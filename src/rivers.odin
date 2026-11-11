@@ -143,7 +143,7 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 	// at both ends so reaches still meet.
 	for i in 1..<last {
 		half := river_half(pts[i].area)
-		swing, _, _ := noise(f64(along[i]/(22*half)), f64(id%977), SEED + 200)
+		swing, _, _ := noise(f64(along[i]/(22*half)), f64(id%977), seed + 200)
 		taper := clamp(min(along[i], along[last] - along[i])/(6*half), 0, 1)
 		pts[i].p += [2]f32{-flow[i].y, flow[i].x}*min(2.4*half, 6)*(swing*2 - 1)*taper
 	}
@@ -155,7 +155,7 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 	half := make([]f32, len(pts), context.temp_allocator)
 	bend := make([]f32, len(pts), context.temp_allocator)
 	for i in 0..=last {
-		swell, _, _ := noise(f64(along[i]/45), f64(id%977) + 31, SEED + 201)
+		swell, _, _ := noise(f64(along[i]/45), f64(id%977) + 31, seed + 201)
 		half[i] = river_half(pts[i].area)*(0.8 + 0.45*swell)
 	}
 	for i in 1..<last {
@@ -294,7 +294,7 @@ river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool, water: f3
 	if cell > 1 {
 		d = max(d - 0.71*f32(cell), 0)
 	} else {
-		d = max(d + 0.22*r.half*fbm(x, z, 9, 1, 2, SEED + 210), 0)   // a ragged water's edge
+		d = max(d + 0.22*r.half*fbm(x, z, 9, 1, 2, seed + 210), 0)   // a ragged water's edge
 	}
 	bar, undercut := max(r.inside, 0), max(-r.inside, 0)
 	edge := r.half*(1.2 + 0.6*bar)   // where the bank top is reached

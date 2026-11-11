@@ -83,6 +83,8 @@ mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out: ^[dynamic]Quad) {
 mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^[4][2]u32) {
 	HALF :: CHUNK/2
 	top :: #force_inline proc(c: ^Columns, i, j: i32) -> i32 { return c.top[(j + 1)*P + i + 1] }
+	level := 0   // which merging of the beds this cell size reads
+	for i32(1) << uint(level) < s do level += 1
 
 	for q in 0..<4 {
 		x0, z0 := i32(q & 1)*HALF, i32(q >> 1)*HALF
@@ -117,15 +119,23 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 					edge := (side.x == 1 && i == x0 + HALF - 1) || (side.x == -1 && i == x0) ||
 					        (side.y == 1 && j == z0 + HALF - 1) || (side.y == -1 && j == z0)
 					if edge do bottom = min(c.ground[(j + side.y + 1)*P + i + side.x + 1], c.ground[(j + 1)*P + i + 1]) - 2*s
-					if bottom >= t do continue
-					drop := t - bottom
-					wall := m if t - n <= s + s/4 || m == .Leaves else Mat.Stone   // too steep to hold soil
-					y := bottom - y_base
-					switch side.z {
-					case 0: append(out, quad((i + 1)*s, y, j*s, drop, s, 0, wall, OPEN, slope))
-					case 1: append(out, quad(i*s, y, j*s, s, drop, 1, wall, OPEN, slope))
-					case 4: append(out, quad(i*s, y, (j + 1)*s, s, drop, 4, wall, OPEN, slope))
-					case 5: append(out, quad(i*s, y, j*s, drop, s, 5, wall, OPEN, slope))
+					// A riser too steep to hold soil, or cut in bare rock, shows the beds at
+					// their heights, as the blocks of a face do near by.
+					bare := m != .Leaves && (t - n > s + s/4 || MATERIALS[m].strength > 0)
+					for at := bottom; at < t; {
+						wall, drop := m, t - at
+						if bare {
+							wall, drop = rock_in(f32(at) + 0.5, c.base[(j + 1)*P + i + 1], level), 1
+							for at + drop < t && rock_in(f32(at + drop) + 0.5, c.base[(j + 1)*P + i + 1], level) == wall do drop += 1
+						}
+						y := at - y_base
+						switch side.z {
+						case 0: append(out, quad((i + 1)*s, y, j*s, drop, s, 0, wall, OPEN, slope))
+						case 1: append(out, quad(i*s, y, j*s, s, drop, 1, wall, OPEN, slope))
+						case 4: append(out, quad(i*s, y, (j + 1)*s, s, drop, 4, wall, OPEN, slope))
+						case 5: append(out, quad(i*s, y, j*s, drop, s, 5, wall, OPEN, slope))
+						}
+						at += drop
 					}
 				}
 			}

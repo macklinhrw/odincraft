@@ -22,7 +22,9 @@ import sdl "vendor:sdl3"
 //   after=seconds   with shot: let this much time pass first, so water can move
 //   dig=x0,y0,z0,x1,y1,z1   once the world has loaded, clear this box of blocks; may be repeated
 //   probe=x0,z0,x1,z1       on exit, print the ground and water in these columns
+//   seed=N          which world: every random choice is keyed from it (default 7)
 //   map=file.png    save a map of the land and exit
+//   overlay=name    with map: paint one field over the relief (names in OVERLAYS, land.odin)
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground
 
@@ -40,6 +42,8 @@ Options :: struct {
 	probe:         [4]i32,
 	has_probe:     bool,
 	map_path:      string,
+	overlay:       string,
+	above:         bool,
 	bench, speed:  f64,
 }
 
@@ -57,7 +61,9 @@ options :: proc() -> Options {
 		v: [3]f64
 		switch name {
 		case "pos":   ok = numbers(value, ",", v[:]); o.pos, o.has_pos = v, true
-		case "above": ok = numbers(value, ",", v[:]); o.pos, o.has_pos = {v.x, f64(height_at(v.x, v.z, 1)) + v.y, v.z}, true
+		case "above": ok = numbers(value, ",", v[:]); o.pos, o.has_pos, o.above = v, true, true   // the ground is added once the land is formed
+		case "seed":  ok = numbers(value, ",", v[:1]); seed = u32(v.x)
+		case "overlay": o.overlay = value
 		case "look":  ok = numbers(value, ",", v[:2]); o.yaw, o.pitch, o.has_look = f32(v.x), f32(v.y), true
 		case "size":  ok = numbers(value, "x", v[:2]); o.width, o.height = i32(v.x), i32(v.y)
 		case "hour":  ok = numbers(value, ",", v[:1]); o.hour = f32(v.x)
@@ -102,10 +108,11 @@ find_start :: proc() -> (pos: [3]f64, yaw: f32) {
 }
 
 main :: proc() {
-	gen_init()
 	opt := options()
+	gen_init()
+	if opt.above do opt.pos.y += f64(height_at(opt.pos.x, opt.pos.z, 1))
 	if opt.map_path != "" {
-		land_map(opt.map_path)
+		land_map(opt.map_path, opt.overlay)
 		return
 	}
 	if !sdl.Init({.VIDEO}) do fatal("SDL")

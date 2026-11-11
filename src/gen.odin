@@ -11,7 +11,43 @@ import "core:math"
 // than the cell fades out, so a coarse answer is the average of the fine one and distant
 // terrain shows the same hills as near terrain.
 
-Mat :: enum u8 { Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel }
+// A block is an index into one table of materials. The shader's palette is written from it.
+// A rock kind's loose form follows the solid ones, so each kind can later gain its broken
+// and gravel forms as rows of their own.
+Mat :: enum u8 {
+	Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel,
+	Mudstone, Siltstone, Sandstone, Grit, Limestone,
+	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree,
+}
+
+Material :: struct {
+	colour:   [3]f32,   // albedo, linear
+	strength: f32,      // of a rock, 0..1 (rock.odin); zero for anything else
+	crack:    f32,      // metres between the cracks that break a face of it, along the strike
+	loose:    Mat,      // what it is once fallen from a face
+}
+
+MATERIALS := [Mat]Material{
+	.Air       = {{1.0, 0.0, 1.0}, 0, 0, .Air},
+	.Grass     = {{0.070, 0.135, 0.032}, 0, 0, .Air},
+	.Dirt      = {{0.130, 0.085, 0.048}, 0, 0, .Air},
+	.Stone     = {{0.165, 0.155, 0.140}, 0, 0, .Air},
+	.Sand      = {{0.330, 0.285, 0.180}, 0, 0, .Air},
+	.Snow      = {{0.780, 0.800, 0.840}, 0, 0, .Air},
+	.Wood      = {{0.105, 0.068, 0.036}, 0, 0, .Air},
+	.Leaves    = {{0.036, 0.105, 0.024}, 0, 0, .Air},
+	.Gravel    = {{0.105, 0.097, 0.085}, 0, 0, .Air},
+	.Mudstone  = {{0.082, 0.082, 0.088}, 0.25, 0.1, .Mudstone_Scree},   // dark grey, crumbles into flakes; never holds a face
+	.Siltstone = {{0.135, 0.115, 0.092}, 0.4, 0.3, .Siltstone_Scree},   // grey-brown flags, thin ledges
+	.Sandstone = {{0.200, 0.180, 0.145}, 0.6, 1.5, .Sandstone_Scree},   // buff-grey rectangular blocks
+	.Grit      = {{0.250, 0.235, 0.205}, 0.8, 4, .Grit_Scree},          // pale pebbly rock that caps the hills, in huge blocks
+	.Limestone = {{0.280, 0.280, 0.268}, 0.65, 1, .Limestone_Scree},    // pale grey
+	.Mudstone_Scree  = {{0.088, 0.087, 0.093}, 0, 0, .Air},   // fresh broken rock is a little paler than the weathered face
+	.Siltstone_Scree = {{0.143, 0.122, 0.098}, 0, 0, .Air},
+	.Sandstone_Scree = {{0.212, 0.190, 0.154}, 0, 0, .Air},
+	.Grit_Scree      = {{0.265, 0.249, 0.218}, 0, 0, .Air},
+	.Limestone_Scree = {{0.297, 0.297, 0.284}, 0, 0, .Air},
+}
 
 CHUNK       :: 32               // cells along a chunk side
 CHUNK_SHIFT :: 5
@@ -19,7 +55,7 @@ P           :: CHUNK + 2        // a chunk plus a one-cell border, which meshing
 SEA_LEVEL   :: 0
 SEA_SURFACE :: SEA_LEVEL - 0.15   // where the sea stands, a little under the block tops at the shore
 NO_WATER    :: -1e6
-SEED        :: 7
+seed        := u32(7)   // every random choice in the world is keyed from this; --seed= sets it
 
 // The ground under one chunk and its border.
 Columns :: struct {
@@ -27,6 +63,7 @@ Columns :: struct {
 	ground: [P*P]i32,   // elevation of the ground, which is lower than the top under a tree crown
 	water:  [P*P]f32,   // level of the river or sea standing here, or NO_WATER
 	mat:    [P*P]Mat,   // what the surface is made of
+	base:   [P*P]f32,   // height of the rock stack's base, which places the beds (rock.odin)
 	slope:  [P*P][2]u8, // the smooth ground normal's x and z, packed; zero in the border
 	lo, hi: i32,        // lowest ground and highest top
 }
@@ -89,40 +126,129 @@ smoothstep :: proc(a, b, x: f32) -> f32 {
 
 // Form the land and its rivers. Call once, before anything asks about the world.
 gen_init :: proc() {
+	rock_init()
 	land_form()
 	rivers_trace()
 }
 
-// The ground at a point as seen at a cell size: its elevation, how steep the hillside is,
-// whether the point is river bed, and the level of the water standing there.
-ground :: proc(x, z, cell: f64) -> (h, steep: f32, gravel: bool, water: f32) {
+Ground :: struct {
+	h, steep: f32,   // elevation, and how steep the ground is there, rise over run
+	base:     f32,   // height of the rock stack's base under it (rock.odin)
+	water:    f32,   // level of the river or sea standing here, or NO_WATER
+	cover:    Mat,   // river gravel, or the loose rock lying under a face; Air for neither
+}
+
+REPOSE :: 0.67   // loose rock comes to rest at about 34°
+
+// How strongly a bed of `lo` under a bed of `hi` stands as a ledge on a hillside this steep:
+// a riser at the foot of `lo` and a tread on its top. Only a stronger bed under a weaker one,
+// and only where the land forming left the stronger near the steepest slope it holds.
+ledge :: proc(lo, hi: Mat, steep: f32) -> f32 {
+	return smoothstep(0.05, 0.3, MATERIALS[lo].strength - MATERIALS[hi].strength)*smoothstep(0.5, 0.9, steep/rocks.law[lo].limit)
+}
+
+Ledge :: struct {
+	h, rise: f32,   // height, and how many times steeper than the smooth hillside the ground is
+	lift:    f32,   // depth of the loose rock lying there
+	face:    Mat,   // the rock of the face above, if this bed lies under one
+}
+
+// The beds in a hillside (docs/foundations/ground-and-underground.md, §5). The land forming
+// leaves a face as a smooth slope through its beds. Here the height within each bed is pushed
+// toward its contact with a weaker bed above, from both sides, so a strong bed stands as a
+// riser with a tread on its top and the weak bed above begins on that tread. The contacts
+// stay where the rock has them; only the ground between them moves, and the change fades
+// once a cell is too coarse to hold a riser. Under a riser, rock fallen from it lies at its
+// angle of rest.
+ledges :: proc(h, steep, base: f32, cell: f64) -> (l: Ledge) {
+	l.h, l.rise = h, 1
+	y := h - base - STACK_LO
+	n := int(rocks.bed[clamp(int(y), 0, STACK_LEN - 1)])
+	if n == 0 || n + 2 >= len(rocks.beds) do return
+	bed, floor := rocks.beds[n], rocks.floor[n]
+	fade := band(2*f64(bed.thick/max(steep, 0.1)), cell)
+	top := fade*ledge(bed.kind, rocks.beds[n + 1].kind, steep)    // a tread on this bed's top
+	foot := fade*ledge(rocks.beds[n - 1].kind, bed.kind, steep)   // a tread at its foot, on the bed below's top
+	if top + foot > 1 do top, foot = top/(top + foot), foot/(top + foot)   // so the ground never folds back over itself
+	q := clamp((y - floor)/bed.thick, 0, 1)
+	p := 1 - q
+	SHARP :: 8   // how abruptly a riser turns into its tread
+	g := q + top*(1 - math.pow(p, SHARP) - q) + foot*(math.pow(q, SHARP) - q)
+	l.rise = 1 + top*(SHARP*math.pow(p, SHARP - 1) - 1) + foot*(SHARP*math.pow(q, SHARP - 1) - 1)
+	l.h = h + bed.thick*(g - q)
+	// Under the riser of the bed above: rock fallen from it, lying from the contact down at its
+	// angle of rest, or where the hillside is steeper than that, no steeper than the hillside,
+	// so it always comes to ground within this bed.
+	above := rocks.beds[n + 1].kind
+	if face := fade*max(ledge(above, rocks.beds[n + 2].kind, steep), smoothstep(0.9, 1.1, steep/rocks.law[above].limit)); face > 0 {
+		l.face = above
+		fall := max(REPOSE/max(steep, 0.01), 1)   // its fall per metre of the smooth hillside's
+		if lift := face*(h + bed.thick*p*(1 - fall) - l.h); lift > 0 {
+			l.h, l.lift, l.rise = l.h + lift, lift, fall
+		}
+	}
+	return
+}
+
+// The ground the land forming left at a point, shaped by its beds, read `back` metres up the
+// hillside from where it stands.
+shaped :: proc(x, z, cell: f64, back: f32 = 0) -> (l: Ledge, steep, base: f32) {
 	level := 0 if cell <= 16 else 1 if cell <= 32 else 2
-	h = land_at(land.z[level], LAND_N >> uint(level), x, z)
 	steep = max(land_at(land.slope, LAND_N, x, z), 0)
-	// Small rises and hollows the simulation is too coarse to hold: more on slopes, none at the shore.
-	h += fbm(x, z, 70, cell, 3, SEED + 80)*(0.5 + 2.2*min(steep, 1))*smoothstep(0, 3, h)
-	h, gravel, water = river_cut(h, x, z, cell)
-	if h < SEA_SURFACE do water = max(water, SEA_SURFACE)
+	base = rock_base(x, z, cell)
+	l = ledges(land_at(land.z[level], LAND_N >> uint(level), x, z) - back*steep, steep, base, cell)
+	return
+}
+
+// The ground at a point as seen at a cell size.
+ground :: proc(x, z, cell: f64) -> (g: Ground) {
+	l, steep, base := shaped(x, z, cell)
+	g.base = base
+	near := band(8, cell)   // cracks are gone by 4 m cells
+	// A face that breaks along its cracks: each block between two cracks stands up to a metre
+	// forward of the face or back from it, so the face breaks into prisms. One set of cracks
+	// runs along the strike of the beds and the other across it, each bed with its own.
+	n := rocks.bed[clamp(int(l.h - 0.5 - base - STACK_LO), 0, STACK_LEN - 1)]
+	kind := rocks.beds[n].kind
+	if gap := MATERIALS[kind].crack; near > 0 && l.lift == 0 && gap >= 1 {
+		if bare := near*smoothstep(1, 1.5, steep*l.rise/rocks.law[kind].limit); bare > 0 {
+			strike := [2]f64{-rocks.dip.y, rocks.dip.x}/math.hypot(rocks.dip.x, rocks.dip.y)
+			u, v := (x*strike.x + z*strike.y)/f64(gap), (z*strike.x - x*strike.y)/f64(2.5*gap)
+			across := i32(math.floor(v + f64(hash01(i32(n), 1, seed + 401))))
+			along := i32(math.floor(u + f64(hash01(across, i32(n), seed + 402))))
+			l, _, _ = shaped(x, z, cell, 2*bare*(hash01(along, across, seed + 403 + u32(n)) - 0.5))
+		}
+	}
+	if l.lift > 0 do g.cover = MATERIALS[l.face].loose
+	// Small rises and hollows the simulation is too coarse to hold: more on slopes, none at
+	// the shore, and none on a ledged face or loose rock, whose shapes have their own causes.
+	h := l.h + fbm(x, z, 70, cell, 3, seed + 80)*(0.5 + 2.2*min(steep, 1))*smoothstep(0, 3, l.h)*min(l.rise, 1)*(1 - smoothstep(0, 1, l.lift))
+	gravel: bool
+	g.h, gravel, g.water = river_cut(h, x, z, cell)
+	if gravel do g.cover = .Gravel
+	if g.h < SEA_SURFACE do g.water = max(g.water, SEA_SURFACE)
+	g.steep = steep*l.rise
 	return
 }
 
 height_at :: proc(x, z, cell: f64) -> f32 {
-	h, _, _, _ := ground(x, z, cell)
-	return h
+	return ground(x, z, cell).h
 }
 
-// What the ground is at a point: its elevation, what covers it, and the water standing on it.
-surface_at :: proc(x, z, cell: f64) -> (h: f32, m: Mat, water: f32) {
-	steep: f32
-	gravel: bool
-	h, steep, gravel, water = ground(x, z, cell)
-	vary := fbm(x, z, 120, cell, 2, SEED + 100) + 0.7*fbm(x, z, 22, cell, 2, SEED + 101)   // broad patches, broken at the edges
-	hard := -fbm(x, z, 1100, 1, 3, SEED + 5)   // above zero where the rock resists; the simulation used the same bands
+// What the ground is at a point, and what covers it.
+surface_at :: proc(x, z, cell: f64) -> (g: Ground, m: Mat) {
+	g = ground(x, z, cell)
+	vary := fbm(x, z, 120, cell, 2, seed + 100) + 0.7*fbm(x, z, 22, cell, 2, seed + 101)   // broad patches, broken at the edges
+	bed := rock_in(g.h - 0.5, g.base, clamp(int(math.log2(cell)), 0, ROCK_LEVELS - 1))
+	// Weak rock keeps soil up to the steepest slope it holds; strong rock sheds it a little
+	// before, as its face stands near that slope.
+	holds := rocks.law[bed].limit*(0.95 + 0.1*vary - (0.1 if MATERIALS[bed].strength >= 0.5 else 0))
 	switch {
-	case gravel:                                   m = .Gravel
-	case h < 1.8 + vary*1.2:                       m = .Sand
-	case steep > 0.64 + vary*0.08 - hard*0.10:     m = .Stone   // too steep to keep its soil
-	case:                                          m = .Grass
+	case g.cover == .Gravel:       m = .Gravel
+	case g.h < 1.8 + vary*1.2:     m = .Sand
+	case g.cover != .Air:          m = g.cover
+	case g.steep > holds:          m = bed
+	case:                          m = .Grass
 	}
 	return
 }
@@ -144,7 +270,7 @@ TREE_REACH :: 4   // the widest crown
 forest_at :: proc(x, z: f64) -> f32 {
 	wet := land_at(land.wet, LAND_N, x, z)
 	h := land_at(land.z[0], LAND_N, x, z)
-	return clamp(0.12 + 1.3*wet + 0.4*fbm(x, z, 500, 1, 3, SEED + 120) - smoothstep(170, 320, h), 0, 1)
+	return clamp(0.12 + 1.3*wet + 0.4*fbm(x, z, 500, 1, 3, seed + 120) - smoothstep(170, 320, h), 0, 1)
 }
 
 // Every tree whose trunk stands in a rectangle of blocks. The same tree is found whichever
@@ -153,15 +279,15 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree) {
 	floor_div :: proc(a, b: i32) -> i32 { return (a - a %% b)/b }
 	for gz in floor_div(z0, TREE_GRID)..=floor_div(z1, TREE_GRID) {
 		for gx in floor_div(x0, TREE_GRID)..=floor_div(x1, TREE_GRID) {
-			r := hash(gx, gz, SEED + 140)
+			r := hash(gx, gz, seed + 140)
 			x, z := gx*TREE_GRID + i32(r % TREE_GRID), gz*TREE_GRID + i32((r >> 4) % TREE_GRID)
 			if x < x0 || x > x1 || z < z0 || z > z1 do continue
 			fx, fz := f64(x) + 0.5, f64(z) + 0.5
 			if f32((r >> 8) & 0xFF)/255 >= forest_at(fx, fz)*0.92 do continue
-			h, m, _ := surface_at(fx, fz, 1)
+			g, m := surface_at(fx, fz, 1)
 			if m != .Grass do continue
 			radius := 2 + i32((r >> 24) % 3)
-			append(out, Tree{x, z, i32(math.round(h)), radius + 3 + i32((r >> 16) % 4), radius})
+			append(out, Tree{x, z, i32(math.round(g.h)), radius + 3 + i32((r >> 16) % 4), radius})
 		}
 	}
 }
@@ -187,11 +313,13 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			ix, iz := cx*CHUNK + i - 1, cz*CHUNK + j - 1   // cell coordinates at this level
 			x, z := (f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell
 			k := j*P + i
-			heights[k], c.mat[k], c.water[k] = surface_at(x, z, cell)
+			g: Ground
+			g, c.mat[k] = surface_at(x, z, cell)
+			heights[k], c.water[k], c.base[k] = g.h, g.water, g.base
 			c.top[k] = i32(math.round(heights[k]))
 			c.ground[k] = c.top[k]
 			if s >= 8 && c.mat[k] == .Grass {
-				r := hash(ix, iz, SEED + 160 + u32(level))
+				r := hash(ix, iz, seed + 160 + u32(level))
 				if f32(r & 0xFFFF)/65536 < forest_at(x, z)*0.75 {
 					c.top[k] += 7 + i32((r >> 16) % 4)
 					c.mat[k] = .Leaves
@@ -237,15 +365,17 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 	}
 }
 
-// The block at a depth below the surface of a column.
-block_below :: proc(surface: Mat, depth: i32) -> Mat {
+// The block at a depth below the surface of a column, where `bed` is the rock at that
+// height. Bare rock is rock all the way down, so a face and a hole show the same beds.
+block_below :: proc(surface: Mat, depth: i32, bed: Mat) -> Mat {
 	#partial switch surface {
-	case .Grass: return .Grass if depth == 0 else .Dirt if depth < 4 else .Stone
-	case .Sand:  return .Sand if depth < 4 else .Stone
-	case .Snow:  return .Snow if depth < 2 else .Stone
-	case .Gravel: return .Gravel if depth < 2 else .Stone
+	case .Grass: return .Grass if depth == 0 else .Dirt if depth < 4 else bed
+	case .Sand:  return .Sand if depth < 4 else bed
+	case .Snow:  return .Snow if depth < 2 else bed
+	case .Gravel: return .Gravel if depth < 2 else bed
 	}
-	return .Stone
+	if surface >= .Mudstone_Scree do return surface if depth < 5 else bed   // loose rock lies on the bed
+	return bed
 }
 
 // The blocks of a nearest-level chunk and its border, in layers from y_base up. `lo` and
@@ -262,7 +392,7 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 	blocks = make([]u8, P*P*int(h))
 	for k in 0..<P*P {
 		t := c.top[k]
-		for y in y_base..<t do blocks[k + int(y - y_base)*P*P] = u8(block_below(c.mat[k], t - 1 - y))
+		for y in y_base..<t do blocks[k + int(y - y_base)*P*P] = u8(block_below(c.mat[k], t - 1 - y, rock_in(f32(y) + 0.5, c.base[k], 0)))
 	}
 	for t in trees {
 		put :: proc(blocks: []u8, x, y, z: i32, m: Mat, replace: bool) {
@@ -276,7 +406,7 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 		for dy in -r..=r {
 			for dz in -r..=r {
 				for dx in -r..=r {
-					ragged := hash01(t.x + dx + dy*57, t.z + dz, SEED + 180)*1.6   // a soft, uneven edge
+					ragged := hash01(t.x + dx + dy*57, t.z + dz, seed + 180)*1.6   // a soft, uneven edge
 					if f32(dx*dx + dz*dz) + f32(dy*dy)*1.4 > f32(r*r) + 0.6 - ragged do continue
 					put(blocks, t.x + dx - x0, crown + dy - y_base, t.z + dz - z0, .Leaves, false)
 				}

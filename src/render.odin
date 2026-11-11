@@ -96,7 +96,7 @@ Pipeline :: struct {
 make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
 	shader :: proc(g: ^Gpu, entry: cstring, stage: sdl.GPUShaderStage, uniforms, samplers: u32) -> ^sdl.GPUShader {
 		s := sdl.CreateGPUShader(g.dev, {
-			code_size = len(SHADERS), code = cast([^]u8)g.source, entrypoint = entry, format = {.MSL},
+			code_size = len(g.source), code = cast([^]u8)g.source, entrypoint = entry, format = {.MSL},
 			stage = stage, num_samplers = samplers, num_uniform_buffers = uniforms,
 		})
 		if s == nil do fatal(string(entry))
@@ -153,7 +153,10 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 	if g.dev == nil || !sdl.ClaimWindowForGPUDevice(g.dev, window) do fatal("GPU device")
 	_ = sdl.SetGPUSwapchainParameters(g.dev, window, .SDR, .VSYNC)
 	g.format = sdl.GetGPUSwapchainTextureFormat(g.dev, window)
-	g.source = strings.clone_to_cstring(SHADERS)
+	colours := strings.builder_make(context.temp_allocator)
+	for m in MATERIALS do fmt.sbprintf(&colours, "float3(%f, %f, %f), ", m.colour.r, m.colour.g, m.colour.b)
+	source, _ := strings.replace_all(SHADERS, "MATERIAL_COLOURS", strings.to_string(colours), context.temp_allocator)
+	g.source = strings.clone_to_cstring(source)
 
 	g.shadow = sdl.CreateGPUTexture(g.dev, {
 		type = .D2_ARRAY, format = .D32_FLOAT, usage = {.SAMPLER, .DEPTH_STENCIL_TARGET},

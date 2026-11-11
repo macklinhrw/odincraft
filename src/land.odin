@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:math"
+import "core:slice"
 import "core:time"
 
 // The land is formed before play. An island is pushed up out of the sea for about four
@@ -19,8 +20,7 @@ LAND_SIZE :: LAND_N*LAND_CELL    // the region, centred on the origin; its rim i
 
 UPLIFT :: 0.0006    // m/yr at the heart of the island
 ERODE  :: 1.3e-5    // how fast water cuts: per year, times root of drainage area, times slope
-CREEP  :: 0.012     // m²/yr of soil creep, which rounds hilltops
-REPOSE :: 0.80      // the steepest slope a hillside holds
+CREEP  :: 0.012     // m²/yr of soil creep, which rounds hilltops, on the weakest rock
 DROWN  :: 8         // metres the sea rises at the end, flooding the valley mouths into inlets
 
 CHANNEL_AREA :: 120_000   // m² of land that must drain through a cell before it carries a stream
@@ -36,7 +36,8 @@ Grid :: struct {
 	next:   []i32,          // the cell each land cell drains into, or -1 for the sea
 	area:   []f32,          // land draining through each cell, m²
 	uplift: []f32,          // m/yr; zero marks sea
-	soft:   []f32,          // how easily the rock erodes, around 1
+	soft:   []f32,          // how easily the rock erodes, around 1, from one outcrop to the next
+	base:   []f32,          // height of the rock stack's base under each cell (rock.odin)
 	jitter: [][2]f32,       // where each cell's node sits in its square, so flow has no favourite compass direction
 	seen:   []bool,
 	order:  [dynamic]i32,   // land cells from the shore upward
@@ -57,39 +58,40 @@ land: Land
 shore :: proc(x, z: f64) -> f32 {
 	r := f32(math.sqrt(x*x*0.8 + z*z*1.25 + x*z*0.5))/(0.40*LAND_SIZE)
 	edge := f32(max(abs(x), abs(z)))/(0.5*LAND_SIZE)
-	return 1 - r*(1 + 0.42*fbm(x, z, 3000, 1, 4, SEED + 1)) - 4*smoothstep(0.86, 1, edge)
+	return 1 - r*(1 + 0.42*fbm(x, z, 3000, 1, 4, seed + 1)) - 4*smoothstep(0.86, 1, edge)
 }
 
 grid_make :: proc(n: int) -> ^Grid {
 	g := new(Grid)
 	g.n, g.d = n, f32(LAND_SIZE)/f32(n)
 	g.z, g.fill, g.area = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
-	g.uplift, g.soft = make([]f32, n*n), make([]f32, n*n)
+	g.uplift, g.soft, g.base = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 	g.next, g.jitter, g.seen = make([]i32, n*n), make([][2]f32, n*n), make([]bool, n*n)
 	for c in 0..<n*n {
 		x, z := (f64(c%n) + 0.5)*f64(g.d) - LAND_SIZE/2, (f64(c/n) + 0.5)*f64(g.d) - LAND_SIZE/2
 		s := shore(x, z)
 		ix, iz := i32(c%n), i32(c/n)
-		g.jitter[c] = [2]f32{hash01(ix, iz, SEED + 7 + u32(n)) - 0.5, hash01(ix, iz, SEED + 8 + u32(n)) - 0.5}*0.9
-		// Rock varies in broad bands and from one outcrop to the next. The fine variation is
-		// what keeps streams from running in straight lines along the grid.
-		g.soft[c] = math.exp(0.45*fbm(x, z, 1100, 1, 3, SEED + 5) + 1.4*(hash01(ix, iz, SEED + 6 + u32(n)) - 0.5))
+		g.jitter[c] = [2]f32{hash01(ix, iz, seed + 7 + u32(n)) - 0.5, hash01(ix, iz, seed + 8 + u32(n)) - 0.5}*0.9
+		// The beds decide how the rock wears; it also varies a little from one outcrop to the
+		// next, which keeps streams from running in straight lines along the grid.
+		g.soft[c] = math.exp(0.8*(hash01(ix, iz, seed + 6 + u32(n)) - 0.5))
+		g.base[c] = rock_base(x, z, LAND_CELL)
 		if s <= 0 {
 			g.z[c] = -1 - 45*smoothstep(0, 0.35, -s)   // sea bed
 		} else {
 			// The island rises fastest along a range that runs its length north of centre, so
 			// the south side is a long slope with room for rivers. The coast barely rises.
-			axis := -900 + 450*math.sin(x/1700) + 350*f64(fbm(x, 0, 2500, 1, 2, SEED + 2))
+			axis := -900 + 450*math.sin(x/1700) + 350*f64(fbm(x, 0, 2500, 1, 2, seed + 2))
 			range := f32(math.exp(-math.pow((z - axis)/1000, 2)))
-			g.uplift[c] = UPLIFT*smoothstep(0, 0.3, s)*(0.30 + 0.95*range)*(1 + 0.4*fbm(x, z, 2200, 1, 3, SEED + 3))
-			g.z[c] = 0.5 + 30*s + 25*(1 + fbm(x, z, 900, 1, 3, SEED + 9))
+			g.uplift[c] = UPLIFT*smoothstep(0, 0.3, s)*(0.30 + 0.95*range)*(1 + 0.4*fbm(x, z, 2200, 1, 3, seed + 3))
+			g.z[c] = 0.5 + 30*s + 25*(1 + fbm(x, z, 900, 1, 3, seed + 9))
 		}
 	}
 	return g
 }
 
 grid_free :: proc(g: ^Grid) {
-	delete(g.z); delete(g.fill); delete(g.area); delete(g.uplift); delete(g.soft)
+	delete(g.z); delete(g.fill); delete(g.area); delete(g.uplift); delete(g.soft); delete(g.base)
 	delete(g.next); delete(g.jitter); delete(g.seen); delete(g.order); delete(g.heap)
 	free(g)
 }
@@ -195,21 +197,30 @@ route :: proc(g: ^Grid) {
 	}
 }
 
+// How the rock at height z in a cell wears. The rock is read where it will stand in the
+// finished world, once the uplift still to come (`left` years of it) and the sea's rise
+// have moved it, so the beds cut here are the beds the blocks show.
+wear :: #force_inline proc(g: ^Grid, c: int, z, left: f32) -> Rock_Law {
+	return rocks.law[rock_in(z + g.uplift[c]*left - DROWN, g.base[c], ROCK_SIM)]
+}
+
 // One step of uplift and cutting, worked from the shore upward so each cell knows where
 // the cell below it has ended up. Solving for the new height rather than stepping toward
-// it keeps the result steady however long the step.
-erode :: proc(g: ^Grid, dt: f32) {
+// it keeps the result steady however long the step. Weak rock is cut faster and holds a
+// gentler slope.
+erode :: proc(g: ^Grid, dt, left: f32) {
 	for ci in g.order {
 		c := int(ci)
 		below, run: f32 = 0, g.d
 		if r := g.next[c]; r >= 0 do below, run = g.z[r], span(g, c, int(r))
-		f := ERODE*g.soft[c]*math.sqrt(g.area[c])*dt/run
+		law := wear(g, c, g.z[c], left)
+		f := ERODE*g.soft[c]*law.erodes*math.sqrt(g.area[c])*dt/run
 		z := (g.fill[c] + g.uplift[c]*dt + f*below)/(1 + f)
-		g.z[c] = clamp(z, below + 0.001*run, below + REPOSE*run)
+		g.z[c] = clamp(z, below + 0.001*run, below + law.limit*run)
 	}
 }
 
-creep :: proc(g: ^Grid, dt: f32) {
+creep :: proc(g: ^Grid, dt, left: f32) {
 	n := g.n
 	rounds := int(math.ceil(CREEP*dt/(0.2*g.d*g.d)))
 	k := CREEP*dt/(f32(rounds)*g.d*g.d)
@@ -220,7 +231,7 @@ creep :: proc(g: ^Grid, dt: f32) {
 			for x in 1..<n - 1 {
 				c := y*n + x
 				if g.uplift[c] == 0 do continue
-				g.z[c] = max(old[c] + k*(old[c - 1] + old[c + 1] + old[c - n] + old[c + n] - 4*old[c]), 0.02)
+				g.z[c] = max(old[c] + k*wear(g, c, old[c], left).creep*(old[c - 1] + old[c + 1] + old[c - n] + old[c + n] - 4*old[c]), 0.02)
 			}
 		}
 	}
@@ -234,15 +245,15 @@ refine :: proc(coarse: ^Grid) -> ^Grid {
 		if g.uplift[c] == 0 do continue
 		// Read the coarse land through a gentle warp, so a valley that ran straight along the
 		// coarse grid comes out winding. The steps that follow settle it.
-		wx, _, _ := noise(f64(c%n)/9, f64(c/n)/9, SEED + 11 + u32(n))
-		wz, _, _ := noise(f64(c%n)/9, f64(c/n)/9, SEED + 12 + u32(n))
+		wx, _, _ := noise(f64(c%n)/9, f64(c/n)/9, seed + 11 + u32(n))
+		wz, _, _ := noise(f64(c%n)/9, f64(c/n)/9, seed + 12 + u32(n))
 		u, v := (f32(c%n) + 0.5)/2 - 0.5 + 1.6*(wx - 0.5), (f32(c/n) + 0.5)/2 - 0.5 + 1.6*(wz - 0.5)
 		x0, y0 := clamp(int(math.floor(u)), 0, m - 2), clamp(int(math.floor(v)), 0, m - 2)
 		tu, tv := clamp(u - f32(x0), 0, 1), clamp(v - f32(y0), 0, 1)
 		k := y0*m + x0
 		z := math.lerp(math.lerp(coarse.z[k], coarse.z[k + 1], tu), math.lerp(coarse.z[k + m], coarse.z[k + m + 1], tu), tv)
 		// A little roughness, so the finer streams have something to start from.
-		g.z[c] = max(z, 0.3) + 0.03*g.d*(hash01(i32(c%n), i32(c/n), SEED + 10) - 0.5)
+		g.z[c] = max(z, 0.3) + 0.03*g.d*(hash01(i32(c%n), i32(c/n), seed + 10) - 0.5)
 	}
 	grid_free(coarse)
 	return g
@@ -252,11 +263,14 @@ land_form :: proc() {
 	started := time.now()
 	g := grid_make(LAND_N/4)
 	schedule := SCHEDULE
+	left: f32   // years still to run
+	for stage in schedule do left += stage[0]*stage[1]
 	for stage, level in schedule {
 		for _ in 0..<int(stage[0]) {
 			route(g)
-			erode(g, stage[1])
-			creep(g, stage[1])
+			erode(g, stage[1], left)
+			creep(g, stage[1], left)
+			left -= stage[1]
 		}
 		if level < len(schedule) - 1 do g = refine(g)
 	}
@@ -302,34 +316,112 @@ land_form :: proc() {
 			}
 		}
 	}
-	fmt.printfln("land formed in %.1f s: %d land cells, highest point %.0f m", time.duration_seconds(time.since(started)), len(g.order), highest)
+	fmt.printfln("land formed in %.2f s: %d land cells, highest point %.0f m", time.duration_seconds(time.since(started)), len(g.order), highest)
+	land_stats(g)
 }
 
-// Smooth value of one of the land's grids at a point in the world.
+// How steep the land came out: the share of land steeper than 45° and the median slope,
+// each cell taken by its steepest neighbour, and the tallest face, followed down the
+// drainage while it stays steeper than 45°.
+land_stats :: proc(g: ^Grid) {
+	n := g.n
+	slopes := make([dynamic]f32, context.temp_allocator)
+	face, top, foot, steep := f32(0), 0, 0, 0
+	kinds: [Mat]int
+	for ci in g.order {
+		c := int(ci)
+		kinds[rock_in(g.z[c] - 0.5, g.base[c], ROCK_SIM)] += 1
+		if c%n == 0 || c/n == 0 || c%n == n - 1 || c/n == n - 1 do continue
+		most: f32
+		for o in OFFSETS do most = max(most, (g.z[c] - max(g.z[c + o.y*n + o.x], 0))/(g.d*math.sqrt(f32(o.x*o.x + o.y*o.y))))
+		append(&slopes, most)
+		if most > 1 do steep += 1
+		drop, at := f32(0), c
+		for ; g.next[at] >= 0 && (g.z[at] - g.z[g.next[at]])/span(g, at, int(g.next[at])) >= 1; at = int(g.next[at]) {
+			drop += g.z[at] - g.z[g.next[at]]
+		}
+		if drop > face do face, top, foot = drop, c, at
+	}
+	slice.sort(slopes[:])
+	at :: proc(g: ^Grid, c: int) -> [3]f32 { return {(f32(c%g.n) + 0.5)*g.d - LAND_SIZE/2, g.z[c], (f32(c/g.n) + 0.5)*g.d - LAND_SIZE/2} }
+	fmt.printfln("steeper than 45°: %.1f%% of land; median slope %.0f°; tallest face %.0f m, from %.0f to %.0f",
+		100*f32(steep)/f32(len(slopes)), math.to_degrees(math.atan(slopes[len(slopes)/2])), face, at(g, top), at(g, foot))
+	fmt.print("rock at the surface:")
+	for k, m in kinds do if k > 0 do fmt.printf(" %v %.0f%%", m, 100*f32(k)/f32(len(g.order)))
+	fmt.println()
+	free_all(context.temp_allocator)
+}
+
+// Smooth value of one of the land's grids at a point in the world. The curve through each
+// four values never rises past its neighbours (Steffen 1990), so the edge of a face does not
+// bulge above the face's top.
 land_at :: proc(v: []f32, n: int, x, z: f64) -> f32 {
 	d := f64(LAND_SIZE)/f64(n)
 	u, w := (x + LAND_SIZE/2)/d - 0.5, (z + LAND_SIZE/2)/d - 0.5
 	fu, fw := math.floor(u), math.floor(w)
 	iu, iw := int(fu), int(fw)
-	weights :: proc(t: f32) -> [4]f32 {
-		t2, t3 := t*t, t*t*t
-		return {-0.5*t3 + t2 - 0.5*t, 1.5*t3 - 2.5*t2 + 1, -1.5*t3 + 2*t2 + 0.5*t, 0.5*t3 - 0.5*t2}
+	curve :: #force_inline proc(p: [4]f32, t: f32) -> f32 {
+		slope :: #force_inline proc(a, b: f32) -> f32 {   // at a point between rises a and b
+			if a*b <= 0 do return 0
+			return math.sign(a)*min(abs(a), abs(b), 0.25*abs(a + b))*2
+		}
+		s0, s1, s2 := p[1] - p[0], p[2] - p[1], p[3] - p[2]
+		m1, m2 := slope(s0, s1), slope(s1, s2)
+		return p[1] + t*(m1 + t*(3*s1 - 2*m1 - m2 + t*(m1 + m2 - 2*s1)))
 	}
-	a, b := weights(f32(u - fu)), weights(f32(w - fw))
-	sum: f32
+	rows: [4]f32
 	for j in 0..<4 {
 		row := clamp(iw + j - 1, 0, n - 1)*n
-		r: f32
-		for i in 0..<4 do r += a[i]*v[row + clamp(iu + i - 1, 0, n - 1)]
-		sum += b[j]*r
+		p: [4]f32
+		for i in 0..<4 do p[i] = v[row + clamp(iu + i - 1, 0, n - 1)]
+		rows[j] = curve(p, f32(u - fu))
 	}
-	return sum
+	return curve(rows, f32(w - fw))
+}
+
+// The finest grid's cell under a point.
+land_cell :: proc(x, z: f64) -> int {
+	return clamp(int((z + LAND_SIZE/2)/LAND_CELL), 0, LAND_N - 1)*LAND_N + clamp(int((x + LAND_SIZE/2)/LAND_CELL), 0, LAND_N - 1)
+}
+
+// Fields the map can paint over the relief, by name (--overlay=): the value at a point,
+// 0 to 1, and the colours at its two ends; or a material, painted in its own colour.
+Overlay :: struct {
+	name:   string,
+	at:     proc(x, z: f64) -> f32,
+	lo, hi: [3]f32,
+	kinds:  bool,
+}
+
+OVERLAYS := [?]Overlay{
+	{"wetness", proc(x, z: f64) -> f32 { return land_at(land.wet, LAND_N, x, z) }, {0.90, 0.80, 0.50}, {0.05, 0.45, 0.40}, false},
+	{"slope", proc(x, z: f64) -> f32 { return land_at(land.slope, LAND_N, x, z)/1.2 }, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}, false},
+	{"drainage", proc(x, z: f64) -> f32 { return (math.log10(land.grid.area[land_cell(x, z)]) - 2.4)/5 }, {0.95, 0.95, 0.90}, {0.05, 0.10, 0.45}, false},
+	{"uplift", proc(x, z: f64) -> f32 { return land.grid.uplift[land_cell(x, z)]/(1.3*UPLIFT) }, {0.20, 0.25, 0.45}, {0.95, 0.85, 0.30}, false},
+	{"rock", proc(x, z: f64) -> f32 { return f32(rock(x, f64(land_at(land.z[0], LAND_N, x, z)) - 0.5, z, 8)) }, {}, {}, true},
+}
+
+// A material's colour as the map shows it.
+map_colour :: proc(m: Mat) -> [3]f32 {
+	c := MATERIALS[m].colour
+	c = {math.sqrt(c.r), math.sqrt(c.g), math.sqrt(c.b)}*1.2
+	grey := (c.r + c.g + c.b)/3
+	return grey + (c - grey)*3   // hues told apart more easily than on the ground
 }
 
 // A picture of the land from above, eight metres to the pixel: relief shaded from the
-// north-west, sea by depth, and the rivers.
-land_map :: proc(path: string) {
+// north-west, sea by depth, and the rivers. With an overlay, the land is painted by that
+// field instead.
+land_map :: proc(path, overlay: string) {
 	SIZE :: 1024
+	paint: ^Overlay
+	for &o in OVERLAYS do if o.name == overlay do paint = &o
+	if overlay != "" && paint == nil {
+		fmt.eprint("no overlay named", overlay, "; there are:")
+		for o in OVERLAYS do fmt.eprint("", o.name)
+		fmt.eprintln()
+		return
+	}
 	pixels := make([]u8, SIZE*SIZE*4)
 	defer delete(pixels)
 	for py in 0..<SIZE {
@@ -343,8 +435,18 @@ land_map :: proc(path: string) {
 			if h <= 0 {
 				col = math.lerp([3]f32{0.35, 0.62, 0.80}, [3]f32{0.08, 0.22, 0.42}, clamp(-h/30, 0, 1))
 			} else {
-				t := clamp(h/450, 0, 1)
-				col = math.lerp(math.lerp([3]f32{0.42, 0.60, 0.30}, [3]f32{0.62, 0.56, 0.38}, clamp(t*2, 0, 1)), [3]f32{0.92, 0.92, 0.90}, clamp(t*2 - 1, 0, 1))*shade
+				if paint != nil && paint.kinds {
+					col = map_colour(Mat(paint.at(x, z)))*shade
+				} else if paint != nil {
+					col = math.lerp(paint.lo, paint.hi, clamp(paint.at(x, z), 0, 1))*shade
+				} else {
+					t := clamp(h/450, 0, 1)
+					col = math.lerp(math.lerp([3]f32{0.42, 0.60, 0.30}, [3]f32{0.62, 0.56, 0.38}, clamp(t*2, 0, 1)), [3]f32{0.92, 0.92, 0.90}, clamp(t*2 - 1, 0, 1))*shade
+					// Rock shows where the ground is near the steepest its rock holds, as on the ground.
+					bed := rock(x, f64(h) - 0.5, z, 8)
+					bare := smoothstep(0.6, 0.8, land_at(land.slope, LAND_N, x, z)/rocks.law[bed].limit)
+					col = math.lerp(col, map_colour(bed)*shade, 0.8*bare)
+				}
 				if r, near := river_near(f32(x), f32(z)); near && r.d < max(r.half, 4) do col = {0.10, 0.30, 0.75}
 			}
 			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)

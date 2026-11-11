@@ -25,12 +25,8 @@ constant float3 FACE_N[6] = { float3(1,0,0), float3(-1,0,0), float3(0,1,0), floa
 constant float3 FACE_U[6] = { float3(0,1,0), float3(0,0,1), float3(0,0,1), float3(1,0,0), float3(1,0,0), float3(0,1,0) };
 constant float3 FACE_V[6] = { float3(0,0,1), float3(0,1,0), float3(1,0,0), float3(0,0,1), float3(0,1,0), float3(1,0,0) };
 
-// Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel
-constant float3 PALETTE[16] = {
-    float3(1.0, 0.0, 1.0), float3(0.070, 0.135, 0.032), float3(0.130, 0.085, 0.048), float3(0.165, 0.155, 0.140),
-    float3(0.330, 0.285, 0.180), float3(0.780, 0.800, 0.840), float3(0.105, 0.068, 0.036), float3(0.036, 0.105, 0.024),
-    float3(0.105, 0.097, 0.085),
-};
+// A colour for each material, written in from MATERIALS in gen.odin when the shaders load.
+constant float3 PALETTE[] = { MATERIAL_COLOURS };
 
 // ---- shared -----------------------------------------------------------------------------
 
@@ -172,7 +168,7 @@ static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<fl
 fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(0)]],
                            depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]]) {
     uint face = in.info & 7u;
-    uint mat = (in.info >> 8u) & 15u;
+    uint mat = (in.info >> 8u) & 255u;
     float3 N = FACE_N[face];
     float dist = length(in.rel);
     float3 world = in.rel + f.cam.xyz;
