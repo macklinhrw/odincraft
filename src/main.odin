@@ -23,6 +23,8 @@ import sdl "vendor:sdl3"
 //   dig=x0,y0,z0,x1,y1,z1   once the world has loaded, clear this box of blocks; may be repeated
 //   probe=x0,z0,x1,z1       on exit, print the ground and water in these columns
 //   seed=N          which world: every random choice is keyed from it (default 7)
+//   kind=name       which kind of island, whatever the seed would pick (names in KINDS, land.odin)
+//   origin=x,z      where the island's middle lies in the world, in whole metres (default 0,0)
 //   map=file.png    save a map of the land and exit
 //   overlay=name    with map: paint one field over the relief (names in OVERLAYS, land.odin)
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
@@ -45,6 +47,7 @@ Options :: struct {
 	overlay:       string,
 	above:         bool,
 	bench, speed:  f64,
+	kind:          string,
 }
 
 options :: proc() -> Options {
@@ -64,6 +67,8 @@ options :: proc() -> Options {
 		case "above": ok = numbers(value, ",", v[:]); o.pos, o.has_pos, o.above = v, true, true   // the ground is added once the land is formed
 		case "seed":  ok = numbers(value, ",", v[:1]); seed = u32(v.x)
 		case "overlay": o.overlay = value
+		case "kind":  o.kind = value
+		case "origin": ok = numbers(value, ",", v[:2]); region.origin = {i32(v.x), i32(v.y)}
 		case "look":  ok = numbers(value, ",", v[:2]); o.yaw, o.pitch, o.has_look = f32(v.x), f32(v.y), true
 		case "size":  ok = numbers(value, "x", v[:2]); o.width, o.height = i32(v.x), i32(v.y)
 		case "hour":  ok = numbers(value, ",", v[:1]); o.hour = f32(v.x)
@@ -92,7 +97,9 @@ options :: proc() -> Options {
 }
 
 // Start on the bank of the largest river, above the reach the sea floods, facing downstream.
+// Found relative to the region's middle, returned in the world.
 find_start :: proc() -> (pos: [3]f64, yaw: f32) {
+	ox, oz := f64(region.origin.x), f64(region.origin.y)
 	slice.sort_by(rivers.spots[:], proc(a, b: Spot) -> bool { return a.area > b.area })
 	trees: [dynamic]Tree
 	defer delete(trees)
@@ -102,15 +109,20 @@ find_start :: proc() -> (pos: [3]f64, yaw: f32) {
 		trees_in(i32(s.p.x) - 6, i32(s.p.z) - 6, i32(s.p.x) + 6, i32(s.p.z) + 6, &trees)
 		if len(trees) > 0 do continue
 		x, z := math.floor(f64(s.p.x)) + 0.5, math.floor(f64(s.p.z)) + 0.5
-		return {x, math.round(f64(height_at(x, z, 1))) + 0.1, z}, s.yaw
+		return {x + ox, math.round(f64(height_at(x, z, 1))) + 0.1, z + oz}, s.yaw
 	}
-	return {0.5, math.round(f64(height_at(0.5, 0.5, 1))) + 0.1, 0.5}, 0
+	return {0.5 + ox, math.round(f64(height_at(0.5, 0.5, 1))) + 0.1, 0.5 + oz}, 0
 }
 
 main :: proc() {
 	opt := options()
-	gen_init()
-	if opt.above do opt.pos.y += f64(height_at(opt.pos.x, opt.pos.z, 1))
+	if !gen_init(opt.kind) {
+		fmt.eprint("no kind of island named", opt.kind, "; there are:")
+		for k in KINDS do fmt.eprint("", k.name)
+		fmt.eprintln()
+		os.exit(2)
+	}
+	if opt.above do opt.pos.y += f64(height_at(opt.pos.x - f64(region.origin.x), opt.pos.z - f64(region.origin.y), 1))
 	if opt.map_path != "" {
 		land_map(opt.map_path, opt.overlay)
 		return
@@ -277,7 +289,7 @@ main :: proc() {
 		}
 		report("frame interval", intervals[skip:])
 		report("our work      ", work[skip:])
-		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(p.pos.x - start.x, p.pos.z - start.z), p.pos.x, p.pos.y, p.pos.z, height_at(p.pos.x, p.pos.z, 1))
+		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(p.pos.x - start.x, p.pos.z - start.z), p.pos.x, p.pos.y, p.pos.z, height_at(p.pos.x - f64(region.origin.x), p.pos.z - f64(region.origin.y), 1))
 	}
 	if opt.has_probe {
 		for z in opt.probe[1]..=opt.probe[3] {

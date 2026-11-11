@@ -255,8 +255,8 @@ vertex WaterV vs_water(uint vid [[vertex_id]], constant Frame &f [[buffer(0)]]) 
     return o;
 }
 
-// Rivers beyond the simulated water: a strip of positions in world coordinates, with
-// where each lies across the channel.
+// Rivers beyond the simulated water: a strip of positions relative to the region's middle,
+// with where each lies across the channel.
 struct RiverIn { float4 p [[attribute(0)]]; };
 
 vertex WaterV vs_river(RiverIn in [[stage_in]], constant Frame &f [[buffer(0)]], constant Draw &d [[buffer(1)]]) {

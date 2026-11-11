@@ -4,7 +4,8 @@ import "core:math"
 
 // The world generator. Everything the engine knows about the world comes through
 // gen_columns and gen_volume, which read the land formed in land.odin and the rivers
-// traced in rivers.odin.
+// traced in rivers.odin. Those two take a chunk in the world; everything below them works
+// relative to the region's middle (region.origin), so the island is the same wherever it lies.
 //
 // One block is one metre, y is up and sea level is y = 0. The generator is asked for the
 // ground at a cell size: 1 m beside the player, up to 64 m at the horizon. Detail finer
@@ -37,16 +38,16 @@ MATERIALS := [Mat]Material{
 	.Wood      = {{0.105, 0.068, 0.036}, 0, 0, .Air},
 	.Leaves    = {{0.036, 0.105, 0.024}, 0, 0, .Air},
 	.Gravel    = {{0.105, 0.097, 0.085}, 0, 0, .Air},
-	.Mudstone  = {{0.082, 0.082, 0.088}, 0.25, 0.1, .Mudstone_Scree},   // dark grey, crumbles into flakes; never holds a face
-	.Siltstone = {{0.135, 0.115, 0.092}, 0.4, 0.3, .Siltstone_Scree},   // grey-brown flags, thin ledges
-	.Sandstone = {{0.200, 0.180, 0.145}, 0.6, 1.5, .Sandstone_Scree},   // buff-grey rectangular blocks
-	.Grit      = {{0.250, 0.235, 0.205}, 0.8, 4, .Grit_Scree},          // pale pebbly rock that caps the hills, in huge blocks
-	.Limestone = {{0.280, 0.280, 0.268}, 0.65, 1, .Limestone_Scree},    // pale grey
-	.Mudstone_Scree  = {{0.088, 0.087, 0.093}, 0, 0, .Air},   // fresh broken rock is a little paler than the weathered face
-	.Siltstone_Scree = {{0.143, 0.122, 0.098}, 0, 0, .Air},
-	.Sandstone_Scree = {{0.212, 0.190, 0.154}, 0, 0, .Air},
-	.Grit_Scree      = {{0.265, 0.249, 0.218}, 0, 0, .Air},
-	.Limestone_Scree = {{0.297, 0.297, 0.284}, 0, 0, .Air},
+	.Mudstone  = {{0.062, 0.064, 0.074}, 0.25, 0.1, .Mudstone_Scree},   // dark blue-grey, crumbles into flakes; never holds a face
+	.Siltstone = {{0.098, 0.082, 0.062}, 0.4, 0.3, .Siltstone_Scree},   // grey-brown flags, thin ledges
+	.Sandstone = {{0.136, 0.108, 0.074}, 0.6, 1.5, .Sandstone_Scree},   // warm buff rectangular blocks
+	.Grit      = {{0.150, 0.134, 0.128}, 0.8, 4, .Grit_Scree},          // pinkish grey pebbly rock that caps the hills, in huge blocks
+	.Limestone = {{0.178, 0.180, 0.178}, 0.65, 1, .Limestone_Scree},    // pale grey
+	.Mudstone_Scree  = {{0.066, 0.068, 0.079}, 0, 0, .Air},   // fresh broken rock is a little paler than the weathered face
+	.Siltstone_Scree = {{0.105, 0.088, 0.066}, 0, 0, .Air},
+	.Sandstone_Scree = {{0.146, 0.116, 0.079}, 0, 0, .Air},
+	.Grit_Scree      = {{0.160, 0.143, 0.137}, 0, 0, .Air},
+	.Limestone_Scree = {{0.190, 0.193, 0.190}, 0, 0, .Air},
 }
 
 CHUNK       :: 32               // cells along a chunk side
@@ -125,10 +126,12 @@ smoothstep :: proc(a, b, x: f32) -> f32 {
 }
 
 // Form the land and its rivers. Call once, before anything asks about the world.
-gen_init :: proc() {
+gen_init :: proc(kind: string) -> bool {
+	region_init(kind) or_return
 	rock_init()
 	land_form()
 	rivers_trace()
+	return true
 }
 
 Ground :: struct {
@@ -167,7 +170,10 @@ ledges :: proc(h, steep, base: f32, cell: f64) -> (l: Ledge) {
 	if n == 0 || n + 2 >= len(rocks.beds) do return
 	bed, floor := rocks.beds[n], rocks.floor[n]
 	fade := band(2*f64(bed.thick/max(steep, 0.1)), cell)
-	top := fade*ledge(bed.kind, rocks.beds[n + 1].kind, steep)    // a tread on this bed's top
+	// A tread on this bed's top: under a weaker bed, or on a thick hard bed standing at the
+	// steepest slope it holds, which breaks as a face whatever lies above it.
+	massive := smoothstep(0.4, 0.6, MATERIALS[bed.kind].strength)*smoothstep(25, 40, bed.thick)*smoothstep(0.85, 1, steep/rocks.law[bed.kind].limit)
+	top := fade*max(ledge(bed.kind, rocks.beds[n + 1].kind, steep), massive)
 	foot := fade*ledge(rocks.beds[n - 1].kind, bed.kind, steep)   // a tread at its foot, on the bed below's top
 	if top + foot > 1 do top, foot = top/(top + foot), foot/(top + foot)   // so the ground never folds back over itself
 	q := clamp((y - floor)/bed.thick, 0, 1)
@@ -194,9 +200,9 @@ ledges :: proc(h, steep, base: f32, cell: f64) -> (l: Ledge) {
 // hillside from where it stands.
 shaped :: proc(x, z, cell: f64, back: f32 = 0) -> (l: Ledge, steep, base: f32) {
 	level := 0 if cell <= 16 else 1 if cell <= 32 else 2
-	steep = max(land_at(land.slope, LAND_N, x, z), 0)
+	steep = max(land_at(land.slope, land.n, x, z), 0)
 	base = rock_base(x, z, cell)
-	l = ledges(land_at(land.z[level], LAND_N >> uint(level), x, z) - back*steep, steep, base, cell)
+	l = ledges(land_at(land.z[level], land.n >> uint(level), x, z) - back*steep, steep, base, cell)
 	return
 }
 
@@ -268,8 +274,8 @@ TREE_REACH :: 4   // the widest crown
 // How wooded the land is, 0..1. Trees follow water: thick in valley floors and hollows,
 // thinning up the slopes, absent from the high ridges.
 forest_at :: proc(x, z: f64) -> f32 {
-	wet := land_at(land.wet, LAND_N, x, z)
-	h := land_at(land.z[0], LAND_N, x, z)
+	wet := land_at(land.wet, land.n, x, z)
+	h := land_at(land.z[0], land.n, x, z)
 	return clamp(0.12 + 1.3*wet + 0.4*fbm(x, z, 500, 1, 3, seed + 120) - smoothstep(170, 320, h), 0, 1)
 }
 
@@ -307,11 +313,12 @@ crown_top :: proc(t: Tree, distance: f32) -> i32 {
 gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 	s := i32(1) << u32(level)
 	cell := f64(s)
+	ox, oz := region.origin.x, region.origin.y
 	heights: [P*P]f32
 	for j in 0..<i32(P) {
 		for i in 0..<i32(P) {
-			ix, iz := cx*CHUNK + i - 1, cz*CHUNK + j - 1   // cell coordinates at this level
-			x, z := (f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell
+			ix, iz := cx*CHUNK + i - 1, cz*CHUNK + j - 1   // cell coordinates at this level, in the world
+			x, z := (f64(ix) + 0.5)*cell - f64(ox), (f64(iz) + 0.5)*cell - f64(oz)
 			k := j*P + i
 			g: Ground
 			g, c.mat[k] = surface_at(x, z, cell)
@@ -319,7 +326,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			c.top[k] = i32(math.round(heights[k]))
 			c.ground[k] = c.top[k]
 			if s >= 8 && c.mat[k] == .Grass {
-				r := hash(ix, iz, seed + 160 + u32(level))
+				r := hash(i32(math.floor(x/cell)), i32(math.floor(z/cell)), seed + 160 + u32(level))
 				if f32(r & 0xFFFF)/65536 < forest_at(x, z)*0.75 {
 					c.top[k] += 7 + i32((r >> 16) % 4)
 					c.mat[k] = .Leaves
@@ -341,7 +348,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 	}
 	if level == 1 || level == 2 {
 		trees := make([dynamic]Tree, context.temp_allocator)
-		x0, z0 := (cx*CHUNK - 1)*s, (cz*CHUNK - 1)*s
+		x0, z0 := (cx*CHUNK - 1)*s - ox, (cz*CHUNK - 1)*s - oz
 		trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P*s + TREE_REACH, z0 + P*s + TREE_REACH, &trees)
 		for t in trees {
 			for j in max((t.z - TREE_REACH - z0)/s, 0)..=min((t.z + TREE_REACH - z0)/s, P - 1) {
@@ -382,7 +389,7 @@ block_below :: proc(surface: Mat, depth: i32, bed: Mat) -> Mat {
 // `hi` widen the vertical range, for edits that reach outside the generated ground.
 gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_base, h: i32) {
 	trees := make([dynamic]Tree, context.temp_allocator)
-	x0, z0 := cx*CHUNK - 1, cz*CHUNK - 1
+	x0, z0 := cx*CHUNK - 1 - region.origin.x, cz*CHUNK - 1 - region.origin.y
 	trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P + TREE_REACH, z0 + P + TREE_REACH, &trees)
 	top := max(hi, c.hi)
 	for t in trees do top = max(top, t.base + t.trunk + t.radius + 1)
@@ -396,7 +403,7 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 	}
 	for t in trees {
 		put :: proc(blocks: []u8, x, y, z: i32, m: Mat, replace: bool) {
-			if x < 0 || x >= P || z < 0 || z >= P do return
+			if x < 0 || x >= P || z < 0 || z >= P || y < 0 do return   // below y is this chunk's solid ground: a tree at a cliff's foot
 			k := int(x) + int(z)*P + int(y)*P*P
 			if replace || blocks[k] == 0 do blocks[k] = u8(m)
 		}

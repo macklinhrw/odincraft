@@ -28,11 +28,16 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 
 - **Step 2 accepted**: ledges on hard beds, cracked faces, loose rock below a face, far faces coloured bed by bed. Fallen blocks were taken out on Claude's suggestion: single cubes, rare and never stacked, did not read as rockfall. They return when they can be done properly.
 
+- **The default island need not stay the same.** It can and should change as the generation changes, until saves exist and a seed has to keep its world. No step has to preserve the seed 7 map, the start or the bench distances; `CLAUDE.md` is updated when they move.
+
+- **Real Japanese islands are the yardstick for the land.** The owner finds their terrain far more interesting than anything generated so far, and does not accept that realism and interest are separate problems here. Generated islands are judged against real elevation data for islands of the same size, on the map, in figures and in the game.
+
 **2026-11-11, Claude's call**
 
 - **The first rock story row to be written is "layered, gently tilted"**: five kinds (mudstone, siltstone, grey sandstone, grit, limestone), with the sequence, tilt and folds drawn from the seed. It is the row the experiment already showed working. More rows follow in Phase 2, and the seed then picks among them.
 - **Rock is built before lakes.** This is an order of work: the first landslide waits for step 6, so it falls where a strong bed lies over a weak one.
 - **The history rows wait for step 3.** Until then every seed has today's one history.
+- **Step 3 built four island kinds (ridge, cone, worn, raised), and the seed draws among them** with a plain key, so the default seed 7 is now a cone island. Every row has ranges. The owner has not yet said whether "raised" stays.
 
 **2026-11-10, Claude's call**
 

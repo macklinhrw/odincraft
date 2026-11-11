@@ -34,7 +34,7 @@ Story :: struct {
 
 ANYWHERE :: [2]f32{-1e5, 1e5}
 
-// The seed picks a story, then draws everything else within its ranges.
+// The seed picks a story for the region (land.odin), then draws everything else within its ranges.
 STORIES := [?]Story{
 	{
 		name = "layered, gently tilted",
@@ -78,7 +78,7 @@ Rocks :: struct {
 rocks: Rocks
 
 rock_init :: proc() {
-	story := STORIES[hash(0, 0, seed + 300) % len(STORIES)]
+	story := region.story
 	draw :: proc(r: [2]f32, k: i32) -> f32 { return math.lerp(r[0], r[1], hash01(k, 0, seed + 301)) }
 	dip, turn := math.tan(math.to_radians(f64(draw(story.tilt, 0)))), 2*math.PI*f64(hash01(1, 0, seed + 301))
 	rocks.dip = {dip*math.cos(turn), dip*math.sin(turn)}

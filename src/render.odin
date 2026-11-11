@@ -425,7 +425,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	if g.ribbon != nil {
 		sdl.BindGPUGraphicsPipeline(pass, g.river)
 		sdl.BindGPUFragmentSamplers(pass, 0, &water_mask, 1)
-		from_eye := [4]f32{f32(-v.eye.x), f32(-v.eye.y), f32(-v.eye.z), 0}
+		from_eye := [4]f32{f32(f64(region.origin.x) - v.eye.x), f32(-v.eye.y), f32(f64(region.origin.y) - v.eye.z), 0}   // the strip is stored relative to the region
 		sdl.PushGPUVertexUniformData(cmd, 1, &from_eye, size_of(from_eye))
 		binding := sdl.GPUBufferBinding{buffer = g.ribbon}
 		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)

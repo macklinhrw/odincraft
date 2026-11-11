@@ -18,7 +18,6 @@ FREEBOARD   :: 0.4   // metres from the water up to the bank top
 MOUTH_BANK  :: -1    // bank level where a channel runs on under the sea
 RIVER_REACH :: 96    // metres from a channel beyond which the ground is never touched
 BUCKET      :: 64    // metres; segments are filed by the squares they can affect
-BUCKETS     :: LAND_SIZE/BUCKET
 
 River_Point :: struct {
 	p:    [2]f32,   // x, z
@@ -43,8 +42,9 @@ Spot :: struct {
 
 Rivers :: struct {
 	segments: [dynamic]Segment,
-	buckets:  [][dynamic]i32,
-	ribbon:   [dynamic][4]f32,   // the water surface as one triangle strip: x, y, z, and -1 to 1 across the channel
+	buckets:  [][dynamic]i32,   // `side` to a side of the region
+	side:     int,
+	ribbon:   [dynamic][4]f32,   // the water surface as one triangle strip: x, y, z relative to the region's middle, and -1 to 1 across the channel
 	spots:    [dynamic]Spot,
 }
 
@@ -62,11 +62,12 @@ river_depth :: proc(half: f32) -> f32 {
 rivers_trace :: proc() {
 	g := land.grid
 	n := g.n
-	rivers.buckets = make([][dynamic]i32, BUCKETS*BUCKETS)
+	rivers.side = int(region.size)/BUCKET
+	rivers.buckets = make([][dynamic]i32, rivers.side*rivers.side)
 	stream :: proc(g: ^Grid, c: i32) -> bool { return g.area[c] >= CHANNEL_AREA }
 	point :: proc(g: ^Grid, c: i32) -> River_Point {
 		p := [2]f32{f32(int(c)%g.n) + 0.5, f32(int(c)/g.n) + 0.5} + g.jitter[c]
-		return {p*g.d - LAND_SIZE/2, g.fill[c], g.area[c]}
+		return {p*g.d - f32(region.size/2), g.fill[c], g.area[c]}
 	}
 
 	feeders := make([]u8, n*n)
@@ -92,12 +93,12 @@ rivers_trace :: proc() {
 					lowest := -1
 					for o in OFFSETS {
 						x, y := cell%n + o.x, cell/n + o.y
-						if x < 0 || y < 0 || x >= n || y >= n || g.uplift[y*n + x] != 0 do continue
+						if x < 0 || y < 0 || x >= n || y >= n || !g.sea[y*n + x] do continue
 						if lowest < 0 || g.z[y*n + x] < g.z[lowest] do lowest = y*n + x
 					}
 					if lowest < 0 || (cell != int(at) && g.z[lowest] >= g.z[cell]) do break
 					cell = lowest
-					append(&points, River_Point{([2]f32{f32(cell%n), f32(cell/n)} + 0.5)*g.d - LAND_SIZE/2, MOUTH_BANK, g.area[at]})
+					append(&points, River_Point{([2]f32{f32(cell%n), f32(cell/n)} + 0.5)*g.d - f32(region.size/2), MOUTH_BANK, g.area[at]})
 					if g.z[cell] < -2.5 do break
 				}
 				break
@@ -239,11 +240,11 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 		index := i32(len(rivers.segments))
 		lip := i + 1 < last && to[i] > from[i + 1] + 0.01
 		append(&rivers.segments, Segment{a.p, b.p, from[i], to[i], half[i], half[i + 1], bend[i], bend[i + 1], lip})
-		lo := linalg.min(a.p, b.p) - RIVER_REACH + LAND_SIZE/2
-		hi := linalg.max(a.p, b.p) + RIVER_REACH + LAND_SIZE/2
-		for bz in max(int(lo.y)/BUCKET, 0)..=min(int(hi.y)/BUCKET, BUCKETS - 1) {
-			for bx in max(int(lo.x)/BUCKET, 0)..=min(int(hi.x)/BUCKET, BUCKETS - 1) {
-				append(&rivers.buckets[bz*BUCKETS + bx], index)
+		lo := linalg.min(a.p, b.p) - RIVER_REACH + f32(region.size/2)
+		hi := linalg.max(a.p, b.p) + RIVER_REACH + f32(region.size/2)
+		for bz in max(int(lo.y)/BUCKET, 0)..=min(int(hi.y)/BUCKET, rivers.side - 1) {
+			for bx in max(int(lo.x)/BUCKET, 0)..=min(int(hi.x)/BUCKET, rivers.side - 1) {
+				append(&rivers.buckets[bz*rivers.side + bx], index)
 			}
 		}
 	}
@@ -260,11 +261,12 @@ River_Near :: struct {
 
 // The nearest river to a point, judged from the water's edge, if one is within reach.
 river_near :: proc(x, z: f32) -> (r: River_Near, ok: bool) {
-	bx, bz := int(x + LAND_SIZE/2)/BUCKET, int(z + LAND_SIZE/2)/BUCKET
-	if x < -LAND_SIZE/2 || z < -LAND_SIZE/2 || bx >= BUCKETS || bz >= BUCKETS do return
+	rim := f32(region.size/2)
+	bx, bz := int(x + rim)/BUCKET, int(z + rim)/BUCKET
+	if x < -rim || z < -rim || bx >= rivers.side || bz >= rivers.side do return
 	p := [2]f32{x, z}
 	nearest: f32 = RIVER_REACH
-	for id in rivers.buckets[bz*BUCKETS + bx] {
+	for id in rivers.buckets[bz*rivers.side + bx] {
 		s := rivers.segments[id]
 		ab, ap := s.b - s.a, p - s.a
 		t := clamp(linalg.dot(ap, ab)/linalg.dot(ab, ab), 0, 1)

@@ -133,6 +133,7 @@ build :: proc(job: Job) -> (b: Built) {
 				// The land supplies water only to columns it made wet. A dry bank beside the
 				// river stays dry when it is dug, until something lets the water in.
 				b.hold[i] = SEA_SURFACE if b.sea[i] else c.water[k] if f32(c.top[k]) < c.water[k] else NO_WATER
+				b.y_hi = max(b.y_hi, i32(math.ceil(b.hold[i])))   // so the chunk is drawn, and its water, wherever its water is in view
 			}
 		}
 	} else {
