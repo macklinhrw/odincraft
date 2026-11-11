@@ -1,0 +1,10 @@
+# One generator, sampled at a cell size
+
+The engine asks the generator a single question: what is the ground at (x, z) when seen at a cell size, from 1 m beside the player to 64 m at the horizon. Detail finer than the cell fades out inside the generator, so a coarse answer is the average of the fine one and every level of detail shows the same world. We chose this over generating at full detail and simplifying meshes afterwards, which earlier attempts did, because it makes a new generator a one-file change and removes the far-terrain bugs that came from sampling fine terrain sparsely.
+
+## Consequences
+
+- Only the nearest ring of chunks is a true block volume. Farther rings are block columns: one height and one surface material per cell, with heights still in whole metres. Overhangs, caves and player edits are therefore invisible beyond about 256 m. When that matters, the far rings need a second source of truth for volume features.
+- A generator that cannot answer at a coarse cell size directly, such as a simulation stored on a grid, has to supply its own averaging.
+- Trees follow the same rule by hand: solid blocks in the near volume, single crowns as columns out to 1 km, a statistical canopy beyond.
+- A column that stands in for something finer, such as a crown drawn as a pillar, has open air beside it at the next level in. Where two levels meet, every column edge is therefore closed down to below the ground, not just below its neighbour's top.

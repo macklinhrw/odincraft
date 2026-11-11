@@ -1,0 +1,75 @@
+# Lessons from the earlier attempts
+
+Distilled from the written record of ten project folders. Statements about what happened come from those projects' own documents. The section "The pattern" is a reading of that record, written on 2026-11-10 at the start of v5.
+
+## The lineage
+
+| Project | When | Stack | Got to | Stalled on |
+|---|---|---|---|---|
+| zigcraft-ai-1, zigcraft-new, zigcraft | Oct 2024 to Feb 2025 | Zig, OpenGL, raylib | A basic chunked block world | No record |
+| zigcraft-neo | Mar to Apr 2026 | Zig, OpenGL 4.1, GLFW | 25 gated phases, fast near field, far LOD, 10 biomes | Terrain was "a taxonomy of hand-shaped noise fields"; rivers were decoration; far LOD seams |
+| zigcraft-neo-v2 | 2 Jun 2026 | Zig, SDL2, OpenGL | Regional terrain product with real drainage, headless | Previewer built before the game; the playable build was slower than v1 |
+| zigcraft-neo-v3 | Jun to Jul 2026 | Zig, OpenGL 4.1, GLFW | 110k lines; 8.45 km views at 62 to 68 FPS; tectonic landforms the owner approved in a 43-minute flyover; full menu and save flow | Rivers never passed the owner's review |
+| odincraft-v1 | 13 to 14 Jul 2026 | Odin, SDL3, Metal | Menu, music, diffusion-model atlas, voxel view | A "parity" port that ended uncertified; terrain was one sample per 250 m |
+| odincraft-v2, v3 | 12 Aug 2026 | Odin, SDL3, Metal | Menus, saves, streaming, test apparatus, in hours | Never reached real terrain; gates were green on toy worlds |
+| odincraft-v4 | 5 to 27 Sep 2026 | Odin, SDL3 GPU | A 1,000 km world with tectonics, erosion, climate, geology, ecology; atlas; streaming; block breaking | Walking-scale terrain was uninteresting; crafted places read as excavations; 120 FPS pacing never passed |
+
+## The pattern
+
+1. **The ground under the player was always built last.** Every plan ran from the outside in: engine first, or continent first, with the place you stand in as the final refinement. The record shows walking-scale terrain accepted once, on one seed, as "restrained natural ground detail".
+2. **Rivers failed the same way every time.** Water was fitted to a finished heightfield: carve fields in Neo, clamped ribbons in Neo v3, compiled channels and place "transactions" in v4. The result read as a ribbon on the land or a canal dug into it. A river has to be formed together with its valley.
+3. **Measurements passed while the owner's eyes rejected.** v4's one waterfall closed its sediment ledger to the cubic metre and was rejected on sight. Agents certified their own terrain. Gates measured what was easy to measure.
+4. **Scale was fixed before anything was worth scaling.** A 1,000 km world made every look at a change cost minutes, and left a gap between a 1 km simulation mesh and 1 m blocks that only generic noise could fill. That gap is exactly where the player lives.
+5. **Each restart threw away what worked along with what failed.** Neo v3 had a working engine and approved large landforms. v4 revision 15 had realistic large-scale relief. Neither carried forward, because the knowledge lived in code that the next attempt was told not to read.
+6. **The projects accreted.** v4 ended with 15 world revisions, four other version schemes, up to seven companion files per world, ten command-line modes, and compatibility loaders for the saves of a game with no players.
+7. **The evidence rivalled the game.** v4 has 17,000 lines of game, 13,700 lines of experiments and 5.3 GB of reports. Neo v3's status document reached 75 KB while its one open phase stayed open.
+
+## What has been shown to work
+
+These are worth knowing because they bound the risk: the unsolved problem is the look of the land at walking scale, and most of the rest has been done at least once.
+
+- Smooth rendering of 8.45 km of block terrain with near/far levels built from one source of truth (Neo v3).
+- Background generation and meshing with no work on the frame thread, and streaming that never blocks movement (Neo v3; v4 over a 7.5 km flight).
+- Large-scale relief from tectonic uplift plus stream-power erosion that matches real mountain statistics; a toy run on 250,000 cells produced real branching valley networks in about six seconds (v4, `reference/odincraft-v4/relief-compare-findings.md`).
+- Whole-world creation in about 100 seconds for 1,000 km (v4 revision 13 onward).
+- Habitat-restricted plant communities that audit clean (v4).
+- Block breaking with persistence, and the slice camera (v4).
+- Immutable world plus layered save, written atomically (OdinCraft v2 to v4).
+
+## Process lessons the documents agree on
+
+- The running game is the test harness. A previewer or a benchmark can justify work; only the game, moving, on real terrain, can accept it.
+- The owner is the only judge of how the world looks. Automated checks can reject a change and can never accept one.
+- One feature at a time, each one finished or reverted.
+- Plans heavier than the change they describe are a warning sign, as are thresholds set before anything was measured and modules named before they were needed.
+- A missing measurement is a failure. One benchmark reported 1,254 FPS from a 40-frame window; the steady figure was 319.
+- Prefer deleting a special case to adding a compensation for it.
+- Commit accepted work. v4's last two weeks, including its best terrain result, were never committed.
+
+## Technical pitfalls to design against
+
+**Water**
+- Water levels stored as whole metres per column: every shallow is exactly one metre deep, lakes become flat sheets, and rounding makes floating sheets and four-metre steps.
+- Clamping water per column drapes it over slopes.
+- Lakes stored as coarse ownership cells produce water walls and ravines through hillsides.
+- A river reconstructed after the terrain floats over gullies, raises its own banks or rises downstream.
+- A waterfall drawn as a column of water from bed to surface looks like a wall of water. Falling water needs its own representation.
+
+**Terrain**
+- One height per column cannot express an overhang, an undercut wall or a cave mouth, which rules out the gorge references.
+- Shapes stamped on a lattice or carved into a finished surface read as diagrams or excavations. A feature needs a host: a reason in the rock and the drainage for being where it is.
+- Independent fine patches disagree at their edges, by hundreds of metres at divides.
+- Cliffs need bare rock, or soil and trees hide them. Soil decided on a coarse grid leaves rock plains.
+- Recorded dead ends: soft broad uplift, isotropic fractal noise, one mountain strike direction per world.
+
+**Engine**
+- Far from the origin, 32-bit floats blur the camera and crack edges. World coordinates want 64 bits with camera-relative rendering.
+- Near/far seams: water edges, fog and draw order must agree across the boundary, and the far level must sample the same terrain as the near one.
+- Streaming: rebuilding whole windows, tying what is shown to how fast it builds, and discarding stale results so that slow builds never finish.
+- A 68-byte vertex cost about 800 MiB of arena; later versions used 4 to 20 bytes.
+- Odin: `matrix4_perspective` produces OpenGL depth range; the default optimisation level is minimal; size worker pools to the 12 performance cores.
+- macOS stalls presentation for unfocused windows, which pollutes timings.
+- v4's frame pacing failed even with no world on screen, and the cause was never found because SDL GPU exposes no GPU timings.
+
+**Measurement**
+- Lakes counted as sea, four-connectivity inventing tiny lakes, and windows too short to be past warm-up all produced confident wrong conclusions.
