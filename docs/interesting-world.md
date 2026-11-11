@@ -18,6 +18,8 @@ How this was made: six background agents each researched one topic against prima
 8. **Places nobody forgets come from events.** Jūniko, the owner's reference, is one landslide: 33 ponds in its debris beside the bare scar it left.
 9. **Caves need a reason in the rock.** Without limestone or young lava, the realistic caves on an island are sea caves, rock shelters and gaps among fallen blocks. Whether the island has limestone is the owner's choice.
 
+10. **Measured against real islands, the land is the wrong shape more than the wrong texture** (added 2026-11-11 from `interesting-world/notes/real-islands.md`, after rock beds, cliffs in blocks and four island kinds were built). Eight real Japanese islands on the game's own grid meet the sea in cliffs, stand high and steep-sided, hold faces over 60°, and have crests two to four times sharper. The generated islands meet the sea on a low apron and are gentlest at the shore. Valley spacing and roughness by scale already match, so point 2's "oatmeal" is the weaker half of the diagnosis: the stronger half is where the steepness sits. The owner takes real islands as the north star, leaning toward the livable ones, with an island that is all cliff kept as a rarer kind.
+
 The recommended order of work is in section 8.
 
 ## 1. The island today

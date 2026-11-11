@@ -30,7 +30,8 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 
 - **The default island need not stay the same.** It can and should change as the generation changes, until saves exist and a seed has to keep its world. No step has to preserve the seed 7 map, the start or the bench distances; `CLAUDE.md` is updated when they move.
 
-- **Real Japanese islands are the yardstick for the land.** The owner finds their terrain far more interesting than anything generated so far, and does not accept that realism and interest are separate problems here. Generated islands are judged against real elevation data for islands of the same size, on the map, in figures and in the game.
+- **Real Japanese islands are the north star for the land, and not the only reference.** The owner finds their terrain far more interesting than anything generated so far, and does not accept that realism and interest are separate problems here. Generated islands are judged against real elevation data for islands of the same size, on the map, in figures and in the game.
+- **Lean toward livable real islands as references, and keep the inhospitable kind as a rarer draw.** Having seen the comparison, the owner noted that an island like Mikurajima, all cliff and flank, leaves nowhere to live. Most generated islands should have the real islands' drama and also ground a person could settle, well balanced; the variance should still allow an island that is all cliff. The findings and what follows from them are in `interesting-world/notes/real-islands.md`.
 
 **2026-11-11, Claude's call**
 
@@ -124,6 +125,17 @@ Raised by `foundations.md`, section 9, which lists twelve decisions with a recom
 - **Rock before lakes.** *Recommendation: yes*, so the first landslide sits on its real host.
 - **People and the fantastic.** *Recommendation: the first island is wild; people arrive with the archipelago, first as ruins; the fantastic enters only as a cause with a source, a reach and an age, at most one marvel per region.*
 - **The order of work.** Phase 1 is sixteen changes on one island (`foundations.md`, section 8). It replaces the ten steps in `interesting-world.md` section 8, which it contains.
+
+### 9. Closing the gap to real islands
+
+Raised by `interesting-world/notes/real-islands.md` (2026-11-11), which compared eight real Japanese islands with 32 generated ones on the game's own grid and renderer. The generated land is not close. In order of how much shows:
+
+- **The coast.** Real islands meet the sea in cliffs (a median 60 to 117 m high within 100 m of the shore) and are steepest at the sea; ours meet it on a low apron and are gentlest there. The plan builds the coast in step 15, in blocks, on land already formed. *Recommendation: move coast retreat into the land forming and do it next.*
+- **The island's mass.** Real islands have 5 to 16% of their land under 50 m; ours 31 to 58%. *Recommendation: change the uplift shape in the kind rows in the same step.*
+- **Steepness.** Nothing formed is steeper than about 52°; real volcanic islands have 0.8 to 2.9% of their land over 60°.
+- **Ridges and valleys.** Real crests are two to four times sharper and valleys about twice as deep.
+- **Livable ground.** Decided in principle above; open in detail. The steep real islands have almost none (0.0 to 3.9% of land under 3°), Kikaijima has 55%, and our kinds have 1 to 16% spread as a ring round the shore. *Recommendation: when the coast is cut into cliffs, keep gentle ground gathered where it has a cause (a bay head, a valley floor, a river-mouth flat, a terrace, a plateau top), give each kind row a range for how much, weight the draw of kinds toward the livable ones, and add livable ground and sheltered landings to the printed figures.* The thresholds and the weights are the owner's to set by looking.
+- **Keep the comparison as a tool?** A `--real=` option that loads a real island in place of a formed one exists in a scratch build. *Recommendation: fold it in, with the figures, since real islands are now the yardstick.*
 
 ## Deferred on purpose
 
