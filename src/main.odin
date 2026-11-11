@@ -19,6 +19,9 @@ import sdl "vendor:sdl3"
 // Options, each as --name=value
 //   pos=x,y,z  above=x,height,z (over the ground)  look=yaw,pitch (degrees)  hour=0..24  fly  size=WxH
 //   shot=file.png   wait for the world to load, save one frame and exit
+//   after=seconds   with shot: let this much time pass first, so water can move
+//   dig=x0,y0,z0,x1,y1,z1   once the world has loaded, clear this box of blocks; may be repeated
+//   probe=x0,z0,x1,z1       on exit, print the ground and water in these columns
 //   map=file.png    save a map of the land and exit
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground
@@ -32,6 +35,10 @@ Options :: struct {
 	fly:           bool,
 	width, height: i32,
 	shot:          string,
+	after:         f64,
+	digs:          [dynamic][6]i32,
+	probe:         [4]i32,
+	has_probe:     bool,
 	map_path:      string,
 	bench, speed:  f64,
 }
@@ -57,6 +64,15 @@ options :: proc() -> Options {
 		case "bench": ok = numbers(value, ",", v[:1]); o.bench = v.x
 		case "speed": ok = numbers(value, ",", v[:1]); o.speed = v.x
 		case "shot":  o.shot = value
+		case "after": ok = numbers(value, ",", v[:1]); o.after = v.x
+		case "probe":
+			box: [4]f64
+			ok = numbers(value, ",", box[:])
+			o.probe, o.has_probe = {i32(box[0]), i32(box[1]), i32(box[2]), i32(box[3])}, true
+		case "dig":
+			box: [6]f64
+			ok = numbers(value, ",", box[:])
+			append(&o.digs, [6]i32{i32(box[0]), i32(box[1]), i32(box[2]), i32(box[3]), i32(box[4]), i32(box[5])})
 		case "map":   o.map_path = value
 		case "fly":   o.fly = true
 		case:         ok = false
@@ -99,6 +115,7 @@ main :: proc() {
 	gpu_init(&g, window)
 	w := new(World)
 	world_init(w)
+	water_init(&w.water, g.dev)
 
 	p := Player{eye = EYE, fly = opt.fly, yaw = math.to_radians(opt.yaw), pitch = math.to_radians(opt.pitch)}
 	p.pos = opt.pos
@@ -185,6 +202,7 @@ main :: proc() {
 		}
 		eye := p.pos + [3]f64{0, p.eye, 0}
 		world_update(w, g.dev, eye)
+		water_update(&w.water, g.dev, dt)
 
 		look := look_dir(p.yaw, p.pitch)
 		hit, before, aiming := raycast(w, eye, look)
@@ -199,9 +217,17 @@ main :: proc() {
 		}
 
 		// A requested screenshot waits until the world has finished loading.
-		backlog := world_backlog(w)
+		backlog := world_backlog(w) + water_backlog(&w.water)
 		idle_frames = idle_frames + 1 if backlog == 0 else 0
-		if opt.shot != "" && (idle_frames > 3 || seconds > 120) {
+		if len(opt.digs) > 0 && idle_frames > 3 {
+			for b in opt.digs {
+				for x in b[0]..=b[3] do for y in b[1]..=b[4] do for z in b[2]..=b[5] do world_set(w, x, y, z, .Air)
+			}
+			clear(&opt.digs)
+			opt.after += seconds   // the wait counts from the dig
+			idle_frames = 0
+		}
+		if opt.shot != "" && seconds >= opt.after && (idle_frames > 3 || seconds > opt.after + 120) {
 			shot = opt.shot
 			running = false
 		}
@@ -245,6 +271,14 @@ main :: proc() {
 		report("frame interval", intervals[skip:])
 		report("our work      ", work[skip:])
 		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(p.pos.x - start.x, p.pos.z - start.z), p.pos.x, p.pos.y, p.pos.z, height_at(p.pos.x, p.pos.z, 1))
+	}
+	if opt.has_probe {
+		for z in opt.probe[1]..=opt.probe[3] {
+			for x in opt.probe[0]..=opt.probe[2] {
+				i := water_cell(x, z)
+				fmt.printfln("%d %d: ground %.0f  water %.2f deep%s", x, z, w.water.floor[i], w.water.depth[i], "  supplied" if w.water.hold[i] > w.water.floor[i] else "")
+			}
+		}
 	}
 	world_destroy(w)
 }

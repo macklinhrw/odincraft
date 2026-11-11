@@ -9,7 +9,8 @@ import "core:slice"
 // smoothed and given a slight wander. Its width comes from the land it drains, and its
 // bank level comes from the filled surface the water ran down, so it only ever falls
 // toward the sea. The generator cuts bed, banks and a strip of valley floor along the
-// line, and the water itself is a ribbon drawn at the true water level. Where the
+// line. Near the player the water in the channel is simulated (water.odin); beyond that
+// it is a ribbon drawn at the true water level. Where the
 // channel turns, the outside bank is cut steep and the inside builds a gravel bar. Where
 // the ground is steep, the stream drops from pool to pool.
 
@@ -30,6 +31,7 @@ Segment :: struct {
 	bank_a, bank_b: f32,
 	half_a, half_b: f32,   // half the channel width
 	bend_a, bend_b: f32,   // how sharply the channel turns: -1 hard right to 1 hard left, looking downstream
+	lip:            bool,  // the water drops at the downstream end
 }
 
 // A place on a river bank, for choosing where to start.
@@ -181,7 +183,7 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 		up, down := max(i - 3, 0), min(i + 4, last)
 		fall := (pts[up].bank - pts[down].bank)/max(along[down] - along[up], 1)
 		if fall > 0.045 && min(along[i], along[last] - along[i + 1]) > 12 {
-			pool := max(math.floor(pts[i + 1].bank - 0.9) + 0.9, pts[last].bank)   // just under a whole metre, so blocks round cleanly
+			pool := max(math.floor(pts[i + 1].bank - 0.55) + 0.55, pts[last].bank)   // so the water stands a little over a block top
 			from[i] = min(pool, level)
 			to[i] = from[i]
 		} else {
@@ -193,19 +195,40 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 
 	// The water surface: a pair of points across the channel at each end of each stretch.
 	// Where the level drops between stretches the two pairs stand one above the other and
-	// the strip between them is a sheet of falling water.
-	RIBBON :: 1.25   // drawn this much wider than the channel, so the water always reaches into its banks
-	across :: proc(p: River_Point, flow: [2]f32, half, bank: f32) -> (l, r: [4]f32) {
-		edge := [2]f32{-flow.y, flow.x}*(half*RIBBON + 0.3)
-		return {p.p.x - edge.x, bank - FREEBOARD, p.p.y - edge.y, -1}, {p.p.x + edge.x, bank - FREEBOARD, p.p.y + edge.y, 1}
+	// the strip between them is a sheet of falling water. Where the river comes down to
+	// the sea its surface ends, at the line where the two meet: from there on the channel
+	// lies under the sea, which fills it.
+	MEETS :: SEA_SURFACE + 0.01
+	// The water is drawn wider than the channel, and wider still over a bar, so that it
+	// always reaches into its banks and nothing below its level is left uncovered. `wide`
+	// is the reach to the right and to the left of the flow.
+	across :: proc(p, flow: [2]f32, wide: [2]f32, water: f32) -> (r, l: [4]f32) {
+		left := [2]f32{-flow.y, flow.x}
+		return {p.x - left.x*wide[0], water, p.y - left.y*wide[0], -1}, {p.x + left.x*wide[1], water, p.y + left.y*wide[1], 1}
 	}
+	wide := make([][2]f32, len(pts), context.temp_allocator)
+	for i in 0..=last do wide[i] = half[i]*(1.3 + 0.45*[2]f32{max(-bend[i], 0), max(bend[i], 0)}) + 0.3   // the bar is on the side the channel turns toward
 	if len(rivers.ribbon) > 0 {   // join to the strip so far with a zero-area bridge
-		l, _ := across(pts[0], flow[0], half[0], from[0])
+		l, _ := across(pts[0].p, flow[0], wide[0], max(from[0] - FREEBOARD, MEETS))
 		append(&rivers.ribbon, rivers.ribbon[len(rivers.ribbon) - 1], l)
 	}
+	at_sea := false
 	for i in 0..=last {
-		if i > 0 do append(&rivers.ribbon, across(pts[i], flow[i], half[i], to[i - 1]))
-		if i < last && (i == 0 || from[i] < to[i - 1] - 0.01) do append(&rivers.ribbon, across(pts[i], flow[i], half[i], from[i]))
+		if i > 0 && !at_sea {
+			before, water := from[i - 1] - FREEBOARD, to[i - 1] - FREEBOARD
+			if water > MEETS {
+				append(&rivers.ribbon, across(pts[i].p, flow[i], wide[i], water))
+			} else {
+				t := clamp((before - MEETS)/max(before - water, 0.001), 0, 1)
+				append(&rivers.ribbon, across(math.lerp(pts[i - 1].p, pts[i].p, t), flow[i], math.lerp(wide[i - 1], wide[i], t), MEETS))
+				at_sea = true
+			}
+		}
+		if i < last && !at_sea && (i == 0 || from[i] < to[i - 1] - 0.01) {
+			water := from[i] - FREEBOARD
+			append(&rivers.ribbon, across(pts[i].p, flow[i], wide[i], max(water, MEETS)))
+			at_sea = water <= MEETS
+		}
 		if i == last do break
 
 		a, b := pts[i], pts[i + 1]
@@ -214,7 +237,8 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 			append(&rivers.spots, Spot{{bank.x, from[i], bank.y}, math.atan2(flow[i].x, -flow[i].y), a.area})
 		}
 		index := i32(len(rivers.segments))
-		append(&rivers.segments, Segment{a.p, b.p, from[i], to[i], half[i], half[i + 1], bend[i], bend[i + 1]})
+		lip := i + 1 < last && to[i] > from[i + 1] + 0.01
+		append(&rivers.segments, Segment{a.p, b.p, from[i], to[i], half[i], half[i + 1], bend[i], bend[i + 1], lip})
 		lo := linalg.min(a.p, b.p) - RIVER_REACH + LAND_SIZE/2
 		hi := linalg.max(a.p, b.p) + RIVER_REACH + LAND_SIZE/2
 		for bz in max(int(lo.y)/BUCKET, 0)..=min(int(hi.y)/BUCKET, BUCKETS - 1) {
@@ -231,6 +255,7 @@ River_Near :: struct {
 	half:   f32,   // half the channel width there
 	bank:   f32,   // bank level there
 	inside: f32,   // 1 on the inside of a sharp bend, -1 on the outside, 0 on a straight
+	lip:    bool,  // just above a drop
 }
 
 // The nearest river to a point, judged from the water's edge, if one is within reach.
@@ -248,7 +273,8 @@ river_near :: proc(x, z: f32) -> (r: River_Near, ok: bool) {
 		if d - half < nearest {
 			nearest = d - half
 			side: f32 = 1 if ab.x*ap.y - ab.y*ap.x > 0 else -1   // left or right of the flow
-			r, ok = {d, half, math.lerp(s.bank_a, s.bank_b, t), side*math.lerp(s.bend_a, s.bend_b, t)}, true
+			lip := s.lip && (1 - t)*linalg.length(ab) < 1.6
+			r, ok = {d, half, math.lerp(s.bank_a, s.bank_b, t), side*math.lerp(s.bend_a, s.bend_b, t), lip}, true
 		}
 	}
 	return
@@ -256,12 +282,14 @@ river_near :: proc(x, z: f32) -> (r: River_Near, ok: bool) {
 
 // Cut a river into the ground at a point: a bed, banks rising to the bank top, then a strip
 // of valley floor that eases back into the hillside. On the outside of a bend the bank is
-// steep; on the inside the bed ramps up into a bar. `gravel` is true where the ground is
-// river bed or bar. At a coarse cell size the cut is widened by the cell, so a far-off
-// column that a stream crosses is always lowered beneath the water drawn over it.
-river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool) {
+// steep; on the inside the bed ramps up into a bar. Just above a drop the bed rises to a
+// lip that holds the pool back. `gravel` is true where the ground is river bed or bar,
+// and `water` is the river's level within the channel. At a coarse cell size the cut is
+// widened by the cell, so a far-off column that a stream crosses is always lowered
+// beneath the water drawn over it.
+river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool, water: f32) {
 	r, ok := river_near(f32(x), f32(z))
-	if !ok do return h, false
+	if !ok do return h, false, NO_WATER
 	d := r.d
 	if cell > 1 {
 		d = max(d - 0.71*f32(cell), 0)
@@ -272,13 +300,17 @@ river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool) {
 	edge := r.half*(1.2 + 0.6*bar)   // where the bank top is reached
 	top := edge + 1.5                // the bank top is level this far, which keeps the water's edge in its banks
 	floor := top + r.half*2 + 5
-	if d >= floor do return h, false
-	bed := r.bank - FREEBOARD - river_depth(r.half)
+	if d >= floor do return h, false, NO_WATER
+	level := r.bank - FREEBOARD
+	bed := level - (0.15 if r.lip else river_depth(r.half))
+	// The bank top is a whole block that stands at least 30 cm clear of the water. Ground
+	// is cut into whole blocks, and a bank that rounded down would let the river out.
+	crest := math.ceil(level + 0.3)
 	if d < edge {
-		steep := bed + (r.bank - bed)*smoothstep(r.half*(0.55 + 0.3*undercut), r.half*1.2, d)
-		ramp := bed + (r.bank - bed)*d/edge
+		steep := bed + (crest - bed)*smoothstep(r.half*(0.55 + 0.3*undercut), r.half*1.2, d)
+		ramp := bed + (crest - bed)*d/edge
 		cut = math.lerp(steep, ramp, bar)
-		return cut, bar > 0.35 || math.round(cut) < r.bank - FREEBOARD - 0.05   // a bar, or a block whose top is under water
+		return cut, bar > 0.35 || math.round(cut) < level - 0.05, level   // gravel on a bar, or where the block's top is under water
 	}
-	return math.lerp(r.bank, h, smoothstep(top, floor, d)), false
+	return math.lerp(crest, h, smoothstep(top, floor, d)), false, NO_WATER
 }

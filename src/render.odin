@@ -37,7 +37,7 @@ Gpu :: struct {
 	shadow:         ^sdl.GPUTexture,   // one layer per cascade
 	shadow_sampler: ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
-	terrain, shadow_pipe, sky, water, river, present: ^sdl.GPUGraphicsPipeline,
+	terrain, shadow_pipe, sky, water, river, pool, present: ^sdl.GPUGraphicsPipeline,
 	ribbon:         ^sdl.GPUBuffer,    // the rivers' water surface
 	ribbon_count:   u32,
 	quads_drawn:    int,
@@ -71,6 +71,7 @@ Item :: struct {
 	lo, hi: [3]f32,   // bounds relative to the camera
 	level:  i32,
 	mask:   u8,       // quarters not covered by a finer chunk
+	seen:   bool,     // inside the view this frame
 }
 
 fatal :: proc(what: string) -> ! {
@@ -83,6 +84,7 @@ Pipeline :: struct {
 	vs_uniforms, fs_uniforms, fs_samplers: u32,
 	quads:                                bool,   // takes Quad instances
 	ribbon:                               bool,   // takes plain positions
+	pool:                                 bool,   // takes Water_Quad instances
 	cull:                                 sdl.GPUCullMode,
 	color:                                sdl.GPUTextureFormat,   // .INVALID for depth only
 	samples:                              sdl.GPUSampleCount,
@@ -106,7 +108,7 @@ make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
 	defer sdl.ReleaseGPUShader(g.dev, fs)
 
 	buffers := [1]sdl.GPUVertexBufferDescription{{slot = 0, pitch = size_of(Quad), input_rate = .INSTANCE}}
-	attributes := [2]sdl.GPUVertexAttribute{{location = 0, format = .SHORT4, offset = 0}, {location = 1, format = .USHORT4, offset = 8}}
+	attributes := [8]sdl.GPUVertexAttribute{0 = {location = 0, format = .SHORT4, offset = 0}, 1 = {location = 1, format = .USHORT4, offset = 8}}
 	targets := [1]sdl.GPUColorTargetDescription{{format = p.color}}
 	if p.blend {
 		targets[0].blend_state = {
@@ -134,6 +136,11 @@ make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
 		buffers[0] = {slot = 0, pitch = size_of([4]f32), input_rate = .VERTEX}
 		attributes[0] = {location = 0, format = .FLOAT4, offset = 0}
 		info.vertex_input_state = {raw_data(&buffers), 1, raw_data(&attributes), 1}
+	}
+	if p.pool {
+		buffers[0] = {slot = 0, pitch = size_of(Water_Quad), input_rate = .INSTANCE}
+		for &a, i in attributes do a = {location = u32(i), format = .FLOAT3 if i < 4 else .FLOAT4, offset = u32(i*12 if i < 4 else 48 + (i - 4)*16)}
+		info.vertex_input_state = {raw_data(&buffers), 1, raw_data(&attributes), 8}
 	}
 	pipe := sdl.CreateGPUGraphicsPipeline(g.dev, info)
 	if pipe == nil do fatal(string(p.vs))
@@ -173,13 +180,18 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 	})
 	g.sky = make_pipeline(g, {vs = "vs_screen", fs = "fs_sky", fs_uniforms = 1, color = g.format, samples = ._4, depth = true})
 	g.water = make_pipeline(g, {
-		vs = "vs_water", fs = "fs_water", vs_uniforms = 1, fs_uniforms = 1,
+		vs = "vs_water", fs = "fs_water", vs_uniforms = 1, fs_uniforms = 1, fs_samplers = 1,
 		color = g.format, samples = ._4, depth = true, compare = .GREATER, blend = true,
+	})
+	// Simulated water writes depth, so a sheet of falling water is not seen through the pool in front of it.
+	g.pool = make_pipeline(g, {
+		vs = "vs_pool", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 1, pool = true,
+		color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, blend = true,
 	})
 	g.present = make_pipeline(g, {vs = "vs_screen", fs = "fs_present", fs_uniforms = 1, fs_samplers = 1, color = g.format})
 	// River water writes depth, so where two reaches meet the water is drawn once.
 	g.river = make_pipeline(g, {
-		vs = "vs_river", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, ribbon = true,
+		vs = "vs_river", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 1, ribbon = true,
 		color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, blend = true,
 	})
 
@@ -276,7 +288,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	}
 	f.cascade_r = CASCADE_RADIUS
 	f.sun = {sun.x, sun.y, sun.z, v.seconds}
-	f.cam = {f32(math.mod(v.eye.x, 65536)), f32(v.eye.y), f32(math.mod(v.eye.z, 65536)), SEA_LEVEL - 0.15}
+	f.cam = {f32(math.mod(v.eye.x, 65536)), f32(v.eye.y), f32(math.mod(v.eye.z, 65536)), SEA_SURFACE}
 	f.cam_r = {right.x*tan_x, right.y*tan_x, right.z*tan_x, 0}
 	f.cam_u = {up.x*tan_y, up.y*tan_y, up.z*tan_y, 0}
 	f.cam_f = {fwd.x, fwd.y, fwd.z, 0}
@@ -388,11 +400,28 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 			far := [3]f32{it.hi.x if p.x > 0 else it.lo.x, it.hi.y if p.y > 0 else it.lo.y, it.hi.z if p.z > 0 else it.lo.z}
 			if linalg.dot(p, far) < 0 do continue each
 		}
+		it.seen = true
 		draw_item(g, cmd, pass, &it, it.mask)
+	}
+
+	// Water. Near the player it is simulated and drawn chunk by chunk. Beyond that the
+	// rivers and the sea are drawn whole, and give way wherever the mask says a chunk has
+	// simulated water, so the two never lie over each other.
+	water_mask := sdl.GPUTextureSamplerBinding{w.water.mask, g.linear}
+	sdl.BindGPUGraphicsPipeline(pass, g.pool)
+	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask, 1)
+	for &it in items {
+		if !it.seen || it.chunk.water == nil do continue
+		origin := [4]f32{it.origin.x, f32(-v.eye.y), it.origin.z, 1}
+		sdl.PushGPUVertexUniformData(cmd, 1, &origin, size_of(origin))
+		binding := sdl.GPUBufferBinding{buffer = it.chunk.water}
+		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
+		sdl.DrawGPUPrimitives(pass, 4, it.chunk.water_count, 0, 0)
 	}
 
 	if g.ribbon != nil {
 		sdl.BindGPUGraphicsPipeline(pass, g.river)
+		sdl.BindGPUFragmentSamplers(pass, 0, &water_mask, 1)
 		from_eye := [4]f32{f32(-v.eye.x), f32(-v.eye.y), f32(-v.eye.z), 0}
 		sdl.PushGPUVertexUniformData(cmd, 1, &from_eye, size_of(from_eye))
 		binding := sdl.GPUBufferBinding{buffer = g.ribbon}
@@ -401,6 +430,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	}
 
 	sdl.BindGPUGraphicsPipeline(pass, g.water)
+	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask, 1)
 	sdl.DrawGPUPrimitives(pass, 4, 1, 0, 0)
 	sdl.EndGPURenderPass(pass)
 	g.quads_drawn -= shadow_quads

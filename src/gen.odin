@@ -17,12 +17,15 @@ CHUNK       :: 32               // cells along a chunk side
 CHUNK_SHIFT :: 5
 P           :: CHUNK + 2        // a chunk plus a one-cell border, which meshing needs
 SEA_LEVEL   :: 0
+SEA_SURFACE :: SEA_LEVEL - 0.15   // where the sea stands, a little under the block tops at the shore
+NO_WATER    :: -1e6
 SEED        :: 7
 
 // The ground under one chunk and its border.
 Columns :: struct {
 	top:    [P*P]i32,   // elevation of the top face, metres
 	ground: [P*P]i32,   // elevation of the ground, which is lower than the top under a tree crown
+	water:  [P*P]f32,   // level of the river or sea standing here, or NO_WATER
 	mat:    [P*P]Mat,   // what the surface is made of
 	slope:  [P*P][2]u8, // the smooth ground normal's x and z, packed; zero in the border
 	lo, hi: i32,        // lowest ground and highest top
@@ -91,27 +94,28 @@ gen_init :: proc() {
 }
 
 // The ground at a point as seen at a cell size: its elevation, how steep the hillside is,
-// and whether the point is river bed.
-ground :: proc(x, z, cell: f64) -> (h, steep: f32, gravel: bool) {
+// whether the point is river bed, and the level of the water standing there.
+ground :: proc(x, z, cell: f64) -> (h, steep: f32, gravel: bool, water: f32) {
 	level := 0 if cell <= 16 else 1 if cell <= 32 else 2
 	h = land_at(land.z[level], LAND_N >> uint(level), x, z)
 	steep = max(land_at(land.slope, LAND_N, x, z), 0)
 	// Small rises and hollows the simulation is too coarse to hold: more on slopes, none at the shore.
 	h += fbm(x, z, 70, cell, 3, SEED + 80)*(0.5 + 2.2*min(steep, 1))*smoothstep(0, 3, h)
-	h, gravel = river_cut(h, x, z, cell)
+	h, gravel, water = river_cut(h, x, z, cell)
+	if h < SEA_SURFACE do water = max(water, SEA_SURFACE)
 	return
 }
 
 height_at :: proc(x, z, cell: f64) -> f32 {
-	h, _, _ := ground(x, z, cell)
+	h, _, _, _ := ground(x, z, cell)
 	return h
 }
 
-// What the ground is at a point: its elevation and what covers it.
-surface_at :: proc(x, z, cell: f64) -> (h: f32, m: Mat) {
+// What the ground is at a point: its elevation, what covers it, and the water standing on it.
+surface_at :: proc(x, z, cell: f64) -> (h: f32, m: Mat, water: f32) {
 	steep: f32
 	gravel: bool
-	h, steep, gravel = ground(x, z, cell)
+	h, steep, gravel, water = ground(x, z, cell)
 	vary := fbm(x, z, 120, cell, 2, SEED + 100) + 0.7*fbm(x, z, 22, cell, 2, SEED + 101)   // broad patches, broken at the edges
 	hard := -fbm(x, z, 1100, 1, 3, SEED + 5)   // above zero where the rock resists; the simulation used the same bands
 	switch {
@@ -154,7 +158,7 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree) {
 			if x < x0 || x > x1 || z < z0 || z > z1 do continue
 			fx, fz := f64(x) + 0.5, f64(z) + 0.5
 			if f32((r >> 8) & 0xFF)/255 >= forest_at(fx, fz)*0.92 do continue
-			h, m := surface_at(fx, fz, 1)
+			h, m, _ := surface_at(fx, fz, 1)
 			if m != .Grass do continue
 			radius := 2 + i32((r >> 24) % 3)
 			append(out, Tree{x, z, i32(math.round(h)), radius + 3 + i32((r >> 16) % 4), radius})
@@ -183,7 +187,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			ix, iz := cx*CHUNK + i - 1, cz*CHUNK + j - 1   // cell coordinates at this level
 			x, z := (f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell
 			k := j*P + i
-			heights[k], c.mat[k] = surface_at(x, z, cell)
+			heights[k], c.mat[k], c.water[k] = surface_at(x, z, cell)
 			c.top[k] = i32(math.round(heights[k]))
 			c.ground[k] = c.top[k]
 			if s >= 8 && c.mat[k] == .Grass {

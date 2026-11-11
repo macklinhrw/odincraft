@@ -13,12 +13,14 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Keep the code small.** Not too much code, not too long to write.
 - **The world is a simulated island with designed rivers.** The owner chose this from the options below on the day the first build was playable. An island about 6 km across is formed before play by uplift and erosion on a grid, in about a second, and rivers are traced from its drainage and cut by design. See `adr/0003`. The noise generator the first build started with is gone.
 
+- **Water flows.** It runs downhill, fills what is dug, shows its movement and never lies in overlapping sheets. See `adr/0004`.
+
 **2026-11-10, Claude's call**
 
 - **SDL3 with its GPU API, shaders written in Metal's language and compiled at start-up.** It is the least code and needs no shader build step. Measured: 120 FPS at 2560 × 1440 with about 2 ms of our own work per frame. If frame pacing cannot be held or diagnosed, the fallback is Metal directly.
 - **The world is sampled at a cell size.** See `adr/0001`.
 - **Volume near, columns far.** The nearest 256 m is a true block volume, so digging, building and overhangs work. Beyond that the ground is columns.
-- **Water is its own smooth surface**, drawn over block terrain at its true level: a sheet for the sea, a ribbon for each river.
+- **Water is a depth in each column**, standing at its true level in fractions of a metre, not a block.
 - **Faces are lit by the slope they are cut from.** See `adr/0002`.
 - **Leaves and trunks are solid blocks.**
 

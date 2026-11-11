@@ -242,54 +242,126 @@ fragment float4 fs_sky(ScreenV in [[stage_in]], constant Frame &f [[buffer(0)]])
 struct WaterV {
     float4 position [[position]];
     float3 rel;
-    float2 river;   // x: -1 to 1 across a river, y: 1 for river water down to 0 for the sea
+    float2 river;   // x: -1 to 1 across a river ribbon, y: 1 for river water down to 0 for the sea
+    float2 flow;    // metres a second, where the water is simulated
+    float3 kind;    // x: 1 for simulated water, y: 0 for level water to 1 for falling, z: depth
 };
 
+// The sea beyond the simulated water: one sheet at sea level.
 vertex WaterV vs_water(uint vid [[vertex_id]], constant Frame &f [[buffer(0)]]) {
     float2 c = float2(vid & 1u, vid >> 1u) * 2.0 - 1.0;
     WaterV o;
     o.rel = float3(c.x * 60000.0, f.cam.w - f.cam.y, c.y * 60000.0);
     o.river = float2(0.0);
+    o.flow = float2(0.0);
+    o.kind = float3(0.0, 0.0, 10.0);
     o.position = f.view_proj * float4(o.rel, 1.0);
     return o;
 }
 
-// River water: a strip of positions in world coordinates, with where each lies across the channel.
+// Rivers beyond the simulated water: a strip of positions in world coordinates, with
+// where each lies across the channel.
 struct RiverIn { float4 p [[attribute(0)]]; };
 
 vertex WaterV vs_river(RiverIn in [[stage_in]], constant Frame &f [[buffer(0)]], constant Draw &d [[buffer(1)]]) {
     WaterV o;
     o.rel = in.p.xyz + d.origin.xyz;
     o.river = float2(in.p.w, smoothstep(0.0, 1.2, in.p.y - f.cam.w));   // near sea level a river takes on the sea's look
+    o.flow = float2(0.0);
+    o.kind = float3(0.0, 0.0, 10.0);
     o.position = f.view_proj * float4(o.rel, 1.0);
     return o;
 }
 
-fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]) {
+// Simulated water: one quad for each instance, as built in water.odin.
+struct PoolIn {
+    float3 p0 [[attribute(0)]];
+    float3 p1 [[attribute(1)]];
+    float3 p2 [[attribute(2)]];
+    float3 p3 [[attribute(3)]];
+    float4 m0 [[attribute(4)]];   // at each corner: flow x, flow z, depth, falling
+    float4 m1 [[attribute(5)]];
+    float4 m2 [[attribute(6)]];
+    float4 m3 [[attribute(7)]];
+};
+
+vertex WaterV vs_pool(PoolIn in [[stage_in]], uint vid [[vertex_id]], constant Frame &f [[buffer(0)]], constant Draw &d [[buffer(1)]]) {
+    float3 p = vid == 0u ? in.p0 : vid == 1u ? in.p1 : vid == 2u ? in.p2 : in.p3;
+    float4 m = vid == 0u ? in.m0 : vid == 1u ? in.m1 : vid == 2u ? in.m2 : in.m3;
+    WaterV o;
+    o.rel = p + d.origin.xyz;
+    o.river = float2(0.0, smoothstep(0.0, 1.2, p.y - f.cam.w));
+    o.flow = m.xy;
+    o.kind = float3(1.0, m.w, m.z);
+    o.position = f.view_proj * float4(o.rel, 1.0);
+    return o;
+}
+
+// Slope of a field of small ripples at a point.
+static float2 ripples(float2 p) {
+    float e = 0.12;
+    return float2(vnoise(p + float2(e, 0.0)) - vnoise(p - float2(e, 0.0)),
+                  vnoise(p + float2(0.0, e)) - vnoise(p - float2(0.0, e))) / (2.0 * e);
+}
+
+fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]],
+                         texture2d<float> simulated [[texture(0)]], sampler unused [[sampler(0)]]) {
     float dist = length(in.rel);
     float3 rd = in.rel / dist;
     float2 w = in.rel.xz + f.cam.xz;
     float t = f.sun.w;
 
-    // A few crossing ripples; they flatten with distance so they never alias.
+    // Drawn water gives way to simulated water, chunk by chunk. The record of which chunks
+    // are simulated wraps around every 32 chunks, so only the 32 around the camera count.
+    if (in.kind.x < 0.5) {
+        int2 chunk = int2(floor(w / 32.0));
+        int2 away = chunk - int2(floor(f.cam.xz / 32.0));
+        if (all(abs(away) < 16) && simulated.read(uint2(chunk & 31)).r > 0.5) discard_fragment();
+    }
+
+    // Still water: a few crossing ripples.
     float2 slope = float2(0.0);
     slope += float2(0.8, 0.6) * cos(dot(w, float2(0.8, 0.6)) * 0.9 + t * 1.3) * 0.030;
     slope += float2(-0.5, 0.86) * cos(dot(w, float2(-0.5, 0.86)) * 1.7 - t * 1.9) * 0.022;
     slope += float2(0.2, -0.98) * cos(dot(w, float2(0.2, -0.98)) * 3.1 + t * 2.6) * 0.014;
-    slope /= 1.0 + dist * 0.03;
+
+    // Moving water carries a pattern with it. A carried pattern stretches without limit, so
+    // there are two copies, each started afresh in turn while the other is at full strength.
+    float speed = length(in.flow);
+    float running = saturate(speed / 1.0);
+    float2 turn = float2(fract(t / 1.8), fract(t / 1.8 + 0.5));
+    float2 weight = 1.0 - abs(2.0 * turn - 1.0);
+    float2 q0 = w - in.flow * (turn.x - 0.5) * 1.8;
+    float2 q1 = w - in.flow * (turn.y - 0.5) * 1.8 + 37.0;
+    slope += (ripples(q0 * 1.9) * weight.x + ripples(q1 * 1.9) * weight.y) * 0.16 * running;
+    float carried = vnoise(q0 * 2.3) * weight.x + vnoise(q1 * 2.3) * weight.y;   // 0..1, drifting downstream
+
+    slope /= 1.0 + dist * 0.03;   // flatter with distance, so it never shimmers
     float3 N = normalize(float3(-slope.x, 1.0, -slope.y));
     if (rd.y > 0.0) N = -N;   // seen from below
 
     float3 sun = f.sun.xyz;
     float3 r = reflect(rd, N);
     float fresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(-rd, N)), 5.0);
-    // A river is shallower and clearer than the sea, and thins to nothing at its banks.
+    // A river is shallower and clearer than the sea, and thins to nothing at its edges.
     float3 body = mix(float3(0.010, 0.045, 0.060), float3(0.022, 0.070, 0.058), in.river.y);
     float3 mirrored = sky_color(float3(r.x, abs(r.y), r.z), sun) * (1.0 - 0.35 * in.river.y);   // banks and trees dim a river's sky
     float3 col = mix(body * (0.15 + 0.85 * daylight(sun)), mirrored, fresnel);
     col += sun_light(sun) * 2.5 * pow(saturate(dot(r, sun)), 600.0);
     float alpha = mix(mix(0.80, 0.62, in.river.y), 1.0, fresnel);
     alpha *= 1.0 - 0.8 * in.river.y * smoothstep(0.35, 0.85, abs(in.river.x));
+    alpha *= 0.25 + 0.75 * smoothstep(0.0, 0.35, in.kind.z);
+
+    // White water. On a fall it runs down in streaks. On the level it is foam carried by
+    // the flow: none in slow water, patches as it quickens, nearly solid below a fall.
+    float3 geometric = normalize(cross(dfdx(in.rel), dfdy(in.rel)));
+    float sheet = smoothstep(0.5, 0.9, 1.0 - abs(geometric.y));
+    float streaks = vnoise(float2((w.x + w.y) * 4.0, (in.rel.y + f.cam.y) * 0.7 + t * 3.5));
+    float churn = max(smoothstep(1.3, 3.2, speed), in.kind.y);
+    float foam = smoothstep(0.0, 0.3, carried - (1.05 - 1.15 * churn));
+    float white = mix(foam * 0.85, in.kind.y * (0.25 + 0.6 * streaks), sheet);
+    col = mix(col, float3(0.55, 0.62, 0.68) * (sun_light(sun) * 0.3 + sky_ambient(float3(0, 1, 0), sun)), white);
+    alpha = mix(alpha, 0.9, white);
     return finish(apply_fog(col, in.rel, f), in.position.xy, alpha);
 }
 

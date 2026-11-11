@@ -27,6 +27,8 @@ Chunk :: struct {
 	y_base, y_lo, y_hi: i32,           // mesh origin and vertical extent, metres
 	blocks:             []u8,          // level 0 only: the block volume, for collision and edits
 	h:                  i32,           // layers in blocks
+	water:              ^sdl.GPUBuffer, // level 0 only: the water surface, built in water.odin
+	water_count:        u32,
 }
 
 Job :: struct { key: Key, edits: []Edit, urgent: bool }
@@ -38,6 +40,8 @@ Built :: struct {
 	y_base, y_lo, y_hi: i32,
 	blocks:             []u8,
 	h:                  i32,
+	floor, hold:        []f32,         // level 0 only, per column: top of the ground, and the land's water level
+	sea:                []bool,
 }
 
 World :: struct {
@@ -46,6 +50,7 @@ World :: struct {
 	dirty:   [dynamic]Key,
 	center:  [LEVELS][2]i32,          // chunk under the camera at each level
 	started: bool,
+	water:   Water,
 
 	mutex:   sync.Mutex,              // guards everything below
 	wake:    sync.Cond,
@@ -118,6 +123,18 @@ build :: proc(job: Job) -> (b: Built) {
 		mesh_volume(b.blocks, b.h, c, &quads)
 		b.ranges[0] = {0, u32(len(quads))}
 		b.y_lo, b.y_hi = b.y_base, b.y_base + b.h
+		// What the water needs to know about each column.
+		b.floor, b.hold, b.sea = make([]f32, CHUNK*CHUNK), make([]f32, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK)
+		for z in 0..<i32(CHUNK) {
+			for x in 0..<i32(CHUNK) {
+				i, k := z*CHUNK + x, (z + 1)*P + x + 1
+				b.floor[i] = column_floor(b.blocks, b.h, b.y_base, x, z)
+				b.sea[i] = f32(c.top[k]) < SEA_SURFACE   // judged on the land as generated, so digging inland does not make sea
+				// The land supplies water only to columns it made wet. A dry bank beside the
+				// river stays dry when it is dug, until something lets the water in.
+				b.hold[i] = SEA_SURFACE if b.sea[i] else c.water[k] if f32(c.top[k]) < c.water[k] else NO_WATER
+			}
+		}
 	} else {
 		s := i32(1) << u32(job.key.level)
 		b.y_base = c.lo - 2*s - 1
@@ -168,6 +185,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		for key in gone {
 			c := w.chunks[key]
 			if c.buffer != nil do sdl.ReleaseGPUBuffer(dev, c.buffer)
+			if key.level == 0 do water_unload(&w.water, dev, c)
 			delete(c.blocks)
 			free(c)
 			delete_key(&w.chunks, key)
@@ -242,9 +260,14 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 	}
 	pass := sdl.BeginGPUCopyPass(cmd)
 	at := u32(0)
-	for b in batch {
+	for &b in batch {
 		n := u32(len(b.quads)*size_of(Quad))
 		c := w.chunks[b.key] or_else nil
+		defer {
+			delete(b.floor)
+			delete(b.hold)
+			delete(b.sea)
+		}
 		if c == nil {   // left the ring while it was being built
 			delete(b.blocks)
 		} else {
@@ -258,6 +281,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 			c.ranges, c.y_base, c.y_lo, c.y_hi = b.ranges, b.y_base, b.y_lo, b.y_hi
 			c.blocks, c.h = b.blocks, b.h
 			c.ready, c.building = true, false
+			if b.key.level == 0 do water_load(&w.water, c, &b)
 		}
 		at += n
 		delete(b.quads)
@@ -305,6 +329,7 @@ world_set :: proc(w: ^World, x, y, z: i32, m: Mat) {
 	if c := w.chunks[key] or_else nil; c != nil && c.ready {
 		if ly := y - c.y_base; ly >= 0 && ly < c.h {
 			c.blocks[int(x & (CHUNK - 1) + 1) + int(z & (CHUNK - 1) + 1)*P + int(ly)*P*P] = u8(m)
+			water_refloor(&w.water, x, z)
 		}
 	}
 	// This chunk, and any neighbour whose border includes the block.
