@@ -25,9 +25,6 @@ constant float3 FACE_N[6] = { float3(1,0,0), float3(-1,0,0), float3(0,1,0), floa
 constant float3 FACE_U[6] = { float3(0,1,0), float3(0,0,1), float3(0,0,1), float3(1,0,0), float3(1,0,0), float3(0,1,0) };
 constant float3 FACE_V[6] = { float3(0,0,1), float3(0,1,0), float3(1,0,0), float3(0,0,1), float3(0,1,0), float3(1,0,0) };
 
-// A colour for each material, written in from MATERIALS in gen.odin when the shaders load.
-constant float3 PALETTE[] = { MATERIAL_COLOURS };
-
 // ---- shared -----------------------------------------------------------------------------
 
 static float hash21(float2 p) {
@@ -166,7 +163,8 @@ static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<fl
 }
 
 fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(0)]],
-                           depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]]) {
+                           depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]],
+                           texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]]) {
     uint face = in.info & 7u;
     uint mat = (in.info >> 8u) & 255u;
     float3 N = FACE_N[face];
@@ -174,15 +172,20 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     float3 world = in.rel + f.cam.xyz;
     float3 inside = world - N * (0.5 * in.cell);   // a point safely inside the cell this face belongs to
 
-    // Colour: broad patches, a tint per block and fine grain, each fading before it can shimmer.
-    float3 albedo = PALETTE[mat];
-    float patches = vnoise(inside.xz / 41.0) * 0.6 + vnoise(inside.xz / 11.0) * 0.4;
+    // Colour: the material's tile, a metre to a tile, its top on a face that looks up or down
+    // and its side on the rest. A top is turned a quarter, a half or three quarters by the block
+    // it is on, so a field of one material does not repeat. Then broad patches and a tint per block.
+    float2 uv = face < 2u ? float2(world.z, -world.y) : face < 4u ? world.xz : float2(world.x, -world.y);
+    float2 dx = dfdx(uv), dy = dfdy(uv);
     float block = hash21(floor(inside.xz / in.cell) + floor(inside.y / in.cell) * 31.0);
-    float3 texel = floor((world - N * 0.01) * 8.0);
-    float grain = hash21(texel.xz + texel.y * 57.0);
-    albedo *= 1.0 + (patches - 0.5) * 0.24
-                  + (block - 0.5) * 0.12 * saturate(1.0 - dist / (in.cell * 200.0))
-                  + (grain - 0.5) * 0.10 * saturate(1.0 - dist / 24.0);
+    if (face == 2u || face == 3u) {
+        float2 turned = fract(uv) - 0.5;
+        uint quarter = uint(hash21(floor(world.xz - N.xz * 0.01) + 3.0) * 4.0);
+        uv = (quarter == 1u ? float2(-turned.y, turned.x) : quarter == 2u ? -turned : quarter == 3u ? float2(turned.y, -turned.x) : turned) + 0.5;
+    }
+    float3 albedo = blocks.sample(block_smp, uv, mat * 2u + (face == 2u || face == 3u ? 0u : 1u), gradient2d(dx, dy)).rgb;
+    float patches = vnoise(inside.xz / 41.0) * 0.6 + vnoise(inside.xz / 11.0) * 0.4;
+    albedo *= 1.0 + (patches - 0.5) * 0.24 + (block - 0.5) * 0.10 * saturate(1.0 - dist / (in.cell * 200.0));
 
     float3 sun = f.sun.xyz;
     // A face turned from the sun on a sunlit slope is an accident of cutting the slope into

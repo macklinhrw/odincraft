@@ -2,7 +2,9 @@ package main
 
 import "core:encoding/endian"
 import "core:fmt"
+import "core:bytes"
 import "core:hash"
+import "core:image/png"
 import "core:math"
 import "core:math/linalg"
 import "core:os"
@@ -14,6 +16,8 @@ import sdl "vendor:sdl3"
 // Lighting, fog and tone mapping live in shaders.metal.
 
 SHADERS    :: #load("shaders.metal", string)
+BLOCKS     :: #load("../assets/blocks.png")   // the faces of every block, drawn by tools/blocks.py: a row for each material, its top then its side
+TILE       :: 16
 SHADOW_RES :: 2048
 FOV        :: 70.0   // vertical, degrees
 NEAR       :: 0.1
@@ -36,6 +40,8 @@ Gpu :: struct {
 	scene:          ^sdl.GPUTexture,   // resolved frame
 	shadow:         ^sdl.GPUTexture,   // one layer per cascade
 	shadow_sampler: ^sdl.GPUSampler,
+	blocks:         ^sdl.GPUTexture,   // one layer per tile of the atlas
+	block_sampler:  ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
 	terrain, shadow_pipe, sky, water, river, pool, present: ^sdl.GPUGraphicsPipeline,
 	ribbon:         ^sdl.GPUBuffer,    // the rivers' water surface
@@ -153,10 +159,7 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 	if g.dev == nil || !sdl.ClaimWindowForGPUDevice(g.dev, window) do fatal("GPU device")
 	_ = sdl.SetGPUSwapchainParameters(g.dev, window, .SDR, .VSYNC)
 	g.format = sdl.GetGPUSwapchainTextureFormat(g.dev, window)
-	colours := strings.builder_make(context.temp_allocator)
-	for m in MATERIALS do fmt.sbprintf(&colours, "float3(%f, %f, %f), ", m.colour.r, m.colour.g, m.colour.b)
-	source, _ := strings.replace_all(SHADERS, "MATERIAL_COLOURS", strings.to_string(colours), context.temp_allocator)
-	g.source = strings.clone_to_cstring(source)
+	g.source = strings.clone_to_cstring(SHADERS)
 
 	g.shadow = sdl.CreateGPUTexture(g.dev, {
 		type = .D2_ARRAY, format = .D32_FLOAT, usage = {.SAMPLER, .DEPTH_STENCIL_TARGET},
@@ -172,9 +175,41 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		address_mode_u = .CLAMP_TO_EDGE, address_mode_v = .CLAMP_TO_EDGE, address_mode_w = .CLAMP_TO_EDGE,
 	})
 
+	// The block faces: each tile of the atlas a layer, with smaller copies for the distance, so
+	// a far hillside is the average of the pixels a near one shows. Near by, pixels stay square.
+	atlas, err := png.load_from_bytes(BLOCKS, {.alpha_add_if_missing})
+	if err != nil || atlas.width != 2*TILE || atlas.height != len(Mat)*TILE do fatal("assets/blocks.png does not have a row of two tiles for each material")
+	pixels := bytes.buffer_to_bytes(&atlas.pixels)
+	layers := u32(2*len(Mat))
+	g.blocks = sdl.CreateGPUTexture(g.dev, {
+		type = .D2_ARRAY, format = .R8G8B8A8_UNORM_SRGB, usage = {.SAMPLER, .COLOR_TARGET},
+		width = TILE, height = TILE, layer_count_or_depth = layers, num_levels = 5,
+	})
+	staging := sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = layers*TILE*TILE*4})
+	mapped := (cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:layers*TILE*TILE*4]
+	for layer in 0..<int(layers) do for y in 0..<TILE {
+		from := ((layer/2*TILE + y)*2*TILE + layer%2*TILE)*4
+		copy(mapped[(layer*TILE + y)*TILE*4:][:TILE*4], pixels[from:][:TILE*4])
+	}
+	sdl.UnmapGPUTransferBuffer(g.dev, staging)
+	cmd := sdl.AcquireGPUCommandBuffer(g.dev)
+	pass := sdl.BeginGPUCopyPass(cmd)
+	for layer in 0..<layers {
+		sdl.UploadToGPUTexture(pass, {transfer_buffer = staging, offset = layer*TILE*TILE*4}, {texture = g.blocks, layer = layer, w = TILE, h = TILE, d = 1}, false)
+	}
+	sdl.EndGPUCopyPass(pass)
+	sdl.GenerateMipmapsForGPUTexture(cmd, g.blocks)
+	_ = sdl.SubmitGPUCommandBuffer(cmd)
+	sdl.ReleaseGPUTransferBuffer(g.dev, staging)
+	g.block_sampler = sdl.CreateGPUSampler(g.dev, {
+		min_filter = .LINEAR, mag_filter = .NEAREST, mipmap_mode = .LINEAR,
+		address_mode_u = .REPEAT, address_mode_v = .REPEAT, address_mode_w = .REPEAT,
+		max_anisotropy = 4, enable_anisotropy = true,
+	})
+
 	// Depth runs from 1 at the near plane to 0 at infinity, which keeps precision at long range.
 	g.terrain = make_pipeline(g, {
-		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 1, quads = true,
+		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 2, quads = true,
 		cull = .BACK, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER,
 	})
 	g.shadow_pipe = make_pipeline(g, {
@@ -395,8 +430,8 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.DrawGPUPrimitives(pass, 3, 1, 0, 0)
 
 	sdl.BindGPUGraphicsPipeline(pass, g.terrain)
-	shadow_binding := sdl.GPUTextureSamplerBinding{g.shadow, g.shadow_sampler}
-	sdl.BindGPUFragmentSamplers(pass, 0, &shadow_binding, 1)
+	terrain_bindings := [2]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.blocks, g.block_sampler}}
+	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 2)
 	// The view volume as four planes through the eye; a chunk wholly outside one is skipped.
 	planes := [4][3]f32{fwd*tan_x + right, fwd*tan_x - right, fwd*tan_y + up, fwd*tan_y - up}
 	each: for &it in items {
