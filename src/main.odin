@@ -18,7 +18,8 @@ import sdl "vendor:sdl3"
 //
 // Options, each as --name=value
 //   pos=x,y,z  above=x,height,z (over the ground)  look=yaw,pitch (degrees)  hour=0..24  fly  size=WxH
-//   day=N           day of the year, 0 on 1 January (default 80, the March equinox): sets the sun's path
+//   day=N           day of the year, 0 on 1 January (default: the first fair day from 80, the March
+//                   equinox, on): sets the sun's path
 //   weather=c[,b]   force the cloud cover, 0 clear to 1 overcast, and the cloud base in metres (default
 //                   1000, too high for a cap); otherwise both are drawn from the seed, the day and the hour
 //   shot=file.png   wait for the world to load, save one frame and exit
@@ -42,6 +43,7 @@ Options :: struct {
 	has_look:      bool,
 	yaw, pitch:    f32,
 	hour, day:     f32,
+	has_day:       bool,
 	weather:       [2]f32,
 	fly, show:     bool,
 	width, height: i32,
@@ -81,7 +83,7 @@ options :: proc() -> Options {
 		case "look":  ok = numbers(value, ",", v[:2]); o.yaw, o.pitch, o.has_look = f32(v.x), f32(v.y), true
 		case "size":  ok = numbers(value, "x", v[:2]); o.width, o.height = i32(v.x), i32(v.y)
 		case "hour":  ok = numbers(value, ",", v[:1]); o.hour = f32(v.x)
-		case "day":   ok = numbers(value, ",", v[:1]); o.day = f32(v.x)
+		case "day":   ok = numbers(value, ",", v[:1]); o.day, o.has_day = f32(v.x), true
 		case "weather":
 			ok = numbers(value, ",", v[:2]) || numbers(value, ",", v[:1])
 			o.weather = {f32(v.x), f32(v.y) if strings.contains(value, ",") else SKY.base[1]}
@@ -150,6 +152,9 @@ main :: proc() {
 		why_at(opt.why.x, opt.why.y)
 		return
 	}
+	// With no day named, the first fair day from the March equinox on: a person looking at the
+	// land sees it in sunlight, and pictures taken on different days of work can be compared.
+	if !opt.has_day do for c, _ := weather_at(opt.day, opt.hour); c > FAIR && opt.day < 140; c, _ = weather_at(opt.day, opt.hour) do opt.day += 1
 	cover, base := weather_at(opt.day, opt.hour)
 	daylight: f32
 	for h := f32(0.025); h < 24; h += 0.05 do daylight += 0.05 if sun_dir(h, opt.day).y > 0 else 0

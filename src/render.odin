@@ -90,6 +90,7 @@ Sky :: struct {
 SKY := Sky{cover = {0.66, 0.62, 0.62, 0.57, 0.62, 0.73, 0.48, 0.45, 0.54, 0.55, 0.59, 0.62}, spell = 2, deck = 300, base = {250, 1000}, wind = 8}
 
 // The cover (0 clear to 1 overcast) and cloud base at a time, the same for the same seed.
+FAIR :: 0.3   // cloud cover under which a day counts as fair
 weather_at :: proc(day, hour: f32) -> (cover, base: f32) {
 	t := (day + hour/24)/SKY.spell
 	k, w := i32(math.floor(t)), smoothstep(0, 1, t - math.floor(t))
