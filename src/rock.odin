@@ -9,8 +9,10 @@ import "core:math"
 // Nothing is stored per block.
 //
 // The rock is drawn from the seed within the ranges of a story: a stack of beds, tilted
-// and gently folded. A point's place in the stack is its height less the height of the
-// stack's base under it, and the bed there is read from a table, one entry a metre.
+// and gently folded, or laid over the forms the island's vents built, so that a volcano's
+// flows and ash lie parallel to its slopes and dip away from its vent. A point's place in the
+// stack is its height less the height of the stack's base under it, and the bed there is read
+// from a table, one entry a metre.
 
 // A kind a story draws its beds from: how often, and between which places in the stack
 // (metres above the base, which is about the height above sea level under the island's
@@ -30,11 +32,12 @@ Story :: struct {
 	tilt:  [2]f32,   // dip of the beds, degrees
 	fold:  [2]f32,   // height of the folds, metres
 	wave:  [2]f32,   // their wavelength, metres
+	drape: bool,     // the beds lie over the ground the vents built (land.odin), rather than level
 }
 
 ANYWHERE :: [2]f32{-1e5, 1e5}
 
-// The seed picks a story for the region (land.odin), then draws everything else within its ranges.
+// The island's kind names its story (land.odin); the seed draws everything else within its ranges.
 STORIES := [?]Story{
 	{
 		name = "layered, gently tilted",
@@ -46,6 +49,20 @@ STORIES := [?]Story{
 		},
 		thick = {12, 50}, hard = 0.3, gap = 110, tilt = {3, 8}, fold = {20, 70}, wave = {1800, 4500},
 	},
+	{
+		// Runny lava: black flows of basalt between beds of red cinders and ash, after the
+		// sea cliffs of Toshima and Mikurajima.
+		name = "lava and ash",
+		kinds = {0 = {.Basalt, 1, ANYWHERE}, 1 = {.Scoria, 1, ANYWHERE}},
+		thick = {12, 40}, hard = 0.4, gap = 40, fold = {30, 70}, wave = {400, 1000}, drape = true,
+	},
+	{
+		// Stiff lava: pale domes and thick flows of rhyolite in sheets of pumice and ash, after
+		// Kōzushima.
+		name = "pale lava and pumice",
+		kinds = {0 = {.Rhyolite, 1, ANYWHERE}, 1 = {.Tuff, 1, ANYWHERE}},
+		thick = {10, 50}, hard = 0.5, gap = 60, fold = {15, 40}, wave = {600, 1500}, drape = true,
+	},
 }
 
 STACK_LO    :: -2048   // the table covers this far below the base
@@ -54,8 +71,10 @@ ROCK_LEVELS :: 7       // tables for cells of 1 to 64 m
 ROCK_SIM    :: 4       // the table the 16 m land forming reads
 
 // How a rock wears, from its strength: D4 in docs/foundations/geology.md, with erosion
-// (0.4/strength)² rather than (0.5/strength)² and slopes from 35° rather than 30°, which
-// keep the island near its old height.
+// (0.4/strength)² rather than (0.5/strength)², which keeps the island near its old height.
+// Slopes run from 35° on the weakest rock to 60° on the strongest, rising most steeply at the
+// strong end, so that a strong bed stands as a face and the weak ones as steep hillsides, and
+// creep falls with the square of weakness, so crests in strong rock stay sharp.
 Rock_Law :: struct {
 	erodes: f32,   // how fast running water cuts it, around 1
 	limit:  f32,   // the steepest slope it holds, rise over run
@@ -73,9 +92,12 @@ Rocks :: struct {
 	beds:  [dynamic]Bed,       // the stack from the bottom up, as a one-metre cell sees it
 	bed:   [STACK_LEN]u16,     // which of them each metre lies in
 	floor: [dynamic]f32,       // where each begins, metres from the table's start
+	drape: []f32,              // the ground the vents built, on a grid of DRAPE m, where the story lays its beds over it
 }
 
 rocks: Rocks
+
+DRAPE :: 32
 
 rock_init :: proc() {
 	story := region.story
@@ -83,12 +105,19 @@ rock_init :: proc() {
 	dip, turn := math.tan(math.to_radians(f64(draw(story.tilt, 0)))), 2*math.PI*f64(hash01(1, 0, seed + 301))
 	rocks.dip = {dip*math.cos(turn), dip*math.sin(turn)}
 	rocks.fold, rocks.wave = draw(story.fold, 2), f64(draw(story.wave, 3))
-	fmt.printfln("rock: %s; beds dip %.1f° toward %.0f° (0 is north, 90 east), folds %.0f m high every %.1f km",
-		story.name, draw(story.tilt, 0), math.mod(math.to_degrees(math.atan2(-math.cos(turn), math.sin(turn))) + 360, 360), rocks.fold, rocks.wave/1000)
+	if story.drape {
+		n := int(region.size)/DRAPE + 1
+		rocks.drape = make([]f32, n*n)
+		for c in 0..<n*n do rocks.drape[c] = built(f64(c%n*DRAPE) - region.size/2, f64(c/n*DRAPE) - region.size/2)
+		fmt.printfln("rock: %s, laid over the forms the vents built; folds %.0f m high every %.1f km", story.name, rocks.fold, rocks.wave/1000)
+	} else {
+		fmt.printfln("rock: %s; beds dip %.1f° toward %.0f° (0 is north, 90 east), folds %.0f m high every %.1f km",
+			story.name, draw(story.tilt, 0), math.mod(math.to_degrees(math.atan2(-math.cos(turn), math.sin(turn))) + 360, 360), rocks.fold, rocks.wave/1000)
+	}
 	for m in Mat {
 		s := MATERIALS[m].strength
 		if s == 0 do continue
-		rocks.law[m] = {clamp(0.16/(s*s), 0.2, 5), math.tan(math.to_radians(35 + (s - 0.2)/0.7*20)), 1.25*(1 - s)}
+		rocks.law[m] = {clamp(0.16/(s*s), 0.2, 5), math.tan(math.to_radians(35 + 25*math.pow((s - 0.2)/0.6, 1.5))), (1 - s)*(1 - s)/0.5625}
 	}
 
 	// The beds, from the bottom of the stack up.
@@ -142,9 +171,27 @@ rock_init :: proc() {
 	}
 }
 
-// Height of the stack's base under a point: the tilt and the folds.
+// Height of the stack's base under a point: the tilt, the folds, and the ground the vents built
+// where the beds lie over it.
 rock_base :: proc(x, z, cell: f64) -> f32 {
-	return f32(rocks.dip.x*x + rocks.dip.y*z) + rocks.fold*fbm(x, z, rocks.wave, cell, 2, seed + 303)
+	return f32(rocks.dip.x*x + rocks.dip.y*z) + rocks.fold*fbm(x, z, rocks.wave, cell, 2, seed + 303) + drape_at(x, z)
+}
+
+drape_at :: proc(x, z: f64) -> f32 {
+	if len(rocks.drape) == 0 do return 0
+	n := int(region.size)/DRAPE + 1
+	u, v := clamp((x + region.size/2)/DRAPE, 0, f64(n) - 1.001), clamp((z + region.size/2)/DRAPE, 0, f64(n) - 1.001)
+	i, j := int(u), int(v)
+	tu, tv := f32(u - f64(i)), f32(v - f64(j))
+	k := j*n + i
+	return math.lerp(math.lerp(rocks.drape[k], rocks.drape[k + 1], tu), math.lerp(rocks.drape[k + n], rocks.drape[k + n + 1], tu), tv)
+}
+
+// Which way the beds run level at a point, across the slope of the stack's base.
+rock_strike :: proc(x, z: f64) -> [2]f64 {
+	d := rocks.dip + [2]f64{f64(drape_at(x + 8, z) - drape_at(x - 8, z)), f64(drape_at(x, z + 8) - drape_at(x, z - 8))}/16
+	l := math.hypot(d.x, d.y)
+	return [2]f64{-d.y, d.x}/l if l > 1e-6 else {1, 0}
 }
 
 // The rock at height y over a point whose stack base is `base`, from one level's table.

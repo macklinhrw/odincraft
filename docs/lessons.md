@@ -81,7 +81,7 @@ Added 2026-11-11, after rock beds, cliffs in blocks and four island kinds were b
 **Judging the world**
 - "Realistic but dull" meant not realistic enough. Real islands of the same size are steeper, cliffed at the sea and sharper at the crest. Compare with real elevation on the game's own grid before deciding what the land lacks; the plan was ordered from a diagnosis that the real data only partly supported.
 - A real island loaded into the game tests the dressing separately from the land. If it does not look like its photographs, the fault is in what is bare, the soil, the plants or the rock, since the land is known to be right.
-- Read a real island's figures before calling it unlivable. Mikurajima looked uninhabitable on the map and has a village, on ground of about 21°.
+- Read a real island's figures before calling it unlivable. Mikurajima looked uninhabitable on the map and has a village, on ground of about 17° (the median under its mapped buildings).
 - Only the cliff is bare. The older lesson that cliffs need bare rock still holds for the face; real flanks of 30 to 45° carry forest.
 - A design's constants are starting points. Three sets of numbers argued from sources failed the first time they were run.
 

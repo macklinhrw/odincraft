@@ -42,6 +42,16 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Rock is built before lakes.** This is an order of work: the first landslide waits for step 6, so it falls where a strong bed lies over a weak one.
 - **The history rows wait for step 3.** Until then every seed has today's one history.
 - **Step 3 built four island kinds (ridge, cone, worn, raised), and the seed draws among them** with a plain key, so the default seed 7 is now a cone island. Every row has ranges. The owner has not yet said whether "raised" stays.
+- **The sea cuts each shore by how much open sea lies round it and toward a swell whose bearing the seed draws**; sheltered shores are not cut. Strong rock stands to 60° and creeps less. Soil and trees hold to about 45° on any rock, and only steeper faces are bare.
+- **Livable ground is ground no steeper than 20°, at least 2 m above the sea, in a patch of a hectare or more**, set from the OpenStreetMap buildings on the eight real islands' grids: 20° holds 85 to 93% of the buildings on six of them and 57% on Mikurajima, whose village stands at a median 17° and 107 m. Height, distance from the sea and distance from a stream did not tell the villages from the rest of the land. A sheltered landing is shore under 5 m where the sea fills less than a third of the square a kilometre across around it, with livable ground within 100 m. Both print at start-up beside the real islands' figures.
+- **What the streams carry down settles where the sea is sheltered** and builds a flat 4 m over the sea out from the mouth; each row has a range for the share that stays (`silt`), and every history now ends with the last rise of the sea followed by 5,000 to 8,000 years in which the bay heads fill.
+- **A fifth kind, "inlets"**: the ridge island, larger and rising more slowly, drowned by a 115 to 120 m rise of the sea, after Tsushima and Chichijima.
+- **Kinds are drawn by weight**: ridge 3, inlets 3, worn 2, raised 2, domes 2, cone 1, crater 1, so the inhospitable cone and crater are each drawn about one time in fourteen. Seed 7 draws a raised island.
+- **Volcanic islands are histories of vents.** A vent builds rock over a phase (a cone of runny lava and ash, or a dome of stiff lava, by the row's `form`), its top can fall in to leave a closed crater, and magma swells it from inside. The cone row is rewritten this way, and two kinds are new: "crater" after Aogashima and "domes" after Kōzushima.
+- **The swelling is what gives a volcanic island its sea cliffs.** A vent that builds and then rests got none in this forming: the waves break on the platform they cut and the streams grade the coast down as fast as it retreats. The swelling reuses the uplift. The owner may prefer another cause.
+- **A crater floor drinks its water** at its lowest point, so it is dry closed ground with no lake and no stream over the rim. A floor that ends below the sea becomes sea.
+- **The kind names its rock story**, and there are three: the layered one, "lava and ash" (basalt and scoria) and "pale lava and pumice" (rhyolite and tuff). The volcanic beds lie over what the vents built.
+- **The open sea floor is 200 m down** beyond a shelf about 500 m wide, so vents build from a real floor.
 
 **2026-11-10, Claude's call**
 
@@ -131,6 +141,8 @@ Raised by `foundations.md`, section 9, which lists twelve decisions with a recom
 
 ### 9. Closing the gap to real islands
 
+*The first five items were built on 2026-11-11 as the land-forming step (`foundations.md`, section 8, "The land-forming step, as built"). Still open below: kinds named after real islands, people sooner, larger regions, and the comparison tool. New from the step: the ridge and raised islands have no sheltered landing, and whether the swelling of a cone is the right cause for its sea cliffs.*
+
 Raised by `interesting-world/notes/real-islands.md` (2026-11-11), which compared eight real Japanese islands with 32 generated ones on the game's own grid and renderer. The generated land is not close. In order of how much shows:
 
 - **The coast.** Real islands meet the sea in cliffs (a median 60 to 117 m high within 100 m of the shore) and are steepest at the sea; ours meet it on a low apron and are gentlest there. The plan builds the coast in step 15, in blocks, on land already formed. *Recommendation: move coast retreat into the land forming and do it next.*
@@ -145,6 +157,8 @@ Raised by `interesting-world/notes/real-islands.md` (2026-11-11), which compared
 - **Keep the comparison as a tool?** A `--real=` option that loads a real island in place of a formed one exists in a scratch build. *Recommendation: fold it in, with the figures, since real islands are now the yardstick.*
 
 ### 10. Is a kind a shape or a history?
+
+*Taken up on 2026-11-11: the inlets kind and the vent are built, and the three volcanic kinds are histories of events. The layered kinds still have shape fields. Sediment is in, as silt at bay heads.*
 
 Raised by the owner (2026-11-11): what stops a tectonics simulator from producing the kinds, so that none is written by hand? The answer and one test are in `foundations.md` section 11, "A kind as a history, not a shape".
 

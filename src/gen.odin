@@ -17,8 +17,8 @@ import "core:math"
 // and gravel forms as rows of their own.
 Mat :: enum u8 {
 	Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel,
-	Mudstone, Siltstone, Sandstone, Grit, Limestone,
-	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree,
+	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff,
+	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree,
 }
 
 Material :: struct {
@@ -43,11 +43,19 @@ MATERIALS := [Mat]Material{
 	.Sandstone = {{0.136, 0.108, 0.074}, 0.6, 1.5, .Sandstone_Scree},   // warm buff rectangular blocks
 	.Grit      = {{0.150, 0.134, 0.128}, 0.8, 4, .Grit_Scree},          // pinkish grey pebbly rock that caps the hills, in huge blocks
 	.Limestone = {{0.178, 0.180, 0.178}, 0.65, 1, .Limestone_Scree},    // pale grey
+	.Basalt    = {{0.050, 0.047, 0.045}, 0.75, 1, .Basalt_Scree},       // black-grey lava flows, jointed into columns
+	.Scoria    = {{0.085, 0.043, 0.033}, 0.25, 0.1, .Scoria_Scree},     // red-brown cinders and ash between the flows; crumbles
+	.Rhyolite  = {{0.200, 0.186, 0.172}, 0.7, 2, .Rhyolite_Scree},      // pale grey-pink stiff lava, in sheeted crags
+	.Tuff      = {{0.215, 0.200, 0.160}, 0.3, 0.1, .Tuff_Scree},        // cream pumice and ash
 	.Mudstone_Scree  = {{0.066, 0.068, 0.079}, 0, 0, .Air},   // fresh broken rock is a little paler than the weathered face
 	.Siltstone_Scree = {{0.105, 0.088, 0.066}, 0, 0, .Air},
 	.Sandstone_Scree = {{0.146, 0.116, 0.079}, 0, 0, .Air},
 	.Grit_Scree      = {{0.160, 0.143, 0.137}, 0, 0, .Air},
 	.Limestone_Scree = {{0.190, 0.193, 0.190}, 0, 0, .Air},
+	.Basalt_Scree    = {{0.058, 0.054, 0.051}, 0, 0, .Air},
+	.Scoria_Scree    = {{0.093, 0.047, 0.036}, 0, 0, .Air},
+	.Rhyolite_Scree  = {{0.214, 0.200, 0.185}, 0, 0, .Air},
+	.Tuff_Scree      = {{0.228, 0.212, 0.170}, 0, 0, .Air},
 }
 
 CHUNK       :: 32               // cells along a chunk side
@@ -141,7 +149,8 @@ Ground :: struct {
 	cover:    Mat,   // river gravel, or the loose rock lying under a face; Air for neither
 }
 
-REPOSE :: 0.67   // loose rock comes to rest at about 34°
+REPOSE     :: 0.67   // loose rock comes to rest at about 34°
+SOIL_HOLDS :: 1      // and soil holds on ground up to about 45°, rise over run
 
 // How strongly a bed of `lo` under a bed of `hi` stands as a ledge on a hillside this steep:
 // a riser at the foot of `lo` and a tread on its top. Only a stronger bed under a weaker one,
@@ -186,7 +195,7 @@ ledges :: proc(h, steep, base: f32, cell: f64) -> (l: Ledge) {
 	// angle of rest, or where the hillside is steeper than that, no steeper than the hillside,
 	// so it always comes to ground within this bed.
 	above := rocks.beds[n + 1].kind
-	if face := fade*max(ledge(above, rocks.beds[n + 2].kind, steep), smoothstep(0.9, 1.1, steep/rocks.law[above].limit)); face > 0 {
+	if face := fade*max(ledge(above, rocks.beds[n + 2].kind, steep), smoothstep(0.9, 1.1, steep/max(rocks.law[above].limit, SOIL_HOLDS))); face > 0 {
 		l.face = above
 		fall := max(REPOSE/max(steep, 0.01), 1)   // its fall per metre of the smooth hillside's
 		if lift := face*(h + bed.thick*p*(1 - fall) - l.h); lift > 0 {
@@ -218,7 +227,7 @@ ground :: proc(x, z, cell: f64) -> (g: Ground) {
 	kind := rocks.beds[n].kind
 	if gap := MATERIALS[kind].crack; near > 0 && l.lift == 0 && gap >= 1 {
 		if bare := near*smoothstep(1, 1.5, steep*l.rise/rocks.law[kind].limit); bare > 0 {
-			strike := [2]f64{-rocks.dip.y, rocks.dip.x}/math.hypot(rocks.dip.x, rocks.dip.y)
+			strike := rock_strike(x, z)
 			u, v := (x*strike.x + z*strike.y)/f64(gap), (z*strike.x - x*strike.y)/f64(2.5*gap)
 			across := i32(math.floor(v + f64(hash01(i32(n), 1, seed + 401))))
 			along := i32(math.floor(u + f64(hash01(across, i32(n), seed + 402))))
@@ -246,9 +255,10 @@ surface_at :: proc(x, z, cell: f64) -> (g: Ground, m: Mat) {
 	g = ground(x, z, cell)
 	vary := fbm(x, z, 120, cell, 2, seed + 100) + 0.7*fbm(x, z, 22, cell, 2, seed + 101)   // broad patches, broken at the edges
 	bed := rock_in(g.h - 0.5, g.base, clamp(int(math.log2(cell)), 0, ROCK_LEVELS - 1))
-	// Weak rock keeps soil up to the steepest slope it holds; strong rock sheds it a little
-	// before, as its face stands near that slope.
-	holds := rocks.law[bed].limit*(0.95 + 0.1*vary - (0.1 if MATERIALS[bed].strength >= 0.5 else 0))
+	// Soil and forest hold on ground up to about 45°, as on real flanks; only a face steeper
+	// than that is bare, which a weak rock makes only where the sea undercuts it or as the riser
+	// of a ledge.
+	holds := SOIL_HOLDS + 0.15*vary
 	switch {
 	case g.cover == .Gravel:       m = .Gravel
 	case g.h < 1.8 + vary*1.2:     m = .Sand

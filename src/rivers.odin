@@ -64,21 +64,24 @@ rivers_trace :: proc() {
 	n := g.n
 	rivers.side = int(region.size)/BUCKET
 	rivers.buckets = make([][dynamic]i32, rivers.side*rivers.side)
-	stream :: proc(g: ^Grid, c: i32) -> bool { return g.area[c] >= CHANNEL_AREA }
 	point :: proc(g: ^Grid, c: i32) -> River_Point {
 		p := [2]f32{f32(int(c)%g.n) + 0.5, f32(int(c)/g.n) + 0.5} + g.jitter[c]
 		return {p*g.d - f32(region.size/2), g.fill[c], g.area[c]}
 	}
 
-	feeders := make([]u8, n*n)
-	defer delete(feeders)
+	// A stream runs where enough land drains, unless its water sinks into a crater floor
+	// before it gathers: there the ground stays dry.
+	stream, feeders := make([]bool, n*n), make([]u8, n*n)
+	defer { delete(stream); delete(feeders) }
 	for c in g.order {
-		if r := g.next[c]; stream(g, c) && r >= 0 do feeders[r] += 1
+		r := g.next[c]
+		stream[c] = g.area[c] >= CHANNEL_AREA && (r == -1 || (r >= 0 && stream[r]))
+		if stream[c] && r >= 0 do feeders[r] += 1
 	}
 	points: [dynamic]River_Point
 	defer delete(points)
 	for c in g.order {
-		if !stream(g, c) || feeders[c] == 1 do continue   // a reach begins at a spring or below a confluence
+		if !stream[c] || feeders[c] == 1 do continue   // a reach begins at a spring or below a confluence
 		clear(&points)
 		at := c
 		for {

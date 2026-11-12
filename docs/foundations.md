@@ -198,7 +198,7 @@ Forming time is watched as a budget. The designers' estimates add about 0.6 to 1
 
 ### After step 3: the land measured against real islands
 
-Added 2026-11-11. Steps 0 to 3 are built. A comparison with eight real Japanese islands (`interesting-world/notes/real-islands.md`) then showed that the land forming itself is short of real land in four ways the table above does not address, and the owner set the direction: real islands are the north star, leaning toward the livable ones, with an inhospitable island kept as a rarer kind (`open-decisions.md`). What this changes in the plan, pending the owner's word on question 9 there:
+Added 2026-11-11. Steps 0 to 3 are built. A comparison with eight real Japanese islands (`interesting-world/notes/real-islands.md`) then showed that the land forming itself is short of real land in four ways the table above does not address, and the owner set the direction: real islands are the north star, leaning toward the livable ones, with an inhospitable island kept as a rarer kind (`open-decisions.md`). What this changes in the plan (the owner said yes on 2026-11-11, and the step is built: see the next heading):
 
 - **A land-forming step before step 4.** The sea cuts the coast back inside the forming, so exposed shores stand as cliffs 50 m and more over a platform, and the uplift no longer falls to zero at the shore. Strong rock holds steeper faces and creeps less, so crests sharpen. The kind rows are reshaped toward real masses: a broader, gentler top on the cone, a longer ridge, deeper drowning on the worn kind. The targets are the real figures: 40 to 80% of an exposed shore rising 30 m within 50 m, 1 to 3% of land over 60°, a crest fall of 0.5 to 1 m.
 - **Livable ground is kept on purpose.** Cutting the coast removes the low apron that is most of today's gentle land. Gentle ground goes back where it has a cause (a bay head, a valley floor, a river-mouth flat, a terrace, a plateau top), each kind row gets a range for how much, and the draw of kinds is weighted toward the livable ones. Livable ground and sheltered landings join the figures the game prints.
@@ -206,6 +206,42 @@ Added 2026-11-11. Steps 0 to 3 are built. A comparison with eight real Japanese 
 - **Step 5 gains a constraint.** The soil rule must keep forest on slopes of 35 to 45°, or a truer island turns bare.
 - **Step 11 gains material.** Rivers will hang over the new sea cliffs, so falls become common.
 - **A comparison tool.** A scratch build loads a real island in place of a formed one and prints the same figures. Whether it joins the game is the owner's call.
+
+### The land-forming step, as built
+
+Built 2026-11-11 in three parts, each checked against the figures the game now prints at start-up. The owner has not yet looked at it.
+
+**Part 1, coast and steepness.** Uplift reaches the shore. A step inside the forming cuts each shore cell back by how much open sea lies round it and toward a swell whose bearing the seed draws, leaving a platform and a cliff; sheltered shores are not cut. Strong rock stands to 60° and creeps less. Soil and trees hold to about 45° on any rock, and only steeper faces are bare.
+
+**Part 2, livable ground and inlets.** Livable ground is a field: no steeper than 20°, at least 2 m over the sea, in a patch of a hectare or more, set from where mapped buildings stand on the eight real islands. What the streams carry settles in sheltered water and builds flats at bay heads. A fifth kind, inlets, is high ground drowned by a rise of 115 to 120 m. Kinds are drawn by weight, the livable ones more often.
+
+**Part 3, vents.** A vent builds rock (a cone or a dome, by what it erupts), its top can fall in to leave a closed dry crater, and magma swells it from inside. The cone is rewritten as a built island, and crater and domes are new kinds. Two rock stories, lava and ash, and pale lava and pumice, lay their beds over what the vents built.
+
+![Seven kinds on three seeds each, after the step](interesting-world/real/kinds-after-land-step.jpg)
+
+Medians over the seeds tried (three to six a kind), beside the real ranges:
+
+| Figure | Real high islands | ridge | cone | crater | domes | inlets | worn | raised |
+|---|---|---|---|---|---|---|---|---|
+| Height within 100 m of the shore, m | 60 to 117 | 79 | 95 | 98 | 78 | 49 | 22 | 30 |
+| Shore rising 30 m within 50 m, % | 40 to 85 | 81 | 99 | 95 | 76 | 52 | 12 | 32 |
+| Slope in the first 100 m, ° | 29 to 51 | 32 | 38 | 43 | 37 | 20 | 12 | 12 |
+| Land under 50 m, % | 5 to 16 | 13 | 6 | 17 | 13 | 41 | 54 | 31 |
+| Land steeper than 60°, % | 0.8 to 2.9 | 2.0 | 1.6 | 2.7 | 1.0 | 1.6 | 0.3 | 0.7 |
+| Fall at a ridge crest, m | 0.56 to 1.25 | 0.59 | 1.89 | 2.3 | 1.25 | 0.62 | 0.56 | 0.54 |
+| Height above the nearest stream, m | 54 to 130 | 67 | 102 | 74 | 137 | 51 | 29 | 40 |
+| Livable ground, % of land | 15 to 46 (Kikaijima 91) | 50 | 0 | 24 | 28 | 49 | 62 | 62 |
+| Sheltered landings | 0 on the cones, 7 to 14, 80 on Tsushima | 0 | 0 | 0 | 1.5 | 9 | 9 | 0 |
+
+Before the step the four kinds stood at 6 to 17 m, 0 to 2%, 4 to 10° and 30 to 55% on the first four rows, and nothing was steeper than 60°. Forming takes 0.25 to 0.9 s on every kind. `src/` grew by 517 lines.
+
+What is still short:
+
+- **Landings.** The ridge and the raised island, which is now the default, have none; Hahajima has 7 and Kikaijima 12. Their outlines enclose no water, and a more ragged outline was cut back smooth by the sea. Only drowning gave landings.
+- **Volcanic crests are too sharp** (1.2 to 2.3 m against 0.19 to 0.69 on their references), and the cone has no livable ground at all where Mikurajima has 15%.
+- **Craters and domes look drawn.** A crater floor is a smooth round bowl and the domes are round lobes. That is the fault `lessons.md` warns of, a shape that reads as a diagram, and it is the owner's to judge.
+- **The 8 km region.** The inlets island keeps 7.6 km² of land and has 26 to 38% of its outline as sea, against 52 to 60%. On a 16 km region it formed in 4.1 to 4.9 s with 36 to 53 km² and 28 to 41 landings. Not shipped.
+- **Not done:** a real island loaded into the new build to test the dressing.
 
 ### Experiments to run early
 
@@ -355,6 +391,15 @@ Tsushima has 60% of its outline as sea and Hahajima and Chichijima 52 to 56%; th
 - The drowned valley floors have no fill. A real inlet's head is a flat of river sediment, which is where its village stands; that needs deposition, which the plan has left to Phase 2 *(inference)*.
 - The embayment was measured from the map's land outline, checked against the earlier figure for the ridge (4% here, 5% there).
 
+### What the land-forming step taught
+
+- **Livable ground was not what was missing; landings were.** By a rule taken from real buildings (20° holds 85 to 93% of them on six of the eight islands), the islands were already as livable as the real ones once the coast was cut. What they lacked was a low sheltered shore to reach that ground from. Slope alone told the villages from the rest of the land; height, distance to the sea and distance to a stream did not.
+- **Building and then cutting does not make a sea cliff here.** The waves break on the platform they cut and the streams grade the coast down as fast as it retreats. The cliffs on the volcanic kinds come from the cone still swelling. Whether that is the right cause is open.
+- **An old step can undo a new one.** Each refinement re-read the island's first outline, which would have put back everything the sea had cut and which had been laying a strip of low land along every coast.
+- **The uplift ramp was one cause of the low coast among four**: the cone's uplift was nearly all at the summit, the worn island rests while its coast wears, and the raised island's shelf is low by design.
+- **A late event must be late.** A crater that fell in early was breached by streams within about 300,000 years.
+- **Three briefs each carried a wrong premise**, and each was caught because the brief asked for its claims to be tested.
+
 ### Every step has target figures
 
 The Phase 1 table says what the owner looks at after each step. It should also say what is measured, taken from the real islands, so a step can be rejected before the owner's time is spent. The targets known so far:
@@ -375,7 +420,7 @@ The figures the game prints at start-up (slope, tallest face) grow to include th
 ### Livable ground is a field, defined from real settlements
 
 - **It is a named field like wetness or slope**, so kinds can host on it: a plant community, a trail, a landing and later a village all read it. Decision 2 already says a new condition becomes a new field.
-- **Its definition comes from where real villages stand.** Mikurajima's one village is on ground of about 21° at about 150 m above the sea, on the island's gentlest coast. A rule that calls only flat ground livable would reject it. Real settlement sites on the reference islands are the ground truth: their slope, height above the sea, distance to fresh water and to a landing, and shelter. Not yet measured.
+- **Its definition comes from where real villages stand.** Mikurajima's one village is on ground of about 17° at about 107 m above the sea (the median under its mapped buildings), on the island's gentlest coast. A rule that calls only flat ground livable would reject it. Real settlement sites on the reference islands are the ground truth: their slope, height above the sea, distance to fresh water and to a landing, and shelter. Not yet measured.
 - **Livable ground has to have a cause.** Today the gentle land is a ring of low apron round every shore, the same on every side. Real livable ground is somewhere in particular: a bay head, a valley floor, a river-mouth flat, a terrace, a plateau top, a crater floor.
 - **It serves the later game.** The colony game's site choice (Phase 3) reads the same field, and an island with no site has nothing to choose between.
 
@@ -417,8 +462,9 @@ Most livable real islands are larger than the 8 km region: Kikaijima is about 14
 | 2: cliffs in blocks | 160 | 131 after fallen blocks were removed |
 | 3: the island's recipe as a record | 130 | about 200 |
 | Fixes after step 3 | | 9 |
+| The land-forming step (not in the plan) | | 517 |
 
-`src/` went from 3,138 to 3,751 lines. Forming time fell, from about 1.0 s to 0.4 to 1.0 s depending on the kind.
+`src/` went from 3,138 to 3,751 lines over steps 0 to 3, and to 4,268 with the land-forming step. Forming time fell, from about 1.0 s to 0.25 to 0.9 s depending on the kind.
 
 ## Files
 

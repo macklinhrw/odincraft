@@ -8,9 +8,10 @@ import "core:slice"
 import "core:time"
 
 // The land is formed before play. An island is pushed up out of the sea for about four
-// million years while running water cuts it down and hillsides slump to the steepest
-// angle they can hold. Valleys, ridges and the river network come out of that together,
-// which is the point: a river here is the reason its valley exists.
+// million years while running water cuts it down, hillsides slump to the steepest
+// angle they can hold, the sea cuts its exposed shores back into cliffs and what the streams
+// carry down fills its sheltered bays. Valleys, ridges, flats and the river network come out of
+// that together, which is the point: a river here is the reason its valley exists.
 //
 // The work runs coarse to fine. Most of the time passes on a 64 m grid, where a step is
 // cheap; each refinement doubles the detail and runs long enough for the next size of
@@ -30,32 +31,45 @@ REFERENCE :: 8192
 
 // The island's outline, and the pattern it rises in.
 Shape :: struct($T: typeid) {
-	radius:              T,   // of the island, as a share of the region's side
-	xx, zz, xz:          T,   // how the outline is stretched and turned
+	radius:              T,   // of the island at the start, as a share of the region's side; 0 for none, where vents build it from the sea floor
+	xx, zz, xz:          T,   // how the outline, and the forms the vents build, are stretched and turned
 	ragged, ragged_wave: T,   // the coast wanders in and out by this share of the radius, over this distance
 	rate:                T,   // uplift at the heart of the island, m/yr
-	coast:               T,   // the uplift grows from nothing at the shore over this share of the way inland
-	floor:               T,   // the share of it found everywhere inland,
+	swell:               T,   // the bearing the swell comes from, degrees from north
+	silt:                T,   // the share of what the rivers carry down that settles where the sea is sheltered
+	floor:               T,   // the share of it found everywhere, to the shore,
 	ridge:               T,   // and more along a range
 	axis:                T,   // that runs east to west this far south of the middle,
 	bend, bend_wave:     T,   // swinging this far north and south over this distance,
 	wander, wander_wave: T,   // wandering this far besides,
-	width:               T,   // and this wide;
-	peak, peak_width:    T,   // and more toward the middle, falling away over this share of the way to the coast.
-	lumps, lumps_wave:   T,   // The uplift varies by this share over this distance.
+	width:               T,   // and this wide.
+	lumps, lumps_wave:   T,   // The uplift, and the fall of a vent's form, vary by this share over this distance.
 }
 
 // A stretch of the island's history: steps of so many years on cells of a size, with the
 // island rising at a share of the shape's rate, begun by the sea rising (or, below zero,
 // falling) so many metres. Cells halve from one phase to the next or stay.
+//
+// Vents may open at a phase's start, each `spread` metres from the middle of the vents of the
+// phase before (from the region's middle, for the first). Over the phase each raises the
+// ground at its top by `build` metres and lays what it erupts over the land and sea around,
+// filling valleys and building out into the sea, in a form that falls away from its top as
+// distance to the power `form`, `flank` metres a metre on average down to the ground it was
+// built on. What is erupted decides the form: runny lava and ash (under 1) build a cone whose
+// flanks steepen toward its top, stiff lava (over 1) a dome with a broad top and steep sides.
+// At the phase's end a vent's top may fall in within `crater` metres of it, to a closed floor
+// `deep` metres under the lowest point of what is left of its rim.
 Phase :: struct($T: typeid) {
 	cell:  int,
 	years: f32,   // per step
 	steps, uplift, sea: T,
+	vents, spread, build, form, flank, crater, deep: T,
 }
 
 Kind :: struct {
 	name:    string,
+	weight:  f32,      // how often the seed draws this kind, against the other rows' weights
+	story:   string,   // what the rock is (STORIES, rock.odin)
 	shape:   Shape([2]f64),
 	history: []Phase([2]f32),
 }
@@ -63,11 +77,12 @@ Kind :: struct {
 KINDS := [?]Kind{
 	{
 		// A range north of the middle and a long south slope with room for rivers. It rises
-		// for 3 to 4 million years, and the sea then floods the valley mouths into inlets.
-		name = "ridge",
+		// for 3 to 4 million years, and the sea then floods the valley mouths into inlets. After
+		// Hahajima, though rounder.
+		name = "ridge", weight = 3, story = "layered, gently tilted",
 		shape = {
-			radius = {0.29, 0.33}, xx = {0.85, 1.0}, zz = {1.15, 1.35}, xz = {-0.4, 0.4}, ragged = {0.35, 0.45}, ragged_wave = {2500, 3500},
-			rate = {0.00055, 0.0007}, coast = {0.25, 0.35}, floor = {0.25, 0.35}, ridge = {0.8, 1.1},
+			radius = {0.31, 0.35}, xx = {0.85, 1.0}, zz = {1.15, 1.35}, xz = {-0.4, 0.4}, ragged = {0.35, 0.45}, ragged_wave = {2500, 3500},
+			rate = {0.00055, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.25, 0.35}, ridge = {0.8, 1.1},
 			axis = {-1100, -600}, bend = {250, 550}, bend_wave = {1400, 2200}, wander = {250, 450}, wander_wave = {2000, 3000}, width = {850, 1200},
 			lumps = {0.3, 0.45}, lumps_wave = {1800, 2600},
 		},
@@ -75,52 +90,104 @@ KINDS := [?]Kind{
 			{cell = 64, years = 20000, steps = {140, 175}, uplift = {1, 1}},
 			{cell = 32, years = 6000, steps = {40, 60}, uplift = {1, 1}},
 			{cell = 16, years = 3000, steps = {30, 30}, uplift = {1, 1}},
-			{cell = 16, sea = {5, 10}},   // too lately for anything to wear
+			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {5, 10}},   // the last rise, and the thousands of years since
 		},
 	},
 	{
-		// A young cone: round, rising fast in the middle for under a million years, so its
-		// gullies run out from the summit and have not yet cut far in.
-		name = "cone",
+		// Drowned: a ridge island, larger, that the sea rose 115 to 120 m into at the end of the
+		// last ice age, so its valleys are long branching inlets between high steep spurs, and in
+		// the 5,000 to 8,000 years since the rivers have filled the head of each with a flat.
+		// After Tsushima's Asō Bay and Chichijima.
+		name = "inlets", weight = 3, story = "layered, gently tilted",
 		shape = {
-			radius = {0.26, 0.32}, xx = {0.9, 1.1}, zz = {0.9, 1.1}, xz = {-0.2, 0.2}, ragged = {0.15, 0.25}, ragged_wave = {2500, 3500},
-			rate = {0.0015, 0.0025}, coast = {0.1, 0.2}, floor = {0.05, 0.1}, peak = {1.5, 2}, peak_width = {0.35, 0.5},
-			lumps = {0.15, 0.25}, lumps_wave = {2000, 3000},
+			radius = {0.40, 0.42}, xx = {0.85, 1.0}, zz = {1.15, 1.35}, xz = {-0.4, 0.4}, ragged = {0.35, 0.45}, ragged_wave = {2500, 3500},
+			rate = {0.0004, 0.0005}, swell = {0, 360}, silt = {0.4, 0.8}, floor = {0.25, 0.35}, ridge = {0.8, 1.1},
+			axis = {-1100, -600}, bend = {250, 550}, bend_wave = {1400, 2200}, wander = {250, 450}, wander_wave = {2000, 3000}, width = {850, 1200},
+			lumps = {0.3, 0.45}, lumps_wave = {1800, 2600},
 		},
 		history = {
-			{cell = 64, years = 20000, steps = {30, 45}, uplift = {1, 1}},
-			{cell = 32, years = 6000, steps = {50, 50}, uplift = {1, 1}},
+			{cell = 64, years = 20000, steps = {140, 175}, uplift = {1, 1}},
+			{cell = 32, years = 6000, steps = {40, 60}, uplift = {1, 1}},
 			{cell = 16, years = 3000, steps = {30, 30}, uplift = {1, 1}},
-			{cell = 16, sea = {3, 8}},
+			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {115, 120}},
+		},
+	},
+	{
+		// A cone after Toshima and Mikurajima, the rare inhospitable kind: one vent builds it out
+		// of the sea from lava and ash in a few tens of thousands of years, and the sea and its
+		// streams then cut it for a few hundred thousand, into a wall of cliffs round radial gorges.
+		name = "cone", weight = 1, story = "lava and ash",
+		shape = {xx = {0.9, 1.1}, zz = {0.9, 1.1}, xz = {-0.2, 0.2}, rate = {0.0012, 0.0016}, swell = {0, 360}, silt = {0, 0.1}, lumps = {0.05, 0.1}, lumps_wave = {2000, 3000}},
+		history = {
+			{cell = 64, years = 2000, steps = {15, 25}, vents = {1, 1}, spread = {0, 400}, build = {700, 1000}, form = {0.7, 0.9}, flank = {0.28, 0.38}},
+			{cell = 64, years = 10000, steps = {25, 40}, uplift = {1, 1}},
+			{cell = 32, years = 5000, steps = {30, 30}, uplift = {1, 1}},
+			{cell = 16, years = 3000, steps = {30, 30}, uplift = {1, 1}},
+			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {3, 8}},
+		},
+	},
+	{
+		// A crater after Aogashima: a steep cone of lava and ash, cut by the sea into cliffs for a
+		// few hundred thousand years, whose top then falls in after a last small eruption, leaving
+		// a rim round a closed floor, in which a small cone grows with a crater of its own.
+		name = "crater", weight = 1, story = "lava and ash",
+		shape = {xx = {0.75, 1}, zz = {1, 1.3}, xz = {-0.3, 0.3}, rate = {0.0011, 0.0015}, swell = {0, 360}, silt = {0, 0.1}, lumps = {0.04, 0.08}, lumps_wave = {1500, 2500}},
+		history = {
+			{cell = 64, years = 2000, steps = {15, 20}, vents = {1, 1}, build = {880, 980}, form = {1, 1.2}, flank = {0.55, 0.65}},
+			{cell = 64, years = 10000, steps = {5, 10}, uplift = {1, 1}},
+			{cell = 32, years = 5000, steps = {30, 40}, uplift = {1, 1}},
+			{cell = 16, years = 3000, steps = {25, 30}, uplift = {1, 1}},
+			{cell = 16, years = 500, steps = {2, 3}, vents = {1, 1}, spread = {0, 200}, build = {20, 40}, form = {0.6, 0.8}, flank = {0.3, 0.4}, crater = {550, 700}, deep = {60, 110}},
+			{cell = 16, years = 500, steps = {3, 5}, vents = {1, 1}, spread = {0, 250}, build = {80, 140}, form = {0.6, 0.8}, flank = {0.3, 0.4}, crater = {50, 90}, deep = {10, 25}},
+			{cell = 16, years = 1000, steps = {3, 5}, sea = {3, 8}},
+		},
+	},
+	{
+		// Domes after Kōzushima: an explosive vent spreads a low fan of pumice and ash, then
+		// several vents of stiff pale lava pile steep-sided domes on it, with bays where the sea
+		// lies between them. The sea cuts the headlands, the streams fill the bays' heads, and at
+		// last a young dome grows with a shallow sunken top.
+		name = "domes", weight = 2, story = "pale lava and pumice",
+		shape = {xx = {0.9, 1.1}, zz = {0.9, 1.1}, xz = {-0.2, 0.2}, rate = {0.0011, 0.0016}, swell = {0, 360}, silt = {0.2, 0.5}, lumps = {0.15, 0.25}, lumps_wave = {1500, 2500}},
+		history = {
+			{cell = 64, years = 2000, steps = {3, 5}, vents = {1, 1}, spread = {0, 600}, build = {230, 290}, form = {2.5, 3.5}, flank = {0.1, 0.13}},
+			{cell = 64, years = 2000, steps = {10, 15}, vents = {4, 6}, spread = {1000, 2300}, build = {350, 550}, form = {2, 3.5}, flank = {0.35, 0.5}},
+			{cell = 32, years = 5000, steps = {8, 12}, uplift = {1, 1}},
+			{cell = 16, years = 3000, steps = {10, 15}, uplift = {1, 1}},
+			{cell = 16, years = 1000, steps = {3, 5}, vents = {1, 1}, spread = {0, 1000}, build = {250, 350}, form = {2.5, 3.5}, flank = {0.35, 0.45}, crater = {150, 250}, deep = {10, 30}},
+			{cell = 16, years = 1000, steps = {5, 8}, sea = {3, 8}},
 		},
 	},
 	{
 		// Worn down: it rose as the ridge island does, then the uplift stopped some 400,000 years
-		// ago and the land has been wearing away since: low rounded hills, the sea in its valleys.
+		// ago, the sea rose into its valleys, and the land has been wearing away and the waves
+		// cutting the new shore since: low rounded hills round wide bays whose heads have filled
+		// with flats. No real island in the set is close; the drowned ones are the inlets kind.
 		// Much longer at rest and it wears down to the sea.
-		name = "worn",
+		name = "worn", weight = 2, story = "layered, gently tilted",
 		shape = {
-			radius = {0.31, 0.36}, xx = {0.85, 1.15}, zz = {0.85, 1.2}, xz = {-0.5, 0.5}, ragged = {0.35, 0.5}, ragged_wave = {2500, 3500},
-			rate = {0.0005, 0.0007}, coast = {0.2, 0.3}, floor = {0.3, 0.5}, ridge = {0.6, 0.95},
+			radius = {0.34, 0.38}, xx = {0.85, 1.15}, zz = {0.85, 1.2}, xz = {-0.5, 0.5}, ragged = {0.35, 0.5}, ragged_wave = {2500, 3500},
+			rate = {0.0005, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.3, 0.5}, ridge = {0.6, 0.95},
 			axis = {-900, 900}, bend = {200, 500}, bend_wave = {1500, 2500}, wander = {200, 400}, wander_wave = {2500, 2500}, width = {1000, 1400},
 			lumps = {0.3, 0.5}, lumps_wave = {2000, 3000},
 		},
 		history = {
 			{cell = 64, years = 20000, steps = {150, 170}, uplift = {1, 1}},
-			{cell = 32, years = 6000, steps = {40, 60}, uplift = {0, 0}},
+			{cell = 32, years = 6000, steps = {40, 60}, uplift = {0, 0}, sea = {20, 40}},
 			{cell = 16, years = 3000, steps = {30, 30}, uplift = {0, 0}},
-			{cell = 16, sea = {4, 8}},
+			{cell = 16, years = 1000, steps = {5, 8}, uplift = {0, 0}, sea = {4, 8}},
 		},
 	},
 	{
-		// Raised: the sea fell twice late in the island's rise and uncovered the shelf around it.
-		// The shelf does not rise with the island, so the first coast stands as one step above
-		// it, and the streams crossing it cut back into it, the larger faster, until a last small
-		// rise floods their mouths. A step for each fall waits for the sea to cut its own shore.
-		name = "raised",
+		// Raised: the sea fell twice late in the island's rise and uncovered the platform its
+		// waves had cut, broad where the swell struck and narrow in the lee, so the old cliff
+		// stands behind a terrace, and the streams crossing it cut back into it, the larger
+		// faster, until a last small rise floods their mouths. A step for each fall waits for
+		// the sea to cut its own shore. After Kikaijima, though steeper behind its terraces.
+		name = "raised", weight = 2, story = "layered, gently tilted",
 		shape = {
 			radius = {0.26, 0.30}, xx = {0.8, 1.2}, zz = {0.8, 1.25}, xz = {-0.5, 0.5}, ragged = {0.3, 0.45}, ragged_wave = {2500, 3500},
-			rate = {0.0005, 0.0007}, coast = {0.15, 0.3}, floor = {0.3, 0.5}, ridge = {0.6, 0.95},
+			rate = {0.0005, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.3, 0.5}, ridge = {0.6, 0.95},
 			axis = {-900, 900}, bend = {200, 500}, bend_wave = {1500, 2500}, wander = {200, 400}, wander_wave = {2500, 2500}, width = {1000, 1400},
 			lumps = {0.3, 0.5}, lumps_wave = {2000, 3000},
 		},
@@ -128,7 +195,7 @@ KINDS := [?]Kind{
 			{cell = 64, years = 20000, steps = {150, 170}, uplift = {1, 1}},
 			{cell = 32, years = 6000, steps = {40, 50}, uplift = {1, 1}, sea = {-8, -12}},
 			{cell = 16, years = 3000, steps = {30, 30}, uplift = {1, 1}, sea = {-8, -12}},
-			{cell = 16, sea = {3, 6}},
+			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {3, 6}},
 		},
 	},
 }
@@ -140,18 +207,70 @@ Region :: struct {
 	shape:   Shape(f64),
 	story:   ^Story,
 	history: []Phase(f32),
+	vents:   [dynamic]Vent,   // in the order they open
+}
+
+// A vent, drawn from its phase's ranges.
+Vent :: struct {
+	phase:         int,
+	at:            [2]f64,   // relative to the region's middle
+	top, build:    f32,      // height of its top once built, and how much it raised the ground there
+	reach:         f32,      // how far out its form comes down to the ground it was built on
+	form:          f32,
+	crater, deep:  f32,      // the radius its top falls in over, or 0, and the depth of the floor under the rim
+	floor:         f32,      // the height of that floor
+	fallen:        bool,     // its top has fallen in, and the water reaching its floor sinks there
 }
 
 region: Region
 
+SEA_BED :: -200   // metres, the floor of the open sea round a high island
+
+// Height of a vent's form at a point, once built, and how much rock it lays there at most: the
+// height of its form over the ground it was built on, all it built at its top and nothing at its
+// foot. So it fills the hollows near it up to its form, and lies thinly over the ground further
+// out, never more than it erupted. It falls away faster or slower by direction, as flows ran
+// further one way than another.
+vent_top :: proc(v: Vent, x, z: f64) -> (top, thick: f32) {
+	sh, k := region.shape, REFERENCE/region.size
+	dx, dz := x - v.at.x, z - v.at.y
+	r := math.sqrt(dx*dx*sh.xx + dz*dz*sh.zz + dx*dz*sh.xz)
+	out := [2]f64{dx, dz}/max(r, 1)*f64(v.reach)   // the point at the foot of the form in this direction
+	top = v.top - v.build*math.pow(f32(r)/v.reach, v.form)*(1 + f32(sh.lumps)*fbm((v.at.x + out.x)*k, (v.at.y + out.y)*k, sh.lumps_wave, 1, 3, seed + 3))
+	return top, max(top - (v.top - v.build), 0)
+}
+
+// The ground the vents built at a point, before anything wore it: the open sea's floor, raised
+// to each vent's form in turn, lowered into each crater, and swelled as the magma rose. With
+// `upto`, the ground the next vent opened on. The rock's beds lie parallel to it; the forming
+// builds each vent on the ground as the history has left it, worn as well.
+built :: proc(x, z: f64, upto := max(int)) -> f32 {
+	upto := min(upto, len(region.vents))
+	lift := uplift_at(x, z, shore(x, z))
+	h, phase := f32(SEA_BED), 0
+	swell :: proc(h: ^f32, phase: ^int, until: int, lift: f32) {
+		for ; phase^ < until; phase^ += 1 do h^ += lift*region.history[phase^].steps*region.history[phase^].years*region.history[phase^].uplift
+	}
+	for v in region.vents[:upto] {
+		swell(&h, &phase, v.phase, lift)
+		top, thick := vent_top(v, x, z)
+		h = max(h, min(top, h + thick))
+		if v.crater > 0 && math.hypot(x - v.at.x, z - v.at.y) < f64(v.crater) do h = min(h, v.floor)
+	}
+	swell(&h, &phase, region.vents[upto].phase if upto < len(region.vents) else len(region.history), lift)
+	return h
+}
+
 // Draw the region's record from the seed, of the named kind or, with none named, of the kind
-// the seed picks: each row draws a number keyed by its name and the highest wins, so a new row
-// changes only the seeds it wins. False if no kind has the name.
+// the seed picks: each row draws a number keyed by its name, raised to one over its weight, and
+// the highest wins, so a row wins in proportion to its weight and a new row changes only the
+// seeds it wins. False if no kind has the name.
 region_init :: proc(name: string) -> bool {
 	kind: ^Kind
 	best: f32 = -1
 	for &k in KINDS {
-		if h := hash01(i32(fnv.fnv32a(transmute([]u8)k.name)), 0, seed + 500); (name == "" && h > best) || k.name == name do kind, best = &k, h
+		h := math.pow(hash01(i32(fnv.fnv32a(transmute([]u8)k.name)), 0, seed + 500), 1/k.weight)
+		if (name == "" && h > best) || k.name == name do kind, best = &k, h
 	}
 	if kind == nil do return false
 	key := i32(fnv.fnv32a(transmute([]u8)kind.name))
@@ -160,17 +279,44 @@ region_init :: proc(name: string) -> bool {
 	for r, i in ranges do drawn[i] = r[0] + (r[1] - r[0])*f64(hash01(i32(i), key, seed + 520))
 	draw :: proc(r: [2]f32, i, key: i32) -> f32 { return r[0] + (r[1] - r[0])*hash01(i, key, seed + 521) }
 	region.kind, region.size, region.shape = kind.name, REFERENCE, transmute(Shape(f64))drawn
-	region.story = &STORIES[hash(0, 0, seed + 300) % len(STORIES)]
+	for &s in STORIES do if s.name == kind.story do region.story = &s
 	region.history = make([]Phase(f32), len(kind.history))
+	from := [2]f64{}   // the middle of the last vents to open
 	for p, i in kind.history {
 		k := i32(3*i)
-		region.history[i] = {p.cell, p.years, math.round(draw(p.steps, k, key)), draw(p.uplift, k + 1, key), draw(p.sea, k + 2, key)}
+		region.history[i] = {cell = p.cell, years = p.years, steps = math.round(draw(p.steps, k, key)), uplift = draw(p.uplift, k + 1, key), sea = draw(p.sea, k + 2, key)}
+		region.history[i].vents = math.round(draw(p.vents, k, key + 1))
+		// Each vent draws its own place, size and form within the phase's ranges.
+		middle, first := [2]f64{}, len(region.vents)   // the vents of a phase erupt together, each onto the ground as it stood
+		for _ in 0..<int(region.history[i].vents) {
+			j := i32(len(region.vents))*8
+			vary :: proc(r: [2]f32, j, key: i32) -> f32 { return r[0] + (r[1] - r[0])*hash01(j, key, seed + 522) }
+			turn, out := 2*math.PI*f64(hash01(j, key, seed + 523)), f64(vary(p.spread, j, key))*region.size/REFERENCE
+			v := Vent{phase = i, at = from + out*[2]f64{math.cos(turn), math.sin(turn)}, build = vary(p.build, j + 1, key), form = vary(p.form, j + 2, key)}
+			v.reach = v.build/vary(p.flank, j + 3, key)*f32(region.size/REFERENCE)
+			v.top = built(v.at.x, v.at.y, first) + v.build
+			append(&region.vents, v)
+			middle += v.at/f64(region.history[i].vents)
+			// The floor lies under the lowest point of the rim, so the crater is closed.
+			if crater := vary(p.crater, j + 4, key)*f32(region.size/REFERENCE); crater > 0 {
+				rim: f32 = 1e6
+				for a in 0..<32 do rim = min(rim, built(v.at.x + f64(crater)*math.cos(f64(a)*math.PI/16), v.at.y + f64(crater)*math.sin(f64(a)*math.PI/16)))
+				last := &region.vents[len(region.vents) - 1]
+				last.crater, last.deep = crater, vary(p.deep, j + 5, key)
+				last.floor = rim - last.deep
+			}
+		}
+		if region.history[i].vents > 0 do from = middle
 	}
-	fmt.printf("island: %s, %.1f km across", region.kind, region.size/1000)
-	for p in region.history {
+	fmt.printf("island: %s, %.1f km across, the swell from %.0f°", region.kind, region.size/1000, region.shape.swell)
+	for p, i in region.history {
 		if p.sea != 0 do fmt.printf("; the sea %s %.0f m", "rises" if p.sea > 0 else "falls", abs(p.sea))
-		rising := fmt.tprintf("rising %.2f mm/yr", p.uplift*f32(region.shape.rate)*1000) if p.uplift > 0 else "at rest"
-		if p.steps > 0 do fmt.printf("; %.0f kyr %s on %d m cells", p.steps*p.years/1000, rising, p.cell)
+		for v in region.vents do if v.phase == i {
+			fmt.printf("; a vent %.1f km from the middle builds a %s %.0f m high", math.hypot(v.at.x, v.at.y)/1000, "cone" if v.form < 1.5 else "dome", v.build)
+			if v.crater > 0 do fmt.printf(" whose top falls in, %.1f km across, to a floor %.0f m under its rim", 2*v.crater/1000, v.deep)
+		}
+		rising := fmt.tprintf(" rising %.2f mm/yr", p.uplift*f32(region.shape.rate)*1000) if p.uplift > 0 else " at rest" if region.shape.rate > 0 else ""
+		if p.steps > 0 do fmt.printf("; %.0f kyr%s on %d m cells", p.steps*p.years/1000, rising, p.cell)
 	}
 	fmt.println()
 	return true
@@ -181,11 +327,14 @@ Grid :: struct {
 	d:      f32,            // cell size, metres
 	z:      []f32,          // ground elevation, over the sea as it stands now
 	fill:   []f32,          // elevation once hollows are filled: the surface water runs down
-	next:   []i32,          // the cell each land cell drains into, or -1 for the sea
+	next:   []i32,          // the cell each land cell drains into, -1 for the sea or SINK for a crater floor
 	area:   []f32,          // land draining through each cell, m²
 	uplift: []f32,          // m/yr at the shape's full rate
 	sea:    []bool,
 	soft:   []f32,          // how easily the rock erodes, around 1, from one outcrop to the next
+	cut:    []f32,          // metres the sea has cut into a shore cell
+	load:   []f32,          // m³ of rock the water carries down through each cell in a step
+	face:   []f32,          // how many times steeper than on a hillside the ground stands, where the sea undercuts it
 	base:   []f32,          // height of the rock stack's base under each cell (rock.odin)
 	jitter: [][2]f32,       // where each cell's node sits in its square, so flow has no favourite compass direction
 	seen:   []bool,
@@ -202,55 +351,75 @@ Land :: struct {
 	z:     [3][]f32,   // elevation at 16, 32 and 64 m cells
 	slope: []f32,      // steepness
 	wet:   []f32,      // 0 on ridges to 1 in valley floors
+	live:  []f32,      // 1 on ground a person could live on, else 0
 	grid:  ^Grid,      // the finest grid, kept for the river network
 }
+
+// Ground a person could live on, from where the villages on eight real islands stand
+// (interesting-world/notes/real-islands.md, "Livable ground"): no steeper than 20°, which
+// holds 85 to 93% of their buildings on six of them and the gentler half of Mikurajima's, at
+// least 2 m above the sea, in a patch of a hectare or more. Height above the sea, distance
+// from it and distance from a stream told the villages from the rest of the land not at all.
+LIVABLE :: 0.364   // tan 20°
 
 land: Land
 
 // Positive inland, negative at sea, at a point relative to the region's middle.
 shore :: proc(x, z: f64) -> f32 {
 	sh, k := region.shape, REFERENCE/region.size
+	if sh.radius == 0 do return -1
 	r := f32(math.sqrt(x*x*sh.xx + z*z*sh.zz + x*z*sh.xz))/f32(sh.radius*region.size)
 	edge := f32(max(abs(x), abs(z)))/f32(0.5*region.size)
 	return 1 - r*(1 + f32(sh.ragged)*fbm(x*k, z*k, sh.ragged_wave, 1, 4, seed + 1)) - 4*smoothstep(0.86, 1, edge)
 }
 
-// A grid over the region with the sea `sea` metres above where it stood at the start.
-grid_make :: proc(n: int, sea: f32) -> ^Grid {
+// A grid over the region as it stands at the start.
+grid_make :: proc(n: int) -> ^Grid {
 	g := new(Grid)
 	g.n, g.d = n, f32(region.size)/f32(n)
 	g.z, g.fill, g.area = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
-	g.uplift, g.soft, g.base = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+	g.uplift, g.soft, g.base, g.cut, g.face, g.load = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 	g.next, g.jitter, g.seen, g.sea = make([]i32, n*n), make([][2]f32, n*n), make([]bool, n*n), make([]bool, n*n)
-	sh, k := region.shape, REFERENCE/region.size
+	k := REFERENCE/region.size
 	for c in 0..<n*n {
 		x, z := (f64(c%n) + 0.5)*f64(g.d) - region.size/2, (f64(c/n) + 0.5)*f64(g.d) - region.size/2
 		s := shore(x, z)
 		ix, iz := i32(c%n), i32(c/n)
+		g.face[c] = 1
 		g.jitter[c] = [2]f32{hash01(ix, iz, seed + 7 + u32(n)) - 0.5, hash01(ix, iz, seed + 8 + u32(n)) - 0.5}*0.9
 		// The beds decide how the rock wears; it also varies a little from one outcrop to the
 		// next, which keeps streams from running in straight lines along the grid.
 		g.soft[c] = math.exp(0.8*(hash01(ix, iz, seed + 6 + u32(n)) - 0.5))
 		g.base[c] = rock_base(x, z, LAND_CELL)
-		g.z[c] = -1 - 45*smoothstep(0, 0.35, -s) - sea   // sea bed, uncovered where the sea has fallen far enough
-		g.sea[c] = s <= 0 && g.z[c] <= 0
-		if s > 0 {
-			// The coast barely rises.
-			ridge, peak: f32
-			if sh.ridge > 0 {
-				axis := sh.axis + sh.bend*math.sin(x*k/sh.bend_wave) + sh.wander*f64(fbm(x*k, 0, sh.wander_wave, 1, 2, seed + 2))
-				ridge = f32(sh.ridge)*f32(math.exp(-math.pow((z*k - axis)/sh.width, 2)))
-			}
-			if sh.peak > 0 do peak = f32(sh.peak)*math.exp(-math.pow((1 - s)/f32(sh.peak_width), 2))
-			g.uplift[c] = f32(sh.rate)*smoothstep(0, f32(sh.coast), s)*(f32(sh.floor) + ridge + peak)*(1 + f32(sh.lumps)*fbm(x*k, z*k, sh.lumps_wave, 1, 3, seed + 3))
-			g.z[c] = 0.5 + 30*s + 25*(1 + fbm(x*k, z*k, 900, 1, 3, seed + 9))
-		}
+		g.z[c] = -2 - 60*smoothstep(0, 0.2, -s) + (SEA_BED + 62)*smoothstep(0.2, 0.5, -s)   // sea bed, falling away steeply as off a real high island
+		g.sea[c] = s <= 0
+		g.uplift[c] = uplift_at(x, z, s)
+		if s > 0 do g.z[c] = 0.5 + 30*s + 25*(1 + fbm(x*k, z*k, 900, 1, 3, seed + 9))
 	}
 	return g
 }
 
+// Uplift at a point whose shore value is s, m/yr at the shape's full rate: everywhere inland and
+// more along the range; and wherever magma rising into a vent's cone swells it from within, the
+// more the more it built, most under its top or evenly across the floor of a crater and its rim.
+uplift_at :: proc(x, z: f64, s: f32) -> f32 {
+	sh, k := region.shape, REFERENCE/region.size
+	lift: f32
+	for v in region.vents {
+		if r := max(f32(math.hypot(x - v.at.x, z - v.at.y)), v.crater); r < v.reach do lift += v.build/1000*(1 - math.pow(r/v.reach, v.form))
+	}
+	if s > 0 {
+		lift += f32(sh.floor)
+		if sh.ridge > 0 {
+			axis := sh.axis + sh.bend*math.sin(x*k/sh.bend_wave) + sh.wander*f64(fbm(x*k, 0, sh.wander_wave, 1, 2, seed + 2))
+			lift += f32(sh.ridge)*f32(math.exp(-math.pow((z*k - axis)/sh.width, 2)))
+		}
+	}
+	return f32(sh.rate)*lift*(1 + f32(sh.lumps)*fbm(x*k, z*k, sh.lumps_wave, 1, 3, seed + 3)) if lift > 0 else 0
+}
+
 grid_free :: proc(g: ^Grid) {
-	delete(g.z); delete(g.fill); delete(g.area); delete(g.uplift); delete(g.soft); delete(g.base)
+	delete(g.z); delete(g.fill); delete(g.area); delete(g.uplift); delete(g.soft); delete(g.base); delete(g.cut); delete(g.face); delete(g.load)
 	delete(g.next); delete(g.jitter); delete(g.seen); delete(g.sea); delete(g.order); delete(g.heap)
 	free(g)
 }
@@ -298,8 +467,11 @@ heap_pop :: proc(heap: ^[dynamic]Heap_Item) -> Heap_Item {
 
 // Decide where water goes. The land is flooded from the shore upward, lowest ground
 // first, so every cell is reached along a path that never climbs and hollows fill to
-// their rims. Then each cell drains to its steepest lower neighbour, and the land above
-// each cell is added up.
+// their rims. The one exception is a fallen crater: its floor is broken rock and ash that
+// the water sinks into, as on Aogashima's, so the flood starts again from its lowest point
+// and the crater stays a closed, dry hollow. Then each cell drains to its steepest lower
+// neighbour, and the land above each cell is added up.
+SINK :: -2   // in `next`: the water sinks into the ground here
 route :: proc(g: ^Grid) {
 	n := g.n
 	clear(&g.order)
@@ -320,6 +492,19 @@ route :: proc(g: ^Grid) {
 				break
 			}
 		}
+	}
+	sinks: [dynamic]i32
+	defer delete(sinks)
+	for v in region.vents do if v.fallen {
+		lowest := -1
+		x0, y0, r := int((v.at.x + region.size/2)/f64(g.d)), int((v.at.y + region.size/2)/f64(g.d)), int(v.crater/g.d)
+		for y in max(y0 - r, 0)..=min(y0 + r, n - 1) do for x in max(x0 - r, 0)..=min(x0 + r, n - 1) {
+			if c := y*n + x; (x - x0)*(x - x0) + (y - y0)*(y - y0) <= r*r && !g.seen[c] && (lowest < 0 || g.z[c] < g.z[lowest]) do lowest = c
+		}
+		if lowest < 0 do continue
+		g.seen[lowest] = true
+		heap_push(&g.heap, {g.fill[lowest], i32(lowest)})
+		append(&sinks, i32(lowest))
 	}
 	for len(g.heap) > 0 {
 		item := heap_pop(&g.heap)
@@ -350,6 +535,7 @@ route :: proc(g: ^Grid) {
 		}
 		g.next[c] = best
 	}
+	for c in sinks do if g.next[c] < 0 do g.next[c] = SINK
 	for c in g.order do g.area[c] = g.d*g.d
 	#reverse for c in g.order {
 		if r := g.next[c]; r >= 0 do g.area[r] += g.area[c]
@@ -371,12 +557,23 @@ erode :: proc(g: ^Grid, dt: f32) {
 	for ci in g.order {
 		c := int(ci)
 		below, run: f32 = 0, g.d
-		if r := g.next[c]; r >= 0 do below, run = g.z[r], span(g, c, int(r))
+		if g.next[c] == SINK {   // nothing runs on from a sink to cut it
+			g.z[c] += g.uplift[c]*g.lift*dt
+			g.load[c] = 0
+			continue
+		}
+		if r := g.next[c]; r >= 0 {
+			below, run = g.z[r], span(g, c, int(r))
+			g.face[c] = 1 + (g.face[r] - 1)*math.exp(-run/100)   // a cliff the sea undercuts eases over 100 m inland
+		}
 		law := wear(g, c, g.z[c])
 		f := ERODE*g.soft[c]*law.erodes*math.sqrt(g.area[c])*dt/run
 		z := (g.fill[c] + g.uplift[c]*g.lift*dt + f*below)/(1 + f)
-		g.z[c] = clamp(z, below + 0.001*run, below + law.limit*run)
+		was := g.z[c] + g.uplift[c]*g.lift*dt
+		g.z[c] = clamp(z, below + 0.001*run, below + law.limit*run*g.face[c])
+		g.load[c] = max(was - g.z[c], 0)*g.d*g.d
 	}
+	#reverse for c in g.order do if r := g.next[c]; r >= 0 do g.load[r] += g.load[c]
 }
 
 creep :: proc(g: ^Grid, dt: f32) {
@@ -396,15 +593,116 @@ creep :: proc(g: ^Grid, dt: f32) {
 	}
 }
 
-// The same land at twice the detail. Sea bed the sea has uncovered is land, but land a risen
-// sea has covered is not yet drowned again: a history raises the sea only after its last
-// refinement.
-refine :: proc(coarse: ^Grid, sea: f32) -> ^Grid {
-	g := grid_make(coarse.n*2, sea)
+// The sea cuts its shore back to a platform just under the water, and the land behind, which
+// goes on rising, stands over it as a cliff at the steepest its rock holds. The waves wear away
+// rock by how much open sea lies around a shore and toward the swell, so headlands and shores
+// facing the swell give way, bays and lee shores are spared, and weak rock gives way faster
+// than strong. What they wear away is the whole cliff, so a low shore is cut back quickly and a
+// high one slowly; and they break on the platform they leave, so a coast that has cut a wide
+// shallow one retreats only as fast as the platform is worn deeper.
+WAVES     :: 0.3    // m² of a rock that erodes at 1 worn from each metre of shore a year, open to the swell all round
+FETCH     :: 500    // metres around a shore cell, and toward the swell, over which the sea is counted
+PLATFORM  :: 2      // metres under the sea that a cut shore is left,
+ABRADE    :: 1e-5   // and m/yr the waves wear it lower, slowing to nothing at
+WAVE_BASE :: 20     // this depth, so a platform deepens away from its cliff
+SHELTER   :: 0.07   // exposure below which the waves neither undercut a shore nor carry silt off
+FLAT      :: 4      // metres over the sea that floods build a flat of river silt to
+
+// The sea cells above and to the left of each corner of the grid, so that the share of sea in
+// any square is four reads.
+sea_table :: proc(g: ^Grid, allocator := context.temp_allocator) -> []i32 {
+	n := g.n
+	open := make([]i32, (n + 1)*(n + 1), allocator)
+	for y in 0..<n {
+		row: i32
+		for x in 0..<n {
+			row += i32(g.sea[y*n + x])
+			open[(y + 1)*(n + 1) + x + 1] = open[y*(n + 1) + x + 1] + row
+		}
+	}
+	return open
+}
+
+// The share of sea in a square r cells either side of a cell.
+share :: proc(open: []i32, n, x, y, r: int) -> f32 {
+	x0, y0, x1, y1 := clamp(x - r, 0, n), clamp(y - r, 0, n), clamp(x + r + 1, 0, n), clamp(y + r + 1, 0, n)
+	w := n + 1
+	return f32(open[y1*w + x1] - open[y0*w + x1] - open[y1*w + x0] + open[y0*w + x0])/f32(max((x1 - x0)*(y1 - y0), 1))
+}
+
+coast :: proc(g: ^Grid, dt: f32) {
+	n := g.n
+	open := sea_table(g, context.allocator)
+	defer delete(open)
+	for c in 0..<n*n do if g.sea[c] && g.z[c] > -WAVE_BASE do g.z[c] -= ABRADE*dt*(1 + g.z[c]/WAVE_BASE)
+	r := max(int(FETCH/g.d), 2)
+	bearing := math.to_radians(f32(region.shape.swell))
+	ahead := [2]int{int(math.round(math.sin(bearing)*f32(r))), int(math.round(-math.cos(bearing)*f32(r)))}
+	back := max(int(100/g.d), 1)   // the cliff is the highest ground this many cells inland
+	for ci in g.order {
+		c := int(ci)
+		x, y := c%n, c/n
+		beside := false
+		for o in OFFSETS do beside ||= g.sea[c + o.y*n + o.x]
+		if !beside do continue
+		cliff, deep: f32   // the highest ground and the deepest water within 100 m
+		for j in max(y - back, 0)..=min(y + back, n - 1) do for i in max(x - back, 0)..=min(x + back, n - 1) do cliff, deep = max(cliff, g.z[j*n + i]), max(deep, -g.z[j*n + i])
+		exposed := exposure(open, n, x, y, r, ahead)
+		law := wear(g, c, 0.5)
+		if exposed >= SHELTER do g.cut[c] += WAVES*dt*exposed*law.erodes*min(deep/WAVE_BASE, 1)/(cliff + PLATFORM)
+		if g.cut[c] >= g.d do g.z[c], g.sea[c] = -PLATFORM, true
+		// A face the waves undercut stands steeper than the rock holds on a hillside: up to twice
+		// as steep where the shore is open, and no steeper than a hillside where it is sheltered.
+		g.face[c] = 1 + smoothstep(SHELTER, 0.2, exposed)
+	}
+
+	// What the streams carry down settles where the sea is sheltered. Off each mouth it fills the
+	// water nearest first to just over the sea, so a flat grows out from the head of a bay until
+	// the silt runs out or the water grows open, where the waves carry the rest away.
+	if region.shape.silt == 0 do return
+	reached, queue := make([]i32, n*n), make([dynamic]i32)   // the last mouth whose silt reached a cell
+	defer { delete(reached); delete(queue) }
+	for ci, mouth in g.order {
+		if g.next[ci] >= 0 || g.area[ci] < CHANNEL_AREA do continue
+		left := g.load[ci]*f32(region.shape.silt)
+		clear(&queue)
+		append(&queue, ci)
+		for head := 0; head < len(queue) && left > 0; head += 1 {
+			k := int(queue[head])
+			for o in OFFSETS {
+				x, y := k%n + o.x, k/n + o.y
+				c := y*n + x
+				if x < 0 || y < 0 || x >= n || y >= n || !g.sea[c] || reached[c] == i32(mouth) + 1 do continue
+				reached[c] = i32(mouth) + 1
+				if exposure(open, n, x, y, r, ahead) >= SHELTER do continue
+				need := (FLAT - g.z[c])*g.d*g.d
+				if left < need {
+					g.z[c] += left/(g.d*g.d)
+					left = 0
+					break
+				}
+				g.z[c], g.sea[c] = FLAT, false
+				left -= need
+				append(&queue, i32(c))
+			}
+		}
+	}
+}
+
+// How open a shore is to the waves: the share of open sea around it, squared, and more where
+// the sea toward the swell is open too.
+exposure :: proc(open: []i32, n, x, y, r: int, ahead: [2]int) -> f32 {
+	around := share(open, n, x, y, r)
+	return around*around*(0.3 + 0.7*share(open, n, x + ahead.x, y + ahead.y, r))
+}
+
+// The same land and sea bed at twice the detail: land and sea are where the coarse grid has
+// them, with the coast the waves cut and the sea bed they wore.
+refine :: proc(coarse: ^Grid) -> ^Grid {
+	g := grid_make(coarse.n*2)
 	g.left = coarse.left
 	n, m := g.n, coarse.n
 	for c in 0..<n*n {
-		if g.sea[c] do continue
 		// Read the coarse land through a gentle warp, so a valley that ran straight along the
 		// coarse grid comes out winding. The steps that follow settle it.
 		wx, _, _ := noise(f64(c%n)/9, f64(c/n)/9, seed + 11 + u32(n))
@@ -414,6 +712,12 @@ refine :: proc(coarse: ^Grid, sea: f32) -> ^Grid {
 		tu, tv := clamp(u - f32(x0), 0, 1), clamp(v - f32(y0), 0, 1)
 		k := y0*m + x0
 		z := math.lerp(math.lerp(coarse.z[k], coarse.z[k + 1], tu), math.lerp(coarse.z[k + m], coarse.z[k + m + 1], tu), tv)
+		g.sea[c] = z <= 0
+		if g.sea[c] {
+			g.z[c] = z
+			continue
+		}
+		g.face[c] = coarse.face[k]
 		// A little roughness, so the finer streams have something to start from.
 		g.z[c] = max(z, 0.3) + 0.03*g.d*(hash01(i32(c%n), i32(c/n), seed + 10) - 0.5)
 	}
@@ -426,25 +730,58 @@ land_form :: proc() {
 	history := region.history
 	sea, rise: f32   // metres the sea has risen so far, and will in all
 	for p in history do rise += p.sea
-	g := grid_make(int(region.size)/history[0].cell, 0)
+	g := grid_make(int(region.size)/history[0].cell)
 	for p in history do g.left += p.steps*p.years*p.uplift
-	for p in history {
-		for g.d > f32(p.cell) do g = refine(g, sea)
+	for p, i in history {
+		for g.d > f32(p.cell) do g = refine(g)
+		n := g.n
+		at :: proc(g: ^Grid, c: int) -> (x, z: f64) { return (f64(c%g.n) + 0.5)*f64(g.d) - region.size/2, (f64(c/g.n) + 0.5)*f64(g.d) - region.size/2 }
+		ground :: proc(g: ^Grid, x, z: f64) -> f32 { return g.z[clamp(int((z + region.size/2)/f64(g.d)), 0, g.n - 1)*g.n + clamp(int((x + region.size/2)/f64(g.d)), 0, g.n - 1)] }
 		// Where the sea moves, what lies below it now is sea bed and what it leaves is land: a
 		// rise floods the valley mouths into inlets.
 		if p.sea != 0 {
-			for c in 0..<g.n*g.n {
+			for c in 0..<n*n {
 				g.z[c] -= p.sea
 				g.sea[c] = g.z[c] <= 0
 			}
 			sea += p.sea
 		}
 		g.lift, g.rise = p.uplift, rise - sea
-		for _ in 0..<int(p.steps) {
+		// The forms this phase's vents build, as they will stand, how much each raises the ground
+		// at its top and how much rock it lays at most. They grow over the phase, burying what
+		// they reach.
+		form, grow, low, thick: []f32
+		for &v in region.vents do if v.phase == i do v.top = ground(g, v.at.x, v.at.y) + v.build
+		if p.vents > 0 {
+			form, grow = make([]f32, n*n, context.temp_allocator), make([]f32, n*n, context.temp_allocator)
+			low, thick = slice.clone(g.z, context.temp_allocator), make([]f32, n*n, context.temp_allocator)
+			for c in 0..<n*n {
+				x, z := at(g, c)
+				form[c] = -1e6
+				for v in region.vents do if t, th := vent_top(v, x, z); v.phase == i && t > form[c] do form[c], grow[c], thick[c] = t, v.build, th
+			}
+		}
+		for s in 0..<int(p.steps) {
+			done := f32(s + 1)/p.steps
+			if p.vents > 0 do for c in 0..<n*n {
+				if h := min(form[c] - grow[c]*(1 - done), low[c] + thick[c]*done); h > g.z[c] do g.z[c], g.sea[c], g.cut[c] = h, h <= 0, 0   // fresh rock the sea has yet to cut
+			}
 			route(g)
 			erode(g, p.years)
 			creep(g, p.years)
+			coast(g, p.years)
 			g.left -= p.years*p.uplift
+		}
+		// The tops of the vents that will fall in, fall, to a floor under the lowest point of the
+		// rim, so the crater is closed.
+		for &v in region.vents do if v.phase == i && v.crater > 0 {
+			rim: f32 = 1e6
+			for a in 0..<int(4*math.PI*v.crater/g.d) do rim = min(rim, ground(g, v.at.x + f64(v.crater)*math.cos(f64(a)*f64(g.d)/f64(2*v.crater)), v.at.y + f64(v.crater)*math.sin(f64(a)*f64(g.d)/f64(2*v.crater))))
+			v.floor = rim - v.deep
+			for c in 0..<n*n {
+				if x, z := at(g, c); math.hypot(x - v.at.x, z - v.at.y) < f64(v.crater) do g.z[c], g.sea[c] = min(g.z[c], v.floor), min(g.z[c], v.floor) <= 0
+			}
+			v.fallen = true
 		}
 	}
 	route(g)
@@ -463,8 +800,8 @@ land_form :: proc() {
 		if r := g.next[c]; r >= 0 do climb[c] = climb[r] + span(g, c, int(r))/(ERODE*g.soft[c]*wear(g, c, g.z[c]).erodes*math.sqrt(g.area[c]))
 		if g.area[c] >= CHANNEL_AREA do response = max(response, climb[c])
 	}
-	last: Phase(f32)
-	for p in history do if p.steps > 0 do last = p
+	last: f32   // years on the finest cells
+	for p in history do if p.cell == history[len(history) - 1].cell do last += p.steps*p.years
 
 	land.n, land.grid, land.z[0] = n, g, g.z
 	for level in 1..<3 {
@@ -500,8 +837,13 @@ land_form :: proc() {
 			}
 		}
 	}
+	live := make([]bool, n*n, context.temp_allocator)
+	for c in 0..<n*n do live[c] = !g.sea[c] && g.z[c] >= 2 && land.slope[c] <= LIVABLE
+	group, sizes := patches(n, live, 1)
+	land.live = make([]f32, n*n)
+	for c in 0..<n*n do if group[c] >= 0 && f32(sizes[group[c]])*g.d*g.d >= 10_000 do land.live[c] = 1
 	fmt.printfln("land formed in %.2f s: %d land cells, highest point %.0f m", time.duration_seconds(time.since(started)), len(g.order), highest)
-	fmt.printfln("a step cut at the coast climbs to the farthest stream head in %.0f kyr; the last phase ran %.0f kyr, %.2f of that", response/1000, last.steps*last.years/1000, last.steps*last.years/response)
+	fmt.printfln("a step cut at the coast climbs to the farthest stream head in %.0f kyr; the land has had %.0f kyr on its finest cells, %.2f of that", response/1000, last/1000, last/response)
 	land_stats(g)
 }
 
@@ -534,7 +876,118 @@ land_stats :: proc(g: ^Grid) {
 	fmt.print("rock at the surface:")
 	for k, m in kinds do if k > 0 do fmt.printf(" %v %.0f%%", m, 100*f32(k)/f32(len(g.order)))
 	fmt.println()
+	land_figures(g)
 	free_all(context.temp_allocator)
+}
+
+// The figures the real islands were measured by (interesting-world/notes/real-islands.md),
+// taken the same way, with the real high islands' range beside each. Slope is by central
+// differences on land whose eight neighbours are land; a crest is such a cell steeper than 5°
+// that nothing drains into; a shore cell is land beside the sea.
+land_figures :: proc(g: ^Grid) {
+	n := g.n
+	coast := make([]bool, n*n, context.temp_allocator)   // within 100 m of the sea
+	lists: [5][dynamic]f32   // height within 100 m of a shore cell, slope near the sea, crest fall, height above the stream, within 50 m of a shore cell
+	for &l in lists do l = make([dynamic]f32, context.temp_allocator)
+	for y in 8..<n - 8 {
+		for x in 8..<n - 8 {
+			c := y*n + x
+			beside := false
+			for o in OFFSETS do beside ||= g.sea[c + o.y*n + o.x] != g.sea[c]
+			if !beside do continue
+			top: [2]f32
+			for dy in -6..=6 do for dx in -6..=6 {
+				d := dx*dx + dy*dy
+				k := c + dy*n + dx
+				if g.sea[c] && d <= 39 do coast[k] = true
+				if !g.sea[c] && !g.sea[k] && d <= 36 do top = {max(top[0], g.z[k]), max(top[1], g.z[k] if d <= 9 else 0)}
+			}
+			if !g.sea[c] {
+				append(&lists[0], top[0])
+				append(&lists[4], top[1])
+			}
+		}
+	}
+	stream := make([]f32, n*n, context.temp_allocator)   // height of the stream a cell drains to
+	low, steep, inner := 0, 0, 0
+	for ci in g.order {
+		c := int(ci)
+		r := g.next[c]
+		stream[c] = g.z[c] if g.area[c] >= CHANNEL_AREA || r == SINK else 0 if r < 0 else stream[r]
+		append(&lists[3], g.z[c] - stream[c])
+		if g.z[c] < 50 do low += 1
+		sea := false
+		for o in OFFSETS do sea ||= g.sea[c + o.y*n + o.x]
+		if sea do continue
+		inner += 1
+		if land.slope[c] > math.tan(math.to_radians(f32(60))) do steep += 1
+		if coast[c] do append(&lists[1], land.slope[c])
+		if g.area[c] <= g.d*g.d*1.01 && land.slope[c] > math.tan(math.to_radians(f32(5))) do append(&lists[2], g.z[c] - (g.z[c - 1] + g.z[c + 1] + g.z[c - n] + g.z[c + n])/4)
+	}
+	median :: proc(l: [dynamic]f32) -> f32 { slice.sort(l[:]); return l[len(l)/2] if len(l) > 0 else 0 }
+	rising := 0
+	for h in lists[4] do if h > 30 do rising += 1
+	fmt.printfln("against real high islands: shore height within 100 m %.0f m (60-117); shore rising 30 m in 50 m %.0f%% (40-85); slope in the first 100 m %.0f° (29-51)",
+		median(lists[0]), 100*f32(rising)/f32(max(len(lists[4]), 1)), math.to_degrees(math.atan(median(lists[1]))))
+	fmt.printfln("  land under 50 m %.0f%% (5-16); over 60° %.1f%% (0.8-2.9); fall at a crest %.2f m (0.56-1.25); height above the nearest stream %.0f m (54-130)",
+		100*f32(low)/f32(len(g.order)), 100*f32(steep)/f32(max(inner, 1)), median(lists[2]), median(lists[3]))
+
+	// A sheltered landing is shore under 5 m where the sea fills less than a third of the
+	// square a kilometre across around it, with livable ground within 100 m; shore of that kind
+	// less than 50 m apart is one landing.
+	live, landing := make([]bool, n*n, context.temp_allocator), make([]bool, n*n, context.temp_allocator)
+	livable: int
+	for c in 0..<n*n do live[c], livable = land.live[c] > 0, livable + int(land.live[c] > 0)
+	_, patch := patches(n, live, 1)
+	open := sea_table(g)
+	for y in 16..<n - 16 {
+		for x in 16..<n - 16 {
+			c := y*n + x
+			if g.sea[c] || g.z[c] >= 5 || share(open, n, x, y, int(500/g.d)) >= 1.0/3 do continue
+			beside, behind := false, false
+			for o in OFFSETS do beside ||= g.sea[c + o.y*n + o.x]
+			for dy in -6..=6 do for dx in -6..=6 do behind ||= dx*dx + dy*dy <= 36 && live[c + dy*n + dx]
+			landing[c] = beside && behind
+		}
+	}
+	_, landings := patches(n, landing, 3)
+
+	// The deepest closed hollow, as the real islands were measured: how deep water would stand
+	// in it if none sank into a crater's floor.
+	hollow: f32
+	for &v in region.vents do v.fallen = false
+	route(g)
+	for c in g.order do hollow = max(hollow, g.fill[c] - g.z[c])
+	for &v in region.vents do v.fallen = v.crater > 0
+	route(g)
+	fmt.printfln("  livable %.0f%% of land, the largest patch %.0f ha (15-46, 63-417); sheltered landings %d (0 on the cones, 7-14, 80 on Tsushima); deepest closed hollow %.0f m (2-10, 77 on Aogashima)",
+		100*f32(livable)/f32(len(g.order)), f32(slice.max(patch[:]) if len(patch) > 0 else 0)*g.d*g.d/10_000, len(landings), hollow)
+}
+
+// Group marked cells lying within `reach` cells of each other: each cell's group, or -1, and
+// the number of cells in each group.
+patches :: proc(n: int, marked: []bool, reach: int) -> (group: []i32, sizes: [dynamic]i32) {
+	group, sizes = make([]i32, n*n, context.temp_allocator), make([dynamic]i32, context.temp_allocator)
+	stack := make([dynamic]i32, context.temp_allocator)
+	for &v in group do v = -1
+	for c in 0..<n*n {
+		if !marked[c] || group[c] >= 0 do continue
+		id := i32(len(sizes))
+		append(&sizes, 0)
+		group[c] = id
+		append(&stack, i32(c))
+		for len(stack) > 0 {
+			k := int(pop(&stack))
+			sizes[id] += 1
+			for y in max(k/n - reach, 0)..=min(k/n + reach, n - 1) do for x in max(k%n - reach, 0)..=min(k%n + reach, n - 1) {
+				if j := y*n + x; marked[j] && group[j] < 0 {
+					group[j] = id
+					append(&stack, i32(j))
+				}
+			}
+		}
+	}
+	return
 }
 
 // Smooth value of one of the land's grids at a point in the world. The curve through each
@@ -580,6 +1033,7 @@ Overlay :: struct {
 
 OVERLAYS := [?]Overlay{
 	{"wetness", proc(x, z: f64) -> f32 { return land_at(land.wet, land.n, x, z) }, {0.90, 0.80, 0.50}, {0.05, 0.45, 0.40}, false},
+	{"livable", proc(x, z: f64) -> f32 { return land.live[land_cell(x, z)] }, {0.55, 0.55, 0.55}, {1.00, 0.55, 0.05}, false},
 	{"slope", proc(x, z: f64) -> f32 { return land_at(land.slope, land.n, x, z)/1.2 }, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}, false},
 	{"drainage", proc(x, z: f64) -> f32 { return (math.log10(land.grid.area[land_cell(x, z)]) - 2.4)/5 }, {0.95, 0.95, 0.90}, {0.05, 0.10, 0.45}, false},
 	{"uplift", proc(x, z: f64) -> f32 { return land.grid.uplift[land_cell(x, z)]/f32(1.3*region.shape.rate) }, {0.20, 0.25, 0.45}, {0.95, 0.85, 0.30}, false},
@@ -625,11 +1079,14 @@ land_map :: proc(path, overlay: string) {
 				} else if paint != nil {
 					col = math.lerp(paint.lo, paint.hi, clamp(paint.at(x, z), 0, 1))*shade
 				} else {
-					t := clamp(h/450, 0, 1)
-					col = math.lerp(math.lerp([3]f32{0.42, 0.60, 0.30}, [3]f32{0.62, 0.56, 0.38}, clamp(t*2, 0, 1)), [3]f32{0.92, 0.92, 0.90}, clamp(t*2 - 1, 0, 1))*shade
-					// Rock shows where the ground is near the steepest its rock holds, as on the ground.
+					// Green at the sea, tan at 200 m, brown at 500 and pale only near 1,000, so that
+					// the height of a high island still reads.
+					t := math.sqrt(clamp(h/1000, 0, 1))
+					col = math.lerp(math.lerp([3]f32{0.42, 0.60, 0.30}, [3]f32{0.66, 0.58, 0.38}, clamp(t*2.2, 0, 1)), [3]f32{0.52, 0.42, 0.34}, clamp(t*3.3 - 1.45, 0, 1))
+					col = math.lerp(col, [3]f32{0.90, 0.89, 0.86}, clamp(t*4 - 3, 0, 1))*shade
+					// Rock shows where the ground is too steep to hold soil, as on the ground.
 					bed := rock(x, f64(h) - 0.5, z, 8)
-					bare := smoothstep(0.6, 0.8, land_at(land.slope, land.n, x, z)/rocks.law[bed].limit)
+					bare := smoothstep(0.85, 1.15, land_at(land.slope, land.n, x, z)/SOIL_HOLDS)
 					col = math.lerp(col, map_colour(bed)*shade, 0.8*bare)
 				}
 				if r, near := river_near(f32(x), f32(z)); near && r.d < max(r.half, 4) do col = {0.10, 0.30, 0.75}
