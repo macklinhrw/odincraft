@@ -32,7 +32,7 @@ So the tiles are now an artist's. The atlas is built from Pixel Perfection by XS
 
 ![The atlas, each tile repeated 2 by 2](../real/blocks-sheet.jpg)
 
-What is weak in it: thirty tiles serve forty-one materials, so the rocks share four tiles in different colours and turns, the soils three, and the three grasses one; a rock's bedding no longer shows on its side; and no tile was drawn for these species. Each of those is a tile to draw by hand or find.
+What is weak in it: forty-two tiles serve forty-one materials, most with a tile of their own, but none was drawn for these rocks or species. Mudstone, siltstone and basalt have sides that show their layers or columns; sandstone's side is a plain soft tile, because the pack's sandstone is cut masonry; and the nine broken rocks share two tiles.
 
 ## Still different, on purpose or not
 

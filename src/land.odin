@@ -211,6 +211,7 @@ Region :: struct {
 	story:    ^Story,
 	history:  []Phase(f32),
 	vents:    [dynamic]Vent,   // in the order they open
+	features: [dynamic]Feature,   // what events made, in the order they were made (events.odin)
 }
 
 // A vent, drawn from its phase's ranges.
@@ -347,6 +348,7 @@ Grid :: struct {
 	lift:   f32,            // the share of the uplift in this phase
 	left:   f32,            // years of full uplift still to come
 	rise:   f32,            // metres the sea has still to rise
+	keep:   bool,           // the water that stands in a hollow is a lake, and the ground under it is left as it is
 }
 
 // The finished land, read by the generator.
@@ -366,6 +368,9 @@ Land :: struct {
 	above:   []f32,    // metres over the stream or shore a cell drains to; the cold air of a still night pools from there up
 	soil:    []f32,    // metres of soil over the rock
 	community: []u8,   // the plant community that won the race for each land cell (plants_init), 255 at sea
+	valley:  []f32,    // m² drained by the stream a cell drains to
+	slid:    []f32,    // metres of slide debris laid on a cell, or under 0, taken from it (events.odin)
+	lake:    []u8,     // 1 + the feature whose lake or pond covers a cell, or 0
 }
 
 // Ground a person could live on, from where the villages on eight real islands stand
@@ -559,7 +564,9 @@ route :: proc(g: ^Grid) {
 // finished world, once the uplift still to come and the sea's rise have moved it, so the
 // beds cut here are the beds the blocks show.
 wear :: #force_inline proc(g: ^Grid, c: int, z: f32) -> Rock_Law {
-	return rocks.law[rock_in(z + g.uplift[c]*g.left - g.rise, g.base[c], ROCK_SIM)]
+	law := rocks.law[rock_in(z + g.uplift[c]*g.left - g.rise, g.base[c], ROCK_SIM)]
+	if g.keep && land.slid[c] > 0.5 do law.erodes, law.creep = landslide.law.erodes, landslide.law.creep   // the debris wears as its blocks do
+	return law
 }
 
 // One step of uplift and cutting, worked from the shore upward so each cell knows where
@@ -570,7 +577,7 @@ erode :: proc(g: ^Grid, dt: f32) {
 	for ci in g.order {
 		c := int(ci)
 		below, run: f32 = 0, g.d
-		if g.next[c] == SINK {   // nothing runs on from a sink to cut it
+		if g.next[c] == SINK || (g.keep && g.fill[c] > g.z[c] + 0.01) {   // nothing runs on from a sink to cut it, and a lake's floor is still
 			g.z[c] += g.uplift[c]*g.lift*dt
 			g.load[c] = 0
 			continue
@@ -817,17 +824,30 @@ land_form :: proc() {
 	for p in history do if p.cell == history[len(history) - 1].cell do last += p.steps*p.years
 
 	land.n, land.grid, land.z[0] = n, g, g.z
+	land.slid, land.lake = make([]f32, n*n), make([]u8, n*n)
+	highest := land_finish(g)
+	if slide_make(g) do highest = land_finish(g)
+	fmt.printfln("land formed in %.2f s: %d land cells, highest point %.0f m", time.duration_seconds(time.since(started)), len(g.order), highest)
+	fmt.printfln("a step cut at the coast climbs to the farthest stream head in %.0f kyr; the land has had %.0f kyr on its finest cells, %.2f of that", response/1000, last/1000, last/response)
+	land_stats(g)
+}
+
+// What the generator reads off the formed land: coarser grids, slope, wetness, livable ground
+// and the local fields.
+land_finish :: proc(g: ^Grid) -> (highest: f32) {
+	n := g.n
 	for level in 1..<3 {
 		m := n >> uint(level)
 		fine := land.z[level - 1]
+		delete(land.z[level])
 		land.z[level] = make([]f32, m*m)
 		for c in 0..<m*m {
 			k := (c/m)*2*(m*2) + (c%m)*2
 			land.z[level][c] = (fine[k] + fine[k + 1] + fine[k + m*2] + fine[k + m*2 + 1])/4
 		}
 	}
+	delete(land.slope); delete(land.wet); delete(land.live)
 	land.slope, land.wet = make([]f32, n*n), make([]f32, n*n)
-	highest: f32
 	for y in 1..<n - 1 {
 		for x in 1..<n - 1 {
 			c := y*n + x
@@ -851,14 +871,12 @@ land_form :: proc() {
 		}
 	}
 	live := make([]bool, n*n, context.temp_allocator)
-	for c in 0..<n*n do live[c] = !g.sea[c] && g.z[c] >= 2 && land.slope[c] <= LIVABLE
+	for c in 0..<n*n do live[c] = !g.sea[c] && land.lake[c] == 0 && g.z[c] >= 2 && land.slope[c] <= LIVABLE
 	group, sizes := patches(n, live, 1)
 	land.live = make([]f32, n*n)
 	for c in 0..<n*n do if group[c] >= 0 && f32(sizes[group[c]])*g.d*g.d >= 10_000 do land.live[c] = 1
 	land_local(g)
-	fmt.printfln("land formed in %.2f s: %d land cells, highest point %.0f m", time.duration_seconds(time.since(started)), len(g.order), highest)
-	fmt.printfln("a step cut at the coast climbs to the farthest stream head in %.0f kyr; the land has had %.0f kyr on its finest cells, %.2f of that", response/1000, last/1000, last/response)
-	land_stats(g)
+	return
 }
 
 // What each place on the land gives what grows there (foundations/climate.md, "Region rung"):
@@ -867,7 +885,8 @@ land_form :: proc() {
 HUMP :: 6   // cells either side of the square a cell's height is set against, 208 m across
 land_local :: proc(g: ^Grid) {
 	n := g.n
-	land.facing, land.hump, land.inland = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+	for f in ([?][]f32{land.facing, land.hump, land.inland, land.sun, land.exposed, land.above, land.soil, land.valley}) do delete(f)
+	land.facing, land.hump, land.inland, land.valley = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 	land.sun, land.exposed, land.above, land.soil = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 
 	// Distance to the sea, nearest first: each cell takes the sea cell nearest a neighbour
@@ -947,12 +966,15 @@ land_local :: proc(g: ^Grid) {
 		// Where cold air pools: the height over the stream a cell drains to, or over the sea.
 		r := g.next[c]
 		land.above[c] = 0 if g.area[c] >= CHANNEL_AREA || r == SINK else g.z[c] if r < 0 else g.z[c] - g.z[r] + land.above[r]
+		land.valley[c] = g.area[c] if g.area[c] >= CHANNEL_AREA || r < 0 else land.valley[r]
 		// Soil gathers in hollows and where water collects, thins on humps and as the ground
 		// steepens toward what it holds, and lies deeper over weak rock, which weathers faster.
 		// Within a few metres of a stream the floods lay silt as well.
 		steep := min(land.slope[c]/SOIL_HOLDS, 1)
 		weak := 1.3 - 0.6*MATERIALS[rock_in(g.z[c] - 0.5, g.base[c], ROCK_SIM)].strength
 		land.soil[c] = min((clamp(1 - land.hump[c]/12, 0.3, 2.5) + 1.5*land.wet[c])*(1 - 0.7*steep*steep)*weak + 2*max(1 - land.above[c]/4, 0), 4)
+		// A slide's scar is bare rock and its debris rubble; soil weathers back on both with the years.
+		if s := land.slid[c]; abs(s) > 0.5 do land.soil[c] = min(land.soil[c], (0.3 if s > 0 else 0) + SOIL_GROWS*region.features[landslide.feature].age)
 	}
 }
 
@@ -1186,8 +1208,11 @@ land_map :: proc(path, overlay: string) {
 					bed := rock(x, f64(h) - 0.5, z, 8)
 					bare := smoothstep(0.85, 1.15, land_at(land.slope, land.n, x, z)/SOIL_HOLDS)
 					col = math.lerp(col, map_colour(bed)*shade, 0.8*bare)
+					// A slide's debris is tinted ochre and its scar pale.
+					if s := land_at(land.slid, land.n, x, z); abs(s) > 0.5 do col = math.lerp(col, ([3]f32{0.80, 0.50, 0.20} if s > 0 else {0.90, 0.88, 0.84})*shade, f32(0.5))
 				}
 				if r, near := river_near(f32(x), f32(z)); near && r.d < max(r.half, 4) do col = {0.10, 0.30, 0.75}
+				if level, inside, _ := lake_near(x, z); inside && h < level do col = {0.10, 0.30, 0.75}
 			}
 			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
 		}

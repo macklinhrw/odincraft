@@ -114,6 +114,7 @@ find_start :: proc() -> (pos: [3]f64, yaw: f32) {
 		trees_in(i32(s.p.x) - 6, i32(s.p.z) - 6, i32(s.p.x) + 6, i32(s.p.z) + 6, &trees)
 		if len(trees) > 0 do continue
 		x, z := math.floor(f64(s.p.x)) + 0.5, math.floor(f64(s.p.z)) + 0.5
+		if g := ground(x, z, 1); g.water > g.h do continue   // a bank a lake has drowned
 		return {x + ox, math.round(f64(height_at(x, z, 1))) + 0.1, z + oz}, s.yaw
 	}
 	return {0.5 + ox, math.round(f64(height_at(0.5, 0.5, 1))) + 0.1, 0.5 + oz}, 0

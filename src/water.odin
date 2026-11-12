@@ -38,6 +38,7 @@ Water :: struct {
 	depth:          []f32,
 	hold:           []f32,    // level of the river or sea the generator put here, or NO_WATER
 	sea:            []bool,
+	still:          []bool,   // a lake or pond: it starts full and is neither topped up nor dried, so a breach drains it
 	flow_x, flow_z: []f32,    // depth that crossed to the +x and +z neighbour in the last step
 	before, shown:  []f32,    // depth a step ago, and when the surface was last built
 	chunks:         [WATER_SPAN*WATER_SPAN]^Chunk,   // the chunk loaded in each square of the window
@@ -63,7 +64,7 @@ water_init :: proc(wt: ^Water, dev: ^sdl.GPUDevice) {
 	n := WATER_N*WATER_N
 	wt.floor, wt.depth, wt.hold = make([]f32, n), make([]f32, n), make([]f32, n)
 	wt.flow_x, wt.flow_z = make([]f32, n), make([]f32, n)
-	wt.before, wt.shown, wt.sea = make([]f32, n), make([]f32, n), make([]bool, n)
+	wt.before, wt.shown, wt.sea, wt.still = make([]f32, n), make([]f32, n), make([]bool, n), make([]bool, n)
 	for &f in wt.floor do f = WALL
 	wt.mask = sdl.CreateGPUTexture(dev, {
 		type = .D2, format = .R8_UNORM, usage = {.SAMPLER},
@@ -101,7 +102,7 @@ water_load :: proc(wt: ^Water, c: ^Chunk, b: ^Built) {
 		for x in 0..<i32(CHUNK) {
 			i, k := water_cell(c.key.x*CHUNK + x, c.key.z*CHUNK + z), z*CHUNK + x
 			if fresh {
-				wt.floor[i], wt.hold[i], wt.sea[i] = b.floor[k], b.hold[k], b.sea[k]
+				wt.floor[i], wt.hold[i], wt.sea[i], wt.still[i] = b.floor[k], b.hold[k], b.sea[k], b.still[k]
 				wt.depth[i] = max(b.hold[k] - b.floor[k], 0)
 				wt.before[i], wt.shown[i] = wt.depth[i], -1
 				wt.flow_x[i], wt.flow_z[i] = 0, 0
@@ -217,6 +218,7 @@ water_step :: proc(wt: ^Water) {
 				rim := (west && x == 0) || (east && x == CHUNK - 1) || (north && z == 0) || (south && z == CHUNK - 1)
 				switch {
 				case wt.sea[i] || rim: d = max(standing, 0)
+				case wt.still[i]:
 				case standing > d:     d = standing
 				case standing <= 0 && d > 0:
 					d -= DRY_UP*WATER_STEP

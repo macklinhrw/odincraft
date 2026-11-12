@@ -41,7 +41,7 @@ Built :: struct {
 	blocks:             []u8,
 	h:                  i32,
 	floor, hold:        []f32,         // level 0 only, per column: top of the ground, and the land's water level
-	sea:                []bool,
+	sea, still:         []bool,        // the sea; and a lake or pond, whose water is all there is of it
 }
 
 World :: struct {
@@ -124,7 +124,7 @@ build :: proc(job: Job) -> (b: Built) {
 		b.ranges[0] = {0, u32(len(quads))}
 		b.y_lo, b.y_hi = b.y_base, b.y_base + b.h
 		// What the water needs to know about each column.
-		b.floor, b.hold, b.sea = make([]f32, CHUNK*CHUNK), make([]f32, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK)
+		b.floor, b.hold, b.sea, b.still = make([]f32, CHUNK*CHUNK), make([]f32, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK)
 		for z in 0..<i32(CHUNK) {
 			for x in 0..<i32(CHUNK) {
 				i, k := z*CHUNK + x, (z + 1)*P + x + 1
@@ -133,6 +133,7 @@ build :: proc(job: Job) -> (b: Built) {
 				// The land supplies water only to columns it made wet. A dry bank beside the
 				// river stays dry when it is dug, until something lets the water in.
 				b.hold[i] = SEA_SURFACE if b.sea[i] else c.water[k] if f32(c.top[k]) < c.water[k] else NO_WATER
+				if b.hold[i] != NO_WATER && !b.sea[i] do _, b.still[i], _ = lake_near(f64(job.key.x*CHUNK + x - region.origin.x) + 0.5, f64(job.key.z*CHUNK + z - region.origin.y) + 0.5)
 				b.y_hi = max(b.y_hi, i32(math.ceil(b.hold[i])))   // so the chunk is drawn, and its water, wherever its water is in view
 			}
 		}
@@ -268,6 +269,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 			delete(b.floor)
 			delete(b.hold)
 			delete(b.sea)
+			delete(b.still)
 		}
 		if c == nil {   // left the ring while it was being built
 			delete(b.blocks)

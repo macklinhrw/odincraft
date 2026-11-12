@@ -11,10 +11,11 @@ import "core:math"
 Field :: enum u8 {
 	// on the land's 16 m grid
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
+	At_Limit, Cap, Valley, Slid, Disturbed,
 	// from the ground the generator makes at the point
-	Height, Steepness, Gravel, Fallen, Beach, Too_Steep,
+	Height, Steepness, Gravel, Fallen, Beach, Too_Steep, Under_Water,
 }
-GROUND_FIELDS :: bit_set[Field]{.Height, .Steepness, .Gravel, .Fallen, .Beach, .Too_Steep}
+GROUND_FIELDS :: bit_set[Field]{.Height, .Steepness, .Gravel, .Fallen, .Beach, .Too_Steep, .Under_Water}
 
 // What a field is read from: a point, and the ground made there when the field needs it.
 Point :: struct {
@@ -61,12 +62,18 @@ FIELDS := [Field]Field_Info{
 	.Plants    = {"plants", "", "the plant community that won the race for the ground (COMMUNITIES)", proc(p: ^Point) -> f32 { k, _ := community_at(p.x, p.z, p.cell); return f32(k) }, 0, 0, .Plants, {}, {}},
 	.Volcanic  = {"volcanic", "", "1 where the rock is lava and ash laid by the island's vents", proc(p: ^Point) -> f32 { return 1 if region.story.drape else 0 }, 0, 1, .Ramp, {0.90, 0.88, 0.80}, {0.25, 0.15, 0.12}},
 	.Woods     = {"woods", "", "share of the 6 m squares with a tree, which the plant community sets", proc(p: ^Point) -> f32 { k, _ := community_at(p.x, p.z, p.cell); return COMMUNITIES[k].density }, 0, 1, .Ramp, {0.90, 0.85, 0.65}, {0.05, 0.30, 0.08}},
+	.At_Limit  = {"at-limit", "", "steepness against the steepest the rock at the surface holds", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); return grid_at(land.slope, p)/rocks.law[rock_in(land.grid.z[c] - 2, land.grid.base[c], ROCK_SIM)].limit }, 0, 1.2, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
+	.Cap       = {"cap", "", "how much stronger a bed in the top 50 m is than the weakest bed under it, in strength from 0 to 1", proc(p: ^Point) -> f32 { s, _, _, _ := cap_at(land_cell(p.x, p.z)); return s }, 0, 0.6, .Ramp, {0.95, 0.95, 0.90}, {0.30, 0.20, 0.60}},
+	.Valley    = {"valley", " m²", "drained by the stream the ground drains to", proc(p: ^Point) -> f32 { return land.valley[land_cell(p.x, p.z)] }, 4, 7.4, .Log, {0.95, 0.95, 0.90}, {0.05, 0.10, 0.45}},
+	.Slid      = {"slid", " m", "of a slide's debris laid here, or under 0, of ground it took away", proc(p: ^Point) -> f32 { return grid_at(land.slid, p) }, -30, 30, .Ramp, {0.30, 0.45, 0.85}, {0.85, 0.50, 0.15}},
+	.Disturbed = {"disturbed", " years", "since the ground was laid bare, where an event records it, else 100,000", proc(p: ^Point) -> f32 { return region.features[landslide.feature].age if abs(grid_at(land.slid, p)) > 0.5 else 1e5 }, 1, 5, .Log, {0.95, 0.60, 0.20}, {0.10, 0.35, 0.15}},
 	.Height    = {"height", " m", "of the ground over the sea", proc(p: ^Point) -> f32 { return p.h }, 0, 400, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Steepness = {"steepness", "", "rise over run of the ground in blocks, ledges and all", proc(p: ^Point) -> f32 { return p.steep }, 0, 1.5, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
 	.Gravel    = {"gravel", "", "1 on a bar or bed where a river lays gravel", proc(p: ^Point) -> f32 { return 1 if p.cover == .Gravel else 0 }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
 	.Fallen    = {"fallen", " m", "depth of rock fallen from the face above", proc(p: ^Point) -> f32 { return p.fallen }, 0, 3, .Ramp, {0.95, 0.95, 0.90}, {0.40, 0.30, 0.25}},
 	.Beach     = {"beach", " m", "how far under the line the waves throw sand to, which is 1.8 m over the sea give or take 1.2 in patches", proc(p: ^Point) -> f32 { return 1.8 + p.vary*1.2 - p.h }, -3, 3, .Ramp, {0.30, 0.55, 0.30}, {0.95, 0.85, 0.50}},
 	.Too_Steep = {"too-steep", "", "how much steeper than soil holds, which is a rise over run of 1 (45°) give or take 0.15 in patches", proc(p: ^Point) -> f32 { return p.steep - (SOIL_HOLDS + 0.15*p.vary) }, -0.5, 0.5, .Ramp, {0.30, 0.55, 0.30}, {0.55, 0.50, 0.45}},
+	.Under_Water = {"under-water", " m", "of a lake's or pond's still water over the ground", proc(p: ^Point) -> f32 { l, inside, _ := lake_near(p.x, p.z); return max(l - p.h, 0) if inside else 0 }, 0, 5, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
 }
 
 // A window holds where its field is over `lo` and up to `hi`, and fades to nothing `edge`
@@ -177,4 +184,5 @@ why_at :: proc(wx, wz: f64) {
 	row, depth := soil_at(&p)
 	soil := SOILS[row]
 	fmt.printfln("\nthe soil is %s, %.1f m deep (%s), %s: under the cover %v, then %v down to %v and the rock", soil.name, depth, FIELDS[.Soil_Depth].from, soil.why, soil.top, soil.sub, soil.foot)
+	feature_words(x, z, p.h)
 }

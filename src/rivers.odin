@@ -70,12 +70,13 @@ rivers_trace :: proc() {
 	}
 
 	// A stream runs where enough land drains, unless its water sinks into a crater floor
-	// before it gathers: there the ground stays dry.
+	// before it gathers: there the ground stays dry. It ends at a lake, and a new one leaves
+	// from the lake's outlet.
 	stream, feeders := make([]bool, n*n), make([]u8, n*n)
 	defer { delete(stream); delete(feeders) }
 	for c in g.order {
 		r := g.next[c]
-		stream[c] = g.area[c] >= CHANNEL_AREA && (r == -1 || (r >= 0 && stream[r]))
+		stream[c] = g.area[c] >= CHANNEL_AREA && land.lake[c] == 0 && (r == -1 || (r >= 0 && (stream[r] || land.lake[r] > 0)))
 		if stream[c] && r >= 0 do feeders[r] += 1
 	}
 	points: [dynamic]River_Point
@@ -83,10 +84,15 @@ rivers_trace :: proc() {
 	for c in g.order {
 		if !stream[c] || feeders[c] == 1 do continue   // a reach begins at a spring or below a confluence
 		clear(&points)
-		at := c
+		at, under := c, f32(1e6)   // the outlet stream of a lake keeps its water under the lake's
+		for o in OFFSETS do if k := int(c) + o.y*n + o.x; land.lake[k] > 0 && g.next[k] == c do under = region.features[land.lake[k] - 1].level + FREEBOARD - 0.2
 		for {
 			append(&points, point(g, at))
 			r := g.next[at]
+			if r >= 0 && land.lake[r] > 0 {   // into a lake, at its level
+				append(&points, River_Point{point(g, r).p, min(g.fill[r], region.features[land.lake[r] - 1].level + FREEBOARD), g.area[r]})
+				break
+			}
 			if r < 0 {
 				// The mouth. The first sea cell is often only ankle deep, so carry on down
 				// the sea bed to properly deep water, with the banks under the surface. The
@@ -112,8 +118,10 @@ rivers_trace :: proc() {
 				break
 			}
 		}
+		for &q in points do q.bank = min(q.bank, under)
 		if len(points) >= 2 do reach_build(points[:], u32(c))
 	}
+	lakes_draw()
 }
 
 // One reach, from a spring or confluence down to the next confluence or the sea.

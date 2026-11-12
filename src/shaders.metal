@@ -265,9 +265,10 @@ struct RiverIn { float4 p [[attribute(0)]]; };
 vertex WaterV vs_river(RiverIn in [[stage_in]], constant Frame &f [[buffer(0)]], constant Draw &d [[buffer(1)]]) {
     WaterV o;
     o.rel = in.p.xyz + d.origin.xyz;
-    o.river = float2(in.p.w, smoothstep(0.0, 1.2, in.p.y - f.cam.w));   // near sea level a river takes on the sea's look
+    bool lake = in.p.w > 1.5;   // a lake's far surface rides in the same strip, marked so
+    o.river = float2(lake ? 0.0 : in.p.w, smoothstep(0.0, 1.2, in.p.y - f.cam.w));   // near sea level a river takes on the sea's look
     o.flow = float2(0.0);
-    o.kind = float3(0.0, 0.0, 10.0);
+    o.kind = float3(0.0, 0.0, lake ? 10.0 : 1.5);
     o.position = f.view_proj * float4(o.rel, 1.0);
     return o;
 }
@@ -348,6 +349,7 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
     float3 col = mix(body * (0.15 + 0.85 * daylight(sun)), mirrored, fresnel);
     col += sun_light(sun) * 2.5 * pow(saturate(dot(r, sun)), 600.0);
     float alpha = mix(mix(0.80, 0.62, in.river.y), 1.0, fresnel);
+    alpha = mix(alpha, 0.96, in.river.y * smoothstep(1.5, 7.0, in.kind.z));   // deep fresh water is dark: a lake hides its bed, a stream shows it
     alpha *= 1.0 - 0.8 * in.river.y * smoothstep(0.35, 0.85, abs(in.river.x));
     alpha *= 0.25 + 0.75 * smoothstep(0.0, 0.35, in.kind.z);
 
