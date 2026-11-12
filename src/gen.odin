@@ -19,9 +19,9 @@ import "core:time"
 // and gravel forms as rows of their own.
 Mat :: enum u8 {
 	Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel,
-	Beech_Bark, Beech_Leaves, Pine_Bark, Pine_Needles, Scrub_Leaves,   // each species' bark and leaf (SPECIES)
-	Litter, Needles, Heath, Dune,     // what covers the ground between the trees (COMMUNITIES)
-	Loam, Silt, Bleached, Rust,       // the soils under it (SOILS)
+	Shii_Bark, Shii_Leaves, Grey_Bark, Camellia_Leaves, Hisakaki_Leaves, Pine_Bark, Pine_Needles, Scrub_Leaves,   // each species' bark and leaf (SPECIES); the tabu's are Wood and Leaves
+	Litter, Susuki, Dune,             // what covers the ground between the trees (COMMUNITIES)
+	Loam, Silt, Red_Clay, Ash,        // the soils under it (SOILS)
 	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff,
 	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree,
 }
@@ -41,21 +41,23 @@ MATERIALS := [Mat]Material{
 	.Sand      = {{0.330, 0.285, 0.180}, 0, 0, .Air},
 	.Snow      = {{0.780, 0.800, 0.840}, 0, 0, .Air},
 	.Wood      = {{0.105, 0.068, 0.036}, 0, 0, .Air},
-	.Leaves    = {{0.062, 0.140, 0.026}, 0, 0, .Air},   // katsura: light, yellow-green
+	.Leaves    = {{0.021, 0.074, 0.017}, 0, 0, .Air},   // tabu: dark and glossy
 	.Gravel    = {{0.105, 0.097, 0.085}, 0, 0, .Air},
-	.Beech_Bark   = {{0.075, 0.076, 0.068}, 0, 0, .Air},   // smooth grey
-	.Beech_Leaves = {{0.036, 0.105, 0.024}, 0, 0, .Air},
-	.Pine_Bark    = {{0.090, 0.040, 0.025}, 0, 0, .Air},   // red bole
-	.Pine_Needles = {{0.018, 0.058, 0.034}, 0, 0, .Air},   // dark blue-green
-	.Scrub_Leaves = {{0.040, 0.052, 0.020}, 0, 0, .Air},   // dull olive
-	.Litter    = {{0.055, 0.050, 0.026}, 0, 0, .Air},   // beech litter and dwarf bamboo
-	.Needles   = {{0.062, 0.040, 0.024}, 0, 0, .Air},   // fallen pine needles
-	.Heath     = {{0.058, 0.036, 0.042}, 0, 0, .Air},   // heather, purple-brown
-	.Dune      = {{0.150, 0.150, 0.075}, 0, 0, .Air},   // dune grass, straw
+	.Shii_Bark       = {{0.087, 0.070, 0.055}, 0, 0, .Air},   // dark grey-brown, furrowed
+	.Shii_Leaves     = {{0.074, 0.139, 0.021}, 0, 0, .Air},  // olive with a yellow cast
+	.Grey_Bark       = {{0.184, 0.177, 0.151}, 0, 0, .Air},   // smooth and pale, on camellia and hisakaki
+	.Camellia_Leaves = {{0.010, 0.048, 0.013}, 0, 0, .Air},   // the darkest, with red flowers
+	.Hisakaki_Leaves = {{0.045, 0.087, 0.023}, 0, 0, .Air},   // small, dull
+	.Pine_Bark       = {{0.106, 0.087, 0.074}, 0, 0, .Air},   // black pine: dark plates
+	.Pine_Needles    = {{0.015, 0.058, 0.028}, 0, 0, .Air},
+	.Scrub_Leaves    = {{0.058, 0.128, 0.030}, 0, 0, .Air},  // tobira and its like: glossy mid green
+	.Litter    = {{0.096, 0.058, 0.025}, 0, 0, .Air},      // fallen evergreen leaves
+	.Susuki    = {{0.096, 0.157, 0.038}, 0, 0, .Air},    // susuki grass and dwarf bamboo
+	.Dune      = {{0.128, 0.139, 0.062}, 0, 0, .Air},   // dune grass, straw
 	.Loam      = {{0.058, 0.040, 0.026}, 0, 0, .Air},   // dark topsoil
 	.Silt      = {{0.050, 0.046, 0.038}, 0, 0, .Air},   // grey river silt
-	.Bleached  = {{0.175, 0.170, 0.155}, 0, 0, .Air},   // the pale band a podzol leaches
-	.Rust      = {{0.190, 0.092, 0.036}, 0, 0, .Air},   // the iron it leaches, below
+	.Red_Clay  = {{0.184, 0.062, 0.030}, 0, 0, .Air},     // the red clay long rain leaves on old ground
+	.Ash       = {{0.019, 0.013, 0.010}, 0, 0, .Air},      // black soil weathered from ash and cinders
 	.Mudstone  = {{0.062, 0.064, 0.074}, 0.25, 0.1, .Mudstone_Scree},   // dark blue-grey, crumbles into flakes; never holds a face
 	.Siltstone = {{0.098, 0.082, 0.062}, 0.4, 0.3, .Siltstone_Scree},   // grey-brown flags, thin ledges
 	.Sandstone = {{0.136, 0.108, 0.074}, 0.6, 1.5, .Sandstone_Scree},   // warm buff rectangular blocks
@@ -328,8 +330,9 @@ SOILS := [?]Soil{
 	{"river silt", "floods lay silt over the gravel of old bars", .Silt, .Silt, .Gravel, 0, {{.Cold, -ANY, 2.5, 0}, {.Slope, -ANY, 0.15, 0}}, {0.35, 0.35, 0.40}},
 	{"shore sand", "the wind blows sand in off the beach", .Sand, .Sand, .Sand, 0, {{.Inland, -ANY, 120, 0}, {.Cold, -ANY, 10, 0}}, {0.95, 0.85, 0.55}},
 	{"stony wash", "soil creeping down a steep slope carries stones broken from the beds", .Loam, .Dirt, .Dirt, 0.35, {{.Slope, 0.65, ANY, 0}}, {0.60, 0.55, 0.50}},
-	{"podzol", "rain on a dry hump leaches the iron from the top of the soil and leaves it lower down", .Bleached, .Rust, .Rust, 0, {{.Humped, 3, ANY, 0}, {.Wetness, -ANY, 0.3, 0}}, {0.95, 0.55, 0.12}},
-	{"brown earth", "litter rots into loam over the weathered rock", .Loam, .Dirt, .Dirt, 0, {}, {0.42, 0.34, 0.26}},
+	{"ash soil", "ash and cinders weather into a black soil full of humus", .Ash, .Ash, .Dirt, 0.1, {{.Volcanic, 0.5, ANY, 0}}, {0.22, 0.18, 0.17}},
+	{"red soil", "long rain on old dry ground leaches it to a red clay", .Loam, .Red_Clay, .Red_Clay, 0, {{.Humped, 3, ANY, 0}, {.Wetness, -ANY, 0.3, 0}}, {0.85, 0.40, 0.22}},
+	{"brown forest soil", "fallen leaves rot into loam over the weathered rock", .Loam, .Dirt, .Dirt, 0, {}, {0.42, 0.34, 0.26}},
 }
 
 soil_at :: proc(p: ^Point) -> (row: int, depth: f32) {
@@ -338,9 +341,10 @@ soil_at :: proc(p: ^Point) -> (row: int, depth: f32) {
 }
 
 // A species: its bark and leaf blocks, the form of its crown, and its height to the crown's top
-// and the crown's radius, in metres. True heights wait for the tree grower; these keep the sizes
-// trees have had, 8 to 14 m.
-Tree_Kind :: enum u8 { Katsura, Beech, Pine, Scrub }
+// and the crown's radius, in metres. The cast is the evergreen wood of the warm islands of
+// southern Japan (docs/interesting-world/notes/real-vegetation.md). True heights wait for the
+// tree grower; these keep near the sizes trees have had.
+Tree_Kind :: enum u8 { Tabu, Shii, Camellia, Hisakaki, Pine, Scrub }
 Species :: struct {
 	name:           string,
 	bark, leaf:     Mat,
@@ -349,40 +353,44 @@ Species :: struct {
 }
 
 SPECIES := [Tree_Kind]Species{
-	.Katsura = {"katsura", .Wood, .Leaves, .Broad, {11, 14}, {3, 4}},           // a broad, spreading dome
-	.Beech   = {"beech", .Beech_Bark, .Beech_Leaves, .Dome, {9, 13}, {2, 3}},    // a round dome on a grey trunk
-	.Pine    = {"pine", .Pine_Bark, .Pine_Needles, .Flat, {9, 13}, {2, 3}},      // a flat top on a tall red bole
-	.Scrub   = {"scrub", .Wood, .Scrub_Leaves, .Bush, {2, 4}, {1, 2}},           // a low bush from the ground up
+	.Tabu     = {"tabu", .Wood, .Leaves, .Broad, {12, 15}, {3, 4}},                    // Machilus: the big tree of moist ground, a broad dark dome
+	.Shii     = {"shii", .Shii_Bark, .Shii_Leaves, .Dome, {10, 14}, {2, 3}},           // Castanopsis: the round olive crowns that close over the slopes
+	.Camellia = {"camellia", .Grey_Bark, .Camellia_Leaves, .Dome, {5, 7}, {2, 2}},     // a small dark tree under them, in flower
+	.Hisakaki = {"hisakaki", .Grey_Bark, .Hisakaki_Leaves, .Broad, {4, 7}, {2, 2}},    // Eurya and its like: the low wood of dry ridges
+	.Pine     = {"black pine", .Pine_Bark, .Pine_Needles, .Flat, {9, 13}, {2, 3}},     // a flat top on a dark bole, by the sea and on rock
+	.Scrub    = {"scrub", .Wood, .Scrub_Leaves, .Bush, {1, 3}, {1, 2}},                // tobira and other bushes, from the ground up
 }
-PLANT_BLOCKS :: bit_set[Mat]{.Wood, .Leaves, .Beech_Bark, .Beech_Leaves, .Pine_Bark, .Pine_Needles, .Scrub_Leaves}
+PLANT_BLOCKS :: bit_set[Mat]{.Wood, .Leaves, .Shii_Bark, .Shii_Leaves, .Grey_Bark, .Camellia_Leaves, .Hisakaki_Leaves, .Pine_Bark, .Pine_Needles, .Scrub_Leaves}
 
 // The plant communities, which compete for ground in a race (race, fields.odin). A row brings
-// how thickly trees stand (the share of 6 m squares with one), the species in their shares,
-// what covers the ground between them, and its colour on the map.
-Community_Kind :: enum u8 { Valley, Slope, Ridge, Heath, Coast }
+// how thickly trees stand (the share of 6 m squares with one), how many of those squares have a
+// bush under the trees as well, the species in their shares, what covers the ground between
+// them, and its colour on the map.
+Community_Kind :: enum u8 { Valley, Slope, Ridge, Windy, Coast }
 Community :: struct {
-	name, why:     string,
-	weight, patch: f32,          // its weight in the race, and the size of its patches, metres
-	hosts:         [][]Window,   // it takes the best of them; with none it holds everywhere
-	density:       f32,
-	trees:         [len(Tree_Kind)]f32,   // katsura, beech, pine, scrub
-	cover:         Mat,
-	colour:        [3]f32,
+	name, why:       string,
+	weight, patch:   f32,          // its weight in the race, and the size of its patches, metres
+	hosts:           [][]Window,   // it takes the best of them; with none it holds everywhere
+	density, bushes: f32,
+	trees:           [len(Tree_Kind)]f32,   // tabu, shii, camellia, hisakaki, pine, scrub
+	cover:           Mat,
+	colour:          [3]f32,
 }
 
 COMMUNITIES := [Community_Kind]Community{
-	.Valley = {"valley floor wood", "big broad trees stand over the deep wet soil a few metres above the stream", 4, 150,
-		{{{.Cold, -ANY, 3, 3}, {.Slope, -ANY, 0.2, 0.1}}}, 0.5, {0.75, 0.25, 0, 0}, .Grass, {0.45, 0.85, 0.30}},
-	.Slope = {"slope forest", "beech holds the soil of the slopes wherever nothing else does better", 1, 400,
-		{}, 0.7, {0.05, 0.85, 0.1, 0}, .Litter, {0.10, 0.42, 0.16}},
-	.Ridge = {"ridge pine", "pine holds dry humped ground and thin soil over rock", 3, 250,
-		{{{.Humped, 4, ANY, 3}, {.Wetness, -ANY, 0.25, 0.1}}, {{.Soil_Depth, -ANY, 0.5, 0.25}}}, 0.45, {0, 0, 0.8, 0.2}, .Needles, {0.20, 0.55, 0.60}},
-	.Heath = {"scrub and heath", "wind and salt keep the trees low and few", 4, 200,
-		{{{.Exposure, 0.8, ANY, 0.08}}}, 0.3, {0, 0, 0.15, 0.85}, .Heath, {0.70, 0.45, 0.70}},
-	.Coast = {"coast strand", "salt and blown sand behind the shore: pines and scrub over dune grass", 5, 150,
-		{{{.Inland, -ANY, 150, 100}, {.Cold, -ANY, 12, 8}}}, 0.2, {0, 0, 0.6, 0.4}, .Dune, {0.95, 0.85, 0.45}},
+	.Valley = {"valley forest", "tall tabu trees stand in the deep moist soil of valley floors and hollows", 4, 150,
+		{{{.Cold, -ANY, 3, 3}, {.Slope, -ANY, 0.2, 0.1}}, {{.Humped, -ANY, -8, 4}, {.Wetness, 0.35, ANY, 0.1}}}, 0.8, 0.3, {0.8, 0.2, 0, 0, 0, 0}, .Grass, {0.45, 0.85, 0.30}},
+	.Slope = {"laurel forest", "shii and tabu close over the slopes wherever nothing else does better, with camellia under them", 1, 400,
+		{}, 0.95, 0.3, {0.15, 0.7, 0.15, 0, 0, 0}, .Litter, {0.10, 0.42, 0.16}},
+	.Ridge = {"ridge wood", "a low wood of small-leaved evergreens and pine holds dry humps and thin soil over rock", 3, 250,
+		{{{.Humped, 4, ANY, 3}, {.Wetness, -ANY, 0.25, 0.1}}, {{.Soil_Depth, -ANY, 0.5, 0.25}}}, 0.95, 0.15, {0, 0.1, 0.1, 0.6, 0.2, 0}, .Litter, {0.20, 0.55, 0.60}},
+	.Windy = {"susuki grass and scrub", "sea wind and salt keep the trees out: tall grass, dwarf bamboo and wind-cut bushes", 4, 200,
+		{{{.Exposure, 0.8, ANY, 0.08}}}, 0.35, 0, {0, 0, 0, 0.1, 0.05, 0.85}, .Susuki, {0.80, 0.80, 0.45}},
+	.Coast = {"coast strand", "salt and blown sand behind the shore: black pine and tobira scrub over dune grass", 5, 150,
+		{{{.Inland, -ANY, 50, 40}, {.Cold, -ANY, 12, 8}}}, 0.3, 0, {0, 0, 0, 0, 0.55, 0.45}, .Dune, {0.95, 0.85, 0.45}},
 }
-COVERS :: bit_set[Mat]{.Grass, .Litter, .Needles, .Heath, .Dune}
+COVERS :: bit_set[Mat]{.Grass, .Litter, .Susuki, .Dune}
+closure: [Community_Kind]f32   // the share of a community's ground its crowns cover, which is how much of the far canopy is leaf
 
 // The community at a point: the race's winner on the land's grid, read a little way off by
 // noise, so its edges wander over 10 to 50 m rather than follow the grid. And the cell read.
@@ -408,6 +416,10 @@ plants_init :: proc() {
 		row, _ := soil_at(&p)
 		soils[row] += 1
 	}
+	for com, k in COMMUNITIES {
+		for share, s in com.trees do closure[k] += share*math.PI*math.pow(f32(SPECIES[Tree_Kind(s)].radius[0] + SPECIES[Tree_Kind(s)].radius[1])/2 + 0.5, 2)
+		closure[k] = min(closure[k]*com.density/(TREE_GRID*TREE_GRID), 1)
+	}
 	fmt.printf("plants in %.0f ms:", time.duration_milliseconds(time.since(started)))
 	for k, i in count do fmt.printf(" %s %.0f%%", COMMUNITIES[i].name, 100*f32(k)/f32(len(land.grid.order)))
 	fmt.print("; soil:")
@@ -423,6 +435,7 @@ Tree :: struct {
 	height: i32,   // to the crown's top, over the base
 	radius: i32,   // of the crown
 	kind:   Tree_Kind,
+	under:  bool,  // a bush under the trees, drawn only near by
 }
 
 TREE_GRID  :: 6   // at most one tree per square of this many metres
@@ -435,7 +448,7 @@ pick_species :: proc(k: Community_Kind, u: f32) -> Tree_Kind {
 		u -= share
 		if u < 0 do return Tree_Kind(s)
 	}
-	return .Beech
+	return .Shii
 }
 
 // Every tree whose trunk stands in a rectangle of blocks. The same tree is found whichever
@@ -444,16 +457,20 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree) {
 	floor_div :: proc(a, b: i32) -> i32 { return (a - a %% b)/b }
 	for gz in floor_div(z0, TREE_GRID)..=floor_div(z1, TREE_GRID) {
 		for gx in floor_div(x0, TREE_GRID)..=floor_div(x1, TREE_GRID) {
-			r := hash(gx, gz, seed + 140)
-			x, z := gx*TREE_GRID + i32(r % TREE_GRID), gz*TREE_GRID + i32((r >> 4) % TREE_GRID)
-			if x < x0 || x > x1 || z < z0 || z > z1 do continue
-			fx, fz := f64(x) + 0.5, f64(z) + 0.5
-			if k, _ := community_at(fx, fz, 1); f32((r >> 8) & 0xFF)/255 >= COMMUNITIES[k].density do continue
-			g, _, plants := surface_at(fx, fz, 1)
-			k := plants.? or_continue
-			kind := pick_species(k, hash01(gx, gz, seed + 141))
-			s, v := SPECIES[kind], hash(gx, gz, seed + 142)
-			append(out, Tree{x, z, i32(math.round(g.h)), s.height[0] + i32(v % u32(s.height[1] - s.height[0] + 1)), s.radius[0] + i32((v >> 8) % u32(s.radius[1] - s.radius[0] + 1)), kind})
+			// Each square may hold a tree, and a bush under the trees.
+			for bush in ([2]bool{false, true}) {
+				r := hash(gx, gz, seed + (143 if bush else 140))
+				x, z := gx*TREE_GRID + i32(r % TREE_GRID), gz*TREE_GRID + i32((r >> 4) % TREE_GRID)
+				if x < x0 || x > x1 || z < z0 || z > z1 do continue
+				fx, fz := f64(x) + 0.5, f64(z) + 0.5
+				near, _ := community_at(fx, fz, 1)
+				if f32((r >> 8) & 0xFF)/255 >= (COMMUNITIES[near].bushes if bush else COMMUNITIES[near].density) do continue
+				g, _, plants := surface_at(fx, fz, 1)
+				k := plants.? or_continue
+				kind := Tree_Kind.Scrub if bush else pick_species(k, hash01(gx, gz, seed + 141))
+				s, v := SPECIES[kind], hash(gx, gz, seed + (144 if bush else 142))
+				append(out, Tree{x, z, i32(math.round(g.h)), s.height[0] + i32(v % u32(s.height[1] - s.height[0] + 1)), s.radius[0] + i32((v >> 8) % u32(s.radius[1] - s.radius[0] + 1)), kind, bush})
+			}
 		}
 	}
 }
@@ -497,7 +514,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			// the height of that tree's crown.
 			if com, ok := plants.?; ok && s >= 8 {
 				r := hash(i32(math.floor(x/cell)), i32(math.floor(z/cell)), seed + 160 + u32(level))
-				if f32(r & 0xFFFF)/65536 < COMMUNITIES[com].density*0.75 {
+				if f32(r & 0xFFFF)/65536 < closure[com] {
 					sp := SPECIES[pick_species(com, f32((r >> 16) & 0xFF)/256)]
 					c.top[k] += sp.height[0] - 1 + i32((r >> 24) % u32(sp.height[1] - sp.height[0] + 1))
 					c.mat[k] = sp.leaf
@@ -522,6 +539,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 		x0, z0 := (cx*CHUNK - 1)*s - ox, (cz*CHUNK - 1)*s - oz
 		trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P*s + TREE_REACH, z0 + P*s + TREE_REACH, &trees)
 		for t in trees {
+			if t.under do continue
 			for j in max((t.z - TREE_REACH - z0)/s, 0)..=min((t.z + TREE_REACH - z0)/s, P - 1) {
 				for i in max((t.x - TREE_REACH - x0)/s, 0)..=min((t.x + TREE_REACH - x0)/s, P - 1) {
 					dx := f32(x0 + i*s) + f32(s)/2 - (f32(t.x) + 0.5)
@@ -602,7 +620,7 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 		}
 		sp := SPECIES[t.kind]
 		trunk, _ := envelope(t, 0)
-		for y in t.base..=t.base + i32(trunk) do put(blocks, t.x - x0, y - y_base, t.z - z0, sp.bark, true)
+		if sp.crown != .Bush do for y in t.base..=t.base + i32(trunk) do put(blocks, t.x - x0, y - y_base, t.z - z0, sp.bark, true)
 		r := t.radius
 		for dz in -r..=r {
 			for dx in -r..=r {

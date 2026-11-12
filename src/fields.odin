@@ -10,7 +10,7 @@ import "core:math"
 // becomes a new field here, never new code in a row.
 Field :: enum u8 {
 	// on the land's 16 m grid
-	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Woods,
+	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
 	// from the ground the generator makes at the point
 	Height, Steepness, Gravel, Fallen, Beach, Too_Steep,
 }
@@ -59,6 +59,7 @@ FIELDS := [Field]Field_Info{
 	.Soil_Depth = {"soil-depth", " m", "deeper in hollows, where water gathers, beside streams and over weak rock, thinner on humps and steep ground", proc(p: ^Point) -> f32 { return grid_at(land.soil, p) }, 0, 3, .Ramp, {0.80, 0.80, 0.78}, {0.30, 0.18, 0.08}},
 	.Soil      = {"soil", "", "the kind of soil (SOILS)", proc(p: ^Point) -> f32 { row, _ := soil_at(p); return f32(row) }, 0, 0, .Soils, {}, {}},
 	.Plants    = {"plants", "", "the plant community that won the race for the ground (COMMUNITIES)", proc(p: ^Point) -> f32 { k, _ := community_at(p.x, p.z, p.cell); return f32(k) }, 0, 0, .Plants, {}, {}},
+	.Volcanic  = {"volcanic", "", "1 where the rock is lava and ash laid by the island's vents", proc(p: ^Point) -> f32 { return 1 if region.story.drape else 0 }, 0, 1, .Ramp, {0.90, 0.88, 0.80}, {0.25, 0.15, 0.12}},
 	.Woods     = {"woods", "", "share of the 6 m squares with a tree, which the plant community sets", proc(p: ^Point) -> f32 { k, _ := community_at(p.x, p.z, p.cell); return COMMUNITIES[k].density }, 0, 1, .Ramp, {0.90, 0.85, 0.65}, {0.05, 0.30, 0.08}},
 	.Height    = {"height", " m", "of the ground over the sea", proc(p: ^Point) -> f32 { return p.h }, 0, 400, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Steepness = {"steepness", "", "rise over run of the ground in blocks, ledges and all", proc(p: ^Point) -> f32 { return p.steep }, 0, 1.5, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
