@@ -33,6 +33,9 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Real Japanese islands are the north star for the land, and not the only reference.** The owner finds their terrain far more interesting than anything generated so far, and does not accept that realism and interest are separate problems here. Generated islands are judged against real elevation data for islands of the same size, on the map, in figures and in the game.
 - **Lean toward livable real islands as references, and keep the inhospitable kind as a rarer draw.** Having seen the comparison, the owner noted that an island like Mikurajima, all cliff and flank, leaves nowhere to live. Most generated islands should have the real islands' drama and also ground a person could settle, well balanced; the variance should still allow an island that is all cliff. The findings and what follows from them are in `interesting-world/notes/real-islands.md`.
 
+- **A land-forming step goes next, ahead of step 4.** The sea cuts the coast inside the forming, so exposed shores stand as cliffs; the uplift no longer falls to nothing at the shore; strong rock holds steeper faces and creeps less; and livable ground is kept where it has a cause (a bay head, a valley floor, a terrace). The targets are the real figures in `foundations.md` section 11. This answers the first five items of question 9.
+- **The same step adds an inlet-coast kind and a vent.** The inlet coast is a history that ends in a sea rise of about 120 m, tested the same day. A vent builds rock and can collapse, so a volcanic island is built and not drawn as a bump of uplift. This takes question 10 in the direction of kinds as histories, one kind at a time.
+
 **2026-11-11, Claude's call**
 
 - **The first rock story row to be written is "layered, gently tilted"**: five kinds (mudstone, siltstone, grey sandstone, grit, limestone), with the sequence, tilt and folds drawn from the seed. It is the row the experiment already showed working. More rows follow in Phase 2, and the seed then picks among them.
@@ -135,7 +138,21 @@ Raised by `interesting-world/notes/real-islands.md` (2026-11-11), which compared
 - **Steepness.** Nothing formed is steeper than about 52°; real volcanic islands have 0.8 to 2.9% of their land over 60°.
 - **Ridges and valleys.** Real crests are two to four times sharper and valleys about twice as deep.
 - **Livable ground.** Decided in principle above; open in detail. The steep real islands have almost none (0.0 to 3.9% of land under 3°), Kikaijima has 55%, and our kinds have 1 to 16% spread as a ring round the shore. *Recommendation: when the coast is cut into cliffs, keep gentle ground gathered where it has a cause (a bay head, a valley floor, a river-mouth flat, a terrace, a plateau top), give each kind row a range for how much, weight the draw of kinds toward the livable ones, and add livable ground and sheltered landings to the printed figures.* The thresholds and the weights are the owner's to set by looking.
+- **Kinds after real islands.** Our four kinds match none of the real ones closely, and the real set has kinds we lack: a dome-and-bay volcanic island, a crater island, a coast of long inlets, a terrace island that is mostly flat. *Recommendation: each kind row names the real islands it stands for, their figures are its targets, and the next comparison adds livable islands of this size.*
+- **What is bare.** A real island loaded into the game turns to bare rock where it is really forest, because ground steeper than about 36° is stripped. The plan fixes this in step 5. *Recommendation: fix it with the land-forming step, since steeper land without it will look like a quarry.*
+- **People sooner?** The plan keeps the first island wild. One landing and hamlet placed by the livable-ground field would test that field. *Recommendation: decide after the coast and the livable-ground figure exist.*
+- **Larger regions for some kinds?** Most livable real islands are larger than 8 km. A 16 km region forms in 4.8 s. *Recommendation: try one kind at 16 km when the kinds are reshaped.*
 - **Keep the comparison as a tool?** A `--real=` option that loads a real island in place of a formed one exists in a scratch build. *Recommendation: fold it in, with the figures, since real islands are now the yardstick.*
+
+### 10. Is a kind a shape or a history?
+
+Raised by the owner (2026-11-11): what stops a tectonics simulator from producing the kinds, so that none is written by hand? The answer and one test are in `foundations.md` section 11, "A kind as a history, not a shape".
+
+- **What a kind row says.** Today a row describes the result (a peak, a range's axis and bend). *Recommendation: a row becomes a list of events over general processes, and the shape fields mostly go. Do it one kind at a time, as each process arrives.*
+- **Which processes to add.** The four real kinds we lack need two: the sea cutting the coast, and a vent that builds rock and collapses. *Recommendation: the sea first, as already proposed in question 9; the vent after it, ahead of step 4, if the owner wants volcanic islands to look built.* That two are enough is untested.
+- **The inlet coast.** It needs no new process. Raising the sea 116 m at the end of the ridge island's history took the sea inside its outline from 4% to 34% (Tsushima 60%), and cost two thirds of its land. The test was not kept. *Recommendation: put it in as its own row with a larger outline, and try that row at 16 km.* The owner has not seen it in the game.
+- **A plate simulation.** It would choose and place kinds, which the stand-in in `foundations/world-frame.md` D4 already does. *Recommendation: keep it deferred until the stand-in makes a contradiction the owner can see.*
+- **Sediment.** A real inlet's head is a flat of river sediment, and that is where its village stands. The forming deposits nothing, and the plan leaves deposition to Phase 2. *Recommendation: decide when the livable-ground figure exists and shows what the inlet heads lack.*
 
 ## Deferred on purpose
 

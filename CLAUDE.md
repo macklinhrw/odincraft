@@ -5,7 +5,7 @@ A small first-person block game used to test directions for world generation, lo
 - `docs/ideas.md`: read before proposing a feature.
 - `docs/lessons.md`: read before proposing architecture, a plan or a way of working.
 - `docs/foundations.md`: the plan for the wider world and the order of work on the island; one design per system in `docs/foundations/`. Read its sections 3 and 8 before adding to the land, rock, water, plants or living things. A plan, not decisions.
-- `docs/interesting-world.md`: the research under that plan.
+- `docs/interesting-world.md`: the research under that plan. Its note `interesting-world/notes/real-islands.md` compares the generated islands with real Japanese ones, which are the owner's north star for the land; `foundations.md` section 11 has the target figures. Judge a change to the land against them.
 - `docs/adr/`: why the engine is shaped as it is. Read before changing level of detail or lighting.
 - `reference/README.md`: index of the earlier projects' idea documents, kept verbatim.
 
@@ -21,6 +21,7 @@ The sibling folders `../odincraft-v1` to `v4` and `../zigcraft*` hold the earlie
 - `./build.sh` builds with unused-code checks on. `./build.sh run` plays.
 - Look at every visual change yourself before showing it: `build/odincraft --shot=out.png` waits for the world to load, writes one 2560 × 1440 frame and exits. Add `--fly`, and place the camera with `--above=x,height,z` (height over the ground) or `--pos=x,y,z`, `--look=yaw,pitch` in degrees and `--hour=`. The region is 8,192 m square around its origin, and the default cone island spans about -2,300 to 2,500 in x and -2,400 to 2,600 in z of it; the map shows the whole region at 8 m a pixel with -z at the top, and yaw 0 looks toward -z. Other kinds and seeds put the land elsewhere: read the map first. The PNG is uncompressed; shrink it with `sips -Z 1600 -s format jpeg` before reading it.
 - Check frame pacing after any change to drawing or streaming: `build/odincraft --bench=15 --fly --speed=120 --above=-900,60,1700 --look=90,0`, which crosses the default island's south flank over forest. The target is no frame over 12.5 ms. Without `--fly` the same option runs along the ground, which exercises collision, and prints how far it got.
+- After any change to the land, the rock or trees, fly fast across the steepest ground of each kind, since steep land finds bugs gentle land hides: `build/odincraft --bench=20 --fly --speed=200 --above=0,80,-2000 --look=180,0` crosses the default island's summit, and `--kind=` with a path read off the map covers the others.
 - After any change to the player, trees or the start, run `build/odincraft --bench=8` with no position: that is how the owner starts, on a river bank, and about 60 m is the expected distance.
 - The start-up lines print the island's kind and history, its rock, how long it took to form (keep it near one second) and how long a step cut at the coast takes to climb to the farthest stream head; the length of the last phase against that says how finished the land is.
 - A dark or odd patch in a screenshot is usually real geometry lit truthfully. Move the camera to it before changing the mesher.

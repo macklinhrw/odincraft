@@ -16,6 +16,7 @@ How this was made: ten designers (Opus agents) each designed one system against 
 6. **The fantastic enters as a cause.** A blight, an elder wood or a raised mountain adds terms to the same fields nature uses, so the simulation produces its consequences and inspection can explain it. This costs nothing to allow now and a rebuild to add later.
 7. **The first phase is still one island**, sixteen changes, each ending in something the owner can look at. By the designers' guesses it roughly doubles the game, from about 2,800 to about 5,700 lines.
 8. **Two findings changed earlier advice.** The land forming leaves no hollows, so lakes need events (measured: three one-cell dips on today's island). And the shader reads only four bits of a block's material, so sixteen colours is today's ceiling.
+9. **Building the first four steps and measuring against real islands changed the plan again.** The generated land is the wrong shape at the coast, in its mass, in its steepest faces and at its crests, and the plan had ordered the work from a diagnosis the real data only partly supports. Section 11 holds what was learned and what it changes in how every system is designed and judged.
 
 ## 1. What this plan is, and how it avoids the last one
 
@@ -289,6 +290,135 @@ Each has the plan's recommendation. Section 8 of each design holds the rest.
 - **Journey sizes** (realm widths, hours of road) are guesses until walked.
 - **Sources quoted from memory** by the designers are listed at the end of each design; the Tolkien and Le Guin quotations and several ecology figures are among them.
 - **The size of this plan** is itself a risk. If a step cannot be shown to the owner in under a minute, the step is too large.
+
+## 11. What the first steps taught
+
+Added 2026-11-11, after steps 0 to 3 were built and the land was compared with eight real Japanese islands (`interesting-world/notes/real-islands.md`). These are changes to how the systems are designed and judged, beyond the reordering in section 8. Items marked *(inference)* are Claude's reading and are not yet tested.
+
+### Two tests against the real world
+
+A real island loaded onto the game's grid gives two separate tests, and every system falls under one of them.
+
+- **The forming test: is our land like real land?** Form an island, measure it and a set of real islands the same way, and compare maps, figures and views. This judges geology, landform processes, water and the region kinds. It is what found the missing sea cliffs.
+- **The dressing test: does the game make real land look like itself?** Load a real island in place of a formed one and compare the game's picture with photographs of the place. This judges everything laid over the land: what is bare, soil, plants, rock in blocks, water, and later people's marks. Mikurajima failed it at once: the game drew bare banded rock where the island is forest to the cliff edge, because the rule for bare ground strips anything steeper than about 36°.
+
+The second test separates two kinds of fault that look the same on a generated island. When a generated hillside looks wrong, the land or the dressing may be at fault. On a real island the land is known to be right, so whatever looks wrong is the dressing.
+
+What this asks for:
+
+- The scratch option that loads a real island becomes part of the game, with the figures, if the owner agrees (question 9 in `open-decisions.md`). It is a tool that can reject a change and never accept one, which is the rule in section 1.
+- A real island needs its own rock to be dressed fairly: basalt for a volcano, not the one layered story. So at least a second rock story is wanted before Phase 2, where the plan had put all of them. *(inference)*
+- The dressing test needs references to compare with. Photographs can only be looked at by the owner or described from memory; the test stays a judgement by eye.
+
+### Kinds are families of real places
+
+The four island kinds were written from what the forming's knobs could already make. The comparison shows what that misses: a dome-and-bay volcanic island (Kōzushima), a crater island with a closed floor (Aogashima), a drowned coast of long inlets (Tsushima, Chichijima), a terrace island that is mostly flat (Kikaijima). None of ours is any of these.
+
+- **Each kind row names the real islands it stands for, and their figures are its acceptance targets.** A kind is done when its islands fall inside the range of its references on the figures that matter, and the owner accepts it by looking. A kind with no real reference is a guess and is marked as one.
+- **The catalogue is drawn from the reference set, leaning toward livable islands**, as the owner decided. The inhospitable cone after Mikurajima and Toshima stays as a rarer draw.
+- **This applies down the ladder** *(inference)*: a rock story, a plant community and a coast kind can each name a real place and be judged against it. The designs already cite real places as inspiration (Jūniko, Shirakami, Trotternish, Yakushima); the change is to measure against them.
+
+### A kind as a history, not a shape *(proposal; one test run)*
+
+The owner asked what stops a tectonics simulator from producing the kinds, so that none is written by hand. Two answers:
+
+- **A plate model picks and places kinds; it cannot shape one.** It works at hundreds of kilometres and millions of years and yields a setting for each island: arc or hotspot, age, uplift rate. The stand-in in `foundations/world-frame.md` D4 already does this. What separates the real islands happened on the island itself, mostly in its last few hundred thousand years. v4 had the plate model and dull ground.
+- **The hand is in what a row says.** A row describes the result: the cone has `peak` and `peak_width`, the ridge has `axis` and `bend`. A cone is a bump of uplift that was drawn, not something a vent built.
+
+The proposal is that a row becomes a list of events over a few general processes, and the shape fields mostly go. The four missing kinds as histories:
+
+| Real island | Its history | Missing from the forming |
+|---|---|---|
+| Tsushima, Chichijima (long inlets) | Rivers cut valleys; the sea rises about 120 m and drowns them | Nothing |
+| Kikaijima (terraces) | Rise, pause, rise, pause; the sea cuts a bench at each pause | The sea cutting the coast |
+| Kōzushima (domes and bays) | Several vents of stiff lava pile up domes; the sea cuts between them | A vent building rock; the sea cutting the coast |
+| Aogashima (crater) | A vent builds a cone, its top collapses, a small cone grows inside | A vent building rock, and collapse |
+
+So two processes are missing: the sea cutting the coast, which is already the next land-forming step, and a vent that builds and collapses. That these two are enough is an inference. The test is the forming test above: give the forming each island's history and compare the figures.
+
+**First test, run 2026-11-11.** The ridge island with the sea's last rise changed from 5–10 m to 115–120 m, seed 7, nothing else touched. The source was put back afterwards.
+
+![The ridge island as it is, with the sea raised 116 m, and the same with a larger outline](interesting-world/real/inlets-test.jpg)
+
+| | Ridge as it is | Sea rises 116 m | The same, outline radius 0.40–0.42 |
+|---|---|---|---|
+| Land | 18.7 km² | 6.8 km² | 11.9 km² |
+| Sea inside the convex outline | 4% | 34% | 36% |
+| Land steeper than 45° | 3.2% | 8.7% | 6.4% |
+| Median slope | 9° | 15° | 13° |
+| Highest point | 309 m | 259 m | 284 m |
+
+Tsushima has 60% of its outline as sea and Hahajima and Chichijima 52 to 56%; the worn kind, the most embayed until now, has 20%. One changed range gets over half of the way. The same rise drowns the low apron round the shore: the pale ring is gone from the map, though the share of land under 50 m was not measured. What it leaves:
+
+- The island loses two thirds of its land, so the outline has to be drawn larger, and an 8 km region leaves little room for that.
+- The new shore is uncut, so it has no sea cliffs.
+- The drowned valley floors have no fill. A real inlet's head is a flat of river sediment, which is where its village stands; that needs deposition, which the plan has left to Phase 2 *(inference)*.
+- The embayment was measured from the map's land outline, checked against the earlier figure for the ridge (4% here, 5% there).
+
+### Every step has target figures
+
+The Phase 1 table says what the owner looks at after each step. It should also say what is measured, taken from the real islands, so a step can be rejected before the owner's time is spent. The targets known so far:
+
+| Figure | Real high islands | Generated today |
+|---|---|---|
+| Height reached within 100 m of the shore | 60 to 117 m | 5 to 17 m |
+| Shore rising 30 m within 50 m | 40 to 85% | 0 to 2% |
+| Slope in the first 100 m from the sea | 29 to 51° | 3 to 10° |
+| Land under 50 m | 5 to 16% | 31 to 58% |
+| Land steeper than 60° | 0.8 to 2.9% | 0.0 to 0.1% |
+| Fall at a ridge crest | 0.56 to 1.25 m | 0.22 to 0.30 m |
+| Height above the nearest stream | 54 to 130 m | 24 to 45 m |
+| Stream length per km² | 0.9 to 1.6 km | 1.0 to 1.5 km (already matches) |
+
+The figures the game prints at start-up (slope, tallest face) grow to include these, and livable ground and sheltered landings once those are defined.
+
+### Livable ground is a field, defined from real settlements
+
+- **It is a named field like wetness or slope**, so kinds can host on it: a plant community, a trail, a landing and later a village all read it. Decision 2 already says a new condition becomes a new field.
+- **Its definition comes from where real villages stand.** Mikurajima's one village is on ground of about 21° at about 150 m above the sea, on the island's gentlest coast. A rule that calls only flat ground livable would reject it. Real settlement sites on the reference islands are the ground truth: their slope, height above the sea, distance to fresh water and to a landing, and shelter. Not yet measured.
+- **Livable ground has to have a cause.** Today the gentle land is a ring of low apron round every shore, the same on every side. Real livable ground is somewhere in particular: a bay head, a valley floor, a river-mouth flat, a terrace, a plateau top, a crater floor.
+- **It serves the later game.** The colony game's site choice (Phase 3) reads the same field, and an island with no site has nothing to choose between.
+
+### Where the designs were wrong when measured
+
+The ten designs were argued from sources. Each of these failed on first contact with a measurement or a run, so the designs' numbers are starting points and their mechanisms are to be checked before they are built on.
+
+| Design said | Measured |
+|---|---|
+| Keep the hollows the forming makes, for lakes | It makes none: three one-cell dips |
+| Erodibility (0.5/strength)², slope limits from 30° | The island wore down to 202 m; (0.4/strength)² and 35° are in use |
+| A worn island rests for two million years | It is gone by then; about 0.4 million is in use |
+| The coast is built in blocks, late (step 15) | Real sea cliffs are 50 to 500 m and belong in the forming |
+| True proportions are gentle, so exaggeration may be needed | Real islands of this size are about twice as steep as ours at true scale; the land needs to be truer before it needs exaggerating |
+| Uniform erosion makes every valley alike, which is why the land is dull | Valley spacing and roughness by scale already match real land; the difference is where the steepness sits |
+| Cliffs need bare rock, so steep ground is bare | Only the cliff is bare. Real flanks of 30 to 45° are forested |
+| A loose scree sheet covered a hillside (Claude's own reading of a screenshot) | It was bare sandstone; painting loose rock one colour showed it |
+
+### Where the shape can be seen *(inference)*
+
+At eye level inside the forest, a real island and a generated one are hard to tell apart. The differences show from the sea, from the air, along the coast and from open ground. Two things follow for the plan.
+
+- **The near ground still decides the walk.** This confirms the weight the plan puts on plant communities, stand ages and the tree grower (steps 5, 7 and 8). No change to the land's shape will be felt under one kind of tree.
+- **The shape pays off only where the player can see out.** Open ridges, cliff tops, a coast that can be walked, clearings, a view down a valley from a bench. Whether an island offers these is as much part of its quality as its figures, and it is not measured yet. A figure for it would be how much of a walk along the trails, ridges and shore has a view of more than a few hundred metres.
+
+### People's marks are part of why real islands look as they do
+
+Photographs of the reference islands show a village, a harbour, terraces and roads, and the owner's first comparison with the game's picture was partly about their absence. The plan keeps the first island wild and brings people with the archipelago, first as ruins (section 9, item 9). That is unchanged, and is the owner's to revisit: a single landing and hamlet placed by the livable-ground field would test that field and give the dressing test something to match. Raised as part of question 9.
+
+### Region size
+
+Most livable real islands are larger than the 8 km region: Kikaijima is about 14 km long, and Tsushima and the Oki islands are larger again, so three of the eight references had to be cut to a window. A 16 km region forms in 4.8 s on one thread and a 33 km one in 21.9 s (measured, section 7). Whether some kinds should be larger regions is open, and is cheaper to answer now that size is a field of the region record.
+
+### Guessed and actual size of the steps
+
+| Step | Guessed lines | Actual |
+|---|---|---|
+| 0 and 1: seed, overlays, rock beds | 265 | 275 |
+| 2: cliffs in blocks | 160 | 131 after fallen blocks were removed |
+| 3: the island's recipe as a record | 130 | about 200 |
+| Fixes after step 3 | | 9 |
+
+`src/` went from 3,138 to 3,751 lines. Forming time fell, from about 1.0 s to 0.4 to 1.0 s depending on the kind.
 
 ## Files
 

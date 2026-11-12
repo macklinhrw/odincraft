@@ -73,3 +73,22 @@ These are worth knowing because they bound the risk: the unsolved problem is the
 
 **Measurement**
 - Lakes counted as sea, four-connectivity inventing tiny lakes, and windows too short to be past warm-up all produced confident wrong conclusions.
+
+## Lessons from v5's first steps
+
+Added 2026-11-11, after rock beds, cliffs in blocks and four island kinds were built and compared with real islands. The detail is in `foundations.md` section 11 and `interesting-world/notes/real-islands.md`.
+
+**Judging the world**
+- "Realistic but dull" meant not realistic enough. Real islands of the same size are steeper, cliffed at the sea and sharper at the crest. Compare with real elevation on the game's own grid before deciding what the land lacks; the plan was ordered from a diagnosis that the real data only partly supported.
+- A real island loaded into the game tests the dressing separately from the land. If it does not look like its photographs, the fault is in what is bare, the soil, the plants or the rock, since the land is known to be right.
+- Read a real island's figures before calling it unlivable. Mikurajima looked uninhabitable on the map and has a village, on ground of about 21°.
+- Only the cliff is bare. The older lesson that cliffs need bare rock still holds for the face; real flanks of 30 to 45° carry forest.
+- A design's constants are starting points. Three sets of numbers argued from sources failed the first time they were run.
+
+**Working**
+- A diagnosis read from a screenshot can be wrong. Paint the thing in question in one loud colour before fixing it: the "scree sheet" was bare sandstone.
+- Ask the owner about catalogue rows and the order of work, never about one island's content. The seed draws the content, and a question framed as a hand choice confused the owner.
+- Do not hold the default island fixed while the generator is changing. Keeping seed 7 identical through one step cost a hand-picked key and a row without ranges, both removed the next day.
+- Steeper land exposes old bugs. A tree at a cliff's foot wrote outside the chunk above it, which had been possible since the first build and needed a cliff taller than a tree. After any change to the land, fly fast across the steepest ground of each kind.
+- Frame interval is unreliable when the window is not in front (the pitfall above). Build the last commit in a separate checkout, run both in the same minutes, and judge by the line for the game's own work.
+- An agent's report is a claim: rebuild, rerun the benches and look at the pictures before passing it on. Brief the agent to test the findings it is handed as well; it was an agent that showed the "scree sheet" in its brief was something else.
