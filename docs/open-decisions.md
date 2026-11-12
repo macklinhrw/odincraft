@@ -122,6 +122,16 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Canopy trees have their real heights, on crowns no wider**: shii 13 to 19 m, tabu 14 to 20, black pine 10 to 15. A tree's leaves begin at least 3 m up, a sapling's over a walker's head, and bushes are 1 to 2 m. Claude made this change on review: with trees held under 15 m the old wood was cluttered under a ceiling at head height. It takes the heights out of step 8, which keeps the tree forms.
 - **Beyond half a kilometre only canopy trees are drawn singly, and the second and third shadow cascades take turns**, to pay for the denser woods: the forest flight's frame had gone from 9.3 to 16.4 ms and is back at 8.6.
 - **The start**: no canopy tree within 6 m and no small one within 2 m, or within 3 m where every bank is wooded closer than 6. The default start did not move (east coast, near 2,640, -254), but the ground bench now walks into a bush after 26 m, where it covered 55. The worn island had no bank clear of trees and started at its middle; it now starts on a bank.
+- **Step 8, the tree grower, is built** (`foundations.md` section 8, "Step 8, as built"). The choices in it are these:
+- **Every tree is grown by one procedure from its species' row**: stems, a fork into limbs (or a pine's leader with level tiers), a lobe of leaves at each limb's end. A species is changed by its row, never by its own code.
+- **A crown is a cluster of lobes inside the species' envelope**, and the far crowns are that envelope. The near tree is lumpier than the far box, but the same size and in the same place.
+- **Crowns reach toward the open**: away from stronger neighbours, toward a gap, down the slope, and downwind where exposed. A pine on the windward shore leans and carries its plates downwind; bushes do not lean, and the wind only cuts them lower on the windward side.
+- **A crown's radius is up to 0.75 of the stand's spacing**, 5 m in an old stand (it was 4), and tabu always takes the widest. Real crowns reach 15 m across; wider ones cost more faces than the step could pay for.
+- **Trees between the canopy trees are one crown on a stem, and shii and tabu have three to five limbs**, to keep the faces drawn within 15% of before. Grown limbs on the smaller trees, and four to six on the big ones, were dropped for that.
+- **Leaves stay 3 m over the ground under them, and a stem is straight for its lowest third**, so the woods stay walkable when a crown leans out over lower ground or a clump splays.
+- **Small trees are taller, toward their real sizes**: camellia 5 to 9 m (was 5 to 7), hisakaki 4 to 8 (4 to 7), alder 6 to 10 (5 to 8). With leaves starting 3 m up, a 6 m tree had too little crown to look like a tree. The alder's crown is rounded, as the sources describe, not narrow.
+- **Bark shows bark on every face.** The bark blocks' top and bottom now use the artist's bark tile in place of the log's cut end, which showed on every step of a slanting limb and on top of every fallen trunk.
+- **The ground bench from the start covers about 20 m**, where it covered 26: it ends in the same kind of bush, which is a little fuller now.
 
 **2026-11-11, Claude's call**
 

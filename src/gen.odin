@@ -361,26 +361,44 @@ soil_at :: proc(p: ^Point) -> (row: int, depth: f32) {
 	return len(SOILS) - 1, FIELDS[.Soil_Depth].at(p)
 }
 
-// A species: its bark and leaf blocks, the form of its crown, and its height to the crown's top
-// and the crown's radius, in metres. The cast is the evergreen wood of the warm islands of
-// southern Japan (docs/interesting-world/notes/real-vegetation.md). True heights wait for the
-// tree grower; these keep near the sizes trees have had.
+// A species: its bark and leaf blocks, the envelope its crown fills, its height to the crown's
+// top and the crown's radius in metres, and how the tree grower (grow) builds it: stems from
+// the ground, which fork into limbs or keep a leader the limbs leave in tiers, each limb carrying
+// a lobe of leaves at its end. The cast is the evergreen wood of the warm islands of southern
+// Japan, and the forms are from docs/interesting-world/notes/real-vegetation.md.
 Tree_Kind :: enum u8 { Tabu, Shii, Camellia, Hisakaki, Pine, Scrub, Alder }
 Species :: struct {
 	name:           string,
 	bark, leaf:     Mat,
-	crown:          enum u8 { Broad, Dome, Flat, Bush },
+	crown:          enum u8 { Broad, Dome, Oval, Flat, Bush },   // the envelope, which far crowns draw
 	height, radius: [2]i32,
+	stems:          [2]i32,   // stems from the ground
+	fork:           f32,      // share of the height where a stem gives out into its limbs, or where a leader's first tier leaves it
+	leader:         bool,     // the stem goes on to the top and the limbs leave it in tiers, nearly level
+	limbs:          [2]i32,   // limbs on each stem
+	reach:          f32,      // how far out a limb carries its lobe, as a share of the crown's radius
+	lobe:           f32,      // the lobe's radius, as a share of the crown's radius
+	squash:         f32,      // its depth over its width
+	lean:           f32,      // how far the crown moves toward the open, as a share of the height
+	wind:           f32,      // how far it bends downwind and is cut back on the windward side, fully exposed
+	crook:          f32,      // metres a stem wanders from straight
 }
 
 SPECIES := [Tree_Kind]Species{
-	.Tabu     = {"tabu", .Wood, .Leaves, .Broad, {14, 20}, {3, 4}},                    // Machilus: the big tree of moist ground, a broad dark dome
-	.Shii     = {"shii", .Shii_Bark, .Shii_Leaves, .Dome, {13, 19}, {2, 3}},           // Castanopsis: the round olive crowns that close over the slopes
-	.Camellia = {"camellia", .Grey_Bark, .Camellia_Leaves, .Dome, {5, 7}, {2, 2}},     // a small dark tree under them, in flower
-	.Hisakaki = {"hisakaki", .Grey_Bark, .Hisakaki_Leaves, .Broad, {4, 7}, {2, 2}},    // Eurya and its like: the low wood of dry ridges
-	.Pine     = {"black pine", .Pine_Bark, .Pine_Needles, .Flat, {10, 15}, {2, 3}},     // a flat top on a dark bole, by the sea and on rock
-	.Scrub    = {"scrub", .Wood, .Scrub_Leaves, .Bush, {1, 3}, {1, 2}},                // tobira and other bushes, from the ground up
-	.Alder    = {"alder", .Grey_Bark, .Scrub_Leaves, .Broad, {5, 8}, {2, 3}},          // Alnus sieboldiana: the first trees on raw ground, fixing their own nitrogen
+	// Machilus: a stout trunk forking into heavy spreading limbs under a broad dark dome
+	.Tabu     = {"tabu", .Wood, .Leaves, .Broad, {14, 20}, {5, 5}, {1, 1}, 0.3, false, {3, 5}, 0.75, 0.5, 0.8, 0.12, 0.05, 0.3},
+	// Castanopsis: a short thick bole forking low into great ascending limbs, a dense crown of rounded lumps
+	.Shii     = {"shii", .Shii_Bark, .Shii_Leaves, .Dome, {13, 19}, {3, 5}, {1, 1}, 0.3, false, {3, 5}, 0.55, 0.55, 0.8, 0.12, 0.05, 0.3},
+	// much-branched, often on several stems, a dense dark oval
+	.Camellia = {"camellia", .Grey_Bark, .Camellia_Leaves, .Oval, {5, 9}, {2, 2}, {1, 3}, 0.45, false, {2, 3}, 0.35, 0.65, 1.2, 0.1, 0, 0.3},
+	// Eurya: thin stems with level spreading branches and an open, uneven crown
+	.Hisakaki = {"hisakaki", .Grey_Bark, .Hisakaki_Leaves, .Broad, {4, 8}, {2, 3}, {2, 3}, 0.5, false, {2, 3}, 0.8, 0.45, 0.9, 0.15, 0.15, 0.6},
+	// a crooked bare trunk to the top, with a few long level limbs carrying flat plates of needles
+	.Pine     = {"black pine", .Pine_Bark, .Pine_Needles, .Flat, {10, 15}, {3, 5}, {1, 1}, 0.6, true, {2, 4}, 0.8, 0.55, 0.3, 0.2, 0.2, 0.8},
+	// tobira and other bushes, rounded from the ground up, cut into a wedge by the wind
+	.Scrub    = {"scrub", .Wood, .Scrub_Leaves, .Bush, {1, 3}, {1, 2}, {1, 1}, 0, false, {0, 0}, 0, 1, 1, 0, 0.6, 0},
+	// Alnus sieboldiana: sinuous grey stems from the base, spreading limbs, a rounded crown
+	.Alder    = {"alder", .Grey_Bark, .Scrub_Leaves, .Dome, {6, 10}, {2, 3}, {2, 3}, 0.45, false, {2, 3}, 0.6, 0.55, 0.8, 0.2, 0.1, 0.8},
 }
 PLANT_BLOCKS :: bit_set[Mat]{.Wood, .Leaves, .Shii_Bark, .Shii_Leaves, .Grey_Bark, .Camellia_Leaves, .Hisakaki_Leaves, .Pine_Bark, .Pine_Needles, .Scrub_Leaves}
 
@@ -468,13 +486,16 @@ Tree :: struct {
 	form:   Tree_Form,
 	fall:   [2]f32,   // a fallen trunk: the way it lies from its root
 	tip:    i32,      // and the ground under its tip
+	open:   [2]f32,   // how far the crown's middle stands off the trunk, toward the light and downwind, metres
+	wind:   [2]f32,   // downwind, times how open the tree's place is to the wind
 }
 // Its place in the stand. Only canopy trees and the trees between them are drawn far off; small
 // trees under the canopy, standing dead trunks and fallen ones are drawn only near by.
 Tree_Form :: enum u8 { Canopy, Between, Under, Dead, Fallen }
 
-TREE_GRID  :: 3    // at most one tree stands in a square of this many metres
-TREE_REACH :: 4    // the widest crown
+TREE_GRID   :: 3     // at most one tree stands in a square of this many metres
+TREE_REACH  :: 6     // the farthest a crown reaches from its trunk
+CROWNS_MEET :: 0.75 // a crown's radius is at most this share of the spacing, so neighbours' crowns interlock
 FALLEN     :: 15   // the longest fallen trunk
 
 // How storms age the woods (foundations/vegetation.md, D3 and D6). The land's grid is cut into
@@ -556,7 +577,7 @@ gap_at :: proc(x, z: f64, old: f32) -> (inside: bool, fall: [2]f32, ago: f32) {
 // The share of a community's ground its crowns cover at a canopy spacing, which is how much of the
 // far canopy is leaf.
 cover :: proc(k: Community_Kind, spacing: f32) -> f32 {
-	r := min(crowns[k], 0.55*spacing) + 0.5
+	r := min(crowns[k], CROWNS_MEET*spacing) + 0.5
 	return min(COMMUNITIES[k].density*math.PI*r*r/(spacing*spacing)*(1 + 0.5*STANDS.between), 1)
 }
 
@@ -627,7 +648,7 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree, near := false) {
 			if form == .Under && !gap && (u >> 18)&1 == 0 do t.kind = .Scrub   // a bush, or a sapling of the canopy's own trees
 			sp, w := SPECIES[t.kind], hash(gx, gz, seed + 144)
 			full := f32(sp.height[0] + i32(w % u32(sp.height[1] - sp.height[0] + 1)))*tall
-			t.radius = clamp(i32(0.55*spacing + 0.5), 1, sp.radius[0] + i32((w >> 8) % u32(sp.radius[1] - sp.radius[0] + 1)))
+			t.radius = clamp(i32(CROWNS_MEET*spacing + 0.5), 1, sp.radius[0] + i32((w >> 8) % u32(sp.radius[1] - sp.radius[0] + 1)))
 			switch form {
 			case .Canopy:  t.height = max(i32(full), 3)
 			case .Between: t.height, t.radius = max(i32(0.65*full), 3), clamp(t.radius - 1, 1, 2)
@@ -637,26 +658,184 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree, near := false) {
 				t.height, t.fall = clamp(i32(full), 6, FALLEN - 2), fall
 				t.tip = i32(math.round(ground(fx + f64(fall.x*f32(t.height)), fz + f64(fall.y*f32(t.height)), 1).h))
 			}
+			// Which way the crown reaches: away from stronger neighbours out to twice the reach of a
+			// crown, toward a gap beside it, down the slope, where the light comes from, and downwind
+			// as far as the place is open to the wind.
+			if form <= .Between {
+				push: [2]f32
+				for j in gz - 2*k..=gz + 2*k do for i in gx - 2*k..=gx + 2*k do if hash01(i, j, seed + 141) > v {
+					q := hash(i, j, seed + 140)
+					d := [2]f32{f32(i*TREE_GRID + i32(q % TREE_GRID) - x), f32(j*TREE_GRID + i32((q >> 4) % TREE_GRID) - z)}
+					if l := math.sqrt(d.x*d.x + d.y*d.y); l < 2*reach do push -= d/l*(1 - l/(2*reach))
+				}
+				for a in 0..<4 {
+					d := [2]f32{f32(1 - a%2*2)*f32(a/2), f32(1 - a%2*2)*f32(1 - a/2)}
+					if in_gap, _, _ := gap_at(fx + f64(d.x)*8, fz + f64(d.y)*8, old); in_gap do push += 1.5*d
+				}
+				bearing := math.to_radians(land.facing[cell])
+				push += 0.8*min(land.slope[cell], 1)*[2]f32{math.sin(bearing), -math.cos(bearing)}
+				if l := math.sqrt(push.x*push.x + push.y*push.y); l > 1 do push /= l
+				swell := math.to_radians(f32(region.shape.swell))
+				t.wind = land.exposed[cell]*[2]f32{-math.sin(swell), math.cos(swell)}
+				if sp.crown != .Bush do t.open = (sp.lean*push + sp.wind*t.wind)*f32(t.height)   // a bush grows from its root, and the wind only cuts it
+				if l, most := math.sqrt(t.open.x*t.open.x + t.open.y*t.open.y), f32(TREE_REACH - t.radius); l > most do t.open *= most/l
+			}
 			append(out, t)
 		}
 	}
 }
 
 // A tree's crown, as the height of its underside and its top over the tree's base, at a
-// distance from the trunk; the underside lies over the top outside it. The near blocks and the
-// far crowns both draw this.
+// distance from the crown's middle (the trunk moved by `open`); the underside lies over the top
+// outside it. The grower keeps a tree's leaves inside it, and the far crowns draw it.
 envelope :: proc(t: Tree, d: f32) -> (under, over: f32) {
 	r := f32(t.radius) + 0.5
 	if d >= r do return 1, 0
 	top, q := f32(t.height), math.sqrt(1 - d*d/(r*r))
 	clear := min(3, top - 1)   // a tree's leaves begin over a walker's head, as its lower branches die in the shade
 	switch SPECIES[t.kind].crown {
-	case .Broad: return max(top - r*(0.65 + 0.45*q), clear), top - r*0.65*(1 - q)
-	case .Dome:  return max(top - r*0.85*(1 + q), clear), top - r*0.85*(1 - q)
-	case .Flat:  return max(top - 1.2 - 1.6*q, clear), top - 0.8*(1 - q)
+	case .Broad: return max(top - r*(1.9 - 0.4*q), clear), top - r*0.5*(1 - q)
+	case .Dome:  return max(top - r*(1 + q), clear), top - r*0.8*(1 - q)
+	case .Oval:  return max(top - r*1.2*(1 + q), clear), top - r*1.2*(1 - q)
+	case .Flat:  return max(top - 0.45*top*q, clear), top - 1.5*(1 - q)
 	case .Bush:  return 0, top*q
 	}
 	return 1, 0
+}
+
+// The crown's middle, from which the envelope is measured.
+crown_at :: proc(t: Tree) -> [2]f32 {
+	return {f32(t.x) + 0.5 + t.open.x, f32(t.z) + 0.5 + t.open.y}
+}
+
+// The tree grower (foundations/vegetation.md, D4 and section 5). One procedure grows every
+// species from its row: each stem leans with the crown toward the open and wanders as the
+// species does, then gives out into limbs, or goes on to the top as a leader and the limbs leave
+// it in tiers. Each limb runs out to a lobe of leaves set inside the envelope, so the crown is a
+// cluster of lobes whose lumps and gaps are the species' own, and the far crown is the same
+// tree. Downwind the limbs are longer, and the wind cuts the windward side lower. Everything
+// is drawn from the tree's own hash and its place, so every chunk grows the same tree.
+// Blocks go into a volume whose block (0, 0, 0) is the world block `o`, over the ground in `c`.
+grow :: proc(blocks: []u8, t: Tree, o: [3]i32, c: ^Columns) {
+	layers := i32(len(blocks)/(P*P))
+	put :: proc(blocks: []u8, layers: i32, p: [3]i32, m: Mat, replace: bool) {
+		if p.x < 0 || p.x >= P || p.z < 0 || p.z >= P || p.y < 0 || p.y >= layers do return   // below y is this chunk's solid ground: a tree at a cliff's foot
+		k := int(p.x) + int(p.z)*P + int(p.y)*P*P
+		if replace || blocks[k] == 0 do blocks[k] = u8(m)
+	}
+	// A line of bark half a metre at a time, so it joins face to face where it runs aslant;
+	// `thick` makes it two blocks across.
+	line :: proc(blocks: []u8, layers: i32, o: [3]i32, a, b: [3]f32, m: Mat, thick: bool, replace: bool) {
+		n := i32(2*max(abs(b.x - a.x), abs(b.y - a.y), abs(b.z - a.z))) + 1
+		for s in 0..=n {
+			f := f32(s)/f32(n)
+			p := a + (b - a)*f
+			at := [3]i32{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))} - o
+			for k in 0..<(4 if thick else 1) do put(blocks, layers, at + {i32(k%2), 0, i32(k/2)}, m, replace)
+		}
+	}
+	sp := SPECIES[t.kind]
+	h := hash(t.x, t.z, seed + 150)
+	draw :: proc(h: ^u32) -> f32 {   // the tree's own stream of numbers in 0..1
+		h^ = h^*0x2C1B3C6D + 0x297A2D39
+		return f32(h^ >> 8)/16777216
+	}
+	H, r := f32(t.height), f32(t.radius) + 0.5
+	foot := [3]f32{f32(t.x) + 0.5, f32(t.base), f32(t.z) + 0.5}
+	mid := crown_at(t)
+	middle := [3]f32{mid.x, foot.y, mid.y}
+	big := t.height >= 18 && t.form == .Canopy   // the tallest trees stand on a trunk two blocks across
+	small := t.form >= .Between && t.form != .Dead || t.height < 6   // crowns too small to carry limbs that show
+	stems := 1 if small else sp.stems[0] + i32(draw(&h)*f32(sp.stems[1] - sp.stems[0] + 1))
+	limbs := 0 if small else sp.limbs[0] + i32(draw(&h)*f32(sp.limbs[1] - sp.limbs[0] + 1))
+	clear := 0 if sp.crown == .Bush else min(f32(3), H - 1)
+	turn := 2*math.PI*draw(&h)
+
+	Lobe :: struct { at: [3]f32, a, b: f32 }
+	lobes: [24]Lobe
+	n := 0
+	for s in 0..<stems {
+		spread := [3]f32{math.cos(turn + 2*math.PI*f32(s)/f32(stems)), 0, math.sin(turn + 2*math.PI*f32(s)/f32(stems))}
+		base := foot + (0.5*spread if s > 0 else 0) - {0, 1, 0}
+		// Where the stem gives out, or for a leader its top. Stems of a clump splay apart.
+		fork := max(sp.fork*H, min(4, H - 2)) if !sp.leader else H - 2
+		if small do fork = H - 1
+		end := foot + (middle - foot)*(fork/H) + {0, fork, 0}
+		if stems > 1 do end += 0.35*r*spread
+		// The stem in three lengths, each kinked aside by up to the species' crook.
+		knee: [4][3]f32 = {base, 0, 0, end}
+		for i in 1..=2 {   // the lean is taken low, so a leaning bole turns upright toward the crown
+			f := f32(i)/3
+			knee[i] = base + (end - base)*f + [3]f32{(end - base).x, 0, (end - base).z}*(math.sqrt(f) - f) + [3]f32{draw(&h) - 0.5, 0, draw(&h) - 0.5}*2*sp.crook*(0 if small || i == 1 else 1)   // straight where a walker passes
+		}
+		along :: proc(knee: [4][3]f32, f: f32) -> [3]f32 {   // the point a share f of the way up the stem
+			i := clamp(int(f*3), 0, 2)
+			return knee[i] + (knee[i + 1] - knee[i])*(f*3 - f32(i))
+		}
+		if sp.crown != .Bush do for i in 0..<3 do line(blocks, layers, o, knee[i], knee[i + 1], sp.bark, big && s == 0, true)
+		if small || sp.crown == .Bush {
+			// One crown, as wide as the room it has over the clear bole is deep; a bush is a dome from
+			// the ground, low at its edge.
+			deep := (H - clear)/2 + 0.5
+			if n < len(lobes) do lobes[n] = {middle + {0, clear + deep - 0.5, 0}, min(r - 0.3, deep + 0.5), deep} if sp.crown != .Bush else {middle, r - 0.3, H + 0.5}
+			n += 1
+			continue
+		}
+		// The limbs: from the fork, or from the leader in tiers up it.
+		for l in 0..<limbs {
+			az := turn + math.PI/f32(stems) + 2*math.PI*(f32(l) + 0.6*draw(&h))/f32(limbs)
+			if stems > 1 do az = turn + 2*math.PI*f32(s)/f32(stems) + 0.9*math.PI*(draw(&h) - 0.5)   // each stem of a clump carries its own side of the crown
+			dir := [3]f32{math.cos(az), 0, math.sin(az)}
+			out := sp.reach*r*(0.75 + 0.5*draw(&h))*(1 + 0.6*(dir.x*t.wind.x + dir.z*t.wind.y))   // longer downwind
+			a := sp.lobe*r*(0.8 + 0.4*draw(&h))
+			b := a*sp.squash
+			tip := middle + min(out, r - 0.9*a)*dir   // the lobe's middle stays well inside the envelope
+			from := along(knee, 1 - 1.5*draw(&h)/fork)   // limbs leave over the stem's top metre and a half
+			if sp.leader {
+				f := (f32(l) + 0.5*draw(&h))/f32(limbs)
+				from = along(knee, (sp.fork*H + (H - 2.5 - sp.fork*H)*f)/H)
+				tip.y = from.y + 0.25*out
+			} else {
+				// Anywhere in the depth of the envelope at its distance, so the lobes stand at
+				// different heights and the crown is lumpy and deep.
+				d := math.sqrt((tip.x - mid.x)*(tip.x - mid.x) + (tip.z - mid.y)*(tip.z - mid.y))
+				under, over := envelope(t, d)
+				tip.y = foot.y + max(math.lerp(min(under + b, over - b), over - b, draw(&h)), clear + 0.7*b)   // and rounded underneath, over the clear bole
+			}
+			if t.form != .Dead || draw(&h) < 0.6 do line(blocks, layers, o, from, tip - {0, 0.5*b, 0}, sp.bark, false, false)
+			if n < len(lobes) do lobes[n] = {tip, a, b}
+			n += 1
+			// The limb forks once near its end, and the twig carries a smaller lobe beside the first.
+			if sp.leader || t.form == .Dead do continue
+			side := az + (0.5*math.PI if l%2 == 0 else -0.5*math.PI)*(0.6 + 0.6*draw(&h))
+			twig := tip + 0.9*a*[3]f32{math.cos(side), (draw(&h) - 0.4)*sp.squash, math.sin(side)}
+			if n < len(lobes) do lobes[n] = {twig, 0.75*a, 0.75*b}
+			n += 1
+		}
+		// The top of the crown over the fork, or the leader's top plate.
+		a := sp.lobe*r*(1.1 if sp.leader else 0.9)
+		if n < len(lobes) do lobes[n] = {{mid.x, foot.y + H - a*sp.squash, mid.y}, a, a*sp.squash}
+		n += 1
+	}
+	if t.form == .Dead do return
+	// The leaves: every lobe, its edge a little uneven, inside the envelope and over the clear
+	// bole, and cut lower on the windward side.
+	for lb in lobes[:min(n, len(lobes))] {
+		lo := [3]i32{i32(math.floor(lb.at.x - lb.a)), i32(math.floor(max(lb.at.y - lb.b, foot.y + clear))), i32(math.floor(lb.at.z - lb.a))}
+		hi := [3]i32{i32(math.ceil(lb.at.x + lb.a)), i32(math.ceil(min(lb.at.y + lb.b, foot.y + H))), i32(math.ceil(lb.at.z + lb.a))}
+		if hi.x < o.x || lo.x >= o.x + P || hi.z < o.z || lo.z >= o.z + P do continue
+		for y in lo.y..<hi.y do for z in lo.z..<hi.z do for x in lo.x..<hi.x {
+			p := [3]f32{f32(x), f32(y), f32(z)} + 0.5
+			d := (p - lb.at)/{lb.a, lb.b, lb.a}
+			e := 1.02 - 0.08*hash01(x + y*57, z, seed + 180)
+			if d.x*d.x + d.y*d.y + d.z*d.z > e*e do continue
+			if (p.x - mid.x)*(p.x - mid.x) + (p.z - mid.y)*(p.z - mid.y) > r*r do continue   // inside the envelope, and so within reach of every chunk that grows the tree
+			u := (p.x - mid.x)*t.wind.x + (p.z - mid.y)*t.wind.y   // metres downwind of the middle, times how exposed
+			if p.y > foot.y + H - sp.wind*H*max(-u/r, 0) do continue
+			if k := (z - o.z)*P + x - o.x; z >= o.z && z < o.z + P && x >= o.x && x < o.x + P && f32(y - c.top[k]) < clear do continue   // over a walker's head on the ground beneath as well
+			put(blocks, layers, {x, y, z} - o, sp.leaf, false)
+		}
+	}
 }
 
 // ---- what the engine asks for -------------------------------------------------------------
@@ -709,10 +888,11 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 		trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P*s + TREE_REACH, z0 + P*s + TREE_REACH, &trees)
 		for t in trees {
 			if t.form > (.Between if level == 1 else .Canopy) do continue   // past half a kilometre only the canopy trees: the ones between them are smaller than a cell there
+			mid := crown_at(t)
 			for j in max((t.z - TREE_REACH - z0)/s, 0)..=min((t.z + TREE_REACH - z0)/s, P - 1) {
 				for i in max((t.x - TREE_REACH - x0)/s, 0)..=min((t.x + TREE_REACH - x0)/s, P - 1) {
-					dx := f32(x0 + i*s) + f32(s)/2 - (f32(t.x) + 0.5)
-					dz := f32(z0 + j*s) + f32(s)/2 - (f32(t.z) + 0.5)
+					dx := f32(x0 + i*s) + f32(s)/2 - mid.x
+					dz := f32(z0 + j*s) + f32(s)/2 - mid.y
 					k := j*P + i
 					lo, hi := envelope(t, math.sqrt(dx*dx + dz*dz))
 					under, over := max(t.base + i32(math.round(lo)), c.ground[k]), t.base + i32(math.round(hi))
@@ -789,8 +969,11 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 			k := int(x) + int(z)*P + int(y)*P*P
 			if replace || blocks[k] == 0 do blocks[k] = u8(m)
 		}
-		sp := SPECIES[t.kind]
-		if t.form == .Fallen {
+		if t.form != .Fallen {
+			grow(blocks, t, {x0, y_base, z0}, c)
+			continue
+		}
+		{
 			// The root plate torn up on edge across the way the trunk fell, the pit it left, and the
 			// trunk lying from it toward the ground at its tip, straight, resting on any rise between.
 			ground :: proc(c: ^Columns, x, z: i32) -> i32 { return c.top[clamp(z, 0, P - 1)*P + clamp(x, 0, P - 1)] }
@@ -802,25 +985,8 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 					switch {
 					case d <= 0: put(blocks, x, y - 1 - y_base, z, .Air, true)
 					case d <= 1: for k in 0..<i32(2 - abs(side)) do put(blocks, x, y + k - y_base, z, .Dirt, false)
-					case side == 0: put(blocks, x, max(y, t.base + 1 + i32(f32(t.tip - t.base - 1)*d/f32(t.height + 1))) - y_base, z, sp.bark, false)
+					case side == 0: put(blocks, x, max(y, t.base + 1 + i32(f32(t.tip - t.base - 1)*d/f32(t.height + 1))) - y_base, z, SPECIES[t.kind].bark, false)
 					}
-				}
-			}
-			continue
-		}
-		trunk, _ := envelope(t, 0)
-		thick := i32(1 if t.height >= 18 && t.form == .Canopy else 0)   // the tallest trees stand on a trunk two blocks across
-		if sp.crown != .Bush do for y in t.base..=t.base + i32(trunk) do for k in 0..<(1 + 3*thick) do put(blocks, t.x + i32(k)%2 - x0, y - y_base, t.z + i32(k)/2 - z0, sp.bark, true)
-		if t.form == .Dead do continue
-		r := t.radius
-		for dz in -r..=r {
-			for dx in -r..=r {
-				d := math.sqrt(f32(dx*dx + dz*dz))
-				lo, hi := envelope(t, d - 0.4)
-				for dy in i32(math.floor(lo))..<i32(math.ceil(hi)) {
-					under, over := envelope(t, d - 0.4 + hash01(t.x + dx + dy*57, t.z + dz, seed + 180))   // a soft, uneven edge
-					if f32(dy) + 0.5 < under || f32(dy) + 0.5 > over do continue
-					put(blocks, t.x + dx - x0, t.base + dy - y_base, t.z + dz - z0, sp.leaf, false)
 				}
 			}
 		}

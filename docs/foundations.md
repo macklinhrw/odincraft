@@ -431,6 +431,33 @@ What the design had wrong or left open:
 
 Still short: the old wood at eye height is cluttered and low-ceilinged rather than the high hall of a real one, with half its real stems; the difference between young and old reads at eye height and from 30 m and only faintly from 1 km; a root plate reads as a stack of earth blocks and a trunk lying aslant as a stair of bark; the alder scrub on ridge seed 2's 46-year-old slide is now closed and hides more of the raw debris; a camellia can hold a place in the canopy beside taller shii, since vigour, not height, decides; stands younger than 50 years have no self-thinned dead poles. One fault was seen and not traced, and is older than this step: from some cameras a straight seam runs down the middle of the picture, through crowns, which the last commit shows too.
 
+### Step 8, as built
+
+Built 2026-11-12: the tree grower. The owner has not yet looked at it. The plan's eight cool-temperate forms became the seven species of the warm islands, and step 7 had already given the canopy trees their true heights, so the step was the shape of each tree.
+
+![Three shii, then one of each other species, each from 25 m to the side with the camera 8 m over its foot, each alone](interesting-world/real/trees.jpg)
+
+- **One grower, species as rows** (`grow`, `SPECIES` in `gen.odin`). A row holds its blocks, its envelope and twelve numbers, four of them ranges: height and crown radius, stems from the ground, the share of the height where a stem forks (or, for a leader, where its tiers begin), whether it keeps a leader, limbs on each stem, how far out a limb carries its lobe, the lobe's size and squash, lean toward the open, the answer to wind, and crook. A stem is three lengths, its lean taken low and its upper knee kinked by the crook; it forks into limbs that run to lobes of leaves set at different heights through the envelope's depth, each limb forking once more near its end into a second, smaller lobe; a leader (the pine) goes on to the top and its limbs leave it in near-level tiers carrying flat plates. Trees between the canopy trees, saplings and bushes are one crown on a stem, or a dome from the ground. Dead trees keep some bare limbs.
+- **The lean has causes** (`open`, `trees_in`): away from stronger candidates within twice a crown's reach, toward a gap within 8 m, down the slope, and downwind as far as the place is exposed. A pine on the windward shore leans and carries its plates downwind, with its windward limbs short; a bush does not lean, and the wind cuts it lower on its windward side.
+- **Near and far agree through the envelope.** Every leaf lies inside the envelope measured from the crown's middle (`crown_at`), and the far crowns draw that envelope round the same middle, so a leaning crown is moved far off as well. The Broad envelope (tabu, hisakaki) was given a deeper, lower skirt and a flatter top, the pine's Flat envelope reaches down to 55% of the height where its tiers begin, and an Oval was added for camellia.
+- **Crowns are wider**: a crown's radius is at most 0.75 of the stand's spacing (was 0.55), so 5 m in an old stand; tabu always takes the widest the stand allows. `TREE_REACH` went from 4 to 6, to hold that radius plus the lean.
+- **Walking**: leaves stay 3 m over the ground beneath them as well as over the tree's own foot, the lowest third of a stem has no crook, and a bush is a dome a walker sees over and can step past at its edge.
+- **Bark on every face.** The four bark rows in `tools/blocks.py` now take the artist's bark tile on their top and bottom faces too, in place of the log's cut end, which showed on every step of a limb running aslant and on the top of every fallen trunk. No tile was drawn.
+
+What each species looks like (the line-up above): shii, a short bole forking into three to five ascending limbs under a deep crown of rounded lumps, different from tree to tree; tabu, a broad dark crown deeper at its skirt and flatter on top, on limbs that spread further out; camellia, a dark oval in flower on one to three stems; hisakaki, two or three thin pale stems under an uneven crown; black pine, a bare bole, crooked and leaning on a windward shore, with flat plates of needles in two to four tiers; alder, two or three grey stems under a rounded crown; scrub, a low dome.
+
+| | before | after |
+|---|---|---|
+| Faces drawn, over the forest at 60 m | 2.09 million | 2.40 million (+14.6%) |
+| Faces drawn, over the south flank at 160 m | 2.21 million | 2.53 million (+14.2%) |
+| 64 near chunks round the forest flight's start (columns, blocks and mesh, one thread, best of three) | 92 ms, 561,000 faces | 110 ms, 677,000 faces |
+| Forest flight, median frame interval (back to back with the last commit, twice) | 8.66 and 8.71 ms, 1 and 2 frames over 12.5 ms | 9.25 and 9.25 ms, 1 and 1 frame over, measured on nearly the final shape (crowns 0.55 of the spacing, 13.5% more faces); the final build could not be timed cleanly while other agents' runs shared the GPU |
+| Ground run from the start | 26 m | 19 m, into a 3 m bush (the old ragged edge used to eat its arms) |
+
+**Given up for cost**: the first grown crowns drew 19% more faces and added 1.0 ms to the forest flight's median. To bring that back, the trees between the canopy trees are one crown on a stem instead of grown limbs and lobes, shii and tabu have three to five limbs instead of four to six, the ragged edge of the leaves is nearly gone, and crowns are 0.75 of the spacing rather than 0.85.
+
+Still short: tabu differs from shii by its darker leaf, its flatter, looser crown and its brown bark, but is not the dome wider than tall of an open-grown tabu, which the stand's spacing does not allow; camellia reads as an oval on a stem; alder's crown is rounded but boxy; at eye height the forks of an old wood show as steps of bark at 5 to 7 m, a limb running aslant is a stair of blocks, and the hall of boles is about as crowded as before; the old giants of 4 m through do not exist.
+
 ### Experiments to run early
 
 Each is a scratch copy, folded in or deleted, as the rock experiment was.
@@ -614,6 +641,15 @@ Tsushima has 60% of its outline as sea and Hahajima and Chichijima 52 to 56%; th
 - **A rule that was right for an open wood fails in a closed one.** "No tree within 6 m" of the start held on every island until the woods closed; then a whole island had no bank to start on.
 - **The cost of more trees is the ground under them**, not the rule that places them: the thinning over 25 neighbours per candidate cost about 9 ms in 89 at 4 m cells; finding each tree's ground cost most of the rest.
 
+### What the tree grower taught
+
+- **Look at one tree alone before looking at a wood.** In a wood every crown hides behind another; a single tree drawn alone on open ground, from the side at 25 m, showed at once that the first shii and tabu were umbrella acacias, a thin lid on long bare uprights, and that the first pines were lightning bolts.
+- **The crown's depth decides whether it reads as a tree.** Lobes placed against the envelope's top made a lid; set anywhere in its depth, and rounded underneath, they made a crown. A small tree's 3 m of clear bole leaves too little depth, and it becomes a lollipop or a table unless its single crown is no wider than it is deep.
+- **Clipping makes boxes.** A lobe whose middle stands near the envelope's edge is cut flat by it, and a crown of cut lobes is a box with vertical walls; a lobe has to fit inside.
+- **A limb's cut end shows on every step.** A line of bark running aslant is a stair, and each step showed the log's end-grain tile until bark took its side tile on every face.
+- **Every change to a tree's shape is a change to walking.** Wider bushes, splayed clumps, a kinked bole and thicker trunks each shortened the ground runs from the start, on three kinds, before any picture showed it; the ground runs on every kind found them.
+- **The cost is the shape, not the number of trees.** Wider crowns, more twigs and the ragged edge were each worth 1 to 4% of the faces; the lumps and limbs themselves were the rest.
+
 ### Every step has target figures
 
 The Phase 1 table says what the owner looks at after each step. It should also say what is measured, taken from the real islands, so a step can be rejected before the owner's time is spent. The targets known so far:
@@ -682,8 +718,9 @@ Most livable real islands are larger than the 8 km region: Kikaijima is about 14
 | 5, second half: soil, five communities, four species | | 216 (312 added, 96 removed) |
 | 6: one landslide, its lake and ponds, features | 230 | 348 (287 in `events.odin`; 84 added and 23 removed elsewhere) |
 | 7: stands with ages, gaps, fallen and dead trunks | 130 | 169 (220 added, 51 removed) |
+| 8: the tree grower | 200 | 166 (209 added, 43 removed), and three lines in `tools/blocks.py` |
 
-`src/` went from 3,138 to 3,751 lines over steps 0 to 3, to 4,268 with the land-forming step, to 4,377 with step 4 (4,427 with the fixes after it), to 4,565 with the first half of step 5, and to 4,781 with the second. Step 6 started from 4,463 lines, counted after the warm-island flora and the tiles, and took it to 4,811. Step 7 started from 4,839, after the fixes to step 6, and took it to 5,008. Forming time fell, from about 1.0 s to 0.25 to 0.9 s depending on the kind.
+`src/` went from 3,138 to 3,751 lines over steps 0 to 3, to 4,268 with the land-forming step, to 4,377 with step 4 (4,427 with the fixes after it), to 4,565 with the first half of step 5, and to 4,781 with the second. Step 6 started from 4,463 lines, counted after the warm-island flora and the tiles, and took it to 4,811. Step 7 started from 4,839, after the fixes to step 6, and took it to 5,008. Step 8 started from 5,034, after the change to unseen picture and bench runs, and took it to 5,200. Forming time fell, from about 1.0 s to 0.25 to 0.9 s depending on the kind.
 
 ## Files
 
