@@ -1120,30 +1120,6 @@ land_cell :: proc(x, z: f64) -> int {
 	return clamp(int((z + region.size/2)/LAND_CELL), 0, land.n - 1)*land.n + clamp(int((x + region.size/2)/LAND_CELL), 0, land.n - 1)
 }
 
-// Fields the map can paint over the relief, by name (--overlay=): the value at a point,
-// 0 to 1, and the colours at its two ends; or a material, painted in its own colour.
-Overlay :: struct {
-	name:   string,
-	at:     proc(x, z: f64) -> f32,
-	lo, hi: [3]f32,
-	paint:  enum { Ramp, Kinds, Wheel },   // or a material, or a bearing in degrees round a wheel of hues, grey where flat
-}
-
-OVERLAYS := [?]Overlay{
-	{"wetness", proc(x, z: f64) -> f32 { return land_at(land.wet, land.n, x, z) }, {0.90, 0.80, 0.50}, {0.05, 0.45, 0.40}, .Ramp},
-	{"livable", proc(x, z: f64) -> f32 { return land.live[land_cell(x, z)] }, {0.55, 0.55, 0.55}, {1.00, 0.55, 0.05}, .Ramp},
-	{"slope", proc(x, z: f64) -> f32 { return land_at(land.slope, land.n, x, z)/1.2 }, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}, .Ramp},
-	{"drainage", proc(x, z: f64) -> f32 { return (math.log10(land.grid.area[land_cell(x, z)]) - 2.4)/5 }, {0.95, 0.95, 0.90}, {0.05, 0.10, 0.45}, .Ramp},
-	{"uplift", proc(x, z: f64) -> f32 { return land.grid.uplift[land_cell(x, z)]/f32(1.3*region.shape.rate) }, {0.20, 0.25, 0.45}, {0.95, 0.85, 0.30}, .Ramp},
-	{"rock", proc(x, z: f64) -> f32 { return f32(rock(x, f64(land_at(land.z[0], land.n, x, z)) - 0.5, z, 8)) }, {}, {}, .Kinds},
-	{"facing", proc(x, z: f64) -> f32 { return land.facing[land_cell(x, z)] }, {}, {}, .Wheel},
-	{"humped", proc(x, z: f64) -> f32 { return 0.5 + land_at(land.hump, land.n, x, z)/30 }, {0.10, 0.35, 0.90}, {1.00, 0.75, 0.15}, .Ramp},
-	{"inland", proc(x, z: f64) -> f32 { return land_at(land.inland, land.n, x, z)/2000 }, {0.95, 0.95, 0.85}, {0.25, 0.10, 0.45}, .Ramp},
-	{"sunlight", proc(x, z: f64) -> f32 { return (land_at(land.sun, land.n, x, z) - 0.6)/0.5 }, {0.20, 0.30, 0.80}, {1.00, 0.80, 0.15}, .Ramp},
-	{"exposure", proc(x, z: f64) -> f32 { return land.exposed[land_cell(x, z)] }, {0.10, 0.40, 0.20}, {0.95, 0.90, 0.85}, .Ramp},
-	{"cold", proc(x, z: f64) -> f32 { return 1 - land_at(land.above, land.n, x, z)/50 }, {0.95, 0.92, 0.85}, {0.10, 0.25, 0.70}, .Ramp},   // a pool 50 m deep
-}
-
 // A material's colour as the map shows it.
 map_colour :: proc(m: Mat) -> [3]f32 {
 	c := MATERIALS[m].colour
@@ -1157,11 +1133,12 @@ map_colour :: proc(m: Mat) -> [3]f32 {
 // field instead.
 land_map :: proc(path, overlay: string) {
 	SIZE :: 1024
-	paint: ^Overlay
-	for &o in OVERLAYS do if o.name == overlay do paint = &o
+	paint: ^Field_Info
+	field: Field
+	for &f, k in FIELDS do if f.name == overlay do paint, field = &f, k
 	if overlay != "" && paint == nil {
-		fmt.eprint("no overlay named", overlay, "; there are:")
-		for o in OVERLAYS do fmt.eprint("", o.name)
+		fmt.eprint("no field named", overlay, "; there are:")
+		for f in FIELDS do fmt.eprint("", f.name)
 		fmt.eprintln()
 		return
 	}
@@ -1178,13 +1155,17 @@ land_map :: proc(path, overlay: string) {
 			if h <= 0 {
 				col = math.lerp([3]f32{0.35, 0.62, 0.80}, [3]f32{0.08, 0.22, 0.42}, clamp(-h/30, 0, 1))
 			} else {
-				if paint != nil && paint.paint == .Kinds {
-					col = map_colour(Mat(paint.at(x, z)))*shade
-				} else if paint != nil && paint.paint == .Wheel {
-					a := math.to_radians(paint.at(x, z))
-					col = math.lerp([3]f32{0.6, 0.6, 0.6}, 0.55 + 0.4*[3]f32{math.cos(a), math.cos(a - 2.1), math.cos(a + 2.1)}, clamp(land_at(land.slope, land.n, x, z)/0.2, 0, 1))*shade
-				} else if paint != nil {
-					col = math.lerp(paint.lo, paint.hi, clamp(paint.at(x, z), 0, 1))*shade
+				if paint != nil {
+					p := point_at(x, z, 8) if field in GROUND_FIELDS else Point{x = x, z = z, cell = 8}
+					v := paint.at(&p)
+					switch paint.paint {
+					case .Kinds: col = map_colour(Mat(v))*shade
+					case .Wheel:
+						a := math.to_radians(v)
+						col = math.lerp([3]f32{0.6, 0.6, 0.6}, 0.55 + 0.4*[3]f32{math.cos(a), math.cos(a - 2.1), math.cos(a + 2.1)}, clamp(land_at(land.slope, land.n, x, z)/0.2, 0, 1))*shade
+					case .Log:  col = math.lerp(paint.from_colour, paint.to_colour, clamp((math.log10(v) - paint.lo)/(paint.hi - paint.lo), 0, 1))*shade
+					case .Ramp: col = math.lerp(paint.from_colour, paint.to_colour, clamp((v - paint.lo)/(paint.hi - paint.lo), 0, 1))*shade
+					}
 				} else {
 					// Green at the sea, tan at 200 m, brown at 500 and pale only near 1,000, so that
 					// the height of a high island still reads.

@@ -62,6 +62,12 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Hollow or humped is measured against the ground in a square about 200 m across.** Smaller shows only gullies; 400 m makes whole valley sides hollows. At 200 m each valley floor and each spur between streams reads, about the size of a stand of trees.
 - **Units**: facing in degrees from north, hump in metres, distance to the sea in metres, sunlight against flat ground (0.15 to 1.11), exposure from 0 to 1, cold pool in metres over the stream or sea a cell drains to. The `cold` overlay paints a pool 50 m deep, within the 30 to 100 m the climate design guesses for a still night.
 - **Exposure adds the hump and salt to the upwind rise by guessed weights**: half from flat ground, minus twice the steepest rise toward the wind, plus a quarter for every 10 m of hump, and salt combined as a second chance of exposure. They were set by looking at three maps, not from any measurement.
+- **The first half of step 5 is built**: the rules that exist written as rows, nothing visible changed, and `--why=` (`foundations.md` section 8, "Step 5, first half, as built"). The choices in it are these:
+- **What covers the ground is an ordered list, not a race.** The first row whose conditions hold wins (river gravel, sand, loose rock, bare rock, grass), as the old code chose. The weighted race in `kinds-and-places.md` is left for the plant communities, whose rows truly compete for the same ground.
+- **The sand line and the steepness soil holds are fields** (`beach`, `too-steep`), each with its patchy noise inside, so a row stays a plain range on a named field.
+- **The forest density stays a formula** until the plant communities replace it. It is a sum, which windows that multiply cannot express; `--why` reports its terms and the map paints it as `woods`.
+- **Fields and overlays are one table.** Every field can be painted, and the old overlays keep their names. Three of their maps differ from before by one colour level in at most four values of three million.
+- **`--why` reads the block under the point**, at the 1 m cells the game draws beside the player, and names a nearest miss only within the field's usual span: a sand line 170 m below a cliff top is not a near miss.
 
 **2026-11-11, Claude's call**
 

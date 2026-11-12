@@ -149,6 +149,7 @@ Ground :: struct {
 	base:     f32,   // height of the rock stack's base under it (rock.odin)
 	water:    f32,   // level of the river or sea standing here, or NO_WATER
 	cover:    Mat,   // river gravel, or the loose rock lying under a face; Air for neither
+	fallen:   f32,   // depth of the loose rock fallen from a face, under any gravel
 }
 
 REPOSE     :: 0.67   // loose rock comes to rest at about 34°
@@ -236,7 +237,7 @@ ground :: proc(x, z, cell: f64) -> (g: Ground) {
 			l, _, _ = shaped(x, z, cell, 2*bare*(hash01(along, across, seed + 403 + u32(n)) - 0.5))
 		}
 	}
-	if l.lift > 0 do g.cover = MATERIALS[l.face].loose
+	if l.lift > 0 do g.cover, g.fallen = MATERIALS[l.face].loose, l.lift
 	// Small rises and hollows the simulation is too coarse to hold: more on slopes, none at
 	// the shore, and none on a ledged face or loose rock, whose shapes have their own causes.
 	h := l.h + fbm(x, z, 70, cell, 3, seed + 80)*(0.5 + 2.2*min(steep, 1))*smoothstep(0, 3, l.h)*min(l.rise, 1)*(1 - smoothstep(0, 1, l.lift))
@@ -252,23 +253,35 @@ height_at :: proc(x, z, cell: f64) -> f32 {
 	return ground(x, z, cell).h
 }
 
+// What covers the ground, as an ordered catalogue: the first row whose host holds is the
+// surface. Air brings the rock itself: what has fallen there, or else the bed.
+// Soil and forest hold on ground up to about 45°, as on real flanks; only a face steeper than
+// that is bare, which a weak rock makes only where the sea undercuts it or as the riser of a ledge.
+Surface :: struct {
+	name, why: string,
+	brings:    Mat,
+	host:      []Window,
+}
+
+SURFACES := [?]Surface{
+	{"river gravel", "a river lays gravel on its bars and its bed", .Gravel, {{.Gravel, 0, ANY, 0}}},
+	{"sand", "the waves throw sand up the shore", .Sand, {{.Beach, 0, ANY, 0}}},
+	{"loose rock", "rock fallen from the face above lies at its angle of rest", .Air, {{.Fallen, 0, ANY, 0}}},
+	{"bare rock", "soil cannot hold on ground this steep, so the beds show", .Air, {{.Too_Steep, 0, ANY, 0}}},
+	{"grass", "soil holds, and grass covers it", .Grass, {}},
+}
+
+surface_row :: proc(p: ^Point) -> int {
+	for r, i in SURFACES do if host(r.host, p) > 0 do return i
+	return len(SURFACES) - 1
+}
+
 // What the ground is at a point, and what covers it.
 surface_at :: proc(x, z, cell: f64) -> (g: Ground, m: Mat) {
-	g = ground(x, z, cell)
-	vary := fbm(x, z, 120, cell, 2, seed + 100) + 0.7*fbm(x, z, 22, cell, 2, seed + 101)   // broad patches, broken at the edges
-	bed := rock_in(g.h - 0.5, g.base, rock_level(cell))
-	// Soil and forest hold on ground up to about 45°, as on real flanks; only a face steeper
-	// than that is bare, which a weak rock makes only where the sea undercuts it or as the riser
-	// of a ledge.
-	holds := SOIL_HOLDS + 0.15*vary
-	switch {
-	case g.cover == .Gravel:       m = .Gravel
-	case g.h < 1.8 + vary*1.2:     m = .Sand
-	case g.cover != .Air:          m = g.cover
-	case g.steep > holds:          m = bed
-	case:                          m = .Grass
-	}
-	return
+	p := point_at(x, z, cell)
+	m = SURFACES[surface_row(&p)].brings
+	if m == .Air do m = p.cover if p.cover != .Air else rock_in(p.h - 0.5, p.base, rock_level(cell))
+	return p.g, m
 }
 
 // ---- trees --------------------------------------------------------------------------------
@@ -285,10 +298,14 @@ TREE_REACH :: 4   // the widest crown
 
 // How wooded the land is, 0..1. Trees follow water: thick in valley floors and hollows,
 // thinning up the slopes, absent from the high ridges.
+// A sum, not a host: the plant communities will replace it with rows.
 forest_at :: proc(x, z: f64) -> f32 {
-	wet := land_at(land.wet, land.n, x, z)
-	h := land_at(land.z[0], land.n, x, z)
-	return clamp(0.12 + 1.3*wet + 0.4*fbm(x, z, 500, 1, 3, seed + 120) - smoothstep(170, 320, h), 0, 1)
+	wet, patch, h := forest_terms(x, z)
+	return clamp(0.12 + 1.3*wet + 0.4*patch - smoothstep(170, 320, h), 0, 1)
+}
+
+forest_terms :: proc(x, z: f64) -> (wet, patch, h: f32) {
+	return land_at(land.wet, land.n, x, z), fbm(x, z, 500, 1, 3, seed + 120), land_at(land.z[0], land.n, x, z)
 }
 
 // Every tree whose trunk stands in a rectangle of blocks. The same tree is found whichever
