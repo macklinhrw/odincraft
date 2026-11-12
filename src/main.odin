@@ -18,6 +18,9 @@ import sdl "vendor:sdl3"
 //
 // Options, each as --name=value
 //   pos=x,y,z  above=x,height,z (over the ground)  look=yaw,pitch (degrees)  hour=0..24  fly  size=WxH
+//   day=N           day of the year, 0 on 1 January (default 80, the March equinox): sets the sun's path
+//   weather=c[,b]   force the cloud cover, 0 clear to 1 overcast, and the cloud base in metres (default
+//                   1000, too high for a cap); otherwise both are drawn from the seed, the day and the hour
 //   shot=file.png   wait for the world to load, save one frame and exit
 //   after=seconds   with shot: let this much time pass first, so water can move; with bench as
 //                   well, the frame is saved then without waiting, in mid-flight
@@ -38,7 +41,8 @@ Options :: struct {
 	has_pos:       bool,
 	has_look:      bool,
 	yaw, pitch:    f32,
-	hour:          f32,
+	hour, day:     f32,
+	weather:       [2]f32,
 	fly, show:     bool,
 	width, height: i32,
 	shot:          string,
@@ -56,7 +60,7 @@ Options :: struct {
 }
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, width = 1280, height = 720, speed = 60}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -77,6 +81,10 @@ options :: proc() -> Options {
 		case "look":  ok = numbers(value, ",", v[:2]); o.yaw, o.pitch, o.has_look = f32(v.x), f32(v.y), true
 		case "size":  ok = numbers(value, "x", v[:2]); o.width, o.height = i32(v.x), i32(v.y)
 		case "hour":  ok = numbers(value, ",", v[:1]); o.hour = f32(v.x)
+		case "day":   ok = numbers(value, ",", v[:1]); o.day = f32(v.x)
+		case "weather":
+			ok = numbers(value, ",", v[:2]) || numbers(value, ",", v[:1])
+			o.weather = {f32(v.x), f32(v.y) if strings.contains(value, ",") else SKY.base[1]}
 		case "bench": ok = numbers(value, ",", v[:1]); o.bench = v.x
 		case "speed": ok = numbers(value, ",", v[:1]); o.speed = v.x
 		case "shot":  o.shot = value
@@ -142,6 +150,11 @@ main :: proc() {
 		why_at(opt.why.x, opt.why.y)
 		return
 	}
+	cover, base := weather_at(opt.day, opt.hour)
+	daylight: f32
+	for h := f32(0.025); h < 24; h += 0.05 do daylight += 0.05 if sun_dir(h, opt.day).y > 0 else 0
+	fmt.printfln("sky on day %.0f at %.1f h: the sun %.0f° high at noon, %.1f h of daylight; drawn cover %.2f, cloud base %.0f m%s",
+		opt.day, opt.hour, math.to_degrees(math.asin(sun_dir(12, opt.day).y)), daylight, cover, base, ", forced by --weather" if opt.weather.x >= 0 else "")
 	// A run that only takes a picture or measures opens no window and takes no focus: it draws
 	// unseen, at the size and pace it would have on a display.
 	unseen := (opt.shot != "" || opt.bench > 0) && !opt.show
@@ -273,7 +286,7 @@ main :: proc() {
 		if opt.bench > 0 && seconds > opt.bench do running = false
 
 		view := View {
-			eye = eye, yaw = p.yaw, pitch = p.pitch, hour = hour, seconds = f32(seconds),
+			eye = eye, yaw = p.yaw, pitch = p.pitch, hour = hour, day = opt.day, weather = opt.weather, seconds = f32(seconds),
 			target = hit, has_target = aiming, crosshair = shot == "",
 		}
 		render(&g, w, view, shot)

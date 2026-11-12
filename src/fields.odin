@@ -11,7 +11,7 @@ import "core:math"
 Field :: enum u8 {
 	// on the land's 16 m grid
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
-	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age,
+	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Lifted,
 	// from the ground the generator makes at the point
 	Height, Steepness, Gravel, Fallen, Beach, Too_Steep, Under_Water,
 }
@@ -68,6 +68,7 @@ FIELDS := [Field]Field_Info{
 	.Slid      = {"slid", " m", "of a slide's debris laid here, or under 0, of ground it took away", proc(p: ^Point) -> f32 { return grid_at(land.slid, p) }, -30, 30, .Ramp, {0.30, 0.45, 0.85}, {0.85, 0.50, 0.15}},
 	.Disturbed = {"disturbed", " years", "since the ground was laid bare, where an event records it, else 100,000", proc(p: ^Point) -> f32 { return region.features[landslide.feature].age if abs(grid_at(land.slid, p)) > 0.5 else 1e5 }, 1, 5, .Log, {0.95, 0.60, 0.20}, {0.10, 0.35, 0.15}},
 	.Stand_Age = {"stand-age", " years", "since a storm or a slide last threw the canopy of the stand, which sets how far apart its trees stand and how tall they are", proc(p: ^Point) -> f32 { return land.age[land_cell(p.x, p.z)] }, 1, 3, .Log, {0.95, 0.80, 0.25}, {0.05, 0.25, 0.10}},
+	.Lifted    = {"lifted", " m", "the wind off the sea has been raised to by the ground it crossed; cloud caps the ground where this passes the cloud base", proc(p: ^Point) -> f32 { return grid_at(land.lifted, p) }, 0, 400, .Ramp, {0.20, 0.30, 0.55}, {0.95, 0.95, 0.95}},
 	.Height    = {"height", " m", "of the ground over the sea", proc(p: ^Point) -> f32 { return p.h }, 0, 400, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Steepness = {"steepness", "", "rise over run of the ground in blocks, ledges and all", proc(p: ^Point) -> f32 { return p.steep }, 0, 1.5, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
 	.Gravel    = {"gravel", "", "1 on a bar or bed where a river lays gravel", proc(p: ^Point) -> f32 { return 1 if p.cover == .Gravel else 0 }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},

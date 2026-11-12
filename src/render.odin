@@ -11,9 +11,9 @@ import "core:os"
 import "core:strings"
 import sdl "vendor:sdl3"
 
-// Drawing. A frame is: four sun shadow maps, then sky, terrain and water into a 4x
-// multisampled target that resolves to the scene texture, then the scene to the window.
-// Lighting, fog and tone mapping live in shaders.metal.
+// Drawing. A frame is: four sun shadow maps, then terrain, sky (where no terrain is) and water
+// into a 4x multisampled target that resolves to the scene texture, then the scene to the
+// window. Lighting, clouds, fog and tone mapping live in shaders.metal.
 
 SHADERS    :: #load("shaders.metal", string)
 BLOCKS     :: #load("../assets/blocks.png")   // the faces of every block, drawn by tools/blocks.py: a row for each material, its top then its side
@@ -42,6 +42,7 @@ Gpu :: struct {
 	shadow:         ^sdl.GPUTexture,   // one layer per cascade
 	shadow_sampler: ^sdl.GPUSampler,
 	blocks:         ^sdl.GPUTexture,   // one layer per tile of the atlas
+	lifted:         ^sdl.GPUTexture,   // the field `lifted`, for the cloud cap
 	block_sampler:  ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
 	terrain, shadow_pipe, sky, water, river, pool, present: ^sdl.GPUGraphicsPipeline,
@@ -49,8 +50,8 @@ Gpu :: struct {
 	ribbon_count:   u32,
 	quads_drawn:    int,
 	frame:          int,
-	cascade_at:     [4][3]f64,   // where each shadow map was last drawn, in the sun's frame
-	cascade_sun:    [3]f32,      // and the sun direction then
+	cascade_vp:     [4]matrix[4, 4]f32,   // each shadow map's view as it was last drawn
+	cascade_eye:    [4][3]f64,            // and the eye it was drawn round
 	waited:         f64,   // seconds the last frame spent waiting for the display
 	unseen:         bool,  // no window is shown: frames are drawn in full and paced as a 120 Hz display would
 	shown_at:       u64,   // when the last unseen frame was done
@@ -60,7 +61,9 @@ Gpu :: struct {
 View :: struct {
 	eye:        [3]f64,
 	yaw, pitch: f32,
-	hour:       f32,    // time of day, 0..24
+	hour:       f32,    // time of day, 0..24, by the sun
+	day:        f32,    // of the year, 0 on 1 January
+	weather:    [2]f32, // cover and cloud base forced by --weather, where they are 0 or more
 	seconds:    f32,
 	target:     [3]i32, // block being aimed at
 	has_target: bool,
@@ -71,7 +74,32 @@ View :: struct {
 Frame :: struct {
 	view_proj: matrix[4, 4]f32,
 	shadow_vp: [4]matrix[4, 4]f32,
-	cascade_r, sun, cam, target, cam_r, cam_u, cam_f, screen: [4]f32,
+	cascade_r, sun, cam, target, cam_r, cam_u, cam_f, screen, cloud, weather: [4]f32,
+}
+
+// The sky through the year, from the 1991-2020 normals at Tanegashima (30.7° N, 25 m high, the
+// nearest low island to this latitude): each month's mean cover is the share of its daylight
+// without sunshine. Each spell draws a cover around the month's mean and a cloud base, and the
+// weather passes from one spell to the next; the clouds drift on the wind at `wind` m/s.
+Sky :: struct {
+	cover:       [12]f32,
+	spell, deck: f32,      // days a spell lasts; metres from the cloud base to the deck's top
+	base:        [2]f32,   // metres, the lowest and highest cloud base
+	wind:        f32,
+}
+SKY := Sky{cover = {0.66, 0.62, 0.62, 0.57, 0.62, 0.73, 0.48, 0.45, 0.54, 0.55, 0.59, 0.62}, spell = 2, deck = 300, base = {250, 1000}, wind = 8}
+
+// The cover (0 clear to 1 overcast) and cloud base at a time, the same for the same seed.
+weather_at :: proc(day, hour: f32) -> (cover, base: f32) {
+	t := (day + hour/24)/SKY.spell
+	k, w := i32(math.floor(t)), smoothstep(0, 1, t - math.floor(t))
+	for i in i32(0)..=1 {
+		mean := SKY.cover[int((f32(k + i) + 0.5)*SKY.spell/365*12) %% 12]
+		c := math.pow(hash01(k + i, 0, seed + 700), 1/mean - 1)   // a draw whose mean is `mean`
+		b := SKY.base[0] + (SKY.base[1] - SKY.base[0])*hash01(k + i, 1, seed + 700)*(1 - 0.5*c)   // lower under a heavier cover
+		cover, base = cover + c*(w if i == 1 else 1 - w), base + b*(w if i == 1 else 1 - w)
+	}
+	return
 }
 
 Item :: struct {
@@ -210,29 +238,42 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		max_anisotropy = 4, enable_anisotropy = true,
 	})
 
+	// The field `lifted`, one texel to a cell of the land, read by the cloud cap.
+	n := u32(land.n)
+	g.lifted = sdl.CreateGPUTexture(g.dev, {type = .D2, format = .R16_FLOAT, usage = {.SAMPLER}, width = n, height = n, layer_count_or_depth = 1, num_levels = 1})
+	staging = sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = n*n*2})
+	for &v, i in (cast([^]f16)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:n*n] do v = f16(land.lifted[i])
+	sdl.UnmapGPUTransferBuffer(g.dev, staging)
+	cmd = sdl.AcquireGPUCommandBuffer(g.dev)
+	pass = sdl.BeginGPUCopyPass(cmd)
+	sdl.UploadToGPUTexture(pass, {transfer_buffer = staging}, {texture = g.lifted, w = n, h = n, d = 1}, false)
+	sdl.EndGPUCopyPass(pass)
+	_ = sdl.SubmitGPUCommandBuffer(cmd)
+	sdl.ReleaseGPUTransferBuffer(g.dev, staging)
+
 	// Depth runs from 1 at the near plane to 0 at infinity, which keeps precision at long range.
 	g.terrain = make_pipeline(g, {
-		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 2, quads = true,
+		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 3, quads = true,
 		cull = .BACK, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER,
 	})
 	g.shadow_pipe = make_pipeline(g, {
 		vs = "vs_shadow", fs = "fs_shadow", vs_uniforms = 2, quads = true,
 		cull = .BACK, depth = true, depth_write = true, compare = .LESS, clamp_depth = true,
 	})
-	g.sky = make_pipeline(g, {vs = "vs_screen", fs = "fs_sky", fs_uniforms = 1, color = g.format, samples = ._4, depth = true})
+	g.sky = make_pipeline(g, {vs = "vs_screen", fs = "fs_sky", fs_uniforms = 1, fs_samplers = 1, color = g.format, samples = ._4, depth = true, compare = .GREATER_OR_EQUAL})   // drawn where the terrain left the depth cleared
 	g.water = make_pipeline(g, {
-		vs = "vs_water", fs = "fs_water", vs_uniforms = 1, fs_uniforms = 1, fs_samplers = 1,
+		vs = "vs_water", fs = "fs_water", vs_uniforms = 1, fs_uniforms = 1, fs_samplers = 2,
 		color = g.format, samples = ._4, depth = true, compare = .GREATER, blend = true,
 	})
 	// Simulated water writes depth, so a sheet of falling water is not seen through the pool in front of it.
 	g.pool = make_pipeline(g, {
-		vs = "vs_pool", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 1, pool = true,
+		vs = "vs_pool", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 2, pool = true,
 		color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, blend = true,
 	})
 	g.present = make_pipeline(g, {vs = "vs_screen", fs = "fs_present", fs_uniforms = 1, fs_samplers = 1, color = g.format})
 	// River water writes depth, so where two reaches meet the water is drawn once.
 	g.river = make_pipeline(g, {
-		vs = "vs_river", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 1, ribbon = true,
+		vs = "vs_river", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 2, ribbon = true,
 		color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, blend = true,
 	})
 
@@ -266,11 +307,12 @@ resize :: proc(g: ^Gpu, w, h: u32) {
 	g.scene = target(g, g.format, {.COLOR_TARGET, .SAMPLER}, ._1)
 }
 
-// The sun rises in the east (+X) and crosses the south (+Z) as on an equinox at the region's
-// latitude, 60 degrees high at noon at 30° north.
-sun_dir :: proc(hour: f32) -> [3]f32 {
-	a, lat := (hour - 6)/12*math.PI, math.to_radians(f32(region.latitude))
-	return {math.cos(a), math.sin(a)*math.cos(lat), math.sin(a)*math.sin(lat)}
+// The direction to the sun at an hour of solar time on a day of the year, at the region's latitude:
+// x east, y up, z south. The declination is Cooper's (1969). The land's sunlight reads it too.
+sun_dir :: proc(hour, day: f32) -> [3]f32 {
+	dec := math.to_radians(f32(23.44))*math.sin(2*math.PI*(day - 80)/365)
+	h, lat := (hour - 12)*math.PI/12, math.to_radians(f32(region.latitude))
+	return {-math.cos(dec)*math.sin(h), math.sin(dec)*math.sin(lat) + math.cos(dec)*math.cos(lat)*math.cos(h), math.cos(dec)*math.sin(lat)*math.cos(h) - math.sin(dec)*math.cos(lat)}
 }
 
 draw_item :: proc(g: ^Gpu, cmd: ^sdl.GPUCommandBuffer, pass: ^sdl.GPURenderPass, it: ^Item, mask: u8) {
@@ -319,7 +361,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	fwd := look_dir(v.yaw, v.pitch)
 	right := [3]f32{math.cos(v.yaw), 0, math.sin(v.yaw)}
 	up := linalg.cross(right, fwd)
-	sun := sun_dir(v.hour)
+	sun := sun_dir(v.hour, v.day)
 
 	f: Frame
 	f.view_proj = {
@@ -335,13 +377,21 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	f.cam_u = {up.x*tan_y, up.y*tan_y, up.z*tan_y, 0}
 	f.cam_f = {fwd.x, fwd.y, fwd.z, 0}
 	f.screen = {f32(sw), f32(sh), 1 if v.crosshair else 0, 0}
+	// The camera in the cloud field, which drifts downwind, and on the land's grid.
+	cover, base := weather_at(v.day, v.hour)
+	if v.weather.x >= 0 do cover, base = v.weather.x, v.weather.y
+	from := math.to_radians(region.shape.swell)
+	drift := f64(SKY.wind)*((f64(v.day)*24 + f64(v.hour))*3600 + f64(v.seconds))
+	f.cloud = {f32(math.mod(v.eye.x + math.sin(from)*drift, 65536)), f32(math.mod(v.eye.z - math.cos(from)*drift, 65536)), f32(v.eye.x - f64(region.origin.x) + region.size/2), f32(v.eye.z - f64(region.origin.y) + region.size/2)}
+	f.weather = {cover, base, SKY.deck, f32(region.size)}
 	if v.has_target {
 		f.target = {f32(f64(v.target.x) - v.eye.x), f32(f64(v.target.y) - v.eye.y), f32(f64(v.target.z) - v.eye.z), 1}
 	}
 
 	// Shadow cascades are boxes centred on the camera, looking along the sunlight. Each
 	// centre moves in whole texels so shadow edges hold still while the camera moves. A
-	// cascade that is not redrawn this frame keeps its old centre.
+	// cascade that is not redrawn this frame is read as it was drawn, sun and all, so a clock
+	// that moves the sun costs no extra redraws.
 	light := -sun
 	l_right := linalg.normalize(linalg.cross(light, [3]f32{0, 1, 0}))
 	l_up := linalg.cross(l_right, light)
@@ -351,22 +401,24 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	offset: [4][3]f32
 	redraw: [4]bool
 	for r, i in radius {
-		redraw[i] = sun != g.cascade_sun || g.frame % interval[i] == i % interval[i]
+		redraw[i] = g.frame == 0 || g.frame % interval[i] == i % interval[i]
 		if redraw[i] {
 			texel := f64(2*r/SHADOW_RES)
-			g.cascade_at[i] = {math.floor(eye_lit.x/texel)*texel, math.floor(eye_lit.y/texel)*texel, eye_lit.z}
+			o := eye_lit - {math.floor(eye_lit.x/texel)*texel, math.floor(eye_lit.y/texel)*texel, eye_lit.z}
+			offset[i] = {f32(o.x), f32(o.y), f32(o.z)}
+			d := 4*r   // depth range; casters nearer the sun than this are clamped, not lost
+			g.cascade_vp[i] = {
+				l_right.x/r, l_right.y/r, l_right.z/r, offset[i].x/r,
+				l_up.x/r, l_up.y/r, l_up.z/r, offset[i].y/r,
+				light.x/d, light.y/d, light.z/d, offset[i].z/d + 0.5,
+				0, 0, 0, 1,
+			}
+			g.cascade_eye[i] = v.eye
 		}
-		o := eye_lit - g.cascade_at[i]
-		offset[i] = {f32(o.x), f32(o.y), f32(o.z)}
-		d := 4*r   // depth range; casters nearer the sun than this are clamped, not lost
-		f.shadow_vp[i] = {
-			l_right.x/r, l_right.y/r, l_right.z/r, offset[i].x/r,
-			l_up.x/r, l_up.y/r, l_up.z/r, offset[i].y/r,
-			light.x/d, light.y/d, light.z/d, offset[i].z/d + 0.5,
-			0, 0, 0, 1,
-		}
+		f.shadow_vp[i] = g.cascade_vp[i]
+		moved := v.eye - g.cascade_eye[i]
+		for row in 0..<3 do f.shadow_vp[i][row, 3] += f.shadow_vp[i][row, 0]*f32(moved.x) + f.shadow_vp[i][row, 1]*f32(moved.y) + f.shadow_vp[i][row, 2]*f32(moved.z)
 	}
-	g.cascade_sun = sun
 	g.frame += 1
 
 	// Everything that could be drawn, with the quarters each chunk should show.
@@ -429,12 +481,10 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.PushGPUVertexUniformData(cmd, 0, &f, size_of(f))
 	sdl.PushGPUFragmentUniformData(cmd, 0, &f, size_of(f))
 
-	sdl.BindGPUGraphicsPipeline(pass, g.sky)
-	sdl.DrawGPUPrimitives(pass, 3, 1, 0, 0)
-
 	sdl.BindGPUGraphicsPipeline(pass, g.terrain)
-	terrain_bindings := [2]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.blocks, g.block_sampler}}
-	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 2)
+	lifted := sdl.GPUTextureSamplerBinding{g.lifted, g.linear}
+	terrain_bindings := [3]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.blocks, g.block_sampler}, lifted}
+	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 3)
 	// The view volume as four planes through the eye; a chunk wholly outside one is skipped.
 	planes := [4][3]f32{fwd*tan_x + right, fwd*tan_x - right, fwd*tan_y + up, fwd*tan_y - up}
 	each: for &it in items {
@@ -446,12 +496,16 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		draw_item(g, cmd, pass, &it, it.mask)
 	}
 
+	sdl.BindGPUGraphicsPipeline(pass, g.sky)
+	sdl.BindGPUFragmentSamplers(pass, 0, &lifted, 1)
+	sdl.DrawGPUPrimitives(pass, 3, 1, 0, 0)
+
 	// Water. Near the player it is simulated and drawn chunk by chunk. Beyond that the
 	// rivers and the sea are drawn whole, and give way wherever the mask says a chunk has
 	// simulated water, so the two never lie over each other.
-	water_mask := sdl.GPUTextureSamplerBinding{w.water.mask, g.linear}
+	water_mask := [2]sdl.GPUTextureSamplerBinding{{w.water.mask, g.linear}, lifted}
 	sdl.BindGPUGraphicsPipeline(pass, g.pool)
-	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask, 1)
+	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 2)
 	for &it in items {
 		if !it.seen || it.chunk.water == nil do continue
 		origin := [4]f32{it.origin.x, f32(-v.eye.y), it.origin.z, 1}
@@ -463,7 +517,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 
 	if g.ribbon != nil {
 		sdl.BindGPUGraphicsPipeline(pass, g.river)
-		sdl.BindGPUFragmentSamplers(pass, 0, &water_mask, 1)
+		sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 2)
 		from_eye := [4]f32{f32(f64(region.origin.x) - v.eye.x), f32(-v.eye.y), f32(f64(region.origin.y) - v.eye.z), 0}   // the strip is stored relative to the region
 		sdl.PushGPUVertexUniformData(cmd, 1, &from_eye, size_of(from_eye))
 		binding := sdl.GPUBufferBinding{buffer = g.ribbon}
@@ -472,7 +526,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	}
 
 	sdl.BindGPUGraphicsPipeline(pass, g.water)
-	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask, 1)
+	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 2)
 	sdl.DrawGPUPrimitives(pass, 4, 1, 0, 0)
 	sdl.EndGPURenderPass(pass)
 	g.quads_drawn -= shadow_quads

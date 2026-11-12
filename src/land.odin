@@ -283,7 +283,7 @@ region_init :: proc(name: string) -> bool {
 	for r, i in ranges do drawn[i] = r[0] + (r[1] - r[0])*f64(hash01(i32(i), key, seed + 520))
 	draw :: proc(r: [2]f32, i, key: i32) -> f32 { return r[0] + (r[1] - r[0])*hash01(i, key, seed + 521) }
 	region.kind, region.size, region.shape = kind.name, REFERENCE, transmute(Shape(f64))drawn
-	region.latitude = 30   // where the sun has always stood: 60° high at noon on an equinox; the world frame will set it
+	region.latitude = 30   // as the islands the plants come from (27 to 34° N); the world frame will set it
 	for &s in STORIES do if s.name == kind.story do region.story = &s
 	region.history = make([]Phase(f32), len(kind.history))
 	from := [2]f64{}   // the middle of the last vents to open
@@ -372,6 +372,7 @@ Land :: struct {
 	valley:  []f32,    // m² drained by the stream a cell drains to
 	slid:    []f32,    // metres of slide debris laid on a cell, or under 0, taken from it (events.odin)
 	lake:    []u8,     // 1 + the feature whose lake or pond covers a cell, or 0
+	lifted:  []f32,    // metres the wind off the sea has been raised to by the ground it crossed, at sea too
 }
 
 // Ground a person could live on, from where the villages on eight real islands stand
@@ -886,8 +887,8 @@ land_finish :: proc(g: ^Grid) -> (highest: f32) {
 HUMP :: 6   // cells either side of the square a cell's height is set against, 208 m across
 land_local :: proc(g: ^Grid) {
 	n := g.n
-	for f in ([?][]f32{land.facing, land.hump, land.inland, land.sun, land.exposed, land.above, land.soil, land.valley}) do delete(f)
-	land.facing, land.hump, land.inland, land.valley = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+	for f in ([?][]f32{land.facing, land.hump, land.inland, land.sun, land.exposed, land.above, land.soil, land.valley, land.lifted}) do delete(f)
+	land.facing, land.hump, land.inland, land.valley, land.lifted = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 	land.sun, land.exposed, land.above, land.soil = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 
 	// Distance to the sea, nearest first: each cell takes the sea cell nearest a neighbour
@@ -918,14 +919,12 @@ land_local :: proc(g: ^Grid) {
 		}
 	}
 
-	// A year of clear sky at the region's latitude: the sun each hour of six days from midwinter
+	// A year of clear sky: the sun the sky draws (`sun_dir`), each hour of six days from midwinter
 	// to midsummer, each the weaker by 0.7 for every depth of air it comes through.
-	sky := make([dynamic][3]f32, context.temp_allocator)   // x east, y up, z south, as `sun_dir` has it
+	sky := make([dynamic][3]f32, context.temp_allocator)
 	flat: f32
-	lat := math.to_radians(f32(region.latitude))
 	for day in 0..<6 do for hour in 0..<24 {
-		dec, h := -math.to_radians(f32(23.44))*math.cos(math.PI*(f32(day) + 0.5)/6), (f32(hour) - 11.5)*math.PI/12
-		s := [3]f32{-math.cos(dec)*math.sin(h), math.sin(dec)*math.sin(lat) + math.cos(dec)*math.cos(lat)*math.cos(h), math.cos(dec)*math.sin(lat)*math.cos(h) - math.sin(dec)*math.cos(lat)}
+		s := sun_dir(f32(hour) + 0.5, 355 + (f32(day) + 0.5)*365/12)
 		if s.y < 0.02 do continue
 		append(&sky, s*math.pow(0.7, 1/s.y))
 		flat += sky[len(sky) - 1].y
@@ -945,6 +944,13 @@ land_local :: proc(g: ^Grid) {
 	bearing := math.to_radians(f32(region.shape.swell))
 	wind := [2]f32{math.sin(bearing), -math.cos(bearing)}   // toward where it comes from
 	ahead := [2]int{int(math.round(wind.x*f32(fetch))), int(math.round(wind.y*f32(fetch)))}
+	// How high the wind has been lifted when it reaches each place, sea or land: the highest ground
+	// it crossed in the last 400 m, less a metre for each four it has run on since, sinking and
+	// drying in the lee. Cloud caps the ground where this passes the cloud base (`cloud_top`).
+	for c in 0..<n*n do for d := f32(0); d <= 400; d += g.d {
+		i, j := clamp(int(f32(c%n) + 0.5 + wind.x*d/g.d), 0, n - 1), clamp(int(f32(c/n) + 0.5 + wind.y*d/g.d), 0, n - 1)
+		land.lifted[c] = max(land.lifted[c], g.z[j*n + i] - d/4)
+	}
 	for ci in g.order {
 		c := int(ci)
 		x, y := c%n, c/n
