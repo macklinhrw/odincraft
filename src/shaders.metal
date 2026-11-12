@@ -15,6 +15,8 @@ struct Frame {
     float4 cam_u;       // camera up * tan(half vertical fov)
     float4 cam_f;       // camera forward
     float4 screen;      // xy: size in pixels
+    float4 cloud;       // xy: camera in the drifting cloud field, zw: camera from the region's corner
+    float4 weather;     // x: cover 0..1, y: cloud base, z: depth of the deck, w: region size, metres
 };
 
 struct Draw { float4 origin; };   // xyz: chunk origin, w: cell size in metres
@@ -48,8 +50,8 @@ static float3 sun_light(float3 sun) {
 }
 
 // Sky radiance in direction d. Directions below the horizon return the horizon, which is
-// also what distant terrain fades into.
-static float3 sky_color(float3 d, float3 sun) {
+// also what distant terrain fades into. Under cloud it greys.
+static float3 sky_color(float3 d, float3 sun, float cover) {
     float day = daylight(sun);
     float3 zenith = mix(float3(0.004, 0.006, 0.016), float3(0.09, 0.24, 0.60), day);
     float3 warm = mix(float3(0.85, 0.42, 0.22), float3(0.44, 0.60, 0.84), smoothstep(-0.02, 0.38, sun.y));
@@ -58,26 +60,79 @@ static float3 sky_color(float3 d, float3 sun) {
     float3 c = mix(horizon, zenith, 1.0 - pow(1.0 - up, 4.0));
     float toward = saturate(dot(normalize(float3(d.x, up, d.z)), sun));
     c += sun_light(sun) * (0.05 * pow(toward, 6.0) + 0.25 * pow(toward, 96.0));
-    return c;
+    return mix(c, dot(c, float3(0.3, 0.5, 0.2)) * float3(1.0, 1.03, 1.08), 0.6 * cover);
 }
 
-static float3 sky_ambient(float3 N, float3 sun) {
+static float3 sky_ambient(float3 N, float3 sun, float cover) {
     float day = daylight(sun);
-    float3 sky = mix(float3(0.008, 0.011, 0.024), float3(0.44, 0.55, 0.76), day);
+    float3 sky = mix(float3(0.008, 0.011, 0.024), mix(float3(0.44, 0.55, 0.76), float3(0.62, 0.64, 0.68), cover), day);
     float3 ground = mix(float3(0.003, 0.004, 0.006), float3(0.27, 0.25, 0.20), day);
     return mix(ground, sky, N.y * 0.5 + 0.5);
 }
 
-// Haze that thins with altitude, integrated along the view ray.
-static float3 apply_fog(float3 col, float3 rel, constant Frame &f) {
+// Haze that thins with altitude, integrated along the view ray: how much of the sky's colour
+// there is in what lies at `rel`.
+static float haze(float3 rel, constant Frame &f) {
+    float dist = length(rel);
+    float falloff = 0.0011;
+    float t = falloff * rel.y;
+    float through = abs(t) < 1e-3 ? 1.0 : (1.0 - exp(-t)) / t;
+    return 1.0 - exp(-0.00006 * exp(-falloff * max(f.cam.y - f.cam.w, 0.0)) * dist * through);
+}
+
+// ---- clouds -------------------------------------------------------------------------------
+
+// How far the cloud over a point stands above the cloud base, in metres, 0 where there is none.
+// The deck is noise drifting on the wind over as much of the sky as the weather's cover. The cap
+// is where the wind off the sea has been lifted past the cloud base by the ground it crossed.
+static float cloud_top(float2 rel, constant Frame &f, texture2d<float> lifted, sampler smp, float fine) {
+    float2 q = (rel + f.cloud.xy) / 1200.0;
+    float n = 0.5 * vnoise(q) + 0.25 * vnoise(q * 2.03 + 7.1) + (fine > 0.0 ? fine * (0.15 * vnoise(q * 4.1 + 3.7) + 0.1 * vnoise(q * 8.3 + 1.3) - 0.125) : 0.0) + 0.125;   // the fine octaves fade out with distance, where steps would alias them
+    float c = f.weather.x - 0.5;   // the noise passes this level over a share `cover` of the sky
+    float level = 0.5 - 0.36 * c - 0.5 * c * c * c - 0.3 * smoothstep(0.9, 1.0, f.weather.x) + 0.5 * (1.0 - smoothstep(0.0, 0.03, f.weather.x));
+    float rise = lifted.sample(smp, (rel + f.cloud.zw) / f.weather.w).r - f.weather.y;
+    return max(f.weather.z * smoothstep(0.0, 0.35, n - level), saturate((rise + 30.0) / 60.0) * (rise + 150.0) * (0.5 + n));
+}
+
+// The share of the sun's light that reaches a point through the cloud over where its ray
+// crosses the deck.
+static float cloud_shade(float3 rel, constant Frame &f, texture2d<float> lifted, sampler smp) {
+    float up = max(f.weather.y + 100.0 - f.cam.y - rel.y, 0.0) / max(f.sun.y, 0.05);
+    return 1.0 - 0.85 * smoothstep(0.0, 60.0, cloud_top(rel.xz + f.sun.xz * up, f, lifted, smp, 0.0));
+}
+
+// The cloud along a ray from the camera out to `far`, a few steps through the layer it can fill:
+// its colour, hazed by its distance, and in w how much of what lies beyond still shows.
+static float4 clouds(float3 rd, float far, float2 pixel, constant Frame &f, texture2d<float> lifted, sampler smp) {
+    float lo = f.weather.y - f.cam.y, hi = lo + 300.0, t0 = 0.0, t1 = far;
+    if (abs(rd.y) > 1e-5) {
+        t0 = max(min(lo / rd.y, hi / rd.y), 0.0);
+        t1 = min(max(lo / rd.y, hi / rd.y), min(far, t0 + 20000.0));
+    } else if (lo > 0.0 || hi < 0.0) return float4(0, 0, 0, 1);
+    if (t1 <= t0 || t0 > 60000.0) return float4(0, 0, 0, 1);
+    float3 lit = sun_light(f.sun.xyz), sky = sky_ambient(float3(0, 1, 0), f.sun.xyz, f.weather.x);
+    float dt = (t1 - t0) / 16.0, trans = 1.0, first = -1.0, t = t0 + dt * hash21(pixel + 17.0);   // steps start at a different point in each pixel
+    float3 col = float3(0.0);
+    for (int i = 0; i < 16 && trans > 0.03; i++, t += dt) {
+        float h = rd.y * t - lo, top = cloud_top(rd.xz * t, f, lifted, smp, saturate(2.0 - t / 4000.0));
+        float a = 1.0 - exp(-saturate((top - h) / max(abs(rd.y) * dt, 20.0) + 0.5) * min(dt, 80.0) * 0.02);   // the share of the step inside; a long step is not let make the cloud opaque alone, or far cloud sparkles
+        if (a <= 0.0 || top <= 0.0) continue;
+        float3 light = lit * exp(-0.012 * (top - h)) * mix(0.55, 1.0, saturate(top / 250.0)) + sky * (0.45 + 0.35 * saturate(h / max(top, 1.0)));   // the sun dims through the cloud above, and the low tops lie in the high ones' shade
+        col += trans * a * light;
+        trans *= 1.0 - a;
+        if (first < 0.0) first = t;
+    }
+    if (first > 0.0) col = mix(col, sky_color(float3(rd.x, max(rd.y, 0.0), rd.z), f.sun.xyz, f.weather.x) * (1.0 - trans), haze(rd * first, f));
+    return float4(col, trans);
+}
+
+// What lies at `rel`, seen through the haze and the clouds between it and the camera.
+static float3 apply_fog(float3 col, float3 rel, float2 pixel, constant Frame &f, texture2d<float> lifted, sampler smp) {
     float dist = length(rel);
     float3 rd = rel / max(dist, 1e-4);
-    float falloff = 0.0011;
-    float t = falloff * rd.y * dist;
-    float through = abs(t) < 1e-3 ? 1.0 : (1.0 - exp(-t)) / t;
-    float optical = 0.00006 * exp(-falloff * max(f.cam.y - f.cam.w, 0.0)) * dist * through;
-    float amount = 1.0 - exp(-optical);
-    return mix(col, sky_color(float3(rd.x, max(rd.y, 0.0), rd.z), f.sun.xyz), amount);
+    col = mix(col, sky_color(float3(rd.x, max(rd.y, 0.0), rd.z), f.sun.xyz, f.weather.x), haze(rel, f));
+    float4 c = clouds(rd, dist, pixel, f, lifted, smp);
+    return col * c.w + c.rgb;
 }
 
 // Tone map, encode for the display and break up banding.
@@ -164,7 +219,8 @@ static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<fl
 
 fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(0)]],
                            depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]],
-                           texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]]) {
+                           texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]],
+                           texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]]) {
     uint face = in.info & 7u;
     uint mat = (in.info >> 8u) & 255u;
     float3 N = FACE_N[face];
@@ -194,10 +250,11 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     float ndl = saturate(dot(in.soft, sun));
     bool turned = dot(N, sun) <= 0.0;
     float3 probe = turned ? in.rel + in.soft * (1.5 * in.cell) : in.rel;
-    float lit = ndl > 0.0 ? shadow_at(probe, turned ? in.soft : N, f, shadow_map, shadow_smp) : 0.0;
+    float shade = cloud_shade(in.rel, f, lifted, smp);   // under a cloud the sky round the sun is dimmed too
+    float lit = ndl > 0.0 ? shadow_at(probe, turned ? in.soft : N, f, shadow_map, shadow_smp) * shade : 0.0;
     float ao = mix(0.5, 1.0, in.ao);
     float sky = 1.0 - float((in.info >> 4u) & 15u) / 15.0;   // the share of the sky a face under a roof sees (mesh.odin); far off, of the sunlight too
-    float3 col = albedo * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) * (in.cell > 1.0 ? sky : 1.0) + sky_ambient(in.soft, sun) * ao * sky);
+    float3 col = albedo * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) * (in.cell > 1.0 ? sky : 1.0) + sky_ambient(in.soft, sun, f.weather.x) * ao * sky * mix(0.7, 1.0, shade));
 
     // Light lost on the way down through water.
     float depth = f.cam.w - world.y;
@@ -213,7 +270,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
         }
     }
 
-    return finish(apply_fog(col, in.rel, f), in.position.xy, 1.0);
+    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, 1.0);
 }
 
 // ---- sky, water, present ------------------------------------------------------------------
@@ -231,12 +288,14 @@ vertex ScreenV vs_screen(uint vid [[vertex_id]]) {
     return o;
 }
 
-fragment float4 fs_sky(ScreenV in [[stage_in]], constant Frame &f [[buffer(0)]]) {
+fragment float4 fs_sky(ScreenV in [[stage_in]], constant Frame &f [[buffer(0)]],
+                       texture2d<float> lifted [[texture(0)]], sampler smp [[sampler(0)]]) {
     float2 ndc = float2(in.uv.x * 2.0 - 1.0, 1.0 - in.uv.y * 2.0);
     float3 d = normalize(f.cam_f.xyz + f.cam_r.xyz * ndc.x + f.cam_u.xyz * ndc.y);
-    float3 col = sky_color(d, f.sun.xyz);
+    float3 col = sky_color(d, f.sun.xyz, f.weather.x);
     col += sun_light(f.sun.xyz) * 6.0 * smoothstep(0.99955, 0.9998, dot(d, f.sun.xyz)) * step(0.0, d.y);
-    return finish(col, in.position.xy, 1.0);
+    float4 c = clouds(d, 1e6, in.position.xy, f, lifted, smp);
+    return finish(col * c.w + c.rgb, in.position.xy, 1.0);
 }
 
 struct WaterV {
@@ -311,7 +370,8 @@ static float2 ripples(float2 p) {
 }
 
 fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]],
-                         texture2d<float> simulated [[texture(0)]], sampler unused [[sampler(0)]]) {
+                         texture2d<float> simulated [[texture(0)]], sampler unused [[sampler(0)]],
+                         texture2d<float> lifted [[texture(1)]], sampler smp [[sampler(1)]]) {
     float dist = length(in.rel);
     float3 rd = in.rel / dist;
     float2 w = in.rel.xz + f.cam.xz;
@@ -351,10 +411,14 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
     float fresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(-rd, N)), 5.0);
     // A river is shallower and clearer than the sea, and thins to nothing at its edges.
     float3 body = mix(float3(0.010, 0.045, 0.060), float3(0.022, 0.070, 0.058), in.river.y);
-    float3 mirrored = sky_color(float3(r.x, abs(r.y), r.z), sun) * (1.0 - 0.35 * in.river.y);   // banks and trees dim a river's sky
+    float3 mirrored = sky_color(float3(r.x, abs(r.y), r.z), sun, f.weather.x) * (1.0 - 0.35 * in.river.y);   // banks and trees dim a river's sky
+    float above = (f.weather.y - f.cam.y - in.rel.y) / max(abs(r.y), 0.02);   // the cloud base over the reflected ray
+    if (above > 0.0) mirrored = mix(mirrored, sky_ambient(float3(0, 1, 0), sun, f.weather.x) * 0.9 + sun_light(sun) * 0.3,
+                                    0.7 * smoothstep(0.0, 200.0, cloud_top(in.rel.xz + r.xz * above, f, lifted, smp, 0.0)) * (1.0 - haze(r * above, f)));
     mirrored *= 1.0 - 0.9 * in.roof;   // under a roof it mirrors the dark rock
-    float3 col = mix(body * (0.15 + 0.85 * daylight(sun)) * (1.0 - 0.7 * in.roof), mirrored, fresnel);
-    col += sun_light(sun) * 2.5 * pow(saturate(dot(r, sun)), 600.0) * (1.0 - in.roof);
+    float shade = cloud_shade(in.rel, f, lifted, smp);
+    float3 col = mix(body * (0.15 + 0.85 * daylight(sun)) * (0.5 + 0.5 * shade) * (1.0 - 0.7 * in.roof), mirrored, fresnel);
+    col += sun_light(sun) * 2.5 * shade * pow(saturate(dot(r, sun)), 600.0) * (1.0 - in.roof);
     float alpha = mix(mix(0.80, 0.62, in.river.y), 1.0, fresnel);
     alpha = mix(alpha, 0.96, in.river.y * smoothstep(1.5, 7.0, in.kind.z));   // deep fresh water is dark: a lake hides its bed, a stream shows it
     alpha *= 1.0 - 0.8 * in.river.y * smoothstep(0.35, 0.85, abs(in.river.x));
@@ -368,9 +432,9 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
     float churn = max(smoothstep(1.3, 3.2, speed), in.kind.y);
     float foam = smoothstep(0.0, 0.3, carried - (1.05 - 1.15 * churn));
     float white = mix(foam * 0.85, in.kind.y * (0.25 + 0.6 * streaks), sheet);
-    col = mix(col, float3(0.55, 0.62, 0.68) * (sun_light(sun) * 0.3 + sky_ambient(float3(0, 1, 0), sun)), white);
+    col = mix(col, float3(0.55, 0.62, 0.68) * (sun_light(sun) * 0.3 * shade + sky_ambient(float3(0, 1, 0), sun, f.weather.x)), white);
     alpha = mix(alpha, 0.9, white);
-    return finish(apply_fog(col, in.rel, f), in.position.xy, alpha);
+    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, alpha);
 }
 
 fragment float4 fs_present(ScreenV in [[stage_in]], constant Frame &f [[buffer(0)]],
