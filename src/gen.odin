@@ -374,11 +374,11 @@ Species :: struct {
 }
 
 SPECIES := [Tree_Kind]Species{
-	.Tabu     = {"tabu", .Wood, .Leaves, .Broad, {12, 15}, {3, 4}},                    // Machilus: the big tree of moist ground, a broad dark dome
-	.Shii     = {"shii", .Shii_Bark, .Shii_Leaves, .Dome, {10, 14}, {2, 3}},           // Castanopsis: the round olive crowns that close over the slopes
+	.Tabu     = {"tabu", .Wood, .Leaves, .Broad, {14, 20}, {3, 4}},                    // Machilus: the big tree of moist ground, a broad dark dome
+	.Shii     = {"shii", .Shii_Bark, .Shii_Leaves, .Dome, {13, 19}, {2, 3}},           // Castanopsis: the round olive crowns that close over the slopes
 	.Camellia = {"camellia", .Grey_Bark, .Camellia_Leaves, .Dome, {5, 7}, {2, 2}},     // a small dark tree under them, in flower
 	.Hisakaki = {"hisakaki", .Grey_Bark, .Hisakaki_Leaves, .Broad, {4, 7}, {2, 2}},    // Eurya and its like: the low wood of dry ridges
-	.Pine     = {"black pine", .Pine_Bark, .Pine_Needles, .Flat, {9, 13}, {2, 3}},     // a flat top on a dark bole, by the sea and on rock
+	.Pine     = {"black pine", .Pine_Bark, .Pine_Needles, .Flat, {10, 15}, {2, 3}},     // a flat top on a dark bole, by the sea and on rock
 	.Scrub    = {"scrub", .Wood, .Scrub_Leaves, .Bush, {1, 3}, {1, 2}},                // tobira and other bushes, from the ground up
 	.Alder    = {"alder", .Grey_Bark, .Scrub_Leaves, .Broad, {5, 8}, {2, 3}},          // Alnus sieboldiana: the first trees on raw ground, fixing their own nitrogen
 }
@@ -421,7 +421,7 @@ COMMUNITIES := [Community_Kind]Community{
 		{{{.Disturbed, -ANY, 400, 500}}}, 0.9, 0.4, {0.45, 0, 0.1, 0.25, 0, 0, 0.2}, .Litter, {0.30, 0.65, 0.55}},
 }
 COVERS :: bit_set[Mat]{.Grass, .Litter, .Susuki, .Dune}
-closure: [Community_Kind]f32   // the share of a community's ground its crowns cover, which is how much of the far canopy is leaf
+crowns: [Community_Kind]f32   // the mean radius of a community's crowns, metres
 
 // The community at a point: the race's winner on the land's grid, read a little way off by
 // noise, so its edges wander over 10 to 50 m rather than follow the grid. And the cell read.
@@ -435,27 +435,26 @@ community_at :: proc(x, z, cell: f64) -> (Community_Kind, int) {
 plants_init :: proc() {
 	started := time.now()
 	n := land.n
-	land.community = make([]u8, n*n)
-	count, soils := [Community_Kind]int{}, [len(SOILS)]int{}
+	land.community, land.age = make([]u8, n*n), make([]f32, n*n)
+	count, soils, ages := [Community_Kind]int{}, [len(SOILS)]int{}, [3]int{}
 	for c in 0..<n*n {
 		land.community[c] = 255
 		if land.grid.sea[c] do continue
 		p := Point{x = (f64(c%n) + 0.5)*LAND_CELL - region.size/2, z = (f64(c/n) + 0.5)*LAND_CELL - region.size/2, cell = LAND_CELL}
 		k, _, _ := race(&p)
 		land.community[c] = u8(k)
+		land.age[c] = stand_draw(p.x, p.z, c)
+		ages[0 if land.age[c] < 50 else 1 if land.age[c] < 200 else 2] += 1
 		count[k] += 1
 		row, _ := soil_at(&p)
 		soils[row] += 1
 	}
-	for com, k in COMMUNITIES {
-		for share, s in com.trees do closure[k] += share*math.PI*math.pow(f32(SPECIES[Tree_Kind(s)].radius[0] + SPECIES[Tree_Kind(s)].radius[1])/2 + 0.5, 2)
-		closure[k] = min(closure[k]*com.density/(TREE_GRID*TREE_GRID), 1)
-	}
+	for com, k in COMMUNITIES do for share, s in com.trees do crowns[k] += share*f32(SPECIES[Tree_Kind(s)].radius[0] + SPECIES[Tree_Kind(s)].radius[1])/2
 	fmt.printf("plants in %.0f ms:", time.duration_milliseconds(time.since(started)))
 	for k, i in count do fmt.printf(" %s %.0f%%", COMMUNITIES[i].name, 100*f32(k)/f32(len(land.grid.order)))
 	fmt.print("; soil:")
 	for k, i in soils do fmt.printf(" %s %.0f%%", SOILS[i].name, 100*f32(k)/f32(len(land.grid.order)))
-	fmt.println()
+	fmt.printfln("; stands: young (under 50 years) %.0f%%, middle %.0f%%, old (200 and more) %.0f%%", 100*f32(ages[0])/f32(len(land.grid.order)), 100*f32(ages[1])/f32(len(land.grid.order)), 100*f32(ages[2])/f32(len(land.grid.order)))
 }
 
 // ---- trees --------------------------------------------------------------------------------
@@ -463,15 +462,103 @@ plants_init :: proc() {
 Tree :: struct {
 	x, z:   i32,   // block the trunk stands on
 	base:   i32,   // elevation of the ground there
-	height: i32,   // to the crown's top, over the base
+	height: i32,   // to the crown's top, over the base; of a fallen trunk, its length
 	radius: i32,   // of the crown
 	kind:   Tree_Kind,
-	under:  bool,  // a bush under the trees, drawn only near by
-	dead:   bool,  // a bare trunk: a tree a lake drowned, drawn only near by
+	form:   Tree_Form,
+	fall:   [2]f32,   // a fallen trunk: the way it lies from its root
+	tip:    i32,      // and the ground under its tip
+}
+// Its place in the stand. Only canopy trees and the trees between them are drawn far off; small
+// trees under the canopy, standing dead trunks and fallen ones are drawn only near by.
+Tree_Form :: enum u8 { Canopy, Between, Under, Dead, Fallen }
+
+TREE_GRID  :: 3    // at most one tree stands in a square of this many metres
+TREE_REACH :: 4    // the widest crown
+FALLEN     :: 15   // the longest fallen trunk
+
+// How storms age the woods (foundations/vegetation.md, D3 and D6). The land's grid is cut into
+// stands round middles `across` metres apart, the reach of each drawn from the seed, and each has
+// the years since a typhoon last threw its canopy, drawn from the seed with the storms coming more
+// often to ground open to the wind: young stands gather on windward slopes and crests, old ones in
+// sheltered valleys. Ground a slide laid bare is as old as the slide. A young stand is many thin
+// trees close together; as it ages the trees grow and the fastest shade out their neighbours, until
+// the canopy trees stand `spacing[1]` apart with smaller trees between and beneath them, and gaps
+// open where one or a group was thrown, with the trunks lying the way the wind blew.
+// The figures are from interesting-world/notes/real-vegetation.md, "Stands".
+Stand_Rule :: struct {
+	across:   f64,      // metres between the middles of neighbouring stands
+	interval: [2]f32,   // mean years between storms that throw a stand's canopy, on sheltered ground and on ground fully exposed
+	spacing:  [2]f32,   // metres between canopy trees in a stand just thrown and in an old one
+	grows:    f32,      // years for a stand's trees to grow most of the way to their full height
+	thins:    f32,      // years for its canopy to thin most of the way to the old spacing
+	gaps:     f32,      // share of an old stand's ground in gaps, each where a tree or a group fell
+	gap:      [2]f32,   // radius of a gap, metres
+	refill:   f32,      // years a gap stays open before its young growth closes it
+	between:  f32,      // share of the places between the canopy trees where a smaller tree stands
+	snags:    f32,      // share of an old stand's canopy trees standing dead
+}
+STANDS := Stand_Rule{across = 140, interval = {2000, 40}, spacing = {2.5, 6.5}, grows = 40, thins = 150, gaps = 0.15, gap = {3, 8}, refill = 50, between = 0.5, snags = 0.04}
+
+// The land's cell a tree or a far cell reads its stand and community from: its own, with the
+// edges dithered over 24 m by the hash `r`, so that two stands or communities mix along their edge.
+dithered :: proc(x, z: f64, r: u32) -> int {
+	return land_cell(x + f64(r & 0xFF)/10.6 - 12, z + f64((r >> 8) & 0xFF)/10.6 - 12)
 }
 
-TREE_GRID  :: 6   // at most one tree per square of this many metres
-TREE_REACH :: 4   // the widest crown
+// Which stand a point of the land's grid lies in, and its age: the stand whose middle is nearest
+// for its reach, read a little way off by noise so the edges wander. A slide's ground is as old as
+// the slide.
+stand_draw :: proc(x, z: f64, c: int) -> f32 {
+	x, z := x + 30*f64(fbm(x, z, 80, LAND_CELL, 2, seed + 622)), z + 30*f64(fbm(x, z, 80, LAND_CELL, 2, seed + 623))
+	D := STANDS.across
+	best, age := f64(1e9), f32(0)
+	for j in i32(math.floor(z/D)) - 2..=i32(math.floor(z/D)) + 2 do for i in i32(math.floor(x/D)) - 2..=i32(math.floor(x/D)) + 2 {
+		r := hash(i, j, seed + 620)
+		mx, mz := (f64(i) + f64(r & 0xFF)/256)*D, (f64(j) + f64((r >> 8) & 0xFF)/256)*D
+		if d := math.hypot(x - mx, z - mz)/(0.4 + 1.2*f64(r >> 24)/255); d < best {
+			mc := land_cell(mx, mz)
+			wind := land.exposed[mc if !land.grid.sea[mc] else c]
+			best, age = d, -math.lerp(STANDS.interval[0], STANDS.interval[1], wind)*math.ln(max(hash01(i, j, seed + 621), 1e-4))
+		}
+	}
+	if abs(land.slid[c]) > 0.5 do age = min(age, region.features[landslide.feature].age)
+	return age
+}
+
+// What a stand of an age grows: metres between its canopy trees, the share of their full height
+// they have reached, and how far it is from new to old, 0 to 1.
+stand :: proc(age: f32) -> (spacing, tall, old: f32) {
+	old = 1 - math.exp(-age/STANDS.thins)
+	return math.lerp(STANDS.spacing[0], STANDS.spacing[1], old), 0.35 + 0.65*(1 - math.exp(-age/STANDS.grows)), old
+}
+
+// The gap a point lies in, if any: one may open in each 24 m square, the likelier the older the
+// stand, so that gaps take `gaps` of an old stand's ground and a young one has none. It is where
+// a canopy tree or a group fell the way the storm blew, `ago` years since.
+GAP_TILE :: 24
+gap_at :: proc(x, z: f64, old: f32) -> (inside: bool, fall: [2]f32, ago: f32) {
+	a, b := STANDS.gap[0], STANDS.gap[1]
+	chance := old*old*STANDS.gaps*GAP_TILE*GAP_TILE/(math.PI*(a*a + a*b + b*b)/3)
+	gx, gz := i32(math.floor(x/GAP_TILE)), i32(math.floor(z/GAP_TILE))
+	for j in gz - 1..=gz + 1 do for i in gx - 1..=gx + 1 {
+		r := hash(i, j, seed + 630)
+		if f32(r & 0xFF)/256 >= chance do continue
+		mx, mz := (f64(i) + f64((r >> 8) & 0xFF)/256)*GAP_TILE, (f64(j) + f64((r >> 16) & 0xFF)/256)*GAP_TILE
+		if math.hypot(x - mx, z - mz) < f64(math.lerp(a, b, f32(r >> 24)/255)) {
+			bearing := math.to_radians(f32(region.shape.swell)) + 1.2*(hash01(i, j, seed + 631) - 0.5)   // downwind, give or take 35°
+			return true, {-math.sin(bearing), math.cos(bearing)}, STANDS.refill*hash01(i, j, seed + 632)
+		}
+	}
+	return
+}
+
+// The share of a community's ground its crowns cover at a canopy spacing, which is how much of the
+// far canopy is leaf.
+cover :: proc(k: Community_Kind, spacing: f32) -> f32 {
+	r := min(crowns[k], 0.55*spacing) + 0.5
+	return min(COMMUNITIES[k].density*math.PI*r*r/(spacing*spacing)*(1 + 0.5*STANDS.between), 1)
+}
 
 // The share of the community's trees each species has, picked by a number in 0..1.
 pick_species :: proc(k: Community_Kind, u: f32) -> Tree_Kind {
@@ -483,32 +570,74 @@ pick_species :: proc(k: Community_Kind, u: f32) -> Tree_Kind {
 	return .Shii
 }
 
-// Every tree whose trunk stands in a rectangle of blocks. The same tree is found whichever
-// chunk or level of detail asks.
-trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree) {
+// Every tree whose trunk stands in a rectangle of blocks, and `near`, the small, dead and fallen as
+// well, with the fallen whose trunks reach into it. The same tree is found whichever chunk or level
+// of detail asks. Each 3 m square holds a candidate with a vigour; of the candidates whose crowns
+// would meet at the stand's spacing, the most vigorous takes the canopy (after Deussen et al.
+// 1998). One shaded only from beyond half that reach may stand between the canopy trees, smaller;
+// one shaded from nearer is beneath them, a small tree or a bush if anything. In a gap the canopy
+// trees lie fallen or stand dead and the rest is young growth.
+trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree, near := false) {
 	floor_div :: proc(a, b: i32) -> i32 { return (a - a %% b)/b }
-	for gz in floor_div(z0, TREE_GRID)..=floor_div(z1, TREE_GRID) {
-		for gx in floor_div(x0, TREE_GRID)..=floor_div(x1, TREE_GRID) {
-			// Each square may hold a tree, and a bush under the trees.
-			for bush in ([2]bool{false, true}) {
-				r := hash(gx, gz, seed + (143 if bush else 140))
-				x, z := gx*TREE_GRID + i32(r % TREE_GRID), gz*TREE_GRID + i32((r >> 4) % TREE_GRID)
-				if x < x0 || x > x1 || z < z0 || z > z1 do continue
-				fx, fz := f64(x) + 0.5, f64(z) + 0.5
-				near, _ := community_at(fx, fz, 1)
-				if f32((r >> 8) & 0xFF)/255 >= (COMMUNITIES[near].bushes if bush else COMMUNITIES[near].density) do continue
-				g, _, plants := surface_at(fx, fz, 1)
-				// A young lake still has the trunks of the trees it drowned standing in it.
-				if level, inside, _ := lake_near(fx, fz); inside && g.h < level && !bush && region.features[landslide.feature].age < DROWNED {
-					if (r >> 24)&1 == 0 do continue   // half have fallen
-					append(out, Tree{x = x, z = z, base = i32(math.round(g.h)), height = 5 + i32((r >> 16)%6), kind = .Shii, dead = true})
-					continue
-				}
-				k := plants.? or_continue
-				kind := Tree_Kind.Scrub if bush else pick_species(k, hash01(gx, gz, seed + 141))
-				s, v := SPECIES[kind], hash(gx, gz, seed + (144 if bush else 142))
-				append(out, Tree{x, z, i32(math.round(g.h)), s.height[0] + i32(v % u32(s.height[1] - s.height[0] + 1)), s.radius[0] + i32((v >> 8) % u32(s.radius[1] - s.radius[0] + 1)), kind, bush, false})
+	m := i32(FALLEN) if near else 0
+	for gz in floor_div(z0 - m, TREE_GRID)..=floor_div(z1 + m, TREE_GRID) {
+		for gx in floor_div(x0 - m, TREE_GRID)..=floor_div(x1 + m, TREE_GRID) {
+			r := hash(gx, gz, seed + 140)
+			x, z := gx*TREE_GRID + i32(r % TREE_GRID), gz*TREE_GRID + i32((r >> 4) % TREE_GRID)
+			inside := x >= x0 && x <= x1 && z >= z0 && z <= z1
+			if !inside && (x < x0 - m || x > x1 + m || z < z0 - m || z > z1 + m) do continue
+			fx, fz := f64(x) + 0.5, f64(z) + 0.5
+			cell := dithered(fx, fz, r >> 8)
+			if land.community[cell] == 255 do continue
+			spacing, tall, old := stand(land.age[cell])
+			gap, fall, ago := gap_at(fx, fz, old)
+			if !inside && !gap do continue   // from beyond the rectangle only a fallen trunk reaches into it
+			reach, v, shade := 0.56*spacing, hash01(gx, gz, seed + 141), f32(0)   // canopy trees `spacing` apart on average
+			k := i32(math.ceil(reach/TREE_GRID))
+			for j in gz - k..=gz + k do for i in gx - k..=gx + k do if hash01(i, j, seed + 141) > v {
+				q := hash(i, j, seed + 140)
+				dx, dz := f32(i*TREE_GRID + i32(q % TREE_GRID) - x), f32(j*TREE_GRID + i32((q >> 4) % TREE_GRID) - z)
+				shade = max(shade, 1 - math.sqrt(dx*dx + dz*dz)/reach)
 			}
+			u := hash(gx, gz, seed + 142)
+			form: Tree_Form
+			switch {
+			case shade == 0 && gap: form = .Fallen if u%4 > 0 else .Dead
+			case shade == 0:        form = .Dead if f32(u%1000)/1000 < old*STANDS.snags else .Canopy
+			case gap:               form = .Under
+			case shade < 0.5:       form = .Between if f32(u%1000)/1000 < STANDS.between else .Under
+			case:                   form = .Under
+			}
+			if !near && form > .Between || !inside && form != .Fallen do continue
+			com := Community_Kind(land.community[cell])
+			c := COMMUNITIES[com]
+			if f32((u >> 10) & 0xFF)/255 >= (c.density if form != .Under else 1 if gap else c.bushes) do continue
+			p := point_at(fx, fz, 1)
+			soil, g := surface_row(&p) == len(SURFACES) - 1, p.g
+			t := Tree{x = x, z = z, base = i32(math.round(g.h)), form = form}
+			// A young lake still has the trunks of the trees it drowned standing in it.
+			if level, under, _ := lake_near(fx, fz); under && g.h < level && form <= .Between && region.features[landslide.feature].age < DROWNED {
+				if (u >> 24)&1 == 0 do continue   // half have fallen
+				t.height, t.kind, t.form = 5 + i32((u >> 16)%6), .Shii, .Dead
+				append(out, t)
+				continue
+			}
+			if !soil do continue
+			t.kind = pick_species(com, hash01(gx, gz, seed + 143))
+			if form == .Under && !gap && (u >> 18)&1 == 0 do t.kind = .Scrub   // a bush, or a sapling of the canopy's own trees
+			sp, w := SPECIES[t.kind], hash(gx, gz, seed + 144)
+			full := f32(sp.height[0] + i32(w % u32(sp.height[1] - sp.height[0] + 1)))*tall
+			t.radius = clamp(i32(0.55*spacing + 0.5), 1, sp.radius[0] + i32((w >> 8) % u32(sp.radius[1] - sp.radius[0] + 1)))
+			switch form {
+			case .Canopy:  t.height = max(i32(full), 3)
+			case .Between: t.height, t.radius = max(i32(0.65*full), 3), clamp(t.radius - 1, 1, 2)
+			case .Under:   t.height, t.radius = clamp(i32(4 + ago/6) if gap else (1 + i32((w >> 16)%2) if t.kind == .Scrub else 4 + i32((w >> 16)%3)), 1, max(i32(full), 2)), 1   // a bush a walker sees over, or a sapling whose leaves begin over his head
+			case .Dead:    t.height = max(i32(0.6*full), 2)
+			case .Fallen:
+				t.height, t.fall = clamp(i32(full), 6, FALLEN - 2), fall
+				t.tip = i32(math.round(ground(fx + f64(fall.x*f32(t.height)), fz + f64(fall.y*f32(t.height)), 1).h))
+			}
+			append(out, t)
 		}
 	}
 }
@@ -520,10 +649,11 @@ envelope :: proc(t: Tree, d: f32) -> (under, over: f32) {
 	r := f32(t.radius) + 0.5
 	if d >= r do return 1, 0
 	top, q := f32(t.height), math.sqrt(1 - d*d/(r*r))
+	clear := min(3, top - 1)   // a tree's leaves begin over a walker's head, as its lower branches die in the shade
 	switch SPECIES[t.kind].crown {
-	case .Broad: return top - r*(0.65 + 0.45*q), top - r*0.65*(1 - q)
-	case .Dome:  return top - r*0.85*(1 + q), top - r*0.85*(1 - q)
-	case .Flat:  return top - 1.2 - 1.6*q, top - 0.8*(1 - q)
+	case .Broad: return max(top - r*(0.65 + 0.45*q), clear), top - r*0.65*(1 - q)
+	case .Dome:  return max(top - r*0.85*(1 + q), clear), top - r*0.85*(1 - q)
+	case .Flat:  return max(top - 1.2 - 1.6*q, clear), top - 0.8*(1 - q)
 	case .Bush:  return 0, top*q
 	}
 	return 1, 0
@@ -552,9 +682,10 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			// the height of that tree's crown.
 			if com, ok := plants.?; ok && s >= 8 {
 				r := hash(i32(math.floor(x/cell)), i32(math.floor(z/cell)), seed + 160 + u32(level))
-				if f32(r & 0xFFFF)/65536 < closure[com] {
+				spacing, tall, old := stand(land.age[dithered(x, z, r)])
+				if gap, _, _ := gap_at(x, z, old); !gap && f32(r & 0xFFFF)/65536 < cover(com, spacing) {
 					sp := SPECIES[pick_species(com, f32((r >> 16) & 0xFF)/256)]
-					c.top[k] += sp.height[0] - 1 + i32((r >> 24) % u32(sp.height[1] - sp.height[0] + 1))
+					c.top[k] += i32(f32(sp.height[0] + i32((r >> 24) % u32(sp.height[1] - sp.height[0] + 1)))*tall) - 1
 					c.mat[k] = sp.leaf
 				}
 			}
@@ -577,7 +708,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 		x0, z0 := (cx*CHUNK - 1)*s - ox, (cz*CHUNK - 1)*s - oz
 		trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P*s + TREE_REACH, z0 + P*s + TREE_REACH, &trees)
 		for t in trees {
-			if t.under || t.dead do continue
+			if t.form > (.Between if level == 1 else .Canopy) do continue   // past half a kilometre only the canopy trees: the ones between them are smaller than a cell there
 			for j in max((t.z - TREE_REACH - z0)/s, 0)..=min((t.z + TREE_REACH - z0)/s, P - 1) {
 				for i in max((t.x - TREE_REACH - x0)/s, 0)..=min((t.x + TREE_REACH - x0)/s, P - 1) {
 					dx := f32(x0 + i*s) + f32(s)/2 - (f32(t.x) + 0.5)
@@ -629,7 +760,7 @@ block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, 
 gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_base, h: i32) {
 	trees := make([dynamic]Tree, context.temp_allocator)
 	x0, z0 := cx*CHUNK - 1 - region.origin.x, cz*CHUNK - 1 - region.origin.y
-	trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P + TREE_REACH, z0 + P + TREE_REACH, &trees)
+	trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P + TREE_REACH, z0 + P + TREE_REACH, &trees, true)
 	top := max(hi, c.hi)
 	for t in trees do top = max(top, t.base + t.height + 1)
 
@@ -659,9 +790,28 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 			if replace || blocks[k] == 0 do blocks[k] = u8(m)
 		}
 		sp := SPECIES[t.kind]
+		if t.form == .Fallen {
+			// The root plate torn up on edge across the way the trunk fell, the pit it left, and the
+			// trunk lying from it toward the ground at its tip, straight, resting on any rise between.
+			ground :: proc(c: ^Columns, x, z: i32) -> i32 { return c.top[clamp(z, 0, P - 1)*P + clamp(x, 0, P - 1)] }
+			for h in 0..=2*t.height + 4 {
+				d := f32(h)/2 - 1   // half a metre at a time, so a trunk lying aslant is a joined line of blocks
+				for side in -1..=1 do if d > 0 || side == 0 {
+					x, z := t.x - x0 + i32(math.round(d*t.fall.x - f32(side)*t.fall.y)), t.z - z0 + i32(math.round(d*t.fall.y + f32(side)*t.fall.x))
+					y := ground(c, x, z)
+					switch {
+					case d <= 0: put(blocks, x, y - 1 - y_base, z, .Air, true)
+					case d <= 1: for k in 0..<i32(2 - abs(side)) do put(blocks, x, y + k - y_base, z, .Dirt, false)
+					case side == 0: put(blocks, x, max(y, t.base + 1 + i32(f32(t.tip - t.base - 1)*d/f32(t.height + 1))) - y_base, z, sp.bark, false)
+					}
+				}
+			}
+			continue
+		}
 		trunk, _ := envelope(t, 0)
-		if sp.crown != .Bush do for y in t.base..=t.base + i32(trunk) do put(blocks, t.x - x0, y - y_base, t.z - z0, sp.bark, true)
-		if t.dead do continue
+		thick := i32(1 if t.height >= 18 && t.form == .Canopy else 0)   // the tallest trees stand on a trunk two blocks across
+		if sp.crown != .Bush do for y in t.base..=t.base + i32(trunk) do for k in 0..<(1 + 3*thick) do put(blocks, t.x + i32(k)%2 - x0, y - y_base, t.z + i32(k)/2 - z0, sp.bark, true)
+		if t.form == .Dead do continue
 		r := t.radius
 		for dz in -r..=r {
 			for dx in -r..=r {

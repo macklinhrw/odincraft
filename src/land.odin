@@ -368,6 +368,7 @@ Land :: struct {
 	above:   []f32,    // metres over the stream or shore a cell drains to; the cold air of a still night pools from there up
 	soil:    []f32,    // metres of soil over the rock
 	community: []u8,   // the plant community that won the race for each land cell (plants_init), 255 at sea
+	age:     []f32,    // years since a storm or slide last threw the canopy of the stand a cell lies in (plants_init)
 	valley:  []f32,    // m² drained by the stream a cell drains to
 	slid:    []f32,    // metres of slide debris laid on a cell, or under 0, taken from it (events.odin)
 	lake:    []u8,     // 1 + the feature whose lake or pond covers a cell, or 0

@@ -25,10 +25,11 @@ NEAR       :: 0.1
 // Shadow cascades: how far each reaches from the camera, the finest level of detail drawn
 // into it, and how many frames pass between redraws. A far cascade cannot resolve single
 // blocks, so it does not draw them, and it covers so much ground that the camera barely
-// moves across it in a few frames.
+// moves across it in a few frames. The second and third take turns, a frame each: between them
+// they draw every tree in a kilometre, which is most of what a wooded view costs.
 CASCADE_RADIUS    :: [4]f32{64, 256, 1024, 4096}
 CASCADE_MIN_LEVEL :: [4]i32{0, 0, 1, 3}
-CASCADE_INTERVAL  :: [4]int{1, 1, 2, 4}
+CASCADE_INTERVAL  :: [4]int{1, 2, 2, 4}
 
 Gpu :: struct {
 	dev:            ^sdl.GPUDevice,

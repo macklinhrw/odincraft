@@ -101,18 +101,21 @@ options :: proc() -> Options {
 	return o
 }
 
-// Start on the bank of the largest river, above the reach the sea floods, facing downstream.
-// Found relative to the region's middle, returned in the world.
+// Start on the bank of the largest river, above the reach the sea floods, facing downstream,
+// with no tree within 6 m and no small one within 2; where every bank is wooded closer than that,
+// with none within 3 m. Found relative to the region's middle, returned in the world.
 find_start :: proc() -> (pos: [3]f64, yaw: f32) {
 	ox, oz := f64(region.origin.x), f64(region.origin.y)
 	slice.sort_by(rivers.spots[:], proc(a, b: Spot) -> bool { return a.area > b.area })
 	trees: [dynamic]Tree
 	defer delete(trees)
-	for s in rivers.spots {
+	for clear_of in ([2]f32{6, 3}) do for s in rivers.spots {
 		if s.p.y < 12 do continue
 		clear(&trees)
-		trees_in(i32(s.p.x) - 6, i32(s.p.z) - 6, i32(s.p.x) + 6, i32(s.p.z) + 6, &trees)
-		if len(trees) > 0 do continue
+		trees_in(i32(s.p.x) - 6, i32(s.p.z) - 6, i32(s.p.x) + 6, i32(s.p.z) + 6, &trees, true)
+		near := false
+		for t in trees do near ||= max(abs(f32(t.x) - s.p.x), abs(f32(t.z) - s.p.z)) <= (clear_of if t.form <= .Between else 2)
+		if near do continue
 		x, z := math.floor(f64(s.p.x)) + 0.5, math.floor(f64(s.p.z)) + 0.5
 		if g := ground(x, z, 1); g.water > g.h do continue   // a bank a lake has drowned
 		return {x + ox, math.round(f64(height_at(x, z, 1))) + 0.1, z + oz}, s.yaw
