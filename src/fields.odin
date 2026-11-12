@@ -11,7 +11,7 @@ import "core:math"
 Field :: enum u8 {
 	// on the land's 16 m grid
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
-	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age,
+	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Crossing, Risen, Trail,
 	// from the ground the generator makes at the point
 	Height, Steepness, Gravel, Fallen, Beach, Too_Steep, Under_Water,
 }
@@ -68,6 +68,9 @@ FIELDS := [Field]Field_Info{
 	.Slid      = {"slid", " m", "of a slide's debris laid here, or under 0, of ground it took away", proc(p: ^Point) -> f32 { return grid_at(land.slid, p) }, -30, 30, .Ramp, {0.30, 0.45, 0.85}, {0.85, 0.50, 0.15}},
 	.Disturbed = {"disturbed", " years", "since the ground was laid bare, where an event records it, else 100,000", proc(p: ^Point) -> f32 { return region.features[landslide.feature].age if abs(grid_at(land.slid, p)) > 0.5 else 1e5 }, 1, 5, .Log, {0.95, 0.60, 0.20}, {0.10, 0.35, 0.15}},
 	.Stand_Age = {"stand-age", " years", "since a storm or a slide last threw the canopy of the stand, which sets how far apart its trees stand and how tall they are", proc(p: ^Point) -> f32 { return land.age[land_cell(p.x, p.z)] }, 1, 3, .Log, {0.95, 0.80, 0.25}, {0.05, 0.25, 0.10}},
+	.Crossing  = {"crossing", " s/m", "for a person to walk a metre of this ground straight up its slope, wading any stream across the cell (pace, trails.odin)", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); return pace(c, land.slope[c], land.slope[c]) + trails.wade[c]/LAND_CELL }, -0.3, 1.7, .Log, {0.95, 0.95, 0.90}, {0.45, 0.05, 0.30}},
+	.Risen     = {"risen", " m", "the sea has risen over the island since it stood lowest, when it may have been joined to larger land", proc(p: ^Point) -> f32 { return risen() }, 0, 120, .Ramp, {0.90, 0.88, 0.80}, {0.10, 0.30, 0.70}},
+	.Trail     = {"trail", " m", "from the middle of the nearest animal trail, less half of any cell over a metre; far, at cells over 2 m", proc(p: ^Point) -> f32 { return trail_near(p.x, p.z) - 0.5*f32(p.cell - 1) if p.cell <= 2 else ANY }, 0, 20, .Ramp, {0.60, 0.12, 0.05}, {0.95, 0.95, 0.90}},
 	.Height    = {"height", " m", "of the ground over the sea", proc(p: ^Point) -> f32 { return p.h }, 0, 400, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Steepness = {"steepness", "", "rise over run of the ground in blocks, ledges and all", proc(p: ^Point) -> f32 { return p.steep }, 0, 1.5, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
 	.Gravel    = {"gravel", "", "1 on a bar or bed where a river lays gravel", proc(p: ^Point) -> f32 { return 1 if p.cover == .Gravel else 0 }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
@@ -201,4 +204,5 @@ why_at :: proc(wx, wz: f64) {
 	soil := SOILS[row]
 	fmt.printfln("\nthe soil is %s, %.1f m deep (%s), %s: under the cover %v, then %v down to %v and the rock", soil.name, depth, FIELDS[.Soil_Depth].from, soil.why, soil.top, soil.sub, soil.foot)
 	feature_words(x, z, p.h)
+	trail_words(x, z)
 }

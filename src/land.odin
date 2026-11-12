@@ -1214,6 +1214,8 @@ land_map :: proc(path, overlay: string) {
 				}
 				if r, near := river_near(f32(x), f32(z)); near && r.d < max(r.half, 4) do col = {0.10, 0.30, 0.75}
 				if level, inside, _ := lake_near(x, z); inside && h < level do col = {0.10, 0.30, 0.75}
+				if trail_near(x, z) < 4.5 do col = {0.65, 0.10, 0.05}
+				if k := trails.ford[land_cell(x, z)]; k > 0 && math.hypot(x - region.features[k - 1].at.x, z - region.features[k - 1].at.y) < 14 do col = {1, 1, 1}
 			}
 			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
 		}
