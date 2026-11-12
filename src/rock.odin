@@ -67,7 +67,7 @@ STORIES := [?]Story{
 
 STACK_LO    :: -2048   // the table covers this far below the base
 STACK_LEN   :: 8192    // and this far up: enough for the uplift still to come when the forming starts
-ROCK_LEVELS :: 7       // tables for cells of 1 to 64 m
+ROCK_LEVELS :: 5       // tables with the beds thinner than 1 to 16 m merged
 ROCK_SIM    :: 4       // the table the 16 m land forming reads
 
 // How a rock wears, from its strength: D4 in docs/foundations/geology.md, with erosion
@@ -143,8 +143,9 @@ rock_init :: proc() {
 		soft = 0 if hard else soft + bed.thick
 	}
 
-	// Each cell size reads the stack with the beds thinner than a cell merged into their
-	// thicker neighbour, so a distant hillside shows the dominant bed rather than a flicker.
+	// Each table holds the stack with the beds thinner than its size merged into their
+	// thicker neighbour. The land forming reads the one at its cell size, which is all it can
+	// hold; what is drawn reads a finer one (rock_level).
 	for level in 0..<ROCK_LEVELS {
 		cell := f32(i32(1) << uint(level))
 		for len(beds) > 1 {
@@ -199,7 +200,15 @@ rock_in :: #force_inline proc(y, base: f32, level: int) -> Mat {
 	return rocks.table[level][clamp(int(y - base - STACK_LO), 0, STACK_LEN - 1)]
 }
 
+// Which table a cell size is drawn from. A far face is drawn in whole metres however wide its
+// cells are, so its beds are merged only once they are thinner than a quarter of a cell, about
+// two pixels where that cell is in use; merged at the cell's own size, every face beyond 4 km
+// lost its upper beds and beyond 9 km was one rock.
+rock_level :: proc(cell: f64) -> int {
+	return clamp(int(math.log2(cell)) - 2, 0, ROCK_LEVELS - 1)
+}
+
 // The rock at a point, as seen at a cell size.
 rock :: proc(x, y, z, cell: f64) -> Mat {
-	return rock_in(f32(y), rock_base(x, z, cell), clamp(int(math.log2(cell)), 0, ROCK_LEVELS - 1))
+	return rock_in(f32(y), rock_base(x, z, cell), rock_level(cell))
 }

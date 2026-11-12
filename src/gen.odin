@@ -69,7 +69,9 @@ seed        := u32(7)   // every random choice in the world is keyed from this; 
 // The ground under one chunk and its border.
 Columns :: struct {
 	top:    [P*P]i32,   // elevation of the top face, metres
-	ground: [P*P]i32,   // elevation of the ground, which is lower than the top under a tree crown
+	ground: [P*P]i32,   // elevation of the ground, which is lower than the top under a canopy
+	crown:  [P*P][2]i32, // the underside and top of a single tree's crown over the ground, where one hangs here
+	stem:   [P*P]u8,    // where a trunk stands in the cell: 1 + its x + 4 times its z in metres from the cell's corner, or 0
 	water:  [P*P]f32,   // level of the river or sea standing here, or NO_WATER
 	mat:    [P*P]Mat,   // what the surface is made of
 	base:   [P*P]f32,   // height of the rock stack's base, which places the beds (rock.odin)
@@ -254,7 +256,7 @@ height_at :: proc(x, z, cell: f64) -> f32 {
 surface_at :: proc(x, z, cell: f64) -> (g: Ground, m: Mat) {
 	g = ground(x, z, cell)
 	vary := fbm(x, z, 120, cell, 2, seed + 100) + 0.7*fbm(x, z, 22, cell, 2, seed + 101)   // broad patches, broken at the edges
-	bed := rock_in(g.h - 0.5, g.base, clamp(int(math.log2(cell)), 0, ROCK_LEVELS - 1))
+	bed := rock_in(g.h - 0.5, g.base, rock_level(cell))
 	// Soil and forest hold on ground up to about 45°, as on real flanks; only a face steeper
 	// than that is bare, which a weak rock makes only where the sea undercuts it or as the riser
 	// of a ledge.
@@ -318,8 +320,9 @@ crown_top :: proc(t: Tree, distance: f32) -> i32 {
 
 // ---- what the engine asks for -------------------------------------------------------------
 
-// The ground under a chunk at a level of detail. Beyond the nearest level, trees are part
-// of the columns: single crowns while cells are small enough to show them, then a canopy.
+// The ground under a chunk at a level of detail. Beyond the nearest level, single trees are
+// crowns hung over the ground on their trunks while cells are small enough to show them, then
+// a canopy that is part of the columns.
 gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 	s := i32(1) << u32(level)
 	cell := f64(s)
@@ -365,20 +368,28 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 				for i in max((t.x - TREE_REACH - x0)/s, 0)..=min((t.x + TREE_REACH - x0)/s, P - 1) {
 					dx := f32(x0 + i*s) + f32(s)/2 - (f32(t.x) + 0.5)
 					dz := f32(z0 + j*s) + f32(s)/2 - (f32(t.z) + 0.5)
+					// A crown is as deep below the top of its trunk as it is high above it.
 					if rise := crown_top(t, math.sqrt(dx*dx + dz*dz)); rise > 0 {
 						k := j*P + i
-						c.top[k] = max(c.top[k], t.base + rise)
-						c.mat[k] = .Leaves
-						c.slope[k] = {}
+						under, over := max(t.base + 2*t.trunk - rise, c.ground[k]), t.base + rise
+						if over <= under do continue
+						if c.crown[k][1] > c.crown[k][0] do under, over = min(under, c.crown[k][0]), max(over, c.crown[k][1])
+						c.crown[k] = {under, over}
 					}
 				}
+			}
+			// The trunk's own cell always carries crown, so a small tree is never lost between cells.
+			if i, j := (t.x - x0)/s, (t.z - z0)/s; t.x >= x0 && t.z >= z0 && i < P && j < P {
+				k := j*P + i
+				c.stem[k] = u8(1 + (t.x - x0 - i*s) + 4*(t.z - z0 - j*s))
+				if rise := crown_top(t, 0); c.crown[k][1] <= c.crown[k][0] do c.crown[k] = {max(t.base + 2*t.trunk - rise, c.ground[k]), t.base + rise}
 			}
 		}
 	}
 	c.lo, c.hi = max(i32), min(i32)
 	for k in 0..<P*P {
 		c.lo = min(c.lo, c.ground[k])
-		c.hi = max(c.hi, c.top[k])
+		c.hi = max(c.hi, c.top[k], c.crown[k][1])
 	}
 }
 
