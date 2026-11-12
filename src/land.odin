@@ -364,6 +364,8 @@ Land :: struct {
 	sun:     []f32,    // clear-sky sunlight through a year, against the same ground lying flat
 	exposed: []f32,    // 0 in a hollow sheltered from the wind to 1 on a crest or shore facing the wind and salt
 	above:   []f32,    // metres over the stream or shore a cell drains to; the cold air of a still night pools from there up
+	soil:    []f32,    // metres of soil over the rock
+	community: []u8,   // the plant community that won the race for each land cell (plants_init), 255 at sea
 }
 
 // Ground a person could live on, from where the villages on eight real islands stand
@@ -866,7 +868,7 @@ HUMP :: 6   // cells either side of the square a cell's height is set against, 2
 land_local :: proc(g: ^Grid) {
 	n := g.n
 	land.facing, land.hump, land.inland = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
-	land.sun, land.exposed, land.above = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+	land.sun, land.exposed, land.above, land.soil = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 
 	// Distance to the sea, nearest first: each cell takes the sea cell nearest a neighbour
 	// already reached, which is near enough the true nearest that no contour shows the grid.
@@ -945,6 +947,12 @@ land_local :: proc(g: ^Grid) {
 		// Where cold air pools: the height over the stream a cell drains to, or over the sea.
 		r := g.next[c]
 		land.above[c] = 0 if g.area[c] >= CHANNEL_AREA || r == SINK else g.z[c] if r < 0 else g.z[c] - g.z[r] + land.above[r]
+		// Soil gathers in hollows and where water collects, thins on humps and as the ground
+		// steepens toward what it holds, and lies deeper over weak rock, which weathers faster.
+		// Within a few metres of a stream the floods lay silt as well.
+		steep := min(land.slope[c]/SOIL_HOLDS, 1)
+		weak := 1.3 - 0.6*MATERIALS[rock_in(g.z[c] - 0.5, g.base[c], ROCK_SIM)].strength
+		land.soil[c] = min((clamp(1 - land.hump[c]/12, 0.3, 2.5) + 1.5*land.wet[c])*(1 - 0.7*steep*steep)*weak + 2*max(1 - land.above[c]/4, 0), 4)
 	}
 }
 
@@ -1160,6 +1168,8 @@ land_map :: proc(path, overlay: string) {
 					v := paint.at(&p)
 					switch paint.paint {
 					case .Kinds: col = map_colour(Mat(v))*shade
+					case .Soils: col = SOILS[int(v)].colour*shade
+					case .Plants: col = COMMUNITIES[Community_Kind(v)].colour*shade
 					case .Wheel:
 						a := math.to_radians(v)
 						col = math.lerp([3]f32{0.6, 0.6, 0.6}, 0.55 + 0.4*[3]f32{math.cos(a), math.cos(a - 2.1), math.cos(a + 2.1)}, clamp(land_at(land.slope, land.n, x, z)/0.2, 0, 1))*shade

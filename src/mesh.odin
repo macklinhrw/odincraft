@@ -45,7 +45,7 @@ mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out: ^[dynamic]Quad) {
 			for x in 0..<i32(CHUNK) {
 				m := Mat(blocks[(x + 1) + (z + 1)*P + y*P*P])
 				if m == .Air do continue
-				slope := c.slope[(z + 1)*P + x + 1] if m != .Wood && m != .Leaves else {}
+				slope := c.slope[(z + 1)*P + x + 1] if m not_in PLANT_BLOCKS else {}
 				for f in 0..<6 {
 					n := FACE_N[f]
 					nx, ny, nz := x + n.x, y + n.y, z + n.z
@@ -154,18 +154,19 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 				k := (j + 1)*P + i + 1
 				under, over := c.crown[k][0], c.crown[k][1]
 				if over <= under do continue
+				tree := SPECIES[c.kind[k]]
 				if c.stem[k] > 0 && under > t {
-					for face in ([4]int{0, 1, 4, 5}) do wall(out, i*s + i32(c.stem[k] - 1)%4, j*s + i32(c.stem[k] - 1)/4, 1, t - y_base, under - t, face, .Wood, {})
+					for face in ([4]int{0, 1, 4, 5}) do wall(out, i*s + i32(c.stem[k] - 1)%4, j*s + i32(c.stem[k] - 1)/4, 1, t - y_base, under - t, face, tree.bark, {})
 				}
-				append(out, quad(i*s, over - y_base, j*s, s, s, 2, .Leaves, corners(c, i, j, over, s, true), {}))
-				if under > t do append(out, quad(i*s, under - y_base, j*s, s, s, 3, .Leaves, OPEN, {}))
+				append(out, quad(i*s, over - y_base, j*s, s, s, 2, tree.leaf, corners(c, i, j, over, s, true), {}))
+				if under > t do append(out, quad(i*s, under - y_base, j*s, s, s, 3, tree.leaf, OPEN, {}))
 				for side in sides {
 					beside := c.crown[(j + side.y + 1)*P + i + side.x + 1]
 					edge := (side.x == 1 && i == x0 + HALF - 1) || (side.x == -1 && i == x0) ||
 					        (side.y == 1 && j == z0 + HALF - 1) || (side.y == -1 && j == z0)
 					if edge || beside[1] <= beside[0] do beside = {over, over}   // nothing beside it covers it
-					if low := min(beside[0], over); low > under do wall(out, i*s, j*s, s, under - y_base, low - under, int(side.z), .Leaves, {})
-					if high := max(beside[1], under); high < over do wall(out, i*s, j*s, s, high - y_base, over - high, int(side.z), .Leaves, {})
+					if low := min(beside[0], over); low > under do wall(out, i*s, j*s, s, under - y_base, low - under, int(side.z), tree.leaf, {})
+					if high := max(beside[1], under); high < over do wall(out, i*s, j*s, s, high - y_base, over - high, int(side.z), tree.leaf, {})
 				}
 			}
 		}

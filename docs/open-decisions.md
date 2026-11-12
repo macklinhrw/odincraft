@@ -44,6 +44,8 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 
 - **Fix three faults before step 5**: rows of chunks flashing pale over water while moving fast, distant trees drawn as columns of leaves down to the ground, and rock on a far mountain face showing the wrong colour until one comes close. Of the last the owner said that the far colour being wrong is the point that matters.
 
+- **Move on to step 5**, soil and the five plant communities. The three decisions the plan lists before it (the island's climate, true tree heights, small plants as cubes) were not put to the owner: one flora row exists, tree heights wait for step 8 and small plants for step 9.
+
 **2026-11-12, Claude's call**
 
 - **The land-forming step is committed** as built, so that what follows can be told apart from it and undone alone.
@@ -68,6 +70,17 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **The forest density stays a formula** until the plant communities replace it. It is a sum, which windows that multiply cannot express; `--why` reports its terms and the map paints it as `woods`.
 - **Fields and overlays are one table.** Every field can be painted, and the old overlays keep their names. Three of their maps differ from before by one colour level in at most four values of three million.
 - **`--why` reads the block under the point**, at the 1 m cells the game draws beside the player, and names a nearest miss only within the field's usual span: a sand line 170 m below a cliff top is not a near miss.
+- **The second half of step 5 is built**: soil, five plant communities and four species (`foundations.md` section 8, "Step 5, second half, as built"). The choices in it are these:
+- **Five communities, each a row that competes for ground**: valley floor wood, slope forest, ridge pine, scrub and heath, coast strand. Each has a weight, a patch size and hosts, and brings a tree density, its species' shares and a ground cover. The slope forest has no host and takes whatever the others do not win.
+- **Their edges come from the race and a small shift**, not from a majority filter: the community is read up to about 24 m off by noise, so a boundary wanders over 10 to 50 m. The maps on seven kinds showed no confetti and no edges along contour lines.
+- **A weight is a chance.** A community whose conditions fully hold still loses some of its ground to the slope forest in patches, so crests are part pine and part beech.
+- **Heath and scrub where exposure is over 0.8.** That gives 11 to 17% of the land on every kind, under the fifth Claude set as the most it should take on a livable kind, and the exposure field is unchanged.
+- **Four species**: katsura (broad, light green), beech (round, mid green, grey trunk), pine (flat top on a red bole, dark blue-green), and a low olive scrub. Colours are true hues pushed apart so a community's edge reads from a ridge.
+- **Tree sizes stay near the old 8 to 14 m** (scrub 2 to 4 m) until the tree grower in step 8 brings true heights.
+- **Soil depth is a field of its own** from the hump, wetness, slope, how weak the rock is and nearness to a stream, at least 0.3 m on humps. **Soil kind is an ordered list**: river silt over gravel, shore sand, stony wash on slopes over 33°, podzol on dry humps, brown earth elsewhere. Under the cover lies a block for each metre or part of one, so most banks show one or two blocks of soil over the rock.
+- **No soil reads the rock's chemistry yet**, so the volcanic islands' crests have podzol where real ones have dark ash soils.
+- **A field asked at the grid's own cell size reads the cell's value**, which made the race three times faster and changed nothing else drawn.
+- **The start moved** from the east side to a river bank on the south coast terrace, since the old bank now has a tree within 6 m; the ground bench covers 59 m.
 
 **2026-11-11, Claude's call**
 

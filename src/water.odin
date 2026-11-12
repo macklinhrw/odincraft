@@ -77,7 +77,7 @@ water_init :: proc(wt: ^Water, dev: ^sdl.GPUDevice) {
 column_floor :: proc(blocks: []u8, h, y_base, x, z: i32) -> f32 {
 	for y := h - 1; y >= 0; y -= 1 {
 		m := Mat(blocks[int(x + 1) + int(z + 1)*P + int(y)*P*P])
-		if m != .Air && m != .Wood && m != .Leaves do return f32(y_base + y + 1)
+		if m != .Air && m not_in PLANT_BLOCKS do return f32(y_base + y + 1)
 	}
 	return f32(y_base)
 }

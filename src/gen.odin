@@ -1,6 +1,8 @@
 package main
 
+import "core:fmt"
 import "core:math"
+import "core:time"
 
 // The world generator. Everything the engine knows about the world comes through
 // gen_columns and gen_volume, which read the land formed in land.odin and the rivers
@@ -17,6 +19,9 @@ import "core:math"
 // and gravel forms as rows of their own.
 Mat :: enum u8 {
 	Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel,
+	Beech_Bark, Beech_Leaves, Pine_Bark, Pine_Needles, Scrub_Leaves,   // each species' bark and leaf (SPECIES)
+	Litter, Needles, Heath, Dune,     // what covers the ground between the trees (COMMUNITIES)
+	Loam, Silt, Bleached, Rust,       // the soils under it (SOILS)
 	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff,
 	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree,
 }
@@ -36,8 +41,21 @@ MATERIALS := [Mat]Material{
 	.Sand      = {{0.330, 0.285, 0.180}, 0, 0, .Air},
 	.Snow      = {{0.780, 0.800, 0.840}, 0, 0, .Air},
 	.Wood      = {{0.105, 0.068, 0.036}, 0, 0, .Air},
-	.Leaves    = {{0.036, 0.105, 0.024}, 0, 0, .Air},
+	.Leaves    = {{0.062, 0.140, 0.026}, 0, 0, .Air},   // katsura: light, yellow-green
 	.Gravel    = {{0.105, 0.097, 0.085}, 0, 0, .Air},
+	.Beech_Bark   = {{0.075, 0.076, 0.068}, 0, 0, .Air},   // smooth grey
+	.Beech_Leaves = {{0.036, 0.105, 0.024}, 0, 0, .Air},
+	.Pine_Bark    = {{0.090, 0.040, 0.025}, 0, 0, .Air},   // red bole
+	.Pine_Needles = {{0.018, 0.058, 0.034}, 0, 0, .Air},   // dark blue-green
+	.Scrub_Leaves = {{0.040, 0.052, 0.020}, 0, 0, .Air},   // dull olive
+	.Litter    = {{0.055, 0.050, 0.026}, 0, 0, .Air},   // beech litter and dwarf bamboo
+	.Needles   = {{0.062, 0.040, 0.024}, 0, 0, .Air},   // fallen pine needles
+	.Heath     = {{0.058, 0.036, 0.042}, 0, 0, .Air},   // heather, purple-brown
+	.Dune      = {{0.150, 0.150, 0.075}, 0, 0, .Air},   // dune grass, straw
+	.Loam      = {{0.058, 0.040, 0.026}, 0, 0, .Air},   // dark topsoil
+	.Silt      = {{0.050, 0.046, 0.038}, 0, 0, .Air},   // grey river silt
+	.Bleached  = {{0.175, 0.170, 0.155}, 0, 0, .Air},   // the pale band a podzol leaches
+	.Rust      = {{0.190, 0.092, 0.036}, 0, 0, .Air},   // the iron it leaches, below
 	.Mudstone  = {{0.062, 0.064, 0.074}, 0.25, 0.1, .Mudstone_Scree},   // dark blue-grey, crumbles into flakes; never holds a face
 	.Siltstone = {{0.098, 0.082, 0.062}, 0.4, 0.3, .Siltstone_Scree},   // grey-brown flags, thin ledges
 	.Sandstone = {{0.136, 0.108, 0.074}, 0.6, 1.5, .Sandstone_Scree},   // warm buff rectangular blocks
@@ -72,6 +90,7 @@ Columns :: struct {
 	ground: [P*P]i32,   // elevation of the ground, which is lower than the top under a canopy
 	crown:  [P*P][2]i32, // the underside and top of a single tree's crown over the ground, where one hangs here
 	stem:   [P*P]u8,    // where a trunk stands in the cell: 1 + its x + 4 times its z in metres from the cell's corner, or 0
+	kind:   [P*P]Tree_Kind, // the species of that crown and trunk
 	water:  [P*P]f32,   // level of the river or sea standing here, or NO_WATER
 	mat:    [P*P]Mat,   // what the surface is made of
 	base:   [P*P]f32,   // height of the rock stack's base, which places the beds (rock.odin)
@@ -141,6 +160,7 @@ gen_init :: proc(kind: string) -> bool {
 	rock_init()
 	land_form()
 	rivers_trace()
+	plants_init()
 	return true
 }
 
@@ -268,7 +288,7 @@ SURFACES := [?]Surface{
 	{"sand", "the waves throw sand up the shore", .Sand, {{.Beach, 0, ANY, 0}}},
 	{"loose rock", "rock fallen from the face above lies at its angle of rest", .Air, {{.Fallen, 0, ANY, 0}}},
 	{"bare rock", "soil cannot hold on ground this steep, so the beds show", .Air, {{.Too_Steep, 0, ANY, 0}}},
-	{"grass", "soil holds, and grass covers it", .Grass, {}},
+	{"soil", "soil holds, and the plants cover it", .Grass, {}},   // the plant community brings what covers it
 }
 
 surface_row :: proc(p: ^Point) -> int {
@@ -276,12 +296,123 @@ surface_row :: proc(p: ^Point) -> int {
 	return len(SURFACES) - 1
 }
 
-// What the ground is at a point, and what covers it.
-surface_at :: proc(x, z, cell: f64) -> (g: Ground, m: Mat) {
+// What the ground is at a point, what covers it, and the plant community growing there, if
+// soil holds.
+surface_at :: proc(x, z, cell: f64) -> (g: Ground, m: Mat, plants: Maybe(Community_Kind)) {
 	p := point_at(x, z, cell)
-	m = SURFACES[surface_row(&p)].brings
+	row := surface_row(&p)
+	m = SURFACES[row].brings
+	if row == len(SURFACES) - 1 {
+		k, _ := community_at(x, z, cell)
+		m, plants = COMMUNITIES[k].cover, k
+	}
 	if m == .Air do m = p.cover if p.cover != .Air else rock_in(p.h - 0.5, p.base, rock_level(cell))
-	return p.g, m
+	return p.g, m, plants
+}
+
+// ---- soil and plants ----------------------------------------------------------------------
+
+// What the soil is, as an ordered catalogue over the land's fields: the first row whose host
+// holds. A row gives the block under the cover, the blocks below it, and the last block before
+// the rock, and how many of them are stones broken from the bed beneath. How deep the soil lies
+// is a field of its own (`soil-depth`, land_local).
+Soil :: struct {
+	name, why:       string,
+	top, sub, foot:  Mat,
+	stones:          f32,
+	host:            []Window,
+	colour:          [3]f32,   // on the map
+}
+
+SOILS := [?]Soil{
+	{"river silt", "floods lay silt over the gravel of old bars", .Silt, .Silt, .Gravel, 0, {{.Cold, -ANY, 2.5, 0}, {.Slope, -ANY, 0.15, 0}}, {0.35, 0.35, 0.40}},
+	{"shore sand", "the wind blows sand in off the beach", .Sand, .Sand, .Sand, 0, {{.Inland, -ANY, 120, 0}, {.Cold, -ANY, 10, 0}}, {0.95, 0.85, 0.55}},
+	{"stony wash", "soil creeping down a steep slope carries stones broken from the beds", .Loam, .Dirt, .Dirt, 0.35, {{.Slope, 0.65, ANY, 0}}, {0.60, 0.55, 0.50}},
+	{"podzol", "rain on a dry hump leaches the iron from the top of the soil and leaves it lower down", .Bleached, .Rust, .Rust, 0, {{.Humped, 3, ANY, 0}, {.Wetness, -ANY, 0.3, 0}}, {0.95, 0.55, 0.12}},
+	{"brown earth", "litter rots into loam over the weathered rock", .Loam, .Dirt, .Dirt, 0, {}, {0.42, 0.34, 0.26}},
+}
+
+soil_at :: proc(p: ^Point) -> (row: int, depth: f32) {
+	for r, i in SOILS do if host(r.host, p) > 0 do return i, FIELDS[.Soil_Depth].at(p)
+	return len(SOILS) - 1, FIELDS[.Soil_Depth].at(p)
+}
+
+// A species: its bark and leaf blocks, the form of its crown, and its height to the crown's top
+// and the crown's radius, in metres. True heights wait for the tree grower; these keep the sizes
+// trees have had, 8 to 14 m.
+Tree_Kind :: enum u8 { Katsura, Beech, Pine, Scrub }
+Species :: struct {
+	name:           string,
+	bark, leaf:     Mat,
+	crown:          enum u8 { Broad, Dome, Flat, Bush },
+	height, radius: [2]i32,
+}
+
+SPECIES := [Tree_Kind]Species{
+	.Katsura = {"katsura", .Wood, .Leaves, .Broad, {11, 14}, {3, 4}},           // a broad, spreading dome
+	.Beech   = {"beech", .Beech_Bark, .Beech_Leaves, .Dome, {9, 13}, {2, 3}},    // a round dome on a grey trunk
+	.Pine    = {"pine", .Pine_Bark, .Pine_Needles, .Flat, {9, 13}, {2, 3}},      // a flat top on a tall red bole
+	.Scrub   = {"scrub", .Wood, .Scrub_Leaves, .Bush, {2, 4}, {1, 2}},           // a low bush from the ground up
+}
+PLANT_BLOCKS :: bit_set[Mat]{.Wood, .Leaves, .Beech_Bark, .Beech_Leaves, .Pine_Bark, .Pine_Needles, .Scrub_Leaves}
+
+// The plant communities, which compete for ground in a race (race, fields.odin). A row brings
+// how thickly trees stand (the share of 6 m squares with one), the species in their shares,
+// what covers the ground between them, and its colour on the map.
+Community_Kind :: enum u8 { Valley, Slope, Ridge, Heath, Coast }
+Community :: struct {
+	name, why:     string,
+	weight, patch: f32,          // its weight in the race, and the size of its patches, metres
+	hosts:         [][]Window,   // it takes the best of them; with none it holds everywhere
+	density:       f32,
+	trees:         [len(Tree_Kind)]f32,   // katsura, beech, pine, scrub
+	cover:         Mat,
+	colour:        [3]f32,
+}
+
+COMMUNITIES := [Community_Kind]Community{
+	.Valley = {"valley floor wood", "big broad trees stand over the deep wet soil a few metres above the stream", 4, 150,
+		{{{.Cold, -ANY, 3, 3}, {.Slope, -ANY, 0.2, 0.1}}}, 0.5, {0.75, 0.25, 0, 0}, .Grass, {0.45, 0.85, 0.30}},
+	.Slope = {"slope forest", "beech holds the soil of the slopes wherever nothing else does better", 1, 400,
+		{}, 0.7, {0.05, 0.85, 0.1, 0}, .Litter, {0.10, 0.42, 0.16}},
+	.Ridge = {"ridge pine", "pine holds dry humped ground and thin soil over rock", 3, 250,
+		{{{.Humped, 4, ANY, 3}, {.Wetness, -ANY, 0.25, 0.1}}, {{.Soil_Depth, -ANY, 0.5, 0.25}}}, 0.45, {0, 0, 0.8, 0.2}, .Needles, {0.20, 0.55, 0.60}},
+	.Heath = {"scrub and heath", "wind and salt keep the trees low and few", 4, 200,
+		{{{.Exposure, 0.8, ANY, 0.08}}}, 0.3, {0, 0, 0.15, 0.85}, .Heath, {0.70, 0.45, 0.70}},
+	.Coast = {"coast strand", "salt and blown sand behind the shore: pines and scrub over dune grass", 5, 150,
+		{{{.Inland, -ANY, 150, 100}, {.Cold, -ANY, 12, 8}}}, 0.2, {0, 0, 0.6, 0.4}, .Dune, {0.95, 0.85, 0.45}},
+}
+COVERS :: bit_set[Mat]{.Grass, .Litter, .Needles, .Heath, .Dune}
+
+// The community at a point: the race's winner on the land's grid, read a little way off by
+// noise, so its edges wander over 10 to 50 m rather than follow the grid. And the cell read.
+community_at :: proc(x, z, cell: f64) -> (Community_Kind, int) {
+	c := land_cell(x + 24*f64(fbm(x, z, 40, cell, 2, seed + 600)), z + 24*f64(fbm(x, z, 40, cell, 2, seed + 601)))
+	if land.community[c] == 255 do c = land_cell(x, z)
+	return Community_Kind(land.community[c]) if land.community[c] != 255 else .Coast, c
+}
+
+// Run the race on every land cell once the land is formed, and print each community's share.
+plants_init :: proc() {
+	started := time.now()
+	n := land.n
+	land.community = make([]u8, n*n)
+	count, soils := [Community_Kind]int{}, [len(SOILS)]int{}
+	for c in 0..<n*n {
+		land.community[c] = 255
+		if land.grid.sea[c] do continue
+		p := Point{x = (f64(c%n) + 0.5)*LAND_CELL - region.size/2, z = (f64(c/n) + 0.5)*LAND_CELL - region.size/2, cell = LAND_CELL}
+		k, _, _ := race(&p)
+		land.community[c] = u8(k)
+		count[k] += 1
+		row, _ := soil_at(&p)
+		soils[row] += 1
+	}
+	fmt.printf("plants in %.0f ms:", time.duration_milliseconds(time.since(started)))
+	for k, i in count do fmt.printf(" %s %.0f%%", COMMUNITIES[i].name, 100*f32(k)/f32(len(land.grid.order)))
+	fmt.print("; soil:")
+	for k, i in soils do fmt.printf(" %s %.0f%%", SOILS[i].name, 100*f32(k)/f32(len(land.grid.order)))
+	fmt.println()
 }
 
 // ---- trees --------------------------------------------------------------------------------
@@ -289,23 +420,22 @@ surface_at :: proc(x, z, cell: f64) -> (g: Ground, m: Mat) {
 Tree :: struct {
 	x, z:   i32,   // block the trunk stands on
 	base:   i32,   // elevation of the ground there
-	trunk:  i32,   // height of the trunk; the crown is centred on its top and clears head height
+	height: i32,   // to the crown's top, over the base
 	radius: i32,   // of the crown
+	kind:   Tree_Kind,
 }
 
 TREE_GRID  :: 6   // at most one tree per square of this many metres
 TREE_REACH :: 4   // the widest crown
 
-// How wooded the land is, 0..1. Trees follow water: thick in valley floors and hollows,
-// thinning up the slopes, absent from the high ridges.
-// A sum, not a host: the plant communities will replace it with rows.
-forest_at :: proc(x, z: f64) -> f32 {
-	wet, patch, h := forest_terms(x, z)
-	return clamp(0.12 + 1.3*wet + 0.4*patch - smoothstep(170, 320, h), 0, 1)
-}
-
-forest_terms :: proc(x, z: f64) -> (wet, patch, h: f32) {
-	return land_at(land.wet, land.n, x, z), fbm(x, z, 500, 1, 3, seed + 120), land_at(land.z[0], land.n, x, z)
+// The share of the community's trees each species has, picked by a number in 0..1.
+pick_species :: proc(k: Community_Kind, u: f32) -> Tree_Kind {
+	u := u
+	for share, s in COMMUNITIES[k].trees {
+		u -= share
+		if u < 0 do return Tree_Kind(s)
+	}
+	return .Beech
 }
 
 // Every tree whose trunk stands in a rectangle of blocks. The same tree is found whichever
@@ -318,21 +448,30 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree) {
 			x, z := gx*TREE_GRID + i32(r % TREE_GRID), gz*TREE_GRID + i32((r >> 4) % TREE_GRID)
 			if x < x0 || x > x1 || z < z0 || z > z1 do continue
 			fx, fz := f64(x) + 0.5, f64(z) + 0.5
-			if f32((r >> 8) & 0xFF)/255 >= forest_at(fx, fz)*0.92 do continue
-			g, m := surface_at(fx, fz, 1)
-			if m != .Grass do continue
-			radius := 2 + i32((r >> 24) % 3)
-			append(out, Tree{x, z, i32(math.round(g.h)), radius + 3 + i32((r >> 16) % 4), radius})
+			if k, _ := community_at(fx, fz, 1); f32((r >> 8) & 0xFF)/255 >= COMMUNITIES[k].density do continue
+			g, _, plants := surface_at(fx, fz, 1)
+			k := plants.? or_continue
+			kind := pick_species(k, hash01(gx, gz, seed + 141))
+			s, v := SPECIES[kind], hash(gx, gz, seed + 142)
+			append(out, Tree{x, z, i32(math.round(g.h)), s.height[0] + i32(v % u32(s.height[1] - s.height[0] + 1)), s.radius[0] + i32((v >> 8) % u32(s.radius[1] - s.radius[0] + 1)), kind})
 		}
 	}
 }
 
-// Height of a tree's crown above its base at a horizontal distance from the trunk, or
-// zero outside the crown.
-crown_top :: proc(t: Tree, distance: f32) -> i32 {
+// A tree's crown, as the height of its underside and its top over the tree's base, at a
+// distance from the trunk; the underside lies over the top outside it. The near blocks and the
+// far crowns both draw this.
+envelope :: proc(t: Tree, d: f32) -> (under, over: f32) {
 	r := f32(t.radius) + 0.5
-	if distance >= r do return 0
-	return t.trunk + i32(math.sqrt(r*r - distance*distance)*0.85)
+	if d >= r do return 1, 0
+	top, q := f32(t.height), math.sqrt(1 - d*d/(r*r))
+	switch SPECIES[t.kind].crown {
+	case .Broad: return top - r*(0.65 + 0.45*q), top - r*0.65*(1 - q)
+	case .Dome:  return top - r*0.85*(1 + q), top - r*0.85*(1 - q)
+	case .Flat:  return top - 1.2 - 1.6*q, top - 0.8*(1 - q)
+	case .Bush:  return 0, top*q
+	}
+	return 1, 0
 }
 
 // ---- what the engine asks for -------------------------------------------------------------
@@ -350,16 +489,18 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			ix, iz := cx*CHUNK + i - 1, cz*CHUNK + j - 1   // cell coordinates at this level, in the world
 			x, z := (f64(ix) + 0.5)*cell - f64(ox), (f64(iz) + 0.5)*cell - f64(oz)
 			k := j*P + i
-			g: Ground
-			g, c.mat[k] = surface_at(x, z, cell)
-			heights[k], c.water[k], c.base[k] = g.h, g.water, g.base
+			g, m, plants := surface_at(x, z, cell)
+			heights[k], c.water[k], c.base[k], c.mat[k] = g.h, g.water, g.base, m
 			c.top[k] = i32(math.round(heights[k]))
 			c.ground[k] = c.top[k]
-			if s >= 8 && c.mat[k] == .Grass {
+			// The canopy: a cell is the leaf of a tree its community would grow, raised to about
+			// the height of that tree's crown.
+			if com, ok := plants.?; ok && s >= 8 {
 				r := hash(i32(math.floor(x/cell)), i32(math.floor(z/cell)), seed + 160 + u32(level))
-				if f32(r & 0xFFFF)/65536 < forest_at(x, z)*0.75 {
-					c.top[k] += 7 + i32((r >> 16) % 4)
-					c.mat[k] = .Leaves
+				if f32(r & 0xFFFF)/65536 < COMMUNITIES[com].density*0.75 {
+					sp := SPECIES[pick_species(com, f32((r >> 16) & 0xFF)/256)]
+					c.top[k] += sp.height[0] - 1 + i32((r >> 24) % u32(sp.height[1] - sp.height[0] + 1))
+					c.mat[k] = sp.leaf
 				}
 			}
 		}
@@ -369,7 +510,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 	for j in 1..<P - 1 {
 		for i in 1..<P - 1 {
 			k := j*P + i
-			if c.mat[k] == .Leaves do continue
+			if c.top[k] > c.ground[k] do continue
 			gx := (heights[k + 1] - heights[k - 1])/f32(2*s)
 			gz := (heights[k + P] - heights[k - P])/f32(2*s)
 			inv := 127/math.sqrt(gx*gx + gz*gz + 1)
@@ -385,21 +526,19 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 				for i in max((t.x - TREE_REACH - x0)/s, 0)..=min((t.x + TREE_REACH - x0)/s, P - 1) {
 					dx := f32(x0 + i*s) + f32(s)/2 - (f32(t.x) + 0.5)
 					dz := f32(z0 + j*s) + f32(s)/2 - (f32(t.z) + 0.5)
-					// A crown is as deep below the top of its trunk as it is high above it.
-					if rise := crown_top(t, math.sqrt(dx*dx + dz*dz)); rise > 0 {
-						k := j*P + i
-						under, over := max(t.base + 2*t.trunk - rise, c.ground[k]), t.base + rise
-						if over <= under do continue
-						if c.crown[k][1] > c.crown[k][0] do under, over = min(under, c.crown[k][0]), max(over, c.crown[k][1])
-						c.crown[k] = {under, over}
-					}
+					k := j*P + i
+					lo, hi := envelope(t, math.sqrt(dx*dx + dz*dz))
+					under, over := max(t.base + i32(math.round(lo)), c.ground[k]), t.base + i32(math.round(hi))
+					if over <= under do continue
+					if c.crown[k][1] > c.crown[k][0] do under, over = min(under, c.crown[k][0]), max(over, c.crown[k][1])
+					c.crown[k], c.kind[k] = {under, over}, t.kind
 				}
 			}
 			// The trunk's own cell always carries crown, so a small tree is never lost between cells.
 			if i, j := (t.x - x0)/s, (t.z - z0)/s; t.x >= x0 && t.z >= z0 && i < P && j < P {
 				k := j*P + i
-				c.stem[k] = u8(1 + (t.x - x0 - i*s) + 4*(t.z - z0 - j*s))
-				if rise := crown_top(t, 0); c.crown[k][1] <= c.crown[k][0] do c.crown[k] = {max(t.base + 2*t.trunk - rise, c.ground[k]), t.base + rise}
+				c.stem[k], c.kind[k] = u8(1 + (t.x - x0 - i*s) + 4*(t.z - z0 - j*s)), t.kind
+				if lo, hi := envelope(t, 0); c.crown[k][1] <= c.crown[k][0] do c.crown[k] = {max(t.base + i32(math.round(lo)), c.ground[k]), t.base + i32(math.round(hi))}
 			}
 		}
 	}
@@ -411,10 +550,16 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 }
 
 // The block at a depth below the surface of a column, where `bed` is the rock at that
-// height. Bare rock is rock all the way down, so a face and a hole show the same beds.
-block_below :: proc(surface: Mat, depth: i32, bed: Mat) -> Mat {
+// height. Bare rock is rock all the way down, so a face and a hole show the same beds. Under a
+// plant cover lie `deep` blocks of the soil, counting the cover, and some may be stones.
+block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, stone: bool) -> Mat {
+	if surface in COVERS {
+		if depth == 0 do return surface
+		if depth >= deep do return bed
+		if stone && MATERIALS[bed].loose != .Air do return MATERIALS[bed].loose
+		return soil.top if depth == 1 else soil.foot if depth == deep - 1 && deep > 2 else soil.sub
+	}
 	#partial switch surface {
-	case .Grass: return .Grass if depth == 0 else .Dirt if depth < 4 else bed
 	case .Sand:  return .Sand if depth < 4 else bed
 	case .Snow:  return .Snow if depth < 2 else bed
 	case .Gravel: return .Gravel if depth < 2 else bed
@@ -430,14 +575,24 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 	x0, z0 := cx*CHUNK - 1 - region.origin.x, cz*CHUNK - 1 - region.origin.y
 	trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P + TREE_REACH, z0 + P + TREE_REACH, &trees)
 	top := max(hi, c.hi)
-	for t in trees do top = max(top, t.base + t.trunk + t.radius + 1)
+	for t in trees do top = max(top, t.base + t.height + 1)
 
 	y_base = min(lo, c.lo) - 4   // room below for the rim faces and corner light
 	h = top - y_base + 1
 	blocks = make([]u8, P*P*int(h))
 	for k in 0..<P*P {
 		t := c.top[k]
-		for y in y_base..<t do blocks[k + int(y - y_base)*P*P] = u8(block_below(c.mat[k], t - 1 - y, rock_in(f32(y) + 0.5, c.base[k], 0)))
+		x, z := x0 + i32(k%P), z0 + i32(k/P)
+		soil, deep := &SOILS[0], i32(0)
+		if c.mat[k] in COVERS {
+			p := Point{x = f64(x) + 0.5, z = f64(z) + 0.5, cell = 1}
+			row, depth := soil_at(&p)
+			soil, deep = &SOILS[row], 1 + i32(math.ceil(depth))
+		}
+		for y in y_base..<t {
+			stone := hash01(x + y*131, z, seed + 190) < soil.stones
+			blocks[k + int(y - y_base)*P*P] = u8(block_below(c.mat[k], t - 1 - y, rock_in(f32(y) + 0.5, c.base[k], 0), soil, deep, stone))
+		}
 	}
 	for t in trees {
 		put :: proc(blocks: []u8, x, y, z: i32, m: Mat, replace: bool) {
@@ -445,15 +600,18 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 			k := int(x) + int(z)*P + int(y)*P*P
 			if replace || blocks[k] == 0 do blocks[k] = u8(m)
 		}
-		crown := t.base + t.trunk
-		for y in t.base..<crown do put(blocks, t.x - x0, y - y_base, t.z - z0, .Wood, true)
+		sp := SPECIES[t.kind]
+		trunk, _ := envelope(t, 0)
+		for y in t.base..=t.base + i32(trunk) do put(blocks, t.x - x0, y - y_base, t.z - z0, sp.bark, true)
 		r := t.radius
-		for dy in -r..=r {
-			for dz in -r..=r {
-				for dx in -r..=r {
-					ragged := hash01(t.x + dx + dy*57, t.z + dz, seed + 180)*1.6   // a soft, uneven edge
-					if f32(dx*dx + dz*dz) + f32(dy*dy)*1.4 > f32(r*r) + 0.6 - ragged do continue
-					put(blocks, t.x + dx - x0, crown + dy - y_base, t.z + dz - z0, .Leaves, false)
+		for dz in -r..=r {
+			for dx in -r..=r {
+				d := math.sqrt(f32(dx*dx + dz*dz))
+				lo, hi := envelope(t, d - 0.4)
+				for dy in i32(math.floor(lo))..<i32(math.ceil(hi)) {
+					under, over := envelope(t, d - 0.4 + hash01(t.x + dx + dy*57, t.z + dz, seed + 180))   // a soft, uneven edge
+					if f32(dy) + 0.5 < under || f32(dy) + 0.5 > over do continue
+					put(blocks, t.x + dx - x0, t.base + dy - y_base, t.z + dz - z0, sp.leaf, false)
 				}
 			}
 		}
