@@ -19,7 +19,8 @@ import sdl "vendor:sdl3"
 // Options, each as --name=value
 //   pos=x,y,z  above=x,height,z (over the ground)  look=yaw,pitch (degrees)  hour=0..24  fly  size=WxH
 //   shot=file.png   wait for the world to load, save one frame and exit
-//   after=seconds   with shot: let this much time pass first, so water can move
+//   after=seconds   with shot: let this much time pass first, so water can move; with bench as
+//                   well, the frame is saved then without waiting, in mid-flight
 //   dig=x0,y0,z0,x1,y1,z1   once the world has loaded, clear this box of blocks; may be repeated
 //   probe=x0,z0,x1,z1       on exit, print the ground and water in these columns
 //   seed=N          which world: every random choice is keyed from it (default 7)
@@ -246,7 +247,7 @@ main :: proc() {
 			opt.after += seconds   // the wait counts from the dig
 			idle_frames = 0
 		}
-		if opt.shot != "" && seconds >= opt.after && (idle_frames > 3 || seconds > opt.after + 120) {
+		if opt.shot != "" && seconds >= opt.after && (idle_frames > 3 || seconds > opt.after + 120 || opt.bench > 0) {
 			shot = opt.shot
 			running = false
 		}

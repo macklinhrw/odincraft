@@ -47,7 +47,7 @@ Water :: struct {
 	unbuilt:        [WATER_SPAN*WATER_SPAN]bool,     // loaded, and its surface has not been built yet
 	turn:           int,      // where the next round of rebuilding starts
 	behind:         f64,      // seconds of stepping owed
-	mask:           ^sdl.GPUTexture,   // which squares have simulated water, for the far water to give way to
+	mask:           ^sdl.GPUTexture,   // which squares have simulated water drawn, for the far water to give way to
 	mask_stale:     bool,
 }
 
@@ -337,6 +337,7 @@ water_update :: proc(wt: ^Water, dev: ^sdl.GPUDevice, dt: f64) {
 		s := (wt.turn + k)%len(wt.chunks)
 		c := wt.chunks[s]
 		if c == nil || !wt.stale[s] do continue
+		wt.mask_stale ||= wt.unbuilt[s]
 		wt.stale[s], wt.unbuilt[s] = false, false
 		first := len(quads)
 		water_surface(wt, c, &quads)
@@ -353,7 +354,7 @@ water_update :: proc(wt: ^Water, dev: ^sdl.GPUDevice, dt: f64) {
 	staging := sdl.CreateGPUTransferBuffer(dev, {usage = .UPLOAD, size = bytes + MASK})
 	mapped := cast([^]u8)sdl.MapGPUTransferBuffer(dev, staging, false)
 	if bytes > 0 do copy(mapped[:bytes], (cast([^]u8)raw_data(quads))[:bytes])
-	for c, s in wt.chunks do mapped[int(bytes) + s] = 255 if c != nil else 0
+	for c, s in wt.chunks do mapped[int(bytes) + s] = 255 if c != nil && !wt.unbuilt[s] else 0   // the far water stays until a chunk's own is drawn
 	sdl.UnmapGPUTransferBuffer(dev, staging)
 
 	cmd := sdl.AcquireGPUCommandBuffer(dev)
