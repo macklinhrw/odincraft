@@ -223,21 +223,21 @@ Medians over the seeds tried (three to six a kind; twelve for ridge and raised, 
 
 | Figure | Real high islands | ridge | cone | crater | domes | inlets | worn | raised |
 |---|---|---|---|---|---|---|---|---|
-| Height within 100 m of the shore, m | 60 to 117 | 62 | 95 | 98 | 78 | 49 | 22 | 18 |
-| Shore rising 30 m within 50 m, % | 40 to 85 | 68 | 99 | 95 | 76 | 52 | 12 | 16 |
-| Slope in the first 100 m, ° | 29 to 51 | 28 | 38 | 43 | 37 | 20 | 12 | 6 |
-| Land under 50 m, % | 5 to 16 | 20 | 6 | 17 | 13 | 41 | 54 | 36 |
-| Land steeper than 60°, % | 0.8 to 2.9 | 2.0 | 1.6 | 2.7 | 1.0 | 1.6 | 0.3 | 1.0 |
-| Fall at a ridge crest, m | 0.56 to 1.25 | 0.62 | 1.89 | 2.3 | 1.25 | 0.62 | 0.56 | 0.54 |
-| Height above the nearest stream, m | 54 to 130 | 58 | 102 | 74 | 137 | 51 | 29 | 36 |
-| Livable ground, % of land | 15 to 46 (Kikaijima 91) | 47 | 0 | 24 | 28 | 49 | 62 | 65 |
-| Sheltered landings | 0 on the cones, 7 to 14, 80 on Tsushima | 2 | 0 | 0 | 1.5 | 9 | 9 | 0.5 |
+| Height within 100 m of the shore, m | 60 to 117 | 60 | 95 | 98 | 78 | 49 | 22 | 18 |
+| Shore rising 30 m within 50 m, % | 40 to 85 | 64 | 99 | 95 | 76 | 52 | 12 | 16 |
+| Slope in the first 100 m, ° | 29 to 51 | 26 | 38 | 43 | 37 | 20 | 12 | 6 |
+| Land under 50 m, % | 5 to 16 | 25 | 6 | 17 | 13 | 41 | 54 | 36 |
+| Land steeper than 60°, % | 0.8 to 2.9 | 1.8 | 1.6 | 2.7 | 1.0 | 1.6 | 0.3 | 1.0 |
+| Fall at a ridge crest, m | 0.56 to 1.25 | 0.60 | 1.89 | 2.3 | 1.25 | 0.62 | 0.56 | 0.54 |
+| Height above the nearest stream, m | 54 to 130 | 57 | 102 | 74 | 137 | 51 | 29 | 36 |
+| Livable ground, % of land | 15 to 46 (Kikaijima 91) | 48 | 0 | 24 | 28 | 49 | 62 | 65 |
+| Sheltered landings | 0 on the cones, 7 to 14, 80 on Tsushima | 5 | 0 | 0 | 1.5 | 9 | 9 | 0.5 |
 
 Before the step the four kinds stood at 6 to 17 m, 0 to 2%, 4 to 10° and 30 to 55% on the first four rows, and nothing was steeper than 60°. Forming takes 0.25 to 0.9 s on every kind. `src/` grew by 517 lines.
 
 What is still short:
 
-- **Landings.** As first built, the ridge and the raised island, which is now the default, had none; Hahajima has 7 and Kikaijima 12. Their outlines enclose no water, and a more ragged outline was cut back smooth by the sea. Only drowning gave landings, so on 2026-11-12 the last rise of the sea was enlarged in both rows: 25 to 45 m on the ridge (from 5 to 10) and 10 to 20 m on the raised island (from 3 to 6). Every one of twelve ridge seeds now has a landing (1 to 7, median 2), at the cost of some cliff: the height within 100 m of the shore fell from 79 to 62 m and the cliffed share of shore from 81 to 68%, both still inside the real range, and the land under 50 m rose from 13 to 20%, just outside it. Six of twelve raised seeds have a landing, the default among them with one, and its shore is lower (18 m, where Kikaijima's stays under 10 m). Both are still far short of the real 7 to 14.
+- **Landings.** As first built, the ridge and the raised island, which is now the default, had none. Their outlines enclose no water, and a more ragged outline was cut back smooth by the sea. Only drowning gave landings, so on 2026-11-12 the last rise of the sea was enlarged in both rows, and the ridge island was made longer: its rise is 40 to 60 m (from 5 to 10) and its outline about a tenth larger and a third longer than it is wide; the raised island's rise is 10 to 20 m (from 3 to 6). Twelve ridge seeds now have 2 to 12 landings, median 5, which is 1.8 for every 10 km of shore, where the three real high islands with natural landings have 7 to 14 and 1.3 to 1.9. The cost is at the coast: the height within 100 m of the shore fell from 79 to 60 m and the cliffed share of shore from 81 to 64%, both at the edge of the real range, the slope in the first 100 m fell from 32 to 26°, under it, and the land under 50 m rose from 13 to 25%, over it. Six of twelve raised seeds have a landing, the default among them with one, and that is as it should be: Kikaijima's twelve are harbours built behind breakwaters (section 11).
 - **Volcanic crests are too sharp** (1.2 to 2.3 m against 0.19 to 0.69 on their references), and the cone has no livable ground at all where Mikurajima has 15%.
 - **Craters and domes look drawn.** A crater floor is a smooth round bowl and the domes are round lobes. That is the fault `lessons.md` warns of, a shape that reads as a diagram, and it is the owner's to judge.
 - **The 8 km region.** The inlets island keeps 7.6 km² of land and has 26 to 38% of its outline as sea, against 52 to 60%. On a 16 km region it formed in 4.1 to 4.9 s with 36 to 53 km² and 28 to 41 landings. Not shipped.
@@ -419,7 +419,10 @@ Tsushima has 60% of its outline as sea and Hahajima and Chichijima 52 to 56%; th
 - **An old step can undo a new one.** Each refinement re-read the island's first outline, which would have put back everything the sea had cut and which had been laying a strip of low land along every coast.
 - **The uplift ramp was one cause of the low coast among four**: the cone's uplift was nearly all at the summit, the worn island rests while its coast wears, and the raised island's shelf is low by design.
 - **A late event must be late.** A crater that fell in early was breached by streams within about 300,000 years.
-- **A low stand does not give coves here.** The real cause of coves on a cliffed coast is that valleys were cut down to an ice-age sea some 120 m lower and then flooded. Tried on the ridge row (the sea 50 to 60 m lower for the last 90,000 years, then back): the shelf the sea uncovered was lifted with the land and stayed as a broad apron when the sea returned, and with a larger rise to cover that, the cliffs had still slumped to hillsides while the sea was away (shore height 24 to 38 m). A cliff here stands steeper than a hillside only while the waves undercut it; one that kept its face for 100,000 years out of the sea would let the true history be used, and would also keep the raised island's old cliffs sharp.
+- **A low stand gives coves only on an island at rest, and no more of them than a plain rise.** The real cause of coves on a cliffed coast is that valleys were cut down to an ice-age sea some 120 m lower and then flooded. Tried on the ridge row (the sea 50 to 60 m lower for the last 90,000 years, then back), it failed while the island went on rising: the shelf the sea uncovered was lifted with the land, as much as 55 m where the uplift is strongest, and stayed as a broad apron when the sea returned. With the island at rest through the low stand it works: 2 to 4 landings on six seeds, with 42 to 60 m standing within 100 m of the shore. That is no more landings than the plain rise of 25 to 45 m gives, with less cliff (50 to 73 m) and twice the forming time, so the plain rise stays. A cliff that keeps its face after the sea leaves it added only about 4 m and 6 points of cliffed shore; it was not the cause.
+- **Landings follow the length of the shore.** By the game's rule the three real high islands with natural landings have 1.3 to 1.9 for every 10 km of shore (Hahajima, Kōzushima, Chichijima; none on the three cones, 3.6 on Tsushima). Those are the first comparison's counts over shore lengths from a script on the same grids; the script's own recount finds fewer landings (5, 7 and 13, and 67 on Tsushima), which gives 0.9 to 1.7 and 3.0. The real counts are high because the real shores are long and indented: Hahajima has 55 km of shore round 17 km² and Chichijima 75 km round 24 km², where a ridge island had 16 to 22 km round 6 to 12 km². The inlets and worn kinds have shores as indented as those two (26 to 48 km) and 3 to 14 landings. So the ridge row was made longer and its last rise larger (section 8), and the game now prints landings for every 10 km of shore beside the count. A ridge larger still (radius 0.38 to 0.42) gave a median of 6 landings, but the region's rim cut 0.5 to 1.9 km² off the outline on most seeds; the row shipped loses 0.2 to 0.7 km² on five seeds of twelve. More river silt changed nothing.
+- **Kikaijima's landings are built.** Drawn on its grid, the places the landing rule finds are harbour basins behind breakwaters. Its natural shore is open and smooth, so a raised island with none to two landings matches it, and the real figure for that kind is not 12.
+- **Tried and not shipped: more shelter in the lee.** On a shore facing away from the swell the sea still cuts everything that stands out, which leaves some lee coasts nearly straight (ridge, seed 4). Cutting less there (0.2 of the open-sea rate, from 0.3) left the lee coast a little more irregular and changed the figures of no kind by more than a few points, landings included. A round rim to the region in place of the square one changed little on islands that reach it and cut the corners off islands lying diagonally.
 - **Three briefs each carried a wrong premise**, and each was caught because the brief asked for its claims to be tested.
 
 ### Every step has target figures
@@ -485,10 +488,10 @@ Most livable real islands are larger than the 8 km region: Kikaijima is about 14
 | 3: the island's recipe as a record | 130 | about 200 |
 | Fixes after step 3 | | 9 |
 | The land-forming step (not in the plan) | | 517 |
+| 4: local fields from the land | 90 | 107 (123 added, 16 removed) |
 
 `src/` went from 3,138 to 3,751 lines over steps 0 to 3, to 4,268 with the land-forming step, and to 4,377 with step 4. Forming time fell, from about 1.0 s to 0.25 to 0.9 s depending on the kind.
 
-| 4: local fields from the land | 90 | 107 (123 added, 16 removed) |
 ## Files
 
 - `foundations/brief.md`: the frame all ten designers shared.

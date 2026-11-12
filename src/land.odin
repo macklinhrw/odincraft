@@ -76,13 +76,13 @@ Kind :: struct {
 
 KINDS := [?]Kind{
 	{
-		// A range north of the middle and a long south slope with room for rivers. It rises
-		// for 3 to 4 million years, and the sea then rises 25 to 45 m into the mouths of its
+		// A long island, a range north of its middle and a south slope with room for rivers. It
+		// rises for 3 to 4 million years, and the sea then rises 40 to 60 m into the mouths of its
 		// valleys, leaving coves between the cliffs; much more and it is the inlets kind. After
-		// Hahajima, though rounder.
+		// Hahajima, though its shore is half as long.
 		name = "ridge", weight = 3, story = "layered, gently tilted",
 		shape = {
-			radius = {0.31, 0.35}, xx = {0.85, 1.0}, zz = {1.15, 1.35}, xz = {-0.4, 0.4}, ragged = {0.35, 0.45}, ragged_wave = {2500, 3500},
+			radius = {0.35, 0.39}, xx = {0.85, 1.0}, zz = {1.3, 1.8}, xz = {-0.4, 0.4}, ragged = {0.35, 0.45}, ragged_wave = {2500, 3500},
 			rate = {0.00055, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.25, 0.35}, ridge = {0.8, 1.1},
 			axis = {-1100, -600}, bend = {250, 550}, bend_wave = {1400, 2200}, wander = {250, 450}, wander_wave = {2000, 3000}, width = {850, 1200},
 			lumps = {0.3, 0.45}, lumps_wave = {1800, 2600},
@@ -91,7 +91,7 @@ KINDS := [?]Kind{
 			{cell = 64, years = 20000, steps = {140, 175}, uplift = {1, 1}},
 			{cell = 32, years = 6000, steps = {40, 60}, uplift = {1, 1}},
 			{cell = 16, years = 3000, steps = {30, 30}, uplift = {1, 1}},
-			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {25, 45}},   // the last rise, and the thousands of years since
+			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {40, 60}},   // the last rise, and the thousands of years since
 		},
 	},
 	{
@@ -1058,8 +1058,8 @@ land_figures :: proc(g: ^Grid) {
 	for c in g.order do hollow = max(hollow, g.fill[c] - g.z[c])
 	for &v in region.vents do v.fallen = v.crater > 0
 	route(g)
-	fmt.printfln("  livable %.0f%% of land, the largest patch %.0f ha (15-46, 63-417); sheltered landings %d (0 on the cones, 7-14, 80 on Tsushima); deepest closed hollow %.0f m (2-10, 77 on Aogashima)",
-		100*f32(livable)/f32(len(g.order)), f32(slice.max(patch[:]) if len(patch) > 0 else 0)*g.d*g.d/10_000, len(landings), hollow)
+	fmt.printfln("  livable %.0f%% of land, the largest patch %.0f ha (15-46, 63-417); sheltered landings %d, %.1f in 10 km of shore (0 on the cones, 7-14 and 1.3-1.9, 80 and 3.6 on Tsushima); deepest closed hollow %.0f m (2-10, 77 on Aogashima)",
+		100*f32(livable)/f32(len(g.order)), f32(slice.max(patch[:]) if len(patch) > 0 else 0)*g.d*g.d/10_000, len(landings), f32(len(landings))*10_000/(f32(len(lists[0]))*g.d), hollow)
 }
 
 // Group marked cells lying within `reach` cells of each other: each cell's group, or -1, and
