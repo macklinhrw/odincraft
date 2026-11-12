@@ -196,7 +196,8 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     float3 probe = turned ? in.rel + in.soft * (1.5 * in.cell) : in.rel;
     float lit = ndl > 0.0 ? shadow_at(probe, turned ? in.soft : N, f, shadow_map, shadow_smp) : 0.0;
     float ao = mix(0.5, 1.0, in.ao);
-    float3 col = albedo * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) + sky_ambient(in.soft, sun) * ao);
+    float sky = 1.0 - float((in.info >> 4u) & 15u) / 15.0;   // the share of the sky a face under a roof sees (mesh.odin); far off, of the sunlight too
+    float3 col = albedo * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) * (in.cell > 1.0 ? sky : 1.0) + sky_ambient(in.soft, sun) * ao * sky);
 
     // Light lost on the way down through water.
     float depth = f.cam.w - world.y;
@@ -244,6 +245,7 @@ struct WaterV {
     float2 river;   // x: -1 to 1 across a river ribbon, y: 1 for river water down to 0 for the sea
     float2 flow;    // metres a second, where the water is simulated
     float3 kind;    // x: 1 for simulated water, y: 0 for level water to 1 for falling, z: depth
+    float roof;     // the share of it under a roof of rock
 };
 
 // The sea beyond the simulated water: one sheet at sea level.
@@ -254,6 +256,7 @@ vertex WaterV vs_water(uint vid [[vertex_id]], constant Frame &f [[buffer(0)]]) 
     o.river = float2(0.0);
     o.flow = float2(0.0);
     o.kind = float3(0.0, 0.0, 10.0);
+    o.roof = 0.0;
     o.position = f.view_proj * float4(o.rel, 1.0);
     return o;
 }
@@ -269,6 +272,7 @@ vertex WaterV vs_river(RiverIn in [[stage_in]], constant Frame &f [[buffer(0)]],
     o.river = float2(lake ? 0.0 : in.p.w, smoothstep(0.0, 1.2, in.p.y - f.cam.w));   // near sea level a river takes on the sea's look
     o.flow = float2(0.0);
     o.kind = float3(0.0, 0.0, lake ? 10.0 : 1.5);
+    o.roof = 0.0;
     o.position = f.view_proj * float4(o.rel, 1.0);
     return o;
 }
@@ -292,7 +296,9 @@ vertex WaterV vs_pool(PoolIn in [[stage_in]], uint vid [[vertex_id]], constant F
     o.rel = p + d.origin.xyz;
     o.river = float2(0.0, smoothstep(0.0, 1.2, p.y - f.cam.w));
     o.flow = m.xy;
-    o.kind = float3(1.0, m.w, m.z);
+    float quarters = floor(m.w * 0.5);   // water.odin packs the share under a roof in whole twos over the falling
+    o.kind = float3(1.0, m.w - 2.0 * quarters, m.z);
+    o.roof = quarters * 0.25;
     o.position = f.view_proj * float4(o.rel, 1.0);
     return o;
 }
@@ -346,8 +352,9 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
     // A river is shallower and clearer than the sea, and thins to nothing at its edges.
     float3 body = mix(float3(0.010, 0.045, 0.060), float3(0.022, 0.070, 0.058), in.river.y);
     float3 mirrored = sky_color(float3(r.x, abs(r.y), r.z), sun) * (1.0 - 0.35 * in.river.y);   // banks and trees dim a river's sky
-    float3 col = mix(body * (0.15 + 0.85 * daylight(sun)), mirrored, fresnel);
-    col += sun_light(sun) * 2.5 * pow(saturate(dot(r, sun)), 600.0);
+    mirrored *= 1.0 - 0.9 * in.roof;   // under a roof it mirrors the dark rock
+    float3 col = mix(body * (0.15 + 0.85 * daylight(sun)) * (1.0 - 0.7 * in.roof), mirrored, fresnel);
+    col += sun_light(sun) * 2.5 * pow(saturate(dot(r, sun)), 600.0) * (1.0 - in.roof);
     float alpha = mix(mix(0.80, 0.62, in.river.y), 1.0, fresnel);
     alpha = mix(alpha, 0.96, in.river.y * smoothstep(1.5, 7.0, in.kind.z));   // deep fresh water is dark: a lake hides its bed, a stream shows it
     alpha *= 1.0 - 0.8 * in.river.y * smoothstep(0.35, 0.85, abs(in.river.x));

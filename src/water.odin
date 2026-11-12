@@ -39,6 +39,7 @@ Water :: struct {
 	hold:           []f32,    // level of the river or sea the generator put here, or NO_WATER
 	sea:            []bool,
 	still:          []bool,   // a lake or pond: it starts full and is neither topped up nor dried, so a breach drains it
+	roof:           []bool,   // under a roof of rock, where the sky is not mirrored
 	flow_x, flow_z: []f32,    // depth that crossed to the +x and +z neighbour in the last step
 	before, shown:  []f32,    // depth a step ago, and when the surface was last built
 	chunks:         [WATER_SPAN*WATER_SPAN]^Chunk,   // the chunk loaded in each square of the window
@@ -64,7 +65,7 @@ water_init :: proc(wt: ^Water, dev: ^sdl.GPUDevice) {
 	n := WATER_N*WATER_N
 	wt.floor, wt.depth, wt.hold = make([]f32, n), make([]f32, n), make([]f32, n)
 	wt.flow_x, wt.flow_z = make([]f32, n), make([]f32, n)
-	wt.before, wt.shown, wt.sea, wt.still = make([]f32, n), make([]f32, n), make([]bool, n), make([]bool, n)
+	wt.before, wt.shown, wt.sea, wt.still, wt.roof = make([]f32, n), make([]f32, n), make([]bool, n), make([]bool, n), make([]bool, n)
 	for &f in wt.floor do f = WALL
 	wt.mask = sdl.CreateGPUTexture(dev, {
 		type = .D2, format = .R8_UNORM, usage = {.SAMPLER},
@@ -74,13 +75,18 @@ water_init :: proc(wt: ^Water, dev: ^sdl.GPUDevice) {
 }
 
 // Top of the ground in a column of a chunk's blocks: the highest block that is not part
-// of a tree. Water lies on this, and under any crown.
-column_floor :: proc(blocks: []u8, h, y_base, x, z: i32) -> f32 {
+// of a tree, or where the sea's level runs in under a roof, the floor beneath it. Water lies on
+// this, and under any crown.
+column_floor :: proc(blocks: []u8, h, y_base, x, z: i32) -> (floor: f32, roofed: bool) {
+	at :: proc(blocks: []u8, x, y, z: i32) -> Mat { return Mat(blocks[int(x + 1) + int(z + 1)*P + int(y)*P*P]) }
+	sea := SEA_LEVEL - 1 - y_base
 	for y := h - 1; y >= 0; y -= 1 {
-		m := Mat(blocks[int(x + 1) + int(z + 1)*P + int(y)*P*P])
-		if m != .Air && m not_in PLANT_BLOCKS do return f32(y_base + y + 1)
+		m := at(blocks, x, y, z)
+		if m == .Air || m in PLANT_BLOCKS do continue
+		if y > sea && sea >= 0 && at(blocks, x, sea, z) == .Air do for f := sea; f >= 0; f -= 1 do if at(blocks, x, f, z) != .Air do return f32(y_base + f + 1), true
+		return f32(y_base + y + 1), false
 	}
-	return f32(y_base)
+	return f32(y_base), false
 }
 
 water_wake :: proc(wt: ^Water, cx, cz: i32) {
@@ -102,12 +108,13 @@ water_load :: proc(wt: ^Water, c: ^Chunk, b: ^Built) {
 		for x in 0..<i32(CHUNK) {
 			i, k := water_cell(c.key.x*CHUNK + x, c.key.z*CHUNK + z), z*CHUNK + x
 			if fresh {
-				wt.floor[i], wt.hold[i], wt.sea[i], wt.still[i] = b.floor[k], b.hold[k], b.sea[k], b.still[k]
+				wt.floor[i], wt.hold[i], wt.sea[i], wt.still[i], wt.roof[i] = b.floor[k], b.hold[k], b.sea[k], b.still[k], b.roof[k]
 				wt.depth[i] = max(b.hold[k] - b.floor[k], 0)
 				wt.before[i], wt.shown[i] = wt.depth[i], -1
 				wt.flow_x[i], wt.flow_z[i] = 0, 0
 			} else {
 				water_set_floor(wt, i, b.floor[k])
+				wt.roof[i] = b.roof[k]
 			}
 		}
 	}
@@ -144,7 +151,9 @@ water_refloor :: proc(wt: ^Water, x, z: i32) {
 	s := water_slot(cx, cz)
 	c := wt.chunks[s]
 	if c == nil || c.key.x != cx || c.key.z != cz do return
-	water_set_floor(wt, water_cell(x, z), column_floor(c.blocks, c.h, c.y_base, x & (CHUNK - 1), z & (CHUNK - 1)))
+	floor, roofed := column_floor(c.blocks, c.h, c.y_base, x & (CHUNK - 1), z & (CHUNK - 1))
+	water_set_floor(wt, water_cell(x, z), floor)
+	wt.roof[water_cell(x, z)] = roofed
 	wt.stale[s] = true
 	water_wake(wt, cx, cz)
 }
@@ -252,7 +261,7 @@ water_velocity :: proc(wt: ^Water, x, z: i32) -> [2]f32 {
 // to the next.
 water_corner :: proc(wt: ^Water, x, z, u, v: i32) -> (y: f32, more: [4]f32) {
 	i := water_cell(x, z)
-	sum, n, depth: f32
+	sum, n, depth, roofed: f32
 	lo, hi: f32 = WALL, -WALL
 	flow: [2]f32
 	for dz in v - 1..=v {
@@ -264,11 +273,12 @@ water_corner :: proc(wt: ^Water, x, z, u, v: i32) -> (y: f32, more: [4]f32) {
 			n += 1
 			lo, hi = min(lo, top), max(hi, top)
 			depth += wt.depth[j]
+			roofed += f32(int(wt.roof[j]))
 			flow += water_velocity(wt, x + dx, z + dz)
 		}
 	}
 	y = clamp(sum/n, wt.floor[i] + 0.01, wt.floor[i] + wt.depth[i] + 0.25)
-	return y, {flow.x/n, flow.y/n, depth/4, clamp((hi - lo - 0.05)/0.6, 0, 1)}
+	return y, {flow.x/n, flow.y/n, depth/4, clamp((hi - lo - 0.05)/0.6, 0, 1) + 2*math.round(4*roofed/n)}   // and in whole twos, quarters of it under a roof
 }
 
 // The water surface of a chunk: a top for each wet column, and a sheet down each side
@@ -309,7 +319,7 @@ water_surface :: proc(wt: ^Water, c: ^Chunk, out: ^[dynamic]Water_Quad) {
 				if drop < 0.06 do continue
 				fall := clamp((drop - 0.06)/0.5, 0, 1)
 				ma, mb := more[ca], more[cb]
-				ma[3], mb[3] = fall, fall
+				ma[3], mb[3] = fall + ma[3] - math.mod(ma[3], 2), fall + mb[3] - math.mod(mb[3], 2)
 				// The sheet leans out from the block it falls past, so the two never share a plane.
 				ax, az := fx + f32(ca & 1), fz + f32(ca >> 1)
 				bx, bz := fx + f32(cb & 1), fz + f32(cb >> 1)

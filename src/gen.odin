@@ -97,6 +97,7 @@ Columns :: struct {
 	mat:    [P*P]Mat,   // what the surface is made of
 	base:   [P*P]f32,   // height of the rock stack's base, which places the beds (rock.odin)
 	slope:  [P*P][2]u8, // the smooth ground normal's x and z, packed; zero in the border
+	hollow: [P*P][2]i32, // the floor and roof of a hollow carved under the top here (events.odin); far off, of its mouth
 	lo, hi: i32,        // lowest ground and highest top
 }
 
@@ -163,6 +164,7 @@ gen_init :: proc(kind: string) -> bool {
 	land_form()
 	rivers_trace()
 	plants_init()
+	hollows_make()
 	return true
 }
 
@@ -678,6 +680,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			heights[k], c.water[k], c.base[k], c.mat[k] = g.h, g.water, g.base, m
 			c.top[k] = i32(math.round(heights[k]))
 			c.ground[k] = c.top[k]
+			if s <= 8 do c.hollow[k] = hollow_at(x, z, cell)
 			// The canopy: a cell is the leaf of a tree its community would grow, raised to about
 			// the height of that tree's crown.
 			if com, ok := plants.?; ok && s >= 8 {
@@ -731,7 +734,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 	}
 	c.lo, c.hi = max(i32), min(i32)
 	for k in 0..<P*P {
-		c.lo = min(c.lo, c.ground[k])
+		c.lo = min(c.lo, c.ground[k], c.hollow[k][0] if c.hollow[k][1] > c.hollow[k][0] else max(i32))
 		c.hi = max(c.hi, c.top[k], c.crown[k][1])
 	}
 }
@@ -782,6 +785,7 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 			bed := (landslide.rock if c.mat[k] == landslide.rock && t - y <= 6 else MATERIALS[landslide.rock].loose) if f32(t - y) <= debris else rock_in(f32(y) + 0.5, c.base[k], 0)   // a block of the cap is whole
 			blocks[k + int(y - y_base)*P*P] = u8(block_below(c.mat[k], t - 1 - y, bed, soil, deep, stone))
 		}
+		for y in c.hollow[k][0]..<min(c.hollow[k][1], t) do blocks[k + int(y - y_base)*P*P] = 0   // a hollow under a roof of the beds
 	}
 	for t in trees {
 		put :: proc(blocks: []u8, x, y, z: i32, m: Mat, replace: bool) {

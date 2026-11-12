@@ -372,6 +372,7 @@ Land :: struct {
 	valley:  []f32,    // m² drained by the stream a cell drains to
 	slid:    []f32,    // metres of slide debris laid on a cell, or under 0, taken from it (events.odin)
 	lake:    []u8,     // 1 + the feature whose lake or pond covers a cell, or 0
+	swell:   []f32,    // on land beside the sea, how open the shore is to the waves (exposure)
 }
 
 // Ground a person could live on, from where the villages on eight real islands stand
@@ -886,9 +887,9 @@ land_finish :: proc(g: ^Grid) -> (highest: f32) {
 HUMP :: 6   // cells either side of the square a cell's height is set against, 208 m across
 land_local :: proc(g: ^Grid) {
 	n := g.n
-	for f in ([?][]f32{land.facing, land.hump, land.inland, land.sun, land.exposed, land.above, land.soil, land.valley}) do delete(f)
+	for f in ([?][]f32{land.facing, land.hump, land.inland, land.sun, land.exposed, land.above, land.soil, land.valley, land.swell}) do delete(f)
 	land.facing, land.hump, land.inland, land.valley = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
-	land.sun, land.exposed, land.above, land.soil = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+	land.sun, land.exposed, land.above, land.soil, land.swell = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 
 	// Distance to the sea, nearest first: each cell takes the sea cell nearest a neighbour
 	// already reached, which is near enough the true nearest that no contour shows the grid.
@@ -964,6 +965,7 @@ land_local :: proc(g: ^Grid) {
 			if g.sea[j*n + i] && !hit do salt, hit = share(open, n, i + ahead.x, j + ahead.y, fetch)*math.exp(-d/1000), true
 		}
 		land.exposed[c] = 1 - (1 - clamp(0.5 - 2*rise + land.hump[c]/40, 0, 1))*(1 - salt)
+		for o in OFFSETS do if g.sea[c + o.y*n + o.x] do land.swell[c] = exposure(open, n, x, y, fetch, ahead)
 		// Where cold air pools: the height over the stream a cell drains to, or over the sea.
 		r := g.next[c]
 		land.above[c] = 0 if g.area[c] >= CHANNEL_AREA || r == SINK else g.z[c] if r < 0 else g.z[c] - g.z[r] + land.above[r]
@@ -1216,6 +1218,15 @@ land_map :: proc(path, overlay: string) {
 				if level, inside, _ := lake_near(x, z); inside && h < level do col = {0.10, 0.30, 0.75}
 			}
 			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
+		}
+	}
+	// Each roofed place (events.odin) is ringed, in orange for a notch, white for a shelter and red for a sea cave.
+	for h in hollows {
+		f := region.features[h.feature]
+		cx, cy := int((f.at.x + region.size/2)*SIZE/region.size), int((f.at.y + region.size/2)*SIZE/region.size)
+		for dy in -6..=6 do for dx in -6..=6 do if r := dx*dx + dy*dy; r >= 16 && r <= 36 && cx + dx >= 0 && cy + dy >= 0 && cx + dx < SIZE && cy + dy < SIZE {
+			ring := [Feature_Kind][3]u8{.Notch = {255, 140, 0}, .Shelter = {255, 255, 255}, .Cave = {230, 20, 20}, .Slide = {}, .Lake = {}, .Pond = {}}
+			for k in 0..<3 do pixels[((cy + dy)*SIZE + cx + dx)*4 + k] = ring[f.kind][k]
 		}
 	}
 	write_png(path, pixels, SIZE, SIZE, false)

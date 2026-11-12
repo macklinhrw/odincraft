@@ -6,7 +6,7 @@ We chose a depth per column over water blocks, which can only stand at whole met
 
 ## Consequences
 
-- One depth per column means water cannot stand under a roof: it does not fill caves or flow beneath an overhang. Tree crowns are ignored, so water passes under trees.
+- One depth per column means water cannot stand under a roof: it does not fill caves or flow beneath an overhang. Tree crowns are ignored, so water passes under trees. Since step 14 (2026-11-12) one exception: where the block at the sea's level is air under rock, the column's ground is the floor beneath it, so the sea fills a sea cave or notch and stands under its roof, still one depth per column. Water so roofed is drawn dark rather than mirroring the sky.
 - Water is not conserved. Rivers are endless sources and the sea an endless sink. Water with no supply behind it sinks away at about a metre in four minutes.
 - The water's state lives only while its chunk is loaded. Walk away and come back, and a flooded pit starts again from the land's own water.
 - The river's designed level and the simulation must agree at rest, so the generator cuts each channel with banks that stand clear of the level and a raised lip above each drop to hold the pool behind it.

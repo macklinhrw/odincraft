@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import fnv "core:hash"
 import "core:math"
+import "core:slice"
 import "core:time"
 
 // Events and the features they leave (foundations/kinds-and-places.md, D6). A feature is a
@@ -11,7 +12,7 @@ import "core:time"
 // of the forming (foundations/landforms.md, D4), and it leaves three kinds of feature: its own
 // scar and debris, the lake its debris dams, and the ponds among its hummocks.
 
-Feature_Kind :: enum u8 { Slide, Lake, Pond }
+Feature_Kind :: enum u8 { Slide, Lake, Pond, Notch, Shelter, Cave }
 Measure :: struct { what: string, value: f32 }
 Feature :: struct {
 	kind:     Feature_Kind,
@@ -285,5 +286,213 @@ feature_words :: proc(x, z: f64, h: f32) {
 		fmt.printfln("debris of %s, %.0f m deep here: blocks of %v broken from a scar %.0f m off, which held %.2f million m³. Soil has had %s years to grow on it.", ago, t, landslide.rock, math.hypot(x - s.at.x, z - s.at.y), s.size/1e6, years(s.age))
 	} else if t < -0.5 {
 		fmt.printfln("in the scar of %s, where %.0f m of the hillside slid away. Measured when it fell: %s %.2f; %s %.2f; %s %.1f.", ago, -t, s.measured[0].what, s.measured[0].value, s.measured[1].what, s.measured[1].value, s.measured[2].what, s.measured[2].value)
+	}
+}
+
+// ---- Roofed places (ground-and-underground.md, D4) ------------------------------------------
+
+// Three kinds of hollow under a roof of rock, each a feature placed where its host holds best, as
+// the slide is, and carved out of the blocks once they are filled, so its roof and walls are the
+// beds. A notch is cut by the waves into the foot of a sea cliff at the sea's level; a shelter is
+// where a weak bed has weathered back under a strong one at the foot of a face; a sea cave is
+// driven into a headland along one of its cracks. Each keeps its outline: for every metre of
+// ground in its square, the floor and roof of the space carved there and the top of the ground
+// over it, which the blocks, the far rings, the water and the light under its roof all read.
+Hollow_Row :: struct {
+	why:   string,
+	host:  []Window,
+	most:  [2]f32,   // how many the island has at most, drawn
+	apart: f32,      // metres at least from any other
+	reach: [2]f32,   // metres along the face it is cut into, or for a cave, into the rock
+	deep:  [2]f32,   // metres into the rock at its deepest, or for a cave, across
+	high:  [2]f32,   // metres from floor to roof at its mouth
+	floor: f32,      // metres from the sea to its floor; a shelter's lies under its roof instead
+}
+HOLLOWS := #partial [Feature_Kind]Hollow_Row{
+	.Notch   = {"the waves cut it at the sea's level into the foot of a cliff open to the swell", {{.Swell, 0.15, ANY, 0.1}, {.Inland, -ANY, 24, 16}, {.Slope, 1.5, ANY, 0.5}}, {1, 3}, 400, {50, 110}, {2.5, 5}, {2.5, 4}, -1},
+	.Shelter = {"a weak bed weathered back under a strong one at the foot of a face", {{.Contact, 0.25, ANY, 0.1}, {.At_Limit, 0.8, ANY, 0.2}, {.Inland, 150, ANY, 100}}, {2, 4}, 400, {16, 40}, {4, 16}, {2, 4}, 0},
+	.Cave    = {"the waves drove it into a headland open to the swell along one of its cracks", {{.Headland, 0.5, ANY, 0.1}, {.Swell, 0.15, ANY, 0.1}, {.Slope, 1.5, ANY, 0.5}, {.Strength, 0.5, ANY, 0.1}}, {1, 2}, 300, {18, 40}, {4, 7}, {8, 14}, -2},
+}
+Hollow :: struct {
+	feature:   int,
+	x0, z0, w: i32,       // its square: corner and side, metres relative to the region's middle
+	span:      [][3]i16,  // for each metre in it: the floor and roof of what is carved, and the top of the ground over it
+}
+hollows: [dynamic]Hollow
+
+// The strongest step up from a weaker bed to a stronger one on the hillside within a cell, the
+// foot of a face, and where it lies.
+contact_at :: proc(c: int) -> (contrast, y: f32) {
+	g := land.grid
+	for h := g.z[c] - 8*land.slope[c]; h < g.z[c] + 8*land.slope[c]; h += 1 {
+		below := MATERIALS[rock_in(h, g.base[c], 0)].strength
+		if s := MATERIALS[rock_in(h + 1, g.base[c], 0)].strength - below; below > 0 && s > contrast do contrast, y = s, h + 1
+	}
+	return
+}
+
+// The share of sea within 48 m of a cell.
+headland :: proc(c: int) -> (s: f32) {
+	n := land.n
+	for dy in -3..=3 do for dx in -3..=3 do s += f32(int(land.grid.sea[clamp(c + dy*n + dx, 0, n*n - 1)]))/49
+	return
+}
+
+hollows_make :: proc() {
+	started := time.now()
+	g := land.grid
+	made: [Feature_Kind]int
+	for row, kind in HOLLOWS do if len(row.host) > 0 {
+		Spot :: struct { s: f32, c: i32 }
+		spots := make([dynamic]Spot, context.temp_allocator)
+		for ci in g.order {
+			p := Point{x = middle_of(g, int(ci)).x, z = middle_of(g, int(ci)).y, cell = LAND_CELL}
+			if s := host(row.host, &p); s > 0.5 do append(&spots, Spot{s + 0.05*hash01(ci, i32(kind), seed + 720), ci})
+		}
+		slice.sort_by(spots[:], proc(a, b: Spot) -> bool { return a.s > b.s })
+		most := int(math.round(math.lerp(row.most[0], row.most[1], hash01(i32(kind), 0, seed + 721))))
+		next: for sp in spots {
+			if made[kind] >= most do break
+			at := middle_of(g, int(sp.c))
+			for h in hollows do if math.hypot(region.features[h.feature].at.x - at.x, region.features[h.feature].at.y - at.y) < f64(row.apart) do continue next
+			made[kind] += int(hollow_carve(kind, int(sp.c), at))
+		}
+	}
+	fmt.printf("roofed places in %.0f ms: %d sea notches, %d rock shelters, %d sea caves; at", time.duration_milliseconds(time.since(started)), made[.Notch], made[.Shelter], made[.Cave])
+	for h, i in hollows do fmt.printf("%s %v %.0f, %.0f", "," if i > 0 else "", region.features[h.feature].kind, region.features[h.feature].at.x + f64(region.origin.x), region.features[h.feature].at.y + f64(region.origin.y))
+	fmt.println()
+}
+
+// Draw a hollow's size from the seed, find its outline in the ground and record it. False if
+// no rock is left to carve.
+hollow_carve :: proc(kind: Feature_Kind, c: int, at: [2]f64) -> bool {
+	row, g, i := HOLLOWS[kind], land.grid, i32(len(hollows))
+	draw :: proc(r: [2]f32, i, k: i32) -> f32 { return math.lerp(r[0], r[1], hash01(i, k, seed + 722)) }
+	reach, deep, high := draw(row.reach, i, 0), draw(row.deep, i, 1), draw(row.high, i, 2)
+	// A cave runs along the set of cracks nearer the way into the land, from where its line
+	// first meets the sea.
+	inland := [2]f64{-math.sin(math.to_radians(f64(land.facing[c]))), math.cos(math.to_radians(f64(land.facing[c])))}
+	along := rock_strike(at.x, at.y)
+	if abs(along.x*inland.x + along.y*inland.y) < 0.7071 do along = {-along.y, along.x}
+	if along.x*inland.x + along.y*inland.y < 0 do along = -along
+	middle, mouth := at, at
+	if kind == .Cave {
+		for k := 0; ground(mouth.x, mouth.y, 1).h >= row.floor; k += 1 {
+			if k == 80 do return false
+			mouth -= along
+		}
+		middle = mouth + along*f64(reach/2)
+	}
+	half := i32(reach/2 + deep + 6) if kind != .Cave else i32(reach/2 + 8)
+	h := Hollow{feature = len(region.features), x0 = i32(math.floor(middle.x)) - half, z0 = i32(math.floor(middle.y)) - half, w = 2*half}
+	n := int(h.w)
+	h.span = make([][3]i16, n*n)
+	far := make([]f32, n*n, context.temp_allocator)   // metres from where the open air reaches the floor
+	contrast, contact := contact_at(c)
+	strong := int(rocks.bed[clamp(int(contact + 0.5 - g.base[c] - STACK_LO), 0, STACK_LEN - 1)])
+	for k in 0..<n*n {
+		x, z := f64(h.x0 + i32(k%n)) + 0.5, f64(h.z0 + i32(k/n)) + 0.5
+		gr := ground(x, z, 1)
+		floor, roof := row.floor, row.floor + high*(1 + 0.25*fbm(x, z, 16, 1, 2, seed + 723))
+		if kind == .Shelter {   // its roof is the underside of the strong bed, wherever that lies here
+			y := math.floor(gr.base + STACK_LO + rocks.floor[strong]) - 1
+			for int(rocks.bed[clamp(int(y + 0.5 - gr.base - STACK_LO), 0, STACK_LEN - 1)]) < strong do y += 1
+			floor, roof = y - high, y
+		}
+		h.span[k] = {i16(floor), i16(math.round(roof)), i16(math.round(gr.h))}
+		far[k] = 0 if h.span[k][2] <= h.span[k][0] + 1 else 1e9
+	}
+	// How far each metre lies from the open air, by two sweeps across the square.
+	for pass in 0..<2 do for j in 0..<n do for i in 0..<n {
+		x, y := i if pass == 0 else n - 1 - i, j if pass == 0 else n - 1 - j
+		s := 1 if pass == 0 else -1
+		for o in ([4][3]f32{{-1, 0, 1}, {0, -1, 1}, {-1, -1, 1.41}, {1, -1, 1.41}}) {
+			u, v := x + s*int(o.x), y + s*int(o.y)
+			if u >= 0 && v >= 0 && u < n && v < n do far[y*n + x] = min(far[y*n + x], far[v*n + u] + o.z)
+		}
+	}
+	carved: f32
+	for k in 0..<n*n {
+		x, z := f64(h.x0 + i32(k%n)) + 0.5, f64(h.z0 + i32(k/n)) + 0.5
+		s := &h.span[k]
+		floor, roof := f32(s[0]), f32(s[1])
+		if kind == .Cave {   // a slot along the crack, wandering a little, narrowing and rising to its end
+			t, a := f32((x - mouth.x)*along.x + (z - mouth.y)*along.y), f32((z - mouth.y)*along.x - (x - mouth.x)*along.y) - 1.5*fbm(x*along.x + z*along.y, 0, 12, 1, 2, seed + 724)
+			wide := deep/2*(1 - math.pow(clamp(t/reach, 0, 1), 3))*(0.8 + 0.4*fbm(x, z, 3, 1, 2, seed + 725))
+			q := clamp(t/reach, 0, 1)
+			floor += 3*smoothstep(0.6, 1, q)
+			roof = row.floor + high*math.sqrt(max(1 - a*a/max(wide*wide, 0.01), 0))*(1 - 0.5*q*q) + 1.5*fbm(x, z, 4, 1, 1, seed + 727)   // a tall slot, ragged where blocks broke from its roof
+			if t < -6 || abs(a) >= wide do roof = floor
+		} else {   // deepest at its middle and tapering to its ends, its back ragged, rounded in section
+			ends := smoothstep(0, 0.4, 1 - f32(math.hypot(x - at.x, z - at.y))/(reach/2))
+			q := far[k]/max(deep*ends*(0.8 + 0.4*fbm(x, z, 5, 1, 2, seed + 726)), 0.01)
+			if q >= 1 do roof = floor
+			else if kind == .Notch do roof = floor + (roof - floor)*math.sqrt((1 - q*q)*ends)
+			else do floor = roof - (roof - floor)*math.sqrt((1 - q*q)*ends)
+		}
+		s[0], s[1] = i16(math.round(floor)), i16(math.round(roof))
+		if s[2] - s[1] < 2 do s[1] = max(s[1], s[2])   // a roof thinner than that has fallen in
+		if s[1] > s[0] && s[2] > s[0] do carved += f32(min(s[1], s[2]) - s[0])
+	}
+	if carved < 20 {
+		delete(h.span)
+		return false
+	}
+	measured := [Feature_Kind][3]Measure{
+		.Slide = {}, .Lake = {}, .Pond = {},
+		.Notch = {{"how open its shore is to the swell", land.swell[c]}, {"the steepness of the cliff, rise over run", land.slope[c]}, {"the strength of its rock", MATERIALS[rock_in(0, g.base[c], 0)].strength}},
+		.Shelter = {{"how much stronger its roof's bed is than the bed under it", contrast}, {"the steepness of the face against what its rock holds", land.slope[c]/rocks.law[rocks.beds[strong].kind].limit}, {"metres to the sea", land.inland[c]}},
+		.Cave = {{"the share of sea within 48 m of the headland", headland(c)}, {"how open its shore is to the swell", land.swell[c]}, {"metres between the cracks of its rock", MATERIALS[rock_in(0, g.base[c], 0)].crack}},
+	}
+	append(&region.features, Feature{kind = kind, at = middle if kind == .Cave else at, reach = reach, size = carved, level = f32(row.floor) if kind != .Shelter else contact, age = region.history[len(region.history) - 1].years*region.history[len(region.history) - 1].steps if kind != .Shelter else 0, cause = -1, measured = measured[kind]})
+	append(&hollows, h)
+	return true
+}
+
+// The space carved at a column, relative to the region's middle: its floor and the roof over it,
+// or the ground's top where nothing is left over it. At a far cell, the lowest floor and highest
+// roof of the metres in it that have a roof, so a mouth is drawn on the face from afar.
+hollow_at :: proc(x, z, cell: f64) -> (span: [2]i32) {
+	r := i32(cell)/2
+	for h in hollows {
+		i, j := i32(math.floor(x)) - r - h.x0, i32(math.floor(z)) - r - h.z0
+		if i + i32(cell) <= 0 || j + i32(cell) <= 0 || i >= h.w || j >= h.w do continue
+		if cell <= 1 {
+			s := h.span[j*h.w + i]
+			if top := min(s[1], s[2]); top > s[0] do return {i32(s[0]), i32(top)}
+			continue
+		}
+		for v in max(j, 0)..<min(j + i32(cell), h.w) do for u in max(i, 0)..<min(i + i32(cell), h.w) {
+			s := h.span[v*h.w + u]
+			if s[1] > s[0] && s[1] < s[2] do span = {i32(s[0]), i32(s[1])} if span[1] <= span[0] else {min(span[0], i32(s[0])), max(span[1], i32(s[1]))}
+		}
+	}
+	return
+}
+
+// Whether a block, relative to the region's middle, is rock as generated, where it lies in a
+// hollow's square; unknown elsewhere.
+hollow_rock :: proc(x, y, z: i32) -> (rock, known: bool) {
+	for h in hollows do if x >= h.x0 && z >= h.z0 && x < h.x0 + h.w && z < h.z0 + h.w {
+		s := h.span[(z - h.z0)*h.w + x - h.x0]
+		return y < i32(s[2]) && (y < i32(s[0]) || y >= i32(s[1])), true
+	}
+	return false, false
+}
+
+// The hollow a point lies in, in a sentence, as --why prints it.
+hollow_words :: proc(x, z: f64) {
+	NAMES := #partial [Feature_Kind]string{.Notch = "sea notch", .Shelter = "rock shelter", .Cave = "sea cave"}
+	for h in hollows {
+		span := hollow_at(x, z, 1)
+		f := region.features[h.feature]
+		i, j := i32(math.floor(x)) - h.x0, i32(math.floor(z)) - h.z0
+		if span[1] <= span[0] || i < 0 || j < 0 || i >= h.w || j >= h.w do continue
+		s := h.span[j*h.w + i]
+		fmt.printfln("%s a %s, %s: %s%s. Here its floor is at %d m and %s. Measured when it was made: %s %.2f; %s %.2f; %s %.2f.",
+			"under the roof of" if s[1] < s[2] else "at the mouth of", NAMES[f.kind], fmt.tprintf("%.0f m long", f.reach), HOLLOWS[f.kind].why, fmt.tprintf(", over the %s years the sea has stood where it is", years(f.age)) if f.kind != .Shelter else "", s[0],
+			fmt.tprintf("its roof %d m over it, the underside of %v", s[1] - s[0], rock_in(f32(s[1]) + 0.5, ground(x, z, 1).base, 0)) if s[1] < s[2] else "it is open to the sky",
+			f.measured[0].what, f.measured[0].value, f.measured[1].what, f.measured[1].value, f.measured[2].what, f.measured[2].value)
+		return
 	}
 }

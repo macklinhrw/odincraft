@@ -1,5 +1,7 @@
 package main
 
+import "core:math"
+
 // Meshing. Every visible face is one Quad, drawn as an instanced four-vertex strip, so a
 // face costs 16 bytes. Coordinates are metres from the chunk origin.
 
@@ -39,7 +41,37 @@ solid :: #force_inline proc(blocks: []u8, h, x, y, z: i32) -> bool {
 	return blocks[(x + 1) + (z + 1)*P + y*P*P] != 0
 }
 
-mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out: ^[dynamic]Quad) {
+// The share of the sky a block of air under a roof sees (ground-and-underground.md, D4): of
+// thirteen rays across the sky, weighted toward the way a face looks, those that come out above
+// the ground before they meet rock, the low ones bringing the light of the lit world outside.
+// The eye takes it as brighter than that share, so the face is lit by its square root. Beyond the chunk a hollow's outline answers, and elsewhere
+// a ray is taken to have come out. `at` is the block (0, 0, 0) relative to the region's middle.
+SKY_RAYS :: [13][3]f32{{0.99, 0.14, 0}, {0.70, 0.14, 0.70}, {0, 0.14, 0.99}, {-0.70, 0.14, 0.70}, {-0.99, 0.14, 0}, {-0.70, 0.14, -0.70}, {0, 0.14, -0.99}, {0.70, 0.14, -0.70},
+	{0.45, 0.77, 0.45}, {-0.45, 0.77, 0.45}, {-0.45, 0.77, -0.45}, {0.45, 0.77, -0.45}, {0, 1, 0}}
+sky_seen :: proc(blocks: []u8, h: i32, cover: ^[P*P]i32, at: [3]i32, x, y, z: i32, n: [3]i32) -> f32 {
+	seen, all: f32
+	for d in SKY_RAYS {
+		w := max(d.x*f32(n.x) + d.y*f32(n.y) + d.z*f32(n.z), 0) + 0.1
+		all += w
+		for i in 1..=40 {
+			p := [3]f32{f32(x) + 0.5, f32(y) + 0.5, f32(z) + 0.5} + d*f32(i)*0.75
+			u, v, t := i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))
+			if u >= -1 && t >= -1 && u <= CHUNK && t <= CHUNK {
+				if v > cover[(u + 1) + (t + 1)*P] { seen += w; break }
+				if solid(blocks, h, u, v, t) && Mat(blocks[(u + 1) + (t + 1)*P + v*P*P]) not_in PLANT_BLOCKS do break
+			} else if rock, known := hollow_rock(at.x + u, at.y + v, at.z + t); rock do break
+			else if !known { seen += w; break }
+		}
+	}
+	return seen/all
+}
+
+mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out: ^[dynamic]Quad, at: [3]i32) {
+	cover: [P*P]i32   // the highest block in each column that is not part of a plant
+	for k in 0..<P*P {
+		cover[k] = h - 1
+		for cover[k] >= 0 && (blocks[k + int(cover[k])*P*P] == 0 || Mat(blocks[k + int(cover[k])*P*P]) in PLANT_BLOCKS) do cover[k] -= 1
+	}
 	for y in 0..<h {
 		for z in 0..<i32(CHUNK) {
 			for x in 0..<i32(CHUNK) {
@@ -67,7 +99,15 @@ mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out: ^[dynamic]Quad) {
 						sc := solid(blocks, h, nx + u.x*du + v.x*dv, ny + u.y*du + v.y*dv, nz + u.z*du + v.z*dv)
 						corners[c] = 0 if s1 && s2 else u16(3 - int(s1) - int(s2) - int(sc))*5
 					}
-					append(out, quad(x + max(n.x, 0), y + max(n.y, 0), z + max(n.z, 0), 1, 1, f, m, corners, slope))
+					// Under a roof a face is lit by its own direction and by the share of the sky it sees.
+					closed: u16
+					if !solid(blocks, h, nx, ny, nz) && ny < cover[(nx + 1) + (nz + 1)*P] {
+						closed = u16(math.round(13*(1 - math.sqrt(sky_seen(blocks, h, &cover, at, nx, ny, nz, n)))))   // light the walls throw keeps the deepest from black
+						slope = {}
+					}
+					q := quad(x + max(n.x, 0), y + max(n.y, 0), z + max(n.z, 0), 1, 1, f, m, corners, slope)
+					q.info |= closed << 4
+					append(out, q)
 				}
 			}
 		}
@@ -142,7 +182,11 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 							wall_of, drop = rock_in(f32(at) + 0.5, c.base[(j + 1)*P + i + 1], level), 1
 							for at + drop < ground && rock_in(f32(at + drop) + 0.5, c.base[(j + 1)*P + i + 1], level) == wall_of do drop += 1
 						}
+						// A hollow's mouth on the face is drawn dark from afar (events.odin).
+						mouth := c.hollow[(j + 1)*P + i + 1]
+						if mouth[1] > mouth[0] && at < mouth[1] do drop = min(drop, mouth[0] - at if at < mouth[0] else mouth[1] - at)
 						wall(out, i*s, j*s, s, at - y_base, drop, int(side.z), wall_of, slope)
+						if mouth[1] > mouth[0] && at >= mouth[0] && at < mouth[1] do out[len(out) - 1].info |= 11 << 4
 						at += drop
 					}
 				}

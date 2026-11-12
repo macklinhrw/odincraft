@@ -41,7 +41,7 @@ Built :: struct {
 	blocks:             []u8,
 	h:                  i32,
 	floor, hold:        []f32,         // level 0 only, per column: top of the ground, and the land's water level
-	sea, still:         []bool,        // the sea; and a lake or pond, whose water is all there is of it
+	sea, still, roof:   []bool,        // the sea; a lake or pond, whose water is all there is of it; under a roof
 }
 
 World :: struct {
@@ -120,16 +120,16 @@ build :: proc(job: Job) -> (b: Built) {
 	b.key = job.key
 	if job.key.level == 0 {
 		b.blocks, b.y_base, b.h = build_volume(job.key, c, job.edits)
-		mesh_volume(b.blocks, b.h, c, &quads)
+		mesh_volume(b.blocks, b.h, c, &quads, {job.key.x*CHUNK - region.origin.x, b.y_base, job.key.z*CHUNK - region.origin.y})
 		b.ranges[0] = {0, u32(len(quads))}
 		b.y_lo, b.y_hi = b.y_base, b.y_base + b.h
 		// What the water needs to know about each column.
-		b.floor, b.hold, b.sea, b.still = make([]f32, CHUNK*CHUNK), make([]f32, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK)
+		b.floor, b.hold, b.sea, b.still, b.roof = make([]f32, CHUNK*CHUNK), make([]f32, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK)
 		for z in 0..<i32(CHUNK) {
 			for x in 0..<i32(CHUNK) {
 				i, k := z*CHUNK + x, (z + 1)*P + x + 1
-				b.floor[i] = column_floor(b.blocks, b.h, b.y_base, x, z)
-				b.sea[i] = f32(c.top[k]) < SEA_SURFACE   // judged on the land as generated, so digging inland does not make sea
+				b.floor[i], b.roof[i] = column_floor(b.blocks, b.h, b.y_base, x, z)
+				b.sea[i] = f32(c.top[k]) < SEA_SURFACE || (c.hollow[k][1] > c.hollow[k][0] && f32(c.hollow[k][0]) < SEA_SURFACE)   // judged on the land as generated, so digging inland does not make sea; it reaches under a roof
 				// The land supplies water only to columns it made wet. A dry bank beside the
 				// river stays dry when it is dug, until something lets the water in.
 				b.hold[i] = SEA_SURFACE if b.sea[i] else c.water[k] if f32(c.top[k]) < c.water[k] else NO_WATER
@@ -270,6 +270,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 			delete(b.hold)
 			delete(b.sea)
 			delete(b.still)
+			delete(b.roof)
 		}
 		if c == nil {   // left the ring while it was being built
 			delete(b.blocks)

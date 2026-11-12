@@ -57,6 +57,12 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 
 **2026-11-12, Claude's call**
 
+- **Roofed places are three features with hosts, carved into the blocks** (step 14): sea notches, rock shelters and sea caves, a few of each on an island, each where its host ranks best, as the slide is. The default island has four shelters and no notch or cave, because its shore is low mudstone and sand; the cones, the ridge and the domes have all three.
+- **A sea cave asks for rock of strength 0.5 or more and a real face.** In mudstone it came out as an open cleft, since its roof fell in. Real sea caves at Dogashima are cut in a soft tuff, so this may be too strict.
+- **A face under a roof is lit by the square root of the share of sky it sees, and never below 2 of 15.** Taken straight, a cave was black a metre in. It is a choice of look, not a measure.
+- **The sea runs in under a roof and is drawn dark there**: water stands on the floor under the roof where the sea's level reaches, not on the roof, and does not mirror the sky.
+- **From afar a roofed place is a dark band on the far faces**, out to cells of 8 m (about 2 km), at about a quarter of the light. The near ring's edge is not closed with an unlit face, since no cave is longer than 40 m.
+
 - **The land-forming step is committed** as built, so that what follows can be told apart from it and undone alone.
 - **The ridge and raised islands get their landings from a larger last rise of the sea**, which floods the mouths of their valleys into coves: 40 to 60 m on the ridge (from 5 to 10) and 10 to 20 m on the raised island (from 3 to 6). The ridge row is also about a tenth larger and a third longer than it is wide, since landings follow the length of the shore. These are numbers in two rows and no new code. Twelve ridge seeds have 2 to 12 landings, median 5, where the kind had none; its coast is less steep for it (60 m within 100 m of the shore, 64% cliffed, 25% of land under 50 m against the real 5 to 16). Six of twelve raised seeds have a landing. The truer cause, valleys cut to an ice-age low sea and then flooded, works only with the island at rest through the low stand, and then gives no more landings, less cliff and twice the forming time (`foundations.md` section 11).
 - **The game prints landings for every 10 km of shore beside the count**, since a count alone compares a 20 km shore with a 75 km one. The real ranges beside it (1.3 to 1.9, 3.6 on Tsushima) use the counts from the first comparison over shore lengths measured by a script on the same grids.
