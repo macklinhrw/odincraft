@@ -228,10 +228,11 @@ resize :: proc(g: ^Gpu, w, h: u32) {
 	g.scene = target(g, g.format, {.COLOR_TARGET, .SAMPLER}, ._1)
 }
 
-// The sun rises in the east (+X) and stands 60 degrees high at noon.
+// The sun rises in the east (+X) and crosses the south (+Z) as on an equinox at the region's
+// latitude, 60 degrees high at noon at 30° north.
 sun_dir :: proc(hour: f32) -> [3]f32 {
-	a := (hour - 6)/12*math.PI
-	return {math.cos(a), math.sin(a)*0.866, math.sin(a)*0.5}
+	a, lat := (hour - 6)/12*math.PI, math.to_radians(f32(region.latitude))
+	return {math.cos(a), math.sin(a)*math.cos(lat), math.sin(a)*math.sin(lat)}
 }
 
 draw_item :: proc(g: ^Gpu, cmd: ^sdl.GPUCommandBuffer, pass: ^sdl.GPURenderPass, it: ^Item, mask: u8) {

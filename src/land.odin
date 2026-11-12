@@ -35,7 +35,7 @@ Shape :: struct($T: typeid) {
 	xx, zz, xz:          T,   // how the outline, and the forms the vents build, are stretched and turned
 	ragged, ragged_wave: T,   // the coast wanders in and out by this share of the radius, over this distance
 	rate:                T,   // uplift at the heart of the island, m/yr
-	swell:               T,   // the bearing the swell comes from, degrees from north
+	swell:               T,   // the bearing the swell and the wind that raises it come from, degrees from north
 	silt:                T,   // the share of what the rivers carry down that settles where the sea is sheltered
 	floor:               T,   // the share of it found everywhere, to the shore,
 	ridge:               T,   // and more along a range
@@ -203,13 +203,14 @@ KINDS := [?]Kind{
 }
 
 Region :: struct {
-	kind:    string,
-	size:    f64,      // metres along a side; the region's rim is always sea
-	origin:  [2]i32,   // where its middle lies in the world; everything in it is stored relative to that
-	shape:   Shape(f64),
-	story:   ^Story,
-	history: []Phase(f32),
-	vents:   [dynamic]Vent,   // in the order they open
+	kind:     string,
+	size:     f64,      // metres along a side; the region's rim is always sea
+	origin:   [2]i32,   // where its middle lies in the world; everything in it is stored relative to that
+	latitude: f64,      // degrees north, which the sun's path and the land's sunlight both read
+	shape:    Shape(f64),
+	story:    ^Story,
+	history:  []Phase(f32),
+	vents:    [dynamic]Vent,   // in the order they open
 }
 
 // A vent, drawn from its phase's ranges.
@@ -281,6 +282,7 @@ region_init :: proc(name: string) -> bool {
 	for r, i in ranges do drawn[i] = r[0] + (r[1] - r[0])*f64(hash01(i32(i), key, seed + 520))
 	draw :: proc(r: [2]f32, i, key: i32) -> f32 { return r[0] + (r[1] - r[0])*hash01(i, key, seed + 521) }
 	region.kind, region.size, region.shape = kind.name, REFERENCE, transmute(Shape(f64))drawn
+	region.latitude = 30   // where the sun has always stood: 60° high at noon on an equinox; the world frame will set it
 	for &s in STORIES do if s.name == kind.story do region.story = &s
 	region.history = make([]Phase(f32), len(kind.history))
 	from := [2]f64{}   // the middle of the last vents to open
@@ -355,6 +357,13 @@ Land :: struct {
 	wet:   []f32,      // 0 on ridges to 1 in valley floors
 	live:  []f32,      // 1 on ground a person could live on, else 0
 	grid:  ^Grid,      // the finest grid, kept for the river network
+	// What a place on the land gives what grows there (land_local): on land cells only.
+	facing:  []f32,    // the bearing the ground falls toward, degrees from north
+	hump:    []f32,    // metres the ground stands over the mean ground in a square 208 m across; under it, a hollow
+	inland:  []f32,    // metres to the nearest sea
+	sun:     []f32,    // clear-sky sunlight through a year, against the same ground lying flat
+	exposed: []f32,    // 0 in a hollow sheltered from the wind to 1 on a crest or shore facing the wind and salt
+	above:   []f32,    // metres over the stream or shore a cell drains to; the cold air of a still night pools from there up
 }
 
 // Ground a person could live on, from where the villages on eight real islands stand
@@ -844,9 +853,99 @@ land_form :: proc() {
 	group, sizes := patches(n, live, 1)
 	land.live = make([]f32, n*n)
 	for c in 0..<n*n do if group[c] >= 0 && f32(sizes[group[c]])*g.d*g.d >= 10_000 do land.live[c] = 1
+	land_local(g)
 	fmt.printfln("land formed in %.2f s: %d land cells, highest point %.0f m", time.duration_seconds(time.since(started)), len(g.order), highest)
 	fmt.printfln("a step cut at the coast climbs to the farthest stream head in %.0f kyr; the land has had %.0f kyr on its finest cells, %.2f of that", response/1000, last/1000, last/response)
 	land_stats(g)
+}
+
+// What each place on the land gives what grows there (foundations/climate.md, "Region rung"):
+// the way it faces, whether it stands in a hollow or on a hump, how far the sea is, the sun it
+// gets in a year, the wind and salt it takes, and how high it stands over its stream.
+HUMP :: 6   // cells either side of the square a cell's height is set against, 208 m across
+land_local :: proc(g: ^Grid) {
+	n := g.n
+	land.facing, land.hump, land.inland = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+	land.sun, land.exposed, land.above = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+
+	// Distance to the sea, nearest first: each cell takes the sea cell nearest a neighbour
+	// already reached, which is near enough the true nearest that no contour shows the grid.
+	from := make([]i32, n*n, context.temp_allocator)   // the sea cell nearest each cell
+	clear(&g.heap)
+	for c in 0..<n*n {
+		from[c] = i32(c)
+		if !g.sea[c] do land.inland[c] = 1e9
+		else do for o in OFFSETS {
+			if x, y := c%n + o.x, c/n + o.y; x >= 0 && y >= 0 && x < n && y < n && !g.sea[y*n + x] {
+				heap_push(&g.heap, {0, i32(c)})
+				break
+			}
+		}
+	}
+	for len(g.heap) > 0 {
+		top := heap_pop(&g.heap)
+		c := int(top.c)
+		if top.h > land.inland[c] do continue   // reached nearer since
+		for o in OFFSETS {
+			x, y, s := c%n + o.x, c/n + o.y, int(from[c])
+			if x < 0 || y < 0 || x >= n || y >= n do continue
+			if d := g.d*math.hypot(f32(x - s%n), f32(y - s/n)); d < land.inland[y*n + x] {
+				land.inland[y*n + x], from[y*n + x] = d, i32(s)
+				heap_push(&g.heap, {d, i32(y*n + x)})
+			}
+		}
+	}
+
+	// A year of clear sky at the region's latitude: the sun each hour of six days from midwinter
+	// to midsummer, each the weaker by 0.7 for every depth of air it comes through.
+	sky := make([dynamic][3]f32, context.temp_allocator)   // x east, y up, z south, as `sun_dir` has it
+	flat: f32
+	lat := math.to_radians(f32(region.latitude))
+	for day in 0..<6 do for hour in 0..<24 {
+		dec, h := -math.to_radians(f32(23.44))*math.cos(math.PI*(f32(day) + 0.5)/6), (f32(hour) - 11.5)*math.PI/12
+		s := [3]f32{-math.cos(dec)*math.sin(h), math.sin(dec)*math.sin(lat) + math.cos(dec)*math.cos(lat)*math.cos(h), math.cos(dec)*math.sin(lat)*math.cos(h) - math.sin(dec)*math.cos(lat)}
+		if s.y < 0.02 do continue
+		append(&sky, s*math.pow(0.7, 1/s.y))
+		flat += sky[len(sky) - 1].y
+	}
+
+	// Height summed over the squares above and to the left of each corner, the sea as its surface.
+	sums, w := make([]f64, (n + 1)*(n + 1), context.temp_allocator), n + 1
+	for y in 0..<n {
+		row: f64
+		for x in 0..<n {
+			row += f64(max(g.z[y*n + x], 0))
+			sums[(y + 1)*w + x + 1] = sums[y*w + x + 1] + row
+		}
+	}
+	// The wind blows from the swell's bearing, which it raised.
+	open, fetch := sea_table(g), max(int(FETCH/g.d), 2)
+	bearing := math.to_radians(f32(region.shape.swell))
+	wind := [2]f32{math.sin(bearing), -math.cos(bearing)}   // toward where it comes from
+	ahead := [2]int{int(math.round(wind.x*f32(fetch))), int(math.round(wind.y*f32(fetch)))}
+	for ci in g.order {
+		c := int(ci)
+		x, y := c%n, c/n
+		dx, dz := (g.z[c + 1] - g.z[c - 1])/(2*g.d), (g.z[c + n] - g.z[c - n])/(2*g.d)
+		land.facing[c] = math.mod(math.to_degrees(math.atan2(-dx, dz)) + 360, 360)
+		up := [3]f32{-dx, 1, -dz}/math.sqrt(dx*dx + dz*dz + 1)
+		for s in sky do land.sun[c] += max(up.x*s.x + up.y*s.y + up.z*s.z, 0)/flat
+		x0, y0, x1, y1 := max(x - HUMP, 0), max(y - HUMP, 0), min(x + HUMP + 1, n), min(y + HUMP + 1, n)
+		land.hump[c] = g.z[c] - f32((sums[y1*w + x1] - sums[y0*w + x1] - sums[y1*w + x0] + sums[y0*w + x0])/f64((x1 - x0)*(y1 - y0)))
+		// Exposure: the steepest rise of the ground toward the wind within 300 m (Winstral's index),
+		// lower on a hump and higher in a hollow, and the salt off the first sea toward the wind, by
+		// the share of open sea in the kilometre beyond it, fading over a kilometre inland.
+		rise, salt, hit := f32(-1), f32(0), false
+		for d := g.d; d < 3000 && !(hit && d > 300); d += g.d if d < 300 else 2*g.d {
+			i, j := clamp(int(f32(x) + 0.5 + wind.x*d/g.d), 0, n - 1), clamp(int(f32(y) + 0.5 + wind.y*d/g.d), 0, n - 1)
+			if d <= 300 do rise = max(rise, (max(g.z[j*n + i], 0) - g.z[c])/d)
+			if g.sea[j*n + i] && !hit do salt, hit = share(open, n, i + ahead.x, j + ahead.y, fetch)*math.exp(-d/1000), true
+		}
+		land.exposed[c] = 1 - (1 - clamp(0.5 - 2*rise + land.hump[c]/40, 0, 1))*(1 - salt)
+		// Where cold air pools: the height over the stream a cell drains to, or over the sea.
+		r := g.next[c]
+		land.above[c] = 0 if g.area[c] >= CHANNEL_AREA || r == SINK else g.z[c] if r < 0 else g.z[c] - g.z[r] + land.above[r]
+	}
 }
 
 // How steep the land came out: the share of land steeper than 45° and the median slope,
@@ -910,13 +1009,10 @@ land_figures :: proc(g: ^Grid) {
 			}
 		}
 	}
-	stream := make([]f32, n*n, context.temp_allocator)   // height of the stream a cell drains to
 	low, steep, inner := 0, 0, 0
 	for ci in g.order {
 		c := int(ci)
-		r := g.next[c]
-		stream[c] = g.z[c] if g.area[c] >= CHANNEL_AREA || r == SINK else 0 if r < 0 else stream[r]
-		append(&lists[3], g.z[c] - stream[c])
+		append(&lists[3], land.above[c])
 		if g.z[c] < 50 do low += 1
 		sea := false
 		for o in OFFSETS do sea ||= g.sea[c + o.y*n + o.x]
@@ -1030,16 +1126,22 @@ Overlay :: struct {
 	name:   string,
 	at:     proc(x, z: f64) -> f32,
 	lo, hi: [3]f32,
-	kinds:  bool,
+	paint:  enum { Ramp, Kinds, Wheel },   // or a material, or a bearing in degrees round a wheel of hues, grey where flat
 }
 
 OVERLAYS := [?]Overlay{
-	{"wetness", proc(x, z: f64) -> f32 { return land_at(land.wet, land.n, x, z) }, {0.90, 0.80, 0.50}, {0.05, 0.45, 0.40}, false},
-	{"livable", proc(x, z: f64) -> f32 { return land.live[land_cell(x, z)] }, {0.55, 0.55, 0.55}, {1.00, 0.55, 0.05}, false},
-	{"slope", proc(x, z: f64) -> f32 { return land_at(land.slope, land.n, x, z)/1.2 }, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}, false},
-	{"drainage", proc(x, z: f64) -> f32 { return (math.log10(land.grid.area[land_cell(x, z)]) - 2.4)/5 }, {0.95, 0.95, 0.90}, {0.05, 0.10, 0.45}, false},
-	{"uplift", proc(x, z: f64) -> f32 { return land.grid.uplift[land_cell(x, z)]/f32(1.3*region.shape.rate) }, {0.20, 0.25, 0.45}, {0.95, 0.85, 0.30}, false},
-	{"rock", proc(x, z: f64) -> f32 { return f32(rock(x, f64(land_at(land.z[0], land.n, x, z)) - 0.5, z, 8)) }, {}, {}, true},
+	{"wetness", proc(x, z: f64) -> f32 { return land_at(land.wet, land.n, x, z) }, {0.90, 0.80, 0.50}, {0.05, 0.45, 0.40}, .Ramp},
+	{"livable", proc(x, z: f64) -> f32 { return land.live[land_cell(x, z)] }, {0.55, 0.55, 0.55}, {1.00, 0.55, 0.05}, .Ramp},
+	{"slope", proc(x, z: f64) -> f32 { return land_at(land.slope, land.n, x, z)/1.2 }, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}, .Ramp},
+	{"drainage", proc(x, z: f64) -> f32 { return (math.log10(land.grid.area[land_cell(x, z)]) - 2.4)/5 }, {0.95, 0.95, 0.90}, {0.05, 0.10, 0.45}, .Ramp},
+	{"uplift", proc(x, z: f64) -> f32 { return land.grid.uplift[land_cell(x, z)]/f32(1.3*region.shape.rate) }, {0.20, 0.25, 0.45}, {0.95, 0.85, 0.30}, .Ramp},
+	{"rock", proc(x, z: f64) -> f32 { return f32(rock(x, f64(land_at(land.z[0], land.n, x, z)) - 0.5, z, 8)) }, {}, {}, .Kinds},
+	{"facing", proc(x, z: f64) -> f32 { return land.facing[land_cell(x, z)] }, {}, {}, .Wheel},
+	{"humped", proc(x, z: f64) -> f32 { return 0.5 + land_at(land.hump, land.n, x, z)/30 }, {0.10, 0.35, 0.90}, {1.00, 0.75, 0.15}, .Ramp},
+	{"inland", proc(x, z: f64) -> f32 { return land_at(land.inland, land.n, x, z)/2000 }, {0.95, 0.95, 0.85}, {0.25, 0.10, 0.45}, .Ramp},
+	{"sunlight", proc(x, z: f64) -> f32 { return (land_at(land.sun, land.n, x, z) - 0.6)/0.5 }, {0.20, 0.30, 0.80}, {1.00, 0.80, 0.15}, .Ramp},
+	{"exposure", proc(x, z: f64) -> f32 { return land.exposed[land_cell(x, z)] }, {0.10, 0.40, 0.20}, {0.95, 0.90, 0.85}, .Ramp},
+	{"cold", proc(x, z: f64) -> f32 { return 1 - land_at(land.above, land.n, x, z)/50 }, {0.95, 0.92, 0.85}, {0.10, 0.25, 0.70}, .Ramp},   // a pool 50 m deep
 }
 
 // A material's colour as the map shows it.
@@ -1076,8 +1178,11 @@ land_map :: proc(path, overlay: string) {
 			if h <= 0 {
 				col = math.lerp([3]f32{0.35, 0.62, 0.80}, [3]f32{0.08, 0.22, 0.42}, clamp(-h/30, 0, 1))
 			} else {
-				if paint != nil && paint.kinds {
+				if paint != nil && paint.paint == .Kinds {
 					col = map_colour(Mat(paint.at(x, z)))*shade
+				} else if paint != nil && paint.paint == .Wheel {
+					a := math.to_radians(paint.at(x, z))
+					col = math.lerp([3]f32{0.6, 0.6, 0.6}, 0.55 + 0.4*[3]f32{math.cos(a), math.cos(a - 2.1), math.cos(a + 2.1)}, clamp(land_at(land.slope, land.n, x, z)/0.2, 0, 1))*shade
 				} else if paint != nil {
 					col = math.lerp(paint.lo, paint.hi, clamp(paint.at(x, z), 0, 1))*shade
 				} else {

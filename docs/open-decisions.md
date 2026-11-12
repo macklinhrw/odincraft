@@ -50,6 +50,12 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 
 **2026-11-11, Claude's call**
 
+- **Step 4's six local fields are built** (`foundations.md` section 8, "Step 4, as built"), and the choices in them are these:
+- **The wind blows from the swell's bearing.** The swell is raised by the wind, so the shores the sea cuts into cliffs are the ones salt and wind scour. A separate draw could put heath on a sheltered, uncut shore. When the archipelago brings a world wind, the swell should follow from it.
+- **The island lies at 30° N**, held in the region record. That is where today's sun already stands (60° high at noon on an equinox), and the sun now reads it, so nothing on screen moved. The climate design recommends 40° N, which is step 10's to choose; it would move sky and sunlight together.
+- **Hollow or humped is measured against the ground in a square about 200 m across.** Smaller shows only gullies; 400 m makes whole valley sides hollows. At 200 m each valley floor and each spur between streams reads, about the size of a stand of trees.
+- **Units**: facing in degrees from north, hump in metres, distance to the sea in metres, sunlight against flat ground (0.15 to 1.11), exposure from 0 to 1, cold pool in metres over the stream or sea a cell drains to. The `cold` overlay paints a pool 50 m deep, within the 30 to 100 m the climate design guesses for a still night.
+- **Exposure adds the hump and salt to the upwind rise by guessed weights**: half from flat ground, minus twice the steepest rise toward the wind, plus a quarter for every 10 m of hump, and salt combined as a second chance of exposure. They were set by looking at three maps, not from any measurement.
 - **The first rock story row to be written is "layered, gently tilted"**: five kinds (mudstone, siltstone, grey sandstone, grit, limestone), with the sequence, tilt and folds drawn from the seed. It is the row the experiment already showed working. More rows follow in Phase 2, and the seed then picks among them.
 - **Rock is built before lakes.** This is an order of work: the first landslide waits for step 6, so it falls where a strong bed lies over a weak one.
 - **The history rows wait for step 3.** Until then every seed has today's one history.
