@@ -1216,6 +1216,8 @@ land_map :: proc(path, overlay: string) {
 				}
 				if r, near := river_near(f32(x), f32(z)); near && r.d < max(r.half, 4) do col = {0.10, 0.30, 0.75}
 				if level, inside, _ := lake_near(x, z); inside && h < level do col = {0.10, 0.30, 0.75}
+				if trail_near(x, z) < 4.5 do col = {0.65, 0.10, 0.05}
+				if k := trails.ford[land_cell(x, z)]; k > 0 && math.hypot(x - region.features[k - 1].at.x, z - region.features[k - 1].at.y) < 14 do col = {1, 1, 1}
 			}
 			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
 		}
@@ -1225,7 +1227,7 @@ land_map :: proc(path, overlay: string) {
 		f := region.features[h.feature]
 		cx, cy := int((f.at.x + region.size/2)*SIZE/region.size), int((f.at.y + region.size/2)*SIZE/region.size)
 		for dy in -6..=6 do for dx in -6..=6 do if r := dx*dx + dy*dy; r >= 16 && r <= 36 && cx + dx >= 0 && cy + dy >= 0 && cx + dx < SIZE && cy + dy < SIZE {
-			ring := [Feature_Kind][3]u8{.Notch = {255, 140, 0}, .Shelter = {255, 255, 255}, .Cave = {230, 20, 20}, .Slide = {}, .Lake = {}, .Pond = {}}
+			ring := #partial [Feature_Kind][3]u8{.Notch = {255, 140, 0}, .Shelter = {255, 255, 255}, .Cave = {230, 20, 20}}
 			for k in 0..<3 do pixels[((cy + dy)*SIZE + cx + dx)*4 + k] = ring[f.kind][k]
 		}
 	}

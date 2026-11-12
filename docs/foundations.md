@@ -470,6 +470,38 @@ Real ones. Wave-cut notches in Ryukyu limestone are 2 to 4 m deep at most sites 
 Left out: arches and skylights; a closing face at the near ring's edge; light from a hole the player digs, past the sun's (the faces round a dug shaft do brighten, since the rays read the blocks); notch depth from the years the sea has stood; a beach or boulders at a cave's back, whose floor rises above the sea only at its very end.
 
 Still short: the cave's mouth from outside is a doorway; the notch on a basalt cliff is dark on dark and hard to see from 300 m except as a line; the far band at 2 m cells is broken into separate blocks where only some cells hold a roofed metre; the sand that the beach rule stands up as pillars at a sheer cliff's foot is still there beside a cave's mouth.
+### Step 12, as built
+
+Built 2026-11-12: one cost of crossing ground, one route tracer, and the trails of sika deer meeting at fords, on the islands that have deer. The owner has not yet looked at it.
+
+![A trail in susuki grass; one through laurel forest down to its ford; one climbing a flank; the same ford from 30 m](interesting-world/real/trails.jpg)
+
+- **Which animal, and where.** Of the eight reference islands only Tsushima has a large wild animal of its own, the sika deer, at 4 to 75 a km² in its evergreen forest; the Izu and Ogasawara islands have none but what people brought (deer, muntjac, goats), and none was found for Kikaijima (`interesting-world/notes/real-animals.md`). Deer and boar reach an island that was joined to larger land while the sea stood low. So deer are a row (`DEER`, `trails.odin`) whose host is the island: the sea must have risen 100 m or more over it since it stood lowest (a new field, `risen`). Only the inlets kind, after Tsushima, has them. The default island and the ridge, cone, crater, domes, worn and raised kinds have none, and start-up says so.
+- **One cost of crossing ground** (`pace`, painted as the field `crossing`, in seconds a metre): Tobler's hiking function, 0.6 s on the flat rising by e^3.5 for each unit of grade along the way; a hundred times that past 45° of slope; up to twice as slow on the wettest valley floors and 30 times in standing water; times the plants in the way (`GOING`, by community: 1.2 in laurel forest to 3 in susuki and dwarf bamboo, twice that in a stand just thrown); and a worn trail takes away the plants and is 0.7 of open ground. Wading a stream costs its width times one plus a hundred times its depth squared, and four seconds for the banks, so a lip a hand deep, just above a drop, costs a few seconds and the usual channel, a metre deep, a couple of minutes.
+- **One tracer** (`trace`): least cost over the 16 m cells and their diagonals, a diagonal step paying for the steeper of the corners it cuts and never slipping between two wet ones. It stops at the first cell it wants (water, open ground, or a given bed) or after 40 minutes of a person's walking.
+- **The trails.** A bed in each 500 m square, where dry, gentle, sheltered, wooded ground on a shoulder holds best. Each bed sends routes to water, to open ground to feed (woods under half the canopy) and to the bed beside it to the east or the south, as the seed says, each laid as it is found so the next is drawn to it. A stream crossed on the way is a ford, put on the lip in its cell if there is one. The network is cut into chains between junctions, ends and fords, eased (1-2-1 twice) and rounded at its corners as a river is, and filed in 64 m buckets.
+- **Features.** Each route is a `.Trail` feature with its two ends, length, highest point, minutes to walk, and age: the years since the sea last moved, or the slide's age if it crosses slide ground. Each crossing is a `.Ford` with its width, depth, the land drained above it and the first trail that crossed. `--why=` says it: "at a ford, where deer cross a stream 3 m wide draining 0.7 km², 0 m off at -2407, -184: it is 0.15 m deep there and takes a person 15 s to wade. 7 deer trails meet at it; the first came from the laurel forest on a slope", and "1.0 m from the middle of a sika deer trail worn by 5 routes, about 7000 years old. The first was from the ridge wood on a spur at 123 m to the stream at 21 m, 146 m off: 401 m long, 16 minutes for a person".
+- **In blocks.** A surface row, `trail`, lays bare earth within 0.75 m of the line (soil under it as under any cover) out to 2 m cells, about 512 m; and nothing grows within 2.5 m of it (one line in `trees_in`). The map draws trails red and fords white.
+
+| inlets, seed | 1 | 2 | 3 |
+|---|---|---|---|
+| Beds; routes | 30; 81 | 43; 111 | 65; 154 |
+| Trail, km; m a km² of land | 14.1; 2,714 | 19.7; 2,414 | 27.9; 2,367 |
+| Fords (deeper than 0.6 m) | 3 | 8 | 11 (2) |
+
+Allowed everywhere (a scratch build), the default island would carry 44.5 km, 2,320 m a km², with 33 fords, and the other kinds 1,300 to 3,700 m a km². No measured length of deer trail a km² was found; this is about twice the streams.
+
+**Walking it.** Along every metre of the 31 km of trail lines on inlets seed 3 the ground steps two blocks or more 28 times, mostly where a trail ends at a stream's bank or crosses a boulder of slide debris. The ground bench from a junction toward the busiest ford walks 138 m, across the ford and on. It walks in a straight line, so on a winding trail it leaves the line: 90 m uphill on a 36° flank, climbing 41 m, and 35 m down from the top. Before the ford was put on the lip, the walker reached the stream and stood in it: the river's usual bed is two blocks under its banks.
+
+**Cost.** Tracing takes 26 to 102 ms after the plants on the three inlets seeds, under load, and nothing on islands without deer; the land's forming is unchanged. `gen_columns`, with `gen_volume` at the nearest level, over 64 chunks round the busiest ford on inlets seed 3, the least of four runs alternating with the last commit: 50.1 to 55.0 ms at the nearest level, 41.3 to 41.9 at 2 m cells, 72.8 to 73.5 at 4 m, unchanged beyond; the default island's forest square is unchanged (282.4 against 282.9 ms over all levels). The benches' own work: no frame over 12.5 ms on the start, the forest flight and the steep flight in the last of two rounds against the last commit (worst 5.3, 7.4 and 9.5 ms, against 3.6, 3.4 and 8.0), nor over the inlets island's trails (worst 4.6 and 7.6 ms against 5.1 and 18.6); the first round had spikes in both builds. Every kind runs `--bench=5` without fault. The start is unchanged: 26 m. `src/` grew by 278 lines (284 added, 6 removed), from 5,034 to 5,312.
+
+What the plan had wrong or left open:
+
+- **Deer on every island.** The flora changed after the plan was written; on these islands deer are the exception. The default island has no trails.
+- **A ford is where the cost dips.** At 16 m cells the tracer picks a cell, not the place in it, and every channel but a lip is two blocks deep: the walker stood in the stream. A ford now sits on the lip in its cell, and wading a deep channel costs enough that routes walk to one.
+- **The trails as a lattice.** With routes from each bed to both its east and south neighbours the map read as a road map (3,100 m a km²); one neighbour, chosen by the seed, gives 2,300 to 2,700 m a km² and no grain.
+
+Still short: on a diagonal a one-block trail is a staircase of blocks; under laurel forest the bare earth is only a shade off the litter, plainer in sunlight and from above; on slide rubble and bare rock the trail does not show, since what lies there wins; a fallen trunk can still lie across a trail, two blocks high where it rests on a rise; and trails at a river's mouth cross under the sea's edge. Nothing tells a walker which way a trail leads.
 
 ### Experiments to run early
 
@@ -723,6 +755,7 @@ Most livable real islands are larger than the 8 km region: Kikaijima is about 14
 | 6: one landslide, its lake and ponds, features | 230 | 348 (287 in `events.odin`; 84 added and 23 removed elsewhere) |
 | 7: stands with ages, gaps, fallen and dead trunks | 130 | 169 (220 added, 51 removed) |
 | 14: notches, shelters and sea caves, light under a roof | 150 | 291 (318 added, 27 removed) |
+| 12: trails, the crossing cost and the tracer | 120 | 278 (284 added, 6 removed) |
 
 `src/` went from 3,138 to 3,751 lines over steps 0 to 3, to 4,268 with the land-forming step, to 4,377 with step 4 (4,427 with the fixes after it), to 4,565 with the first half of step 5, and to 4,781 with the second. Step 6 started from 4,463 lines, counted after the warm-island flora and the tiles, and took it to 4,811. Step 7 started from 4,839, after the fixes to step 6, and took it to 5,008. Forming time fell, from about 1.0 s to 0.25 to 0.9 s depending on the kind.
 

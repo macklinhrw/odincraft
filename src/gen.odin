@@ -165,6 +165,7 @@ gen_init :: proc(kind: string) -> bool {
 	rivers_trace()
 	plants_init()
 	hollows_make()
+	trails_make()
 	return true
 }
 
@@ -313,6 +314,7 @@ SURFACES := [?]Surface{
 	{"loose rock", "rock fallen from the face above lies at its angle of rest", .Air, {{.Fallen, 0, ANY, 0}}},
 	{"bare rock", "soil cannot hold on ground this steep, so the beds show", .Air, {{.Too_Steep, 0, ANY, 0}}},
 	{"bare scar", "a slide stripped the hillside to the rock, and no soil has yet weathered back", .Air, {{.Disturbed, -ANY, 1e4, 0}, {.Slid, -ANY, -0.5, 0}, {.Soil_Depth, -ANY, 0.15, 0}}},
+	{"trail", "animals have trodden a path through the plants to the earth", .Dirt, {{.Trail, -ANY, 0.75, 0}}},
 	{"soil", "soil holds, and the plants cover it", .Grass, {}},   // the plant community brings what covers it
 }
 
@@ -422,7 +424,7 @@ COMMUNITIES := [Community_Kind]Community{
 	.Young = {"young wood", "tabu and small evergreens grow up through the alders, a darker and lower wood than the old forest round it", 8, 100,
 		{{{.Disturbed, -ANY, 400, 500}}}, 0.9, 0.4, {0.45, 0, 0.1, 0.25, 0, 0, 0.2}, .Litter, {0.30, 0.65, 0.55}},
 }
-COVERS :: bit_set[Mat]{.Grass, .Litter, .Susuki, .Dune}
+COVERS :: bit_set[Mat]{.Grass, .Litter, .Susuki, .Dune, .Dirt}   // and the earth of a trail
 crowns: [Community_Kind]f32   // the mean radius of a community's crowns, metres
 
 // The community at a point: the race's winner on the land's grid, read a little way off by
@@ -587,7 +589,7 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree, near := false) {
 			r := hash(gx, gz, seed + 140)
 			x, z := gx*TREE_GRID + i32(r % TREE_GRID), gz*TREE_GRID + i32((r >> 4) % TREE_GRID)
 			inside := x >= x0 && x <= x1 && z >= z0 && z <= z1
-			if !inside && (x < x0 - m || x > x1 + m || z < z0 - m || z > z1 + m) do continue
+			if !inside && (x < x0 - m || x > x1 + m || z < z0 - m || z > z1 + m) || trail_near(f64(x) + 0.5, f64(z) + 0.5) < 2.5 do continue   // nothing grows within a stride of a trail
 			fx, fz := f64(x) + 0.5, f64(z) + 0.5
 			cell := dithered(fx, fz, r >> 8)
 			if land.community[cell] == 255 do continue

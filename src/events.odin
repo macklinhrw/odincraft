@@ -12,11 +12,12 @@ import "core:time"
 // of the forming (foundations/landforms.md, D4), and it leaves three kinds of feature: its own
 // scar and debris, the lake its debris dams, and the ponds among its hummocks.
 
-Feature_Kind :: enum u8 { Slide, Lake, Pond, Notch, Shelter, Cave }
+Feature_Kind :: enum u8 { Slide, Lake, Pond, Notch, Shelter, Cave, Trail, Ford }
 Measure :: struct { what: string, value: f32 }
 Feature :: struct {
 	kind:     Feature_Kind,
-	at:       [2]f64,   // its middle, relative to the region's
+	at:       [2]f64,   // its middle, relative to the region's; a trail's first end
+	to:       [2]f64,   // a trail's other end
 	reach:    f32,      // metres from there to its farthest part
 	size:     f32,      // m³ of rock moved, or m² of water
 	level:    f32,      // where a lake's or pond's water stands
@@ -276,7 +277,7 @@ feature_words :: proc(x, z: f64, h: f32) {
 	ago := fmt.tprintf("the slide about %s years ago", years(s.age))
 	if level, inside, _ := lake_near(x, z); inside {
 		k := int(land.lake[land_cell(x, z)]) - 1
-		if k < 0 do for f, i in region.features do if f.kind != .Slide && f.level == level do k = i
+		if k < 0 do for f, i in region.features do if (f.kind == .Lake || f.kind == .Pond) && f.level == level do k = i
 		f, under := region.features[k], h < level
 		fmt.printfln("%s a %s of %.1f ha whose water stands at %.1f m%s, %s by %s; %s.", "in" if under else "on the shore of", "lake" if f.kind == .Lake else "pond", f.size/1e4, f.level,
 			fmt.tprintf(", %.1f m deep here", level - h) if under else "", "dammed" if f.kind == .Lake else "left in a hollow", ago,
@@ -438,7 +439,7 @@ hollow_carve :: proc(kind: Feature_Kind, c: int, at: [2]f64) -> bool {
 		delete(h.span)
 		return false
 	}
-	measured := [Feature_Kind][3]Measure{
+	measured := #partial [Feature_Kind][3]Measure{
 		.Slide = {}, .Lake = {}, .Pond = {},
 		.Notch = {{"how open its shore is to the swell", land.swell[c]}, {"the steepness of the cliff, rise over run", land.slope[c]}, {"the strength of its rock", MATERIALS[rock_in(0, g.base[c], 0)].strength}},
 		.Shelter = {{"how much stronger its roof's bed is than the bed under it", contrast}, {"the steepness of the face against what its rock holds", land.slope[c]/rocks.law[rocks.beds[strong].kind].limit}, {"metres to the sea", land.inland[c]}},
