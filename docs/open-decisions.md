@@ -53,6 +53,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Fix the landslide's weak points**, all of them, Claude to do it and not hand it on.
 - **Commit steps 5 and 6, the flora and the textures, and go on to step 7**, stands with ages.
 - **Continue**: said when asked whether to commit step 7, with step 8 named as next. Taken as both, as with the steps before it.
+- **Run the steps that nothing blocks in parallel, each with its own subagent**, and keep their test runs out of the way: no windows, no taking the mouse or the focus, since open windows disturb each other and the owner.
 
 **2026-11-12, Claude's call**
 
@@ -69,6 +70,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Block faces come from an atlas**, `assets/blocks.png`, built by `tools/blocks.py` and compiled into the game. A tile is 16 pixels to the metre; a top face is turned by the block it lies on so a field does not repeat; far off the game shows the tile's average, so a hillside keeps its colour as it is approached. The owner can paint over any tile.
 - **The pack is Pixel Perfection by XSSheep, CC BY-SA 4.0**, taken as the open-source game Mineclonia ships it, whose legal file states the licence; the pack's own page was not checked. Thirty tiles are in `assets/pixel-perfection/`, and `tools/blocks.py` recolours one to each material, so the atlas is an adaptation under the same licence (`assets/LICENSE.md`). Each rock, soil and grass now has a tile of its own from the same source (two, for mud, are by another author under CC0); only the broken forms of the rocks share two between them. The pack's own sandstone side is cut masonry and was not used.
 - **Faces are a little brighter and richer than the colours in `MATERIALS`** (12% and 18%), since the first tiles read dark beside Minecraft's.
+- **Picture and bench runs draw unseen.** With `--shot` or `--bench` the game opens no window and takes no focus; a bench waits for each frame to be drawn and then for the next refresh of a 120 Hz display, so a slow frame is late as it would be on screen. `--show` opens the window for the owner to watch.
 - **Seed 7 stays a raised island.** It is the most livable kind and now has one landing. The ground bench from its start now covers 53 m, where it covered 60.
 - **The swelling stands as the cause of volcanic sea cliffs** until the owner looks and says otherwise. It reuses the uplift and adds nothing, its figures fall inside the real ranges, and the only other cause tried gave shores of 17 to 43 m. It is a stand-in: real cones are cut back by waves through many stands of the sea, and no way to drop it has been found: a cliff that keeps its face once the sea has left it was tried on the ridge kind and added little.
 - **Left for the owner's eye, not tuned by figures**: craters and domes that may read as drawn, and volcanic crests two to three times sharper than their references. Step 4 follows.

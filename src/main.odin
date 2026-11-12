@@ -31,6 +31,7 @@ import sdl "vendor:sdl3"
 //   why=x,z         print what the ground is at this point in the world and why, and exit
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground
+//   show            with shot or bench: open the window. Without it they draw unseen and take no focus
 
 Options :: struct {
 	pos:           [3]f64,
@@ -38,7 +39,7 @@ Options :: struct {
 	has_look:      bool,
 	yaw, pitch:    f32,
 	hour:          f32,
-	fly:           bool,
+	fly, show:     bool,
 	width, height: i32,
 	shot:          string,
 	after:         f64,
@@ -91,6 +92,7 @@ options :: proc() -> Options {
 		case "map":   o.map_path = value
 		case "why":   ok = numbers(value, ",", o.why[:]); o.has_why = true
 		case "fly":   o.fly = true
+		case "show":  o.show = true
 		case:         ok = false
 		}
 		if !ok {
@@ -140,11 +142,16 @@ main :: proc() {
 		why_at(opt.why.x, opt.why.y)
 		return
 	}
+	// A run that only takes a picture or measures opens no window and takes no focus: it draws
+	// unseen, at the size and pace it would have on a display.
+	unseen := (opt.shot != "" || opt.bench > 0) && !opt.show
+	if unseen do sdl.SetHint(sdl.HINT_MAC_BACKGROUND_APP, "1")
 	if !sdl.Init({.VIDEO}) do fatal("SDL")
-	window := sdl.CreateWindow("OdinCraft", opt.width, opt.height, {.RESIZABLE, .HIGH_PIXEL_DENSITY})
+	window := sdl.CreateWindow("OdinCraft", opt.width, opt.height, {.RESIZABLE, .HIGH_PIXEL_DENSITY} + ({.HIDDEN} if unseen else {}))
 	if window == nil do fatal("window")
 	g: Gpu
 	gpu_init(&g, window)
+	g.unseen = unseen
 	w := new(World)
 	world_init(w)
 	water_init(&w.water, g.dev)

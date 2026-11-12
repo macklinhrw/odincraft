@@ -52,6 +52,8 @@ Gpu :: struct {
 	cascade_at:     [4][3]f64,   // where each shadow map was last drawn, in the sun's frame
 	cascade_sun:    [3]f32,      // and the sun direction then
 	waited:         f64,   // seconds the last frame spent waiting for the display
+	unseen:         bool,  // no window is shown: frames are drawn in full and paced as a 120 Hz display would
+	shown_at:       u64,   // when the last unseen frame was done
 }
 
 // What to draw.
@@ -299,7 +301,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	if !sdl.WaitAndAcquireGPUSwapchainTexture(cmd, g.window, &swap, &sw, &sh) do swap = nil
 	g.waited = f64(sdl.GetPerformanceCounter() - wait_from)/f64(sdl.GetPerformanceFrequency())
 	if swap == nil {   // window hidden or minimised
-		if shot == "" {
+		if shot == "" && !g.unseen {
 			_ = sdl.SubmitGPUCommandBuffer(cmd)
 			sdl.Delay(16)   // nothing to pace us while hidden
 			return
@@ -485,6 +487,21 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		sdl.EndGPURenderPass(pass)
 	}
 
+	if shot == "" && g.unseen {
+		// Wait for the frame to be drawn, then for the next refresh of a 120 Hz display, so a
+		// frame that takes too long is late here as it would be on screen.
+		wait_from = sdl.GetPerformanceCounter()
+		fence := sdl.SubmitGPUCommandBufferAndAcquireFence(cmd)
+		_ = sdl.WaitForGPUFences(g.dev, true, &fence, 1)
+		sdl.ReleaseGPUFence(g.dev, fence)
+		refresh := sdl.GetPerformanceFrequency()/120
+		for now := sdl.GetPerformanceCounter(); now < g.shown_at + refresh; now = sdl.GetPerformanceCounter() {
+			sdl.DelayPrecise((g.shown_at + refresh - now)*1_000_000_000/sdl.GetPerformanceFrequency())
+		}
+		g.shown_at = sdl.GetPerformanceCounter()
+		g.waited += f64(g.shown_at - wait_from)/f64(sdl.GetPerformanceFrequency())
+		return
+	}
 	if shot == "" {
 		_ = sdl.SubmitGPUCommandBuffer(cmd)
 		return
