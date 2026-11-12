@@ -36,6 +36,18 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **A land-forming step goes next, ahead of step 4.** The sea cuts the coast inside the forming, so exposed shores stand as cliffs; the uplift no longer falls to nothing at the shore; strong rock holds steeper faces and creeps less; and livable ground is kept where it has a cause (a bay head, a valley floor, a terrace). The targets are the real figures in `foundations.md` section 11. This answers the first five items of question 9.
 - **The same step adds an inlet-coast kind and a vent.** The inlet coast is a history that ends in a sea rise of about 120 m, tested the same day. A vent builds rock and can collapse, so a volcanic island is built and not drawn as a bump of uplift. This takes question 10 in the direction of kinds as histories, one kind at a time.
 
+**2026-11-12, by the owner**
+
+- **The three questions the land-forming step left are Claude's to settle**: whether to commit it, what to do about the default island having no landing, and whether the swelling of a cone stands as the cause of its sea cliffs. The owner asked for them to be analysed and the best course taken. The answers are below as Claude's call, and the owner has still not looked at the step.
+
+**2026-11-12, Claude's call**
+
+- **The land-forming step is committed** as built, so that what follows can be told apart from it and undone alone.
+- **The ridge and raised islands get their landings from a larger last rise of the sea**: 25 to 45 m on the ridge (from 5 to 10) and 10 to 20 m on the raised island (from 3 to 6), which floods the mouths of their valleys into coves. Two numbers in two rows and no code. All of twelve ridge seeds now have a landing (median 2) and six of twelve raised seeds, where neither kind had any; the ridge keeps its cliffs inside the real range (62 m within 100 m of the shore, 68% of shore cliffed) and the raised shore is lower (18 m), toward Kikaijima's. The truer cause, valleys cut to an ice-age low sea and then flooded, was tried first and failed in this forming (`foundations.md` section 11).
+- **Seed 7 stays a raised island.** It is the most livable kind and now has one landing. The ground bench from its start now covers 53 m, where it covered 60.
+- **The swelling stands as the cause of volcanic sea cliffs** until the owner looks and says otherwise. It reuses the uplift and adds nothing, its figures fall inside the real ranges, and the only other cause tried gave shores of 17 to 43 m. It is a stand-in: real cones are cut back by waves through many stands of the sea, and the fix named in section 11 (a cliff that keeps its face once the sea has left it) is the way to drop it.
+- **Left for the owner's eye, not tuned by figures**: craters and domes that may read as drawn, and volcanic crests two to three times sharper than their references. Step 4 follows.
+
 **2026-11-11, Claude's call**
 
 - **The first rock story row to be written is "layered, gently tilted"**: five kinds (mudstone, siltstone, grey sandstone, grit, limestone), with the sequence, tilt and folds drawn from the seed. It is the row the experiment already showed working. More rows follow in Phase 2, and the seed then picks among them.
@@ -141,7 +153,7 @@ Raised by `foundations.md`, section 9, which lists twelve decisions with a recom
 
 ### 9. Closing the gap to real islands
 
-*The first five items were built on 2026-11-11 as the land-forming step (`foundations.md`, section 8, "The land-forming step, as built"). Still open below: kinds named after real islands, people sooner, larger regions, and the comparison tool. New from the step: the ridge and raised islands have no sheltered landing, and whether the swelling of a cone is the right cause for its sea cliffs.*
+*The first five items were built on 2026-11-11 as the land-forming step (`foundations.md`, section 8, "The land-forming step, as built"). Still open below: kinds named after real islands, people sooner, larger regions, and the comparison tool. New from the step: the ridge and raised islands had no sheltered landing, and whether the swelling of a cone is the right cause for its sea cliffs; both were settled as Claude's call on 2026-11-12 (above) and are the owner's to overturn.*
 
 Raised by `interesting-world/notes/real-islands.md` (2026-11-11), which compared eight real Japanese islands with 32 generated ones on the game's own grid and renderer. The generated land is not close. In order of how much shows:
 

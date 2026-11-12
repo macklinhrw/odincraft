@@ -77,7 +77,8 @@ Kind :: struct {
 KINDS := [?]Kind{
 	{
 		// A range north of the middle and a long south slope with room for rivers. It rises
-		// for 3 to 4 million years, and the sea then floods the valley mouths into inlets. After
+		// for 3 to 4 million years, and the sea then rises 25 to 45 m into the mouths of its
+		// valleys, leaving coves between the cliffs; much more and it is the inlets kind. After
 		// Hahajima, though rounder.
 		name = "ridge", weight = 3, story = "layered, gently tilted",
 		shape = {
@@ -90,7 +91,7 @@ KINDS := [?]Kind{
 			{cell = 64, years = 20000, steps = {140, 175}, uplift = {1, 1}},
 			{cell = 32, years = 6000, steps = {40, 60}, uplift = {1, 1}},
 			{cell = 16, years = 3000, steps = {30, 30}, uplift = {1, 1}},
-			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {5, 10}},   // the last rise, and the thousands of years since
+			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {25, 45}},   // the last rise, and the thousands of years since
 		},
 	},
 	{
@@ -182,8 +183,9 @@ KINDS := [?]Kind{
 		// Raised: the sea fell twice late in the island's rise and uncovered the platform its
 		// waves had cut, broad where the swell struck and narrow in the lee, so the old cliff
 		// stands behind a terrace, and the streams crossing it cut back into it, the larger
-		// faster, until a last small rise floods their mouths. A step for each fall waits for
-		// the sea to cut its own shore. After Kikaijima, though steeper behind its terraces.
+		// faster, until a last rise of 10 to 20 m floods their mouths into small coves. A step for
+		// each fall waits for the sea to cut its own shore. After Kikaijima, though steeper behind
+		// its terraces.
 		name = "raised", weight = 2, story = "layered, gently tilted",
 		shape = {
 			radius = {0.26, 0.30}, xx = {0.8, 1.2}, zz = {0.8, 1.25}, xz = {-0.5, 0.5}, ragged = {0.3, 0.45}, ragged_wave = {2500, 3500},
@@ -195,7 +197,7 @@ KINDS := [?]Kind{
 			{cell = 64, years = 20000, steps = {150, 170}, uplift = {1, 1}},
 			{cell = 32, years = 6000, steps = {40, 50}, uplift = {1, 1}, sea = {-8, -12}},
 			{cell = 16, years = 3000, steps = {30, 30}, uplift = {1, 1}, sea = {-8, -12}},
-			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {3, 6}},
+			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {10, 20}},
 		},
 	},
 }

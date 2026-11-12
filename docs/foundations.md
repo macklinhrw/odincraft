@@ -209,7 +209,7 @@ Added 2026-11-11. Steps 0 to 3 are built. A comparison with eight real Japanese 
 
 ### The land-forming step, as built
 
-Built 2026-11-11 in three parts, each checked against the figures the game now prints at start-up. The owner has not yet looked at it.
+Built 2026-11-11 in three parts, each checked against the figures the game now prints at start-up, with the last rise of the sea on the ridge and raised kinds enlarged the next day (below). The owner has not yet looked at it.
 
 **Part 1, coast and steepness.** Uplift reaches the shore. A step inside the forming cuts each shore cell back by how much open sea lies round it and toward a swell whose bearing the seed draws, leaving a platform and a cliff; sheltered shores are not cut. Strong rock stands to 60° and creeps less. Soil and trees hold to about 45° on any rock, and only steeper faces are bare.
 
@@ -219,25 +219,25 @@ Built 2026-11-11 in three parts, each checked against the figures the game now p
 
 ![Seven kinds on three seeds each, after the step](interesting-world/real/kinds-after-land-step.jpg)
 
-Medians over the seeds tried (three to six a kind), beside the real ranges:
+Medians over the seeds tried (three to six a kind; twelve for ridge and raised, measured after their last rise was enlarged), beside the real ranges:
 
 | Figure | Real high islands | ridge | cone | crater | domes | inlets | worn | raised |
 |---|---|---|---|---|---|---|---|---|
-| Height within 100 m of the shore, m | 60 to 117 | 79 | 95 | 98 | 78 | 49 | 22 | 30 |
-| Shore rising 30 m within 50 m, % | 40 to 85 | 81 | 99 | 95 | 76 | 52 | 12 | 32 |
-| Slope in the first 100 m, ° | 29 to 51 | 32 | 38 | 43 | 37 | 20 | 12 | 12 |
-| Land under 50 m, % | 5 to 16 | 13 | 6 | 17 | 13 | 41 | 54 | 31 |
-| Land steeper than 60°, % | 0.8 to 2.9 | 2.0 | 1.6 | 2.7 | 1.0 | 1.6 | 0.3 | 0.7 |
-| Fall at a ridge crest, m | 0.56 to 1.25 | 0.59 | 1.89 | 2.3 | 1.25 | 0.62 | 0.56 | 0.54 |
-| Height above the nearest stream, m | 54 to 130 | 67 | 102 | 74 | 137 | 51 | 29 | 40 |
-| Livable ground, % of land | 15 to 46 (Kikaijima 91) | 50 | 0 | 24 | 28 | 49 | 62 | 62 |
-| Sheltered landings | 0 on the cones, 7 to 14, 80 on Tsushima | 0 | 0 | 0 | 1.5 | 9 | 9 | 0 |
+| Height within 100 m of the shore, m | 60 to 117 | 62 | 95 | 98 | 78 | 49 | 22 | 18 |
+| Shore rising 30 m within 50 m, % | 40 to 85 | 68 | 99 | 95 | 76 | 52 | 12 | 16 |
+| Slope in the first 100 m, ° | 29 to 51 | 28 | 38 | 43 | 37 | 20 | 12 | 6 |
+| Land under 50 m, % | 5 to 16 | 20 | 6 | 17 | 13 | 41 | 54 | 36 |
+| Land steeper than 60°, % | 0.8 to 2.9 | 2.0 | 1.6 | 2.7 | 1.0 | 1.6 | 0.3 | 1.0 |
+| Fall at a ridge crest, m | 0.56 to 1.25 | 0.62 | 1.89 | 2.3 | 1.25 | 0.62 | 0.56 | 0.54 |
+| Height above the nearest stream, m | 54 to 130 | 58 | 102 | 74 | 137 | 51 | 29 | 36 |
+| Livable ground, % of land | 15 to 46 (Kikaijima 91) | 47 | 0 | 24 | 28 | 49 | 62 | 65 |
+| Sheltered landings | 0 on the cones, 7 to 14, 80 on Tsushima | 2 | 0 | 0 | 1.5 | 9 | 9 | 0.5 |
 
 Before the step the four kinds stood at 6 to 17 m, 0 to 2%, 4 to 10° and 30 to 55% on the first four rows, and nothing was steeper than 60°. Forming takes 0.25 to 0.9 s on every kind. `src/` grew by 517 lines.
 
 What is still short:
 
-- **Landings.** The ridge and the raised island, which is now the default, have none; Hahajima has 7 and Kikaijima 12. Their outlines enclose no water, and a more ragged outline was cut back smooth by the sea. Only drowning gave landings.
+- **Landings.** As first built, the ridge and the raised island, which is now the default, had none; Hahajima has 7 and Kikaijima 12. Their outlines enclose no water, and a more ragged outline was cut back smooth by the sea. Only drowning gave landings, so on 2026-11-12 the last rise of the sea was enlarged in both rows: 25 to 45 m on the ridge (from 5 to 10) and 10 to 20 m on the raised island (from 3 to 6). Every one of twelve ridge seeds now has a landing (1 to 7, median 2), at the cost of some cliff: the height within 100 m of the shore fell from 79 to 62 m and the cliffed share of shore from 81 to 68%, both still inside the real range, and the land under 50 m rose from 13 to 20%, just outside it. Six of twelve raised seeds have a landing, the default among them with one, and its shore is lower (18 m, where Kikaijima's stays under 10 m). Both are still far short of the real 7 to 14.
 - **Volcanic crests are too sharp** (1.2 to 2.3 m against 0.19 to 0.69 on their references), and the cone has no livable ground at all where Mikurajima has 15%.
 - **Craters and domes look drawn.** A crater floor is a smooth round bowl and the domes are round lobes. That is the fault `lessons.md` warns of, a shape that reads as a diagram, and it is the owner's to judge.
 - **The 8 km region.** The inlets island keeps 7.6 km² of land and has 26 to 38% of its outline as sea, against 52 to 60%. On a 16 km region it formed in 4.1 to 4.9 s with 36 to 53 km² and 28 to 41 landings. Not shipped.
@@ -398,6 +398,7 @@ Tsushima has 60% of its outline as sea and Hahajima and Chichijima 52 to 56%; th
 - **An old step can undo a new one.** Each refinement re-read the island's first outline, which would have put back everything the sea had cut and which had been laying a strip of low land along every coast.
 - **The uplift ramp was one cause of the low coast among four**: the cone's uplift was nearly all at the summit, the worn island rests while its coast wears, and the raised island's shelf is low by design.
 - **A late event must be late.** A crater that fell in early was breached by streams within about 300,000 years.
+- **A low stand does not give coves here.** The real cause of coves on a cliffed coast is that valleys were cut down to an ice-age sea some 120 m lower and then flooded. Tried on the ridge row (the sea 50 to 60 m lower for the last 90,000 years, then back): the shelf the sea uncovered was lifted with the land and stayed as a broad apron when the sea returned, and with a larger rise to cover that, the cliffs had still slumped to hillsides while the sea was away (shore height 24 to 38 m). A cliff here stands steeper than a hillside only while the waves undercut it; one that kept its face for 100,000 years out of the sea would let the true history be used, and would also keep the raised island's old cliffs sharp.
 - **Three briefs each carried a wrong premise**, and each was caught because the brief asked for its claims to be tested.
 
 ### Every step has target figures
