@@ -21,6 +21,7 @@ Mat :: enum u8 {
 	Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel,
 	Shii_Bark, Shii_Leaves, Grey_Bark, Camellia_Leaves, Hisakaki_Leaves, Pine_Bark, Pine_Needles, Scrub_Leaves,   // each species' bark and leaf (SPECIES); the tabu's are Wood and Leaves
 	Litter, Susuki, Dune,             // what covers the ground between the trees (COMMUNITIES)
+	Black_Sand,                       // a beach ground from dark lava
 	Loam, Silt, Red_Clay, Ash,        // the soils under it (SOILS)
 	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff,
 	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree,
@@ -54,6 +55,7 @@ MATERIALS := [Mat]Material{
 	.Litter    = {{0.096, 0.058, 0.025}, 0, 0, .Air},      // fallen evergreen leaves
 	.Susuki    = {{0.096, 0.157, 0.038}, 0, 0, .Air},    // susuki grass and dwarf bamboo
 	.Dune      = {{0.128, 0.139, 0.062}, 0, 0, .Air},   // dune grass, straw
+	.Black_Sand = {{0.060, 0.057, 0.054}, 0, 0, .Air},   // basalt and cinder sand, dark grey
 	.Loam      = {{0.058, 0.040, 0.026}, 0, 0, .Air},   // dark topsoil
 	.Silt      = {{0.050, 0.046, 0.038}, 0, 0, .Air},   // grey river silt
 	.Red_Clay  = {{0.184, 0.062, 0.030}, 0, 0, .Air},     // the red clay long rain leaves on old ground
@@ -173,8 +175,9 @@ Ground :: struct {
 	h, steep: f32,   // elevation, and how steep the ground is there, rise over run
 	base:     f32,   // height of the rock stack's base under it (rock.odin)
 	water:    f32,   // level of the river or sea standing here, or NO_WATER
-	cover:    Mat,   // river gravel, or the loose rock lying under a face; Air for neither
+	cover:    Mat,   // river gravel, the loose rock lying under a face, or the stones of a shore; Air for none
 	fallen:   f32,   // depth of the loose rock fallen from a face, under any gravel
+	laid:     f32,   // depth of the sand or stones the waves have laid on a shore
 }
 
 REPOSE     :: 0.67   // loose rock comes to rest at about 34°
@@ -279,6 +282,7 @@ ground :: proc(x, z, cell: f64) -> (g: Ground) {
 			if abs(x - bx) < size/2 && abs(z - bz) < size/2 do h, g.cover, g.fallen = h + f32(1 + (r >> 20)%u32(size)), landslide.rock, 1
 		}
 	}
+	h, g.laid = waters_edge(h, x, z, cell)
 	lake, inside, bank := lake_near(x, z)
 	h = max(h, bank)
 	gravel: bool
@@ -287,9 +291,76 @@ ground :: proc(x, z, cell: f64) -> (g: Ground) {
 		g.h, gravel = min(g.h, h), false
 		if g.h < lake do g.h, g.water = max(g.h, lake - 1) if cell > 1 else g.h, lake   // far off, a lake's bed is drawn flat under it, so its cells do not show through
 	}
-	if gravel do g.cover = .Gravel
-	if g.h < SEA_SURFACE do g.water = max(g.water, SEA_SURFACE)
 	g.steep = steep*l.rise
+	if g.laid > 0 do g.cover = MATERIALS[rock_in(g.h - g.laid - 0.5, base, rock_level(cell))].loose
+	if gravel do g.cover = .Gravel
+	if t, rubble := stack_at(x, z, cell, g.h, base); t > g.h {   // a stack is bare rock to its top
+		if rubble do g.laid, g.cover = g.laid + t - g.h, MATERIALS[rock_in(g.h - 0.5, base, rock_level(cell))].loose
+		else do g.steep = 3
+		g.h, g.water = t, NO_WATER
+	}
+	if g.h < SEA_SURFACE do g.water = max(g.water, SEA_SURFACE)
+	return
+}
+
+// ---- the shore -----------------------------------------------------------------------------
+
+// What the waves leave at the water's edge (ground-and-underground.md §4, the beach and platform
+// rows), from how open the shore is to the swell (`surf`) and how much of the sand its rivers bring
+// they leave it (`sand-kept`). Where they leave sand, it lies as a beach: a flat berm as high as
+// the waves run up, wider the more sand there is, and a face falling to the sea at the angle sand
+// rests at under them. Where they leave none, they throw stones into a bank that is higher and
+// steeper the more open the shore. Either is laid over the ground the forming left where that is
+// steeper than its face, and neither stands under a sheer cliff or on a shore the swell breaks on.
+// There the waves have cut the rock flat at the sea's level, with pools where it is worn deeper,
+// and boulders too large for them to move lie along the foot of what stands over it.
+CARRY :: 4   // the sand a shore loses to the swell, against the supply from a mouth (land_local)
+
+sand_kept :: proc(x, z: f64) -> f32 {
+	return land_at(land.supply, land.n, x, z) - CARRY*land_at(land.surf, land.n, x, z)
+}
+
+waters_edge :: proc(h: f32, x, z, cell: f64) -> (top, laid: f32) {
+	top = h
+	if h > 6 || h < -8 do return
+	surf := land_at(land.surf, land.n, x, z)
+	if surf < 0.01 do return
+	slope := max(land_at(land.slope, land.n, x, z), 0.02)
+	if open := smoothstep(0.1, 0.2, surf); open > 0 {   // gullies and pools along the strike of the beds, where the waves found a weakness
+		along := rock_strike(x, z)
+		u, v := x*along.x + z*along.y, z*along.x - x*along.y
+		flat := 0.2 + 0.9*fbm(u/2, v, 10, cell, 3, seed + 740) - (1.3 if fbm(u/4, v, 5, cell, 2, seed + 741) < -0.2 else 0)
+		top += open*smoothstep(-4.5, -2.5, h)*max(flat - h, 0)
+	}
+	sand := smoothstep(-0.05, 0.05, sand_kept(x, z))
+	berm := 1.2 + 6*surf*(1 - sand) + 0.3*fbm(x, z, 60, cell, 2, seed + 742)
+	face := math.lerp(f32(0.22), 0.06, sand)
+	out := max(berm - top, 0)/slope - 30*sand*clamp(sand_kept(x, z), 0, 0.5)   // metres seaward of the berm's edge
+	TOE :: -2.5   // the face reaches down to here, and the bank ends in a steep front under the water
+	s := berm - face*max(out, 0)
+	if s < TOE do s = TOE - 0.6*(TOE - s)/face
+	if s > top do laid = (s - top)*(1 - smoothstep(0.8, 1.5, slope))*(1 - smoothstep(0.2, 0.3, surf))
+	top += laid
+	if cell <= 2 {
+		// Boulders lie in heaps along the foot of what stands over the platform, larger under a cliff.
+		chance := smoothstep(0.15, 0.3, surf)*smoothstep(0.6, 1.2, top)*(1 - smoothstep(3, 6, top))*smoothstep(-0.3, 0.1, fbm(x, z, 40, cell, 2, seed + 743))
+		if b := stones(x, z, 0.9*chance, 1 + 1.2*smoothstep(0.4, 1.5, slope)); b > 0 do top, laid = top + b, laid + b
+	}
+	return
+}
+
+// Stones on a 3 m grid: in each square, with this chance, one of about this radius in metres,
+// rounded, the tallest where two meet, so that they lie in heaps.
+stones :: proc(x, z: f64, chance, size: f32) -> (h: f32) {
+	if chance <= 0 do return
+	gx, gz := i32(math.floor(x/3)), i32(math.floor(z/3))
+	for j in gz - 1..=gz + 1 do for i in gx - 1..=gx + 1 {
+		r := hash(i, j, seed + 730)
+		if f32(r & 0xFF)/255 >= chance do continue
+		rad := size*(0.5 + f32((r >> 8) & 0xFF)/255)
+		dx, dz := f32(x) - (f32(i)*3 + 3*f32((r >> 16) & 0xFF)/255), f32(z) - (f32(j)*3 + 3*f32(r >> 24)/255)
+		if q := (dx*dx + dz*dz)/(rad*rad); q < 1 do h = max(h, 1.2*rad*math.sqrt(1 - q))
+	}
 	return
 }
 
@@ -309,14 +380,22 @@ Surface :: struct {
 
 SURFACES := [?]Surface{
 	{"river gravel", "a river lays gravel on its bars and its bed", .Gravel, {{.Gravel, 0, ANY, 0}}},
-	{"sand", "the waves throw sand up the shore", .Sand, {{.Beach, 0, ANY, 0}}},
+	{"sand", "the waves keep the sand the rivers bring where the shore is sheltered enough", .Sand, {{.Beach, 0.3, ANY, 0}, {.Sand_Kept, 0, ANY, 0}}},
+	{"boulders", "the swell breaks on this shore and leaves only stones too large for it to move", .Air, {{.Beach, 0.3, ANY, 0}, {.Surf, 0.25, ANY, 0}}},
+	{"shingle", "the waves round the stones the shore gives them and throw them up in a bank", .Air, {{.Beach, 0.3, ANY, 0}}},
+	{"washed rock", "the waves wash the rock bare to this height and cut it flat at the sea's level", .Air, {{.Surf, 0.1, ANY, 0}, {.Washed, 0, ANY, 0}}},
 	{"lake bed", "silt settles out of the still water of a lake or pond", .Silt, {{.Under_Water, 0, ANY, 0}}},
 	{"loose rock", "rock fallen from the face above lies at its angle of rest", .Air, {{.Fallen, 0, ANY, 0}}},
 	{"bare rock", "soil cannot hold on ground this steep, so the beds show", .Air, {{.Too_Steep, 0, ANY, 0}}},
+	{"sea floor", "sand settles under the sea where the waves do not stir it", .Sand, {{.Height, -ANY, 0.5, 0}}},
 	{"bare scar", "a slide stripped the hillside to the rock, and no soil has yet weathered back", .Air, {{.Disturbed, -ANY, 1e4, 0}, {.Slid, -ANY, -0.5, 0}, {.Soil_Depth, -ANY, 0.15, 0}}},
 	{"trail", "animals have trodden a path through the plants to the earth", .Dirt, {{.Trail, -ANY, 0.75, 0}}},
 	{"soil", "soil holds, and the plants cover it", .Grass, {}},   // the plant community brings what covers it
 }
+
+// Sand is ground from the island's rock: black from basalt and scoria (Miyakejima, Ōshima), pale
+// from every other (Kōzushima's rhyolite, Kikaijima's coral, sandstone).
+SAND_OF := #partial [Mat]Mat{.Basalt = .Black_Sand, .Scoria = .Black_Sand}
 
 surface_row :: proc(p: ^Point) -> int {
 	for r, i in SURFACES do if host(r.host, p) > 0 do return i
@@ -334,6 +413,7 @@ surface_at :: proc(x, z, cell: f64) -> (g: Ground, m: Mat, plants: Maybe(Communi
 		m, plants = COMMUNITIES[k].cover, k
 	}
 	if m == .Air do m = p.cover if p.cover != .Air else rock_in(p.h - 0.5, p.base, rock_level(cell))
+	if m == .Sand && SAND_OF[rock_in(p.h - p.laid - 0.5, p.base, rock_level(cell))] != .Air do m = .Black_Sand
 	return p.g, m, plants
 }
 
@@ -932,7 +1012,7 @@ block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, 
 		return soil.top if depth == 1 else soil.foot if depth == deep - 1 && deep > 2 else soil.sub
 	}
 	#partial switch surface {
-	case .Sand, .Silt: return surface if depth < 4 else bed
+	case .Sand, .Silt, .Black_Sand: return surface if depth < 4 else bed
 	case .Snow:  return .Snow if depth < 2 else bed
 	case .Gravel: return .Gravel if depth < 2 else bed
 	}
@@ -965,7 +1045,8 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 		for y in y_base..<t {
 			stone := hash01(x + y*131, z, seed + 190) < soil.stones
 			bed := (landslide.rock if c.mat[k] == landslide.rock && t - y <= 6 else MATERIALS[landslide.rock].loose) if f32(t - y) <= debris else rock_in(f32(y) + 0.5, c.base[k], 0)   // a block of the cap is whole
-			blocks[k + int(y - y_base)*P*P] = u8(block_below(c.mat[k], t - 1 - y, bed, soil, deep, stone))
+			b := block_below(c.mat[k], t - 1 - y, bed, soil, deep, stone)
+			blocks[k + int(y - y_base)*P*P] = u8(Mat.Black_Sand if b == .Sand && SAND_OF[bed] != .Air else b)
 		}
 		for y in c.hollow[k][0]..<min(c.hollow[k][1], t) do blocks[k + int(y - y_base)*P*P] = 0   // a hollow under a roof of the beds
 	}

@@ -373,6 +373,8 @@ Land :: struct {
 	slid:    []f32,    // metres of slide debris laid on a cell, or under 0, taken from it (events.odin)
 	lake:    []u8,     // 1 + the feature whose lake or pond covers a cell, or 0
 	swell:   []f32,    // on land beside the sea, how open the shore is to the waves (exposure)
+	surf:    []f32,    // within 48 m of the shore, on land or at sea, how open the shore nearest is to the waves
+	supply:  []f32,    // sand the rivers bring the shore, from each mouth along 320 m of it
 	lifted:  []f32,    // metres the wind off the sea has been raised to by the ground it crossed, at sea too
 }
 
@@ -888,9 +890,10 @@ land_finish :: proc(g: ^Grid) -> (highest: f32) {
 HUMP :: 6   // cells either side of the square a cell's height is set against, 208 m across
 land_local :: proc(g: ^Grid) {
 	n := g.n
-	for f in ([?][]f32{land.facing, land.hump, land.inland, land.sun, land.exposed, land.above, land.soil, land.valley, land.swell, land.lifted}) do delete(f)
+	for f in ([?][]f32{land.facing, land.hump, land.inland, land.sun, land.exposed, land.above, land.soil, land.valley, land.swell, land.lifted, land.surf, land.supply}) do delete(f)
 	land.facing, land.hump, land.inland, land.valley, land.lifted = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 	land.sun, land.exposed, land.above, land.soil, land.swell = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+	land.surf, land.supply = make([]f32, n*n), make([]f32, n*n)
 
 	// Distance to the sea, nearest first: each cell takes the sea cell nearest a neighbour
 	// already reached, which is near enough the true nearest that no contour shows the grid.
@@ -984,6 +987,26 @@ land_local :: proc(g: ^Grid) {
 		land.soil[c] = min((clamp(1 - land.hump[c]/12, 0.3, 2.5) + 1.5*land.wet[c])*(1 - 0.7*steep*steep)*weak + 2*max(1 - land.above[c]/4, 0), 4)
 		// A slide's scar is bare rock and its debris rubble; soil weathers back on both with the years.
 		if s := land.slid[c]; abs(s) > 0.5 do land.soil[c] = min(land.soil[c], (0.3 if s > 0 else 0) + SOIL_GROWS*region.features[landslide.feature].age)
+	}
+	// The shore the waves work (step 15): each place within 48 m of it, on land or at sea, takes the
+	// swell of the shore round it, the nearest the most; and each river's mouth gives the shore sand
+	// for 320 m along it, as much as the square root of the km² it drains, up to 1.
+	for y in 3..<n - 3 do for x in 3..<n - 3 {
+		c := y*n + x
+		if !g.sea[c] && land.inland[c] > 48 do continue
+		sum, weight: f32
+		for j in -3..=3 do for i in -3..=3 do if s := land.swell[c + j*n + i]; s > 0 {
+			w := 1/(1 + math.hypot(f32(i), f32(j)))
+			sum, weight = sum + w*s, weight + w
+		}
+		if weight > 0 do land.surf[c] = sum/weight
+	}
+	for ci in g.order do if g.next[ci] == -1 && g.area[ci] >= CHANNEL_AREA {
+		x, y, r := int(ci)%n, int(ci)/n, 20
+		for j in max(y - r, 0)..=min(y + r, n - 1) do for i in max(x - r, 0)..=min(x + r, n - 1) {
+			k := j*n + i
+			if land.surf[k] > 0 do land.supply[k] = max(land.supply[k], min(math.sqrt(g.area[ci]/1e6), 1)*(1 - math.hypot(f32(i - x), f32(j - y))/f32(r)))
+		}
 	}
 }
 
@@ -1225,15 +1248,23 @@ land_map :: proc(path, overlay: string) {
 				if trail_near(x, z) < 4.5 do col = {0.65, 0.10, 0.05}
 				if k := trails.ford[land_cell(x, z)]; k > 0 && math.hypot(x - region.features[k - 1].at.x, z - region.features[k - 1].at.y) < 14 do col = {1, 1, 1}
 			}
+			// The shore as the ground has it (waters_edge, gen.odin): sand, stones and the rock
+			// platform in their own colours where they stand over the sea, and the stacks.
+			if paint == nil && land_at(land.surf, land.n, x, z) > 0.01 {
+				p := point_at(x, z, 8)
+				if w := SURFACES[surface_row(&p)].host; p.h > 0 && len(w) > 0 && (w[0].field == .Beach || w[0].field == .Surf) || p.steep == 3 {
+					_, m, _ := surface_at(x, z, 8)
+					col = map_colour(m)*shade
+				}
+			}
 			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
 		}
 	}
-	// Each roofed place (events.odin) is ringed, in orange for a notch, white for a shelter and red for a sea cave.
-	for h in hollows {
-		f := region.features[h.feature]
+	// Each roofed place and stack (events.odin) is ringed, in orange for a notch, white for a shelter, red for a sea cave and yellow for a stack.
+	for f in region.features do if f.kind >= .Notch && f.kind <= .Cave || f.kind == .Stack {
 		cx, cy := int((f.at.x + region.size/2)*SIZE/region.size), int((f.at.y + region.size/2)*SIZE/region.size)
 		for dy in -6..=6 do for dx in -6..=6 do if r := dx*dx + dy*dy; r >= 16 && r <= 36 && cx + dx >= 0 && cy + dy >= 0 && cx + dx < SIZE && cy + dy < SIZE {
-			ring := #partial [Feature_Kind][3]u8{.Notch = {255, 140, 0}, .Shelter = {255, 255, 255}, .Cave = {230, 20, 20}}
+			ring := #partial [Feature_Kind][3]u8{.Notch = {255, 140, 0}, .Shelter = {255, 255, 255}, .Cave = {230, 20, 20}, .Stack = {255, 230, 0}}
 			for k in 0..<3 do pixels[((cy + dy)*SIZE + cx + dx)*4 + k] = ring[f.kind][k]
 		}
 	}

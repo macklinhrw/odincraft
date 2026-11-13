@@ -593,6 +593,60 @@ Built 2026-11-12 by Claude: falls as features with water of their own, a gorge b
 
 Still short: from 1 km the default island's fall is a faint thread or lost in its gorge's shadow, where the cone's to the sea still shows; the sheet is a flat ribbon with no spray, and from just above the lip a few thin sheets of the simulated water hang on the wall beside it; the domes have 65 falls over 30 m, many on spring brooks down the dome flanks, and one of 322 m, which has not been looked at in the game; a spring's brook has no moss and no seep line, and looks like any stream head; a gorge's walls are smooth strips, not cracked faces; the lake outlet over the slide's dam is unchanged in kind.
 
+### Step 15, as built
+
+Built 2026-11-12: what lies at the water's edge. The owner has not yet looked at it. The large coast (cliffs, bays, platforms, silt flats) was already made in the forming, and notches and caves in step 14, so this step is the blocks at the shore.
+
+![A pocket beach at a bay head on the ridge island, its river crossing it to the sea; a sea stack and a skerry off the cone's west cliff, from its foot; the raised mudstone platform on the default island's open north-east shore, with gullies and pools along the strike; black sand in a cove on the crater island, under basalt](interesting-world/real/coast.jpg)
+
+**How much of each shore there is**, counted before building, on 16 m shore cells: open to the swell by `swell` (sheltered under 0.07, where the forming does not cut; moderate to 0.2; open beyond), and behind it a cliff (30 m within 48 m), a flat (under 10 m for 96 m) or a slope between. Kilometres:
+
+| | default (raised 7) | ridge 3 | inlets 3 | worn 3 | domes 3 | cone 3 | crater 3 |
+|---|---|---|---|---|---|---|---|
+| Sheltered: cliff, slope, flat | 0.3, 0.7, 0 | 1.6, 1.4, 0 | 3.3, 4.9, 2.9 | 0.8, 7.3, 3.7 | 0.7, 1.2, 0 | 0.1, 0, 0 | 0, 0, 0 |
+| Moderate | 0.5, 10.2, 5.4 | 5.8, 9.5, 0 | 5.3, 9.1, 0.1 | 2.0, 11.3, 3.2 | 9.9, 0.1, 0 | 7.3, 0, 0 | 5.3, 0.2, 0 |
+| Open | 0.1, 7.0, 3.1 | 4.4, 4.7, 0.1 | 8.0, 14.7, 0.3 | 2.4, 12.3, 2.3 | 7.8, 0.2, 0 | 6.6, 0, 0 | 5.3, 0.1, 0 |
+| Open, on rock of strength 0.5 or more | 0, 3.4, 1.9 | 2.5, 3.3, 0.1 | 6.2, 12.8, 0.3 | 1.7, 9.1, 1.3 | 7.6, 0.2, 0 | 6.6, 0, 0 | 5.3, 0.1, 0 |
+
+A round island has almost no sheltered shore: its lee still reads 0.05 to 0.1, since the share of open sea round it stays near a half. Only the inlets and worn islands have kilometres of it. The default island's shore is low but open: it has slope and flat behind it, almost no cliff, so a platform and shingle rather than beach.
+
+- **Two fields** (`land_local`): `surf`, the swell of the shore round each place within 48 m of it, on land or at sea, the nearest the most; and the sand the rivers bring (`land.supply`), from each mouth along 320 m of shore, as much as the square root of the km² it drains, up to 1. `sand-kept` is that less four times the surf: over 0, sand stays.
+- **The shore in blocks** (`waters_edge`, `gen.odin`, called by `ground`). Where sand is kept it lies as a beach, laid over the ground the forming left wherever that is steeper than the beach: a flat berm 1.2 m over the sea, wider by up to 15 m the more sand is kept, and a face of about 1 in 16 to 2.5 m under the sea, which ends in a steeper front. Where none is kept the waves throw the island's broken rock into a bank 1.2 m high and 6 m more for each unit of surf, with a face of 1 in 4.5. Neither stands on ground steeper than 0.8 to 1.5 or where the surf passes 0.2 to 0.3, so no sand stands at a sheer cliff's foot, and the sand pillars step 14 reported are gone. Where the surf passes 0.1 to 0.2, the platform the forming cut 2 m under the sea is raised to the sea's level where it lies within 2.5 to 4.5 m of it: its top wanders a block either way along the strike of the beds, with gullies along the strike 1.3 m deeper, which the sea fills as pools. Boulders, rounded, 1 to 3 m across and up to 6 m under a cliff, lie in heaps on a 3 m grid along the foot of what rises 0.6 to 6 m over the platform, nine in ten squares filled where the heaps lie.
+- **The rows** (`SURFACES`): sand (laid 0.3 m or more and sand kept), boulders (laid and surf over 0.25), shingle (laid), washed rock (surf over 0.1 and lower than 1 m and 8 m more for each unit of surf: the field `washed`), then the old rows, and sea floor (sand under 0.5 m) after bare rock. The old `beach` field, a line 1.8 m over the sea give or take 1.2 that laid pale sand round every shore and on any low ground, is now the depth the waves laid. Shingle and boulders are the loose block of the rock under them, dark on basalt and buff on sandstone. Sand is black on basalt and scoria and pale on every other rock (`SAND_OF`), and so is the shore sand soil; black sand is a new material on the artist's sand tile.
+- **Stacks** (`.Stack` in `HOLLOWS`, `stack_make` and `stack_at` in `events.odin`) are ranked as notches are, on a headland (sea over half of the 48 m round it), open to the swell (0.2), in rock of strength 0.5 or more, at a slope of 1 or more, at least 250 m apart. Each stands out from where the ground first lies a metre under the sea, 5 to 40 m off, 12 to 26 m across and up to 1.8 times as long along the strike of its beds, at 40 to 90% of the height of the cliff within 48 m, with up to three skerries 2 to 4.5 m across and up to a third its height, 12 to 40 m further out. Going down a column, each bed reaches out by its strength and its own offset and the column widens toward its foot, so its sides step at the beds and its top is the last bed the waves left; rubble lies round its foot. It is a raise of the ground at every cell size, widened by a third of a cell far off, so the far rings, the map and the near water read the same column. `--why=` names it, and the map rings it yellow.
+- **The map** paints the shore in its materials where it stands over the sea (the platform shows as a rim of rock off the open shores) and the stacks.
+
+What each shore is now made of, kilometres, by the surface at the waterline walking from each shore cell to the sea:
+
+| | default | ridge 3 | inlets 3 | worn 3 | domes 3 | cone 3 | crater 3 |
+|---|---|---|---|---|---|---|---|
+| Sand | 3.2 | 4.3 | 5.9 | 7.1 | 1.0 | 0.2, black | 0.2, black |
+| Sand under the water to the shore | 0 | 0.1 | 0 | 3.0 | 0 | 0 | 0 |
+| Shingle | 9.8 | 14.0 | 13.1 | 4.2 | 8.4 | 1.5 | 4.5 |
+| Boulders | 1.2 | 1.3 | 1.3 | 0.5 | 1.1 | 0.4 | 0.7 |
+| Washed rock and platform | 9.0 | 4.6 | 18.7 | 23.9 | 3.4 | 6.9 | 4.3 |
+| Bare face or loose rock into deep water | 0.3 | 1.7 | 4.1 | 0.4 | 3.6 | 4.2 | 0.6 |
+| Soil to the water | 3.8 | 1.5 | 5.5 | 6.3 | 2.2 | 0.7 | 0.5 |
+
+Every island got two stacks, with one to four skerries. `src/` grew by 203 lines (222 added, 19 removed), from 5,842 to 6,045, and `tools/blocks.py` by one tile.
+
+**Unchanged elsewhere.** A temporary hash of height, surface and water on 128 × 128 points at 1 m and at 4 m round three squares away from the shore on the default island (its middle, the forest flight's start, -1,280, -1,280) and three on the cone, on the parent commit and on this one: five of the six squares are the same. In the sixth, 2 of 32,768 points differ, at 4 m cells 16 m from the sea at the square's corner, where the old sand line made them sand.
+
+**Cost.** Benches against the parent commit, alternately, twice each (our work, median and worst): the start 1.04/1.02 ms against 1.05/1.04, worst 5.6 against 8.1; the forest flight 1.06/0.99 against 1.03/0.99, worst 6.5 against 7.9; the steep flight, four times each, 1.02 to 1.06 against 1.04 to 1.12, with one frame over 12.5 ms in one of mine (18.4) and one in one of the parent's (17.5); along the default island's open north-east shore (`--bench=15 --fly --speed=120 --pos=900,12,-2000 --look=140,0`) 1.04/1.00 against 1.01/1.02, worst 6.6 against 4.8; down the cone's west shore past both stacks (`--kind=cone --seed=3 --bench=15 --fly --speed=120 --pos=-1500,15,1200 --look=200,0`) 0.98/1.02 against 0.97/0.98, worst 7.0 against 6.0. `--bench=5` on seed 3 of every kind runs, worst 6.6 ms. Forming is unchanged (1.00 s on the default island); the map takes about 0.05 s longer. The ground run from the start ends at 19 or 52 m on both builds, varying from run to run.
+
+What the premises had wrong:
+
+- **That the default island has beach to spare.** Its shore is low, but almost all of it is open to the swell: a sixteenth is sheltered. So it is mostly shingle and platform, with sand at a few mouths, as an island cut by the waves would be.
+- **That stacks show from a kilometre.** They are drawn at every distance, but a stack 20 m off a cliff of the same black rock is lost against it from out at sea unless seen at an angle that puts water or sky behind it; from its own shore it reads plainly.
+- **That a stack reads as a stack in blocks.** The first try, a smooth column on a wider base, read as a built pillar. Stepping its sides at the beds, a ragged outline stretched along the strike, and an uneven top fixed most of that.
+- **That boulders can be scattered.** Scattered, they were the single cubes the owner rejected in step 2; only in heaps at the foot of a rise do they read.
+
+Real ones. Miyakejima's beaches are black from its basalt, and its coast alternates black sand with lava headlands and small coves; Toga's shore is an arc of large black rocks ([Seth Lui](https://sethlui.com/visit-miyake-jima-island-tokyo/); [JNTO](https://www.japan.travel/en/spot/1620/)). Hachijōjima's best-known beach, Sokodo, is described as its only sand beach, made by people, of black sand, beside the lava shore of Nanbara Senjōjiki ([Navitime](https://japantravel.navitime.com/en/area/jp/spot/02301-1405383/); [Tokyo islands guide](https://global.shima.metro.tokyo.lg.jp/wp-content/themes/tcvb/assets/docs/island_guide.pdf)). Niijima's Maehama is white sand from its rhyolite, about 6.5 km on an open shore under cliffs ([Wikipedia](https://en.wikipedia.org/wiki/Niijima)), and Kōzushima's Maehama about a kilometre of white sand that a local account derives from the rhyolite of Mt Tenjō ([Tamashima](https://tamashima.tokyo/foreign/collaborate/article009-2.html)). Kikaijima, raised coral, has few sandy beaches, Sugira's white sand lying behind a lagoon ([Japan Experience](https://www.japan-experience.com/all-about-japan/kagoshima/attractions-and-excursions/kikaijima)); Chichijima's Kominato and Hatsuneura are white coral sand ([Go Tokyo](https://www.gotokyo.org/en/spot/535/index.html)). On Tsushima a sandy beach in a sheltered bay is called less common on a mostly rocky coast ([Only Beaches](https://onlybeaches.com/japan/nagasaki-prefecture/tsushima/aso-bay-beach-tsushima/story)). Futo, on Izu's east coast, is a beach of boulders hard to walk on, with two sea stacks with caves ([Locationscout](https://www.locationscout.net/japan/7117-futo-beach-sea-stacks)); the Sanshirō islets stand about 200 m off Dōgashima, the nearest joined at low tide by a bar ([Wikipedia](https://en.wikipedia.org/wiki/Dogashima)). Most of these are travel pages; nothing found measured beach widths or stack heights on these islands. What this corrects: sand needs more than a river. Niijima's long beach is fed by its soft pumice cliffs on an open shore, which the rule here, rivers only, cannot make; black sand is rare on a basalt cone, as on Hachijōjima, which the rule does give; and stacks 200 m out, as at Dōgashima, are further than the 40 m allowed.
+
+Left out: surf (white water where the swell breaks), since the sea's shader is being changed in another step and nothing simple looked right; sand supplied by soft rock behind the shore (Niijima); dunes behind a beach; spits and bars; tides; stacks further out than 40 m and arches.
+
+Still short: the sandstone platform's top tile reads as sand from eye height; the platform is still mostly flat floor; on the cone the shore under a sheer cliff is a ledge of basalt shingle a few metres wide, dark on dark; a beach under a steep wooded slope is a strip a few metres wide; the sea floor off a beach shows its 1 m steps through the water, as it did before.
+
 ### Experiments to run early
 
 Each is a scratch copy, folded in or deleted, as the rock experiment was.
@@ -858,6 +912,7 @@ Most livable real islands are larger than the 8 km region: Kikaijima is about 14
 | 10: sun by latitude and date, weather, a cloud layer, its cap and shadows (no snow line) | 125 | 138 (212 added, 74 removed) |
 | 8: the tree grower | 200 | 166 (209 added, 43 removed), and three lines in `tools/blocks.py` |
 | 11: falls, gorges, rivers by discharge, springs | 200 | 215 (245 added, 30 removed, 18 of them in the shader) |
+| 15: the shore in blocks, platforms with pools, stacks (no surf) | 100 | 203 (222 added, 19 removed), and one tile in `tools/blocks.py` |
 
 `src/` went from 3,138 to 3,751 lines over steps 0 to 3, to 4,268 with the land-forming step, to 4,377 with step 4 (4,427 with the fixes after it), to 4,565 with the first half of step 5, and to 4,781 with the second. Step 6 started from 4,463 lines, counted after the warm-island flora and the tiles, and took it to 4,811. Step 7 started from 4,839, after the fixes to step 6, and took it to 5,008. Step 8 started from 5,034, after the change to unseen picture and bench runs, and took it to 5,200. Forming time fell, from about 1.0 s to 0.25 to 0.9 s depending on the kind.
 

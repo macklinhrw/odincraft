@@ -11,17 +11,17 @@ import "core:math"
 Field :: enum u8 {
 	// on the land's 16 m grid
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
-	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge,
+	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge, Surf, Sand_Kept, Washed,
 	// from the ground the generator makes at the point
 	Height, Steepness, Gravel, Fallen, Beach, Too_Steep, Under_Water,
 }
-GROUND_FIELDS :: bit_set[Field]{.Height, .Steepness, .Gravel, .Fallen, .Beach, .Too_Steep, .Under_Water}
+GROUND_FIELDS :: bit_set[Field]{.Washed, .Height, .Steepness, .Gravel, .Fallen, .Beach, .Too_Steep, .Under_Water}
 
 // What a field is read from: a point, and the ground made there when the field needs it.
 Point :: struct {
 	using g:    Ground,
 	x, z, cell: f64,
-	vary:       f32,   // broad patches broken at their edges, about -1.7 to 1.7, that move the beach and what soil holds
+	vary:       f32,   // broad patches broken at their edges, about -1.7 to 1.7, that move what soil holds
 }
 
 point_at :: proc(x, z, cell: f64) -> (p: Point) {
@@ -77,11 +77,14 @@ FIELDS := [Field]Field_Info{
 	.Trail     = {"trail", " m", "from the middle of the nearest animal trail, less half of any cell over a metre; far, at cells over 2 m", proc(p: ^Point) -> f32 { return trail_near(p.x, p.z) - 0.5*f32(p.cell - 1) if p.cell <= 2 else ANY }, 0, 20, .Ramp, {0.60, 0.12, 0.05}, {0.95, 0.95, 0.90}},
 	.Lifted    = {"lifted", " m", "the wind off the sea has been raised to by the ground it crossed; cloud caps the ground where this passes the cloud base", proc(p: ^Point) -> f32 { return grid_at(land.lifted, p) }, 0, 400, .Ramp, {0.20, 0.30, 0.55}, {0.95, 0.95, 0.95}},
 	.Discharge = {"discharge", " m³/s", "the mean flow of the stream the ground drains to, the share of the rain on the land it drains that runs off", proc(p: ^Point) -> f32 { return discharge(land.valley[land_cell(p.x, p.z)]) }, -3, 0, .Log, {0.95, 0.95, 0.90}, {0.05, 0.10, 0.45}},
+	.Surf      = {"surf", "", "how open the nearest shore is to the swell, within 48 m of it on land or at sea; 0 farther", proc(p: ^Point) -> f32 { return grid_at(land.surf, p) }, 0, 0.5, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.25, 0.70}},
+	.Sand_Kept = {"sand-kept", "", "the sand the rivers bring the shore, less what the swell carries off; over 0 a beach of sand stays", proc(p: ^Point) -> f32 { return sand_kept(p.x, p.z) }, -1, 1, .Ramp, {0.40, 0.40, 0.45}, {0.95, 0.85, 0.50}},
+	.Washed    = {"washed", " m", "under the height the waves wash over a shore, 1 m and 8 m more for each unit of surf", proc(p: ^Point) -> f32 { return 1 + 8*grid_at(land.surf, p) - p.h }, -3, 3, .Ramp, {0.30, 0.55, 0.30}, {0.55, 0.50, 0.45}},
 	.Height    = {"height", " m", "of the ground over the sea", proc(p: ^Point) -> f32 { return p.h }, 0, 400, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Steepness = {"steepness", "", "rise over run of the ground in blocks, ledges and all", proc(p: ^Point) -> f32 { return p.steep }, 0, 1.5, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
 	.Gravel    = {"gravel", "", "1 on a bar or bed where a river lays gravel", proc(p: ^Point) -> f32 { return 1 if p.cover == .Gravel else 0 }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
 	.Fallen    = {"fallen", " m", "depth of rock fallen from the face above", proc(p: ^Point) -> f32 { return p.fallen }, 0, 3, .Ramp, {0.95, 0.95, 0.90}, {0.40, 0.30, 0.25}},
-	.Beach     = {"beach", " m", "how far under the line the waves throw sand to, which is 1.8 m over the sea give or take 1.2 in patches", proc(p: ^Point) -> f32 { return 1.8 + p.vary*1.2 - p.h }, -3, 3, .Ramp, {0.30, 0.55, 0.30}, {0.95, 0.85, 0.50}},
+	.Beach     = {"beach", " m", "of sand or stones the waves have laid on the shore (waters_edge, gen.odin)", proc(p: ^Point) -> f32 { return p.laid }, 0, 3, .Ramp, {0.30, 0.55, 0.30}, {0.95, 0.85, 0.50}},
 	.Too_Steep = {"too-steep", "", "how much steeper than soil holds, which is a rise over run of 1 (45°) give or take 0.15 in patches", proc(p: ^Point) -> f32 { return p.steep - (SOIL_HOLDS + 0.15*p.vary) }, -0.5, 0.5, .Ramp, {0.30, 0.55, 0.30}, {0.55, 0.50, 0.45}},
 	.Under_Water = {"under-water", " m", "of a lake's or pond's still water over the ground", proc(p: ^Point) -> f32 { l, inside, _ := lake_near(p.x, p.z); return max(l - p.h, 0) if inside else 0 }, 0, 5, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
 }
@@ -211,5 +214,6 @@ why_at :: proc(wx, wz: f64) {
 	fmt.printfln("\nthe soil is %s, %.1f m deep (%s), %s: under the cover %v, then %v down to %v and the rock", soil.name, depth, FIELDS[.Soil_Depth].from, soil.why, soil.top, soil.sub, soil.foot)
 	feature_words(x, z, p.h)
 	hollow_words(x, z)
+	stack_words(x, z)
 	trail_words(x, z)
 }
