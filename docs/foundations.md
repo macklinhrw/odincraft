@@ -558,6 +558,8 @@ What each species looks like (the line-up above): shii, a short bole forking int
 Still short: tabu differs from shii by its darker leaf, its flatter, looser crown and its brown bark, but is not the dome wider than tall of an open-grown tabu, which the stand's spacing does not allow; camellia reads as an oval on a stem; alder's crown is rounded but boxy; at eye height the forks of an old wood show as steps of bark at 5 to 7 m, a limb running aslant is a stair of blocks, and the hall of boles is about as crowded as before; the old giants of 4 m through do not exist.
 ### Step 11, as built
 
+*Changed when merged: a fall now stops at the top of the next strong bed under its lip, and only a stream draining 0.12 km² or more makes one, so the counts below are too high for the domes kind (now 10 over 30 m, the tallest 60 m) and a little high elsewhere; `open-decisions.md` has the reason. The start is near 527, -1,061 on the default island, and the ground bench covers 31 m.*
+
 Built 2026-11-12 by Claude: falls as features with water of their own, a gorge below each tall one, rivers sized by discharge, and springs. The owner has not yet looked at it.
 
 ![From below the default island's 86 m fall at -252, -327; from its lip; from about 200 m; and the cone's (seed 3) 124 m fall to the sea in its slot, from below](interesting-world/real/falls.jpg)

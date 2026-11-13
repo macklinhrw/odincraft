@@ -23,6 +23,7 @@ BUCKET      :: 64    // metres; segments are filed by the squares they can affec
 RUNOFF      :: 2.0   // metres of the year's rain that runs off: some 3 m falls on the Izu islands and about 1 m goes back to the air (a guess)
 FLOOD       :: 20    // how many times the mean flow a flood that scours a plunge pool carries (a guess)
 FALL_STEEP  :: 0.3   // a stream steeper than this over 30 m falls where a strong bed holds a lip
+FALL_AREA   :: 120_000   // m² a stream must drain to wear a fall back into a gorge; a smaller one hangs and runs down the face (Crosby & Whipple 2006: knickpoints stall at 0.1 to 1 km²)
 SPRING_AREA :: 30_000   // m² of land above a contact that feeds a spring (a guess)
 // The rocks that pass water, through their pores or joints; the others hold it (after the ranges
 // in Freeze and Cherry, Groundwater, 1979, from memory): sandstone and grit, jointed limestone,
@@ -364,10 +365,21 @@ falls_make :: proc(pts: []River_Point, along, slope, half, from, to: []f32, flow
 			if strong && (m == k || n != above) do append(&lips, m)
 		}
 		for m, j in lips {
+			if pts[m].area < FALL_AREA do continue
 			next := lips[j + 1] if j + 1 < len(lips) else end
 			cliff := from[next] < 0.5 && land.grid.face[land_cell(f64(pts[m].p.x), f64(pts[m].p.y))] > 1.3   // it falls from the lowest strong bed over a cliff the waves undercut
 			_, n := bed(pts[m], from[m])
 			if _, below := bed(pts[next], from[next]); below == n && !cliff do continue   // it runs down the bed, as on a lava flow's back, and never falls past it
+			// It wears back only the weak rock under its own bed, so it falls no further than the top
+			// of the next strong bed beneath its lip; below that the stream steps down as before.
+			under := int(n) - 1
+			for under > 0 && MATERIALS[rocks.beds[under].kind].strength < 0.5 do under -= 1
+			if floor := rocks.floor[under + 1] + rock_base(f64(pts[m].p.x), f64(pts[m].p.y), 1) + STACK_LO; !cliff {
+				for s in m + 1..<next do if from[s] <= floor {
+					next = s
+					break
+				}
+			}
 			for s in m + 1..<next {
 				from[s], to[s] = from[next], from[next]
 				gorge[s] = pts[s].bank - from[next] > 6*half[s]   // walls several channel widths high
