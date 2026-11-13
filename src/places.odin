@@ -46,6 +46,7 @@ MOST   :: 12     // places on an island at most
 OF_A_KIND :: 3   // and of one kind, so the island is not eight falls on one stream
 SEEN_SIZE :: 40   // metres a thing must stand, up or across, to be known 1.5 km off, where it spans 1.5°
 ON_TOP :: bit_set[Place_Kind]{.Summit, .Pass, .Head, .Wood, .Slide, .Crater, .Lake}   // looked at over the woods on it
+ON_FOOT :: bit_set[Place_Kind]{.Fall, .Cave, .Shelter, .Notch, .Wood, .Spring}   // a place a person comes upon, known when reached and not from a kilometre off
 
 Candidate :: struct {
 	kind:        Place_Kind,
@@ -264,7 +265,7 @@ places_make :: proc() {
 			c.seen += 1.0/120
 			if v := min(clear, 100) - abs(d - 1500)/25; clear >= 15 && land.slope[land_cell(x, z)] < 0.3 && (v > best || best == 1e9) do c.view, best = e, v
 		}
-		c.score *= min(0.3 + 1.4*c.seen, 1)*min(c.size/SEEN_SIZE, 1)
+		if c.kind not_in ON_FOOT do c.score *= min(0.3 + 1.4*c.seen, 1)*min(c.size/SEEN_SIZE, 1)
 	}
 	slice.sort_by(candidates[:], proc(a, b: Candidate) -> bool { return a.score > b.score })
 
