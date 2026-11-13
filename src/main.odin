@@ -25,7 +25,8 @@ import sdl "vendor:sdl3"
 //                   1000, too high for a cap); otherwise both are drawn from the seed, the day and the hour
 //   shot=file.png   wait for the world to load, save one frame and exit
 //   after=seconds   with shot: let this much time pass first, so water can move; with bench as
-//                   well, the frame is saved then without waiting, in mid-flight
+//                   well, the frame is saved then without waiting, in mid-flight. A picture's birds and
+//                   fish are posed this many seconds into the hour, so two runs show the same ones
 //   dig=x0,y0,z0,x1,y1,z1   once the world has loaded, clear this box of blocks; may be repeated
 //   probe=x0,z0,x1,z1       on exit, print the ground and water in these columns
 //   seed=N          which world: every random choice is keyed from it (default 7)
@@ -228,7 +229,7 @@ main :: proc() {
 	start := p.pos
 	intervals: [dynamic]f32   // seconds between frames
 	work: [dynamic]f32        // seconds of our own work per frame: everything but the wait for the display
-	drawn: [dynamic][2]int    // faces and ground plants drawn each frame
+	drawn: [dynamic][3]int    // faces, ground plants and creatures' boxes drawn each frame
 	idle_frames, title_from := 0, 0
 
 	running := true
@@ -328,13 +329,16 @@ main :: proc() {
 		}
 		if opt.bench > 0 && seconds > opt.bench do running = false
 
+		// The creatures' clock runs from the day and hour; a picture is taken `after` seconds into it, so two
+		// runs show the same animals, and two pictures with different `after` show them moved on.
+		clock := f64(opt.day)*86400 + f64(hour)*3600 + (opt.after if opt.shot != "" && opt.bench == 0 else seconds)
 		view := View {
 			eye = eye, yaw = p.yaw, pitch = p.pitch, hour = hour, day = opt.day, weather = opt.weather, seconds = f32(seconds),
-			target = hit, has_target = aiming, crosshair = shot == "",
+			target = hit, has_target = aiming, crosshair = shot == "", boxes = creatures_pose(eye, clock, f32(dt), hour, opt.day, &w.water),
 		}
 		render(&g, w, view, shot)
 		append(&work, f32(f64(sdl.GetPerformanceCounter() - now)/frequency - g.waited))
-		append(&drawn, [2]int{g.quads_drawn, g.plants_drawn})
+		append(&drawn, [3]int{g.quads_drawn, g.plants_drawn, g.boxes_drawn})
 
 		if seconds - title_at > 0.5 {
 			recent := intervals[title_from:]
@@ -369,10 +373,13 @@ main :: proc() {
 		report("frame interval", intervals[skip:])
 		report("our work      ", work[skip:])
 		if skip < len(drawn) {
-			slice.sort_by(drawn[skip:], proc(a, b: [2]int) -> bool { return a.x < b.x })
-			faces := drawn[skip + (len(drawn) - skip)/2].x
-			slice.sort_by(drawn[skip:], proc(a, b: [2]int) -> bool { return a.y < b.y })
-			fmt.printfln("drawn a frame (median): %d k faces, %d k ground plants", faces/1000, drawn[skip + (len(drawn) - skip)/2].y/1000)
+			mid := skip + (len(drawn) - skip)/2
+			slice.sort_by(drawn[skip:], proc(a, b: [3]int) -> bool { return a.x < b.x })
+			faces := drawn[mid].x
+			slice.sort_by(drawn[skip:], proc(a, b: [3]int) -> bool { return a.z < b.z })
+			boxes, most := drawn[mid].z, drawn[len(drawn) - 1].z
+			slice.sort_by(drawn[skip:], proc(a, b: [3]int) -> bool { return a.y < b.y })
+			fmt.printfln("drawn a frame (median): %d k faces, %d k ground plants, %d creatures' boxes (at most %d)", faces/1000, drawn[mid].y/1000, boxes, most)
 		}
 		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(p.pos.x - start.x, p.pos.z - start.z), p.pos.x, p.pos.y, p.pos.z, height_at(p.pos.x - f64(region.origin.x), p.pos.z - f64(region.origin.y), 1))
 	}

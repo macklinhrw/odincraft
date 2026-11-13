@@ -11,7 +11,7 @@ import "core:math"
 Field :: enum u8 {
 	// on the land's 16 m grid
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
-	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge, Surf, Sand_Kept, Washed, Canopy,
+	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge, Surf, Sand_Kept, Washed, Canopy, Lift, Barrier,
 	// from the ground the generator makes at the point
 	Height, Steepness, Gravel, Fallen, Beach, Too_Steep, Under_Water, Over_Water,
 }
@@ -81,6 +81,8 @@ FIELDS := [Field]Field_Info{
 	.Sand_Kept = {"sand-kept", "", "the sand the rivers bring the shore, less what the swell carries off; over 0 a beach of sand stays", proc(p: ^Point) -> f32 { return sand_kept(p.x, p.z) }, -1, 1, .Ramp, {0.40, 0.40, 0.45}, {0.95, 0.85, 0.50}},
 	.Washed    = {"washed", " m", "under the height the waves wash over a shore, 1 m and 8 m more for each unit of surf", proc(p: ^Point) -> f32 { return 1 + 8*grid_at(land.surf, p) - p.h }, -3, 3, .Ramp, {0.30, 0.55, 0.30}, {0.55, 0.50, 0.45}},
 	.Canopy    = {"canopy", "", "share of the sky the stand's crowns hide from the ground: little in the open and in a fresh gap, nearly all under a closed wood", proc(p: ^Point) -> f32 { return canopy_at(p.x, p.z) }, 0, 1, .Ramp, {0.95, 0.90, 0.60}, {0.05, 0.25, 0.08}},
+	.Lift      = {"lift", " m/s", "the wind of 8 m/s off the sea is turned upward by the ground facing it, which a soaring bird rides: the wind's speed times the sine of the slope times the cosine between the way the ground faces and the way the wind comes from", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); s := land.slope[c]; return SKY.wind*s/math.sqrt(1 + s*s)*math.cos(math.to_radians(land.facing[c] - f32(region.shape.swell))) if !land.grid.sea[c] else 0 }, 0, 3, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
+	.Barrier   = {"barrier", " m", "the tallest fall between the stream the ground drains to and the sea, which a fish coming up from the sea must get past; 10,000 where no stream reaches the sea", proc(p: ^Point) -> f32 { return fauna.barrier[land_cell(p.x, p.z)] }, 0, 50, .Ramp, {0.10, 0.35, 0.80}, {0.85, 0.20, 0.10}},
 	.Height    = {"height", " m", "of the ground over the sea", proc(p: ^Point) -> f32 { return p.h }, 0, 400, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Steepness = {"steepness", "", "rise over run of the ground in blocks, ledges and all", proc(p: ^Point) -> f32 { return p.steep }, 0, 1.5, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
 	.Gravel    = {"gravel", "", "1 on a bar or bed where a river lays gravel", proc(p: ^Point) -> f32 { return 1 if p.cover == .Gravel else 0 }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
@@ -221,4 +223,5 @@ why_at :: proc(wx, wz: f64) {
 	stack_words(x, z)
 	trail_words(x, z)
 	named_words(x, z)
+	creature_words(x, z)
 }

@@ -183,6 +183,7 @@ gen_init :: proc(kind: string) -> bool {
 	hollows_make()
 	trails_make()
 	places_make()
+	creatures_make()
 	return true
 }
 
