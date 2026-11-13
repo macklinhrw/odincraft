@@ -84,7 +84,7 @@ grain :: proc(blocks: []u8, h, x, y, z: i32, n: [3]i32, m: Mat) -> Mat {
 	lying := !above && solid(blocks, h, x, y - 1, z) && Mat(blocks[(x + 1) + (z + 1)*P + max(y - 1, 0)*P*P]) not_in PLANT_BLOCKS   // on the ground with none of its own over it
 	switch {
 	case n.y > 0 && lying:                    return .Grass if joined else GRAIN[m][0]   // moss on a lying trunk, the rings of a stump
-	case n.y > 0:                             return GRAIN[m][0] if below && !joined else m
+	case n.y > 0:                             return GRAIN[m][0] if below && !joined && !(y + 1 < h && Mat(blocks[(x + 1) + (z + 1)*P + (y + 1)*P*P]) in LEAVES) else m   // not under leaves, where the stem goes on as twigs
 	case n.y < 0:                             return m   // a limb's underside, far more often than a trunk cut from beneath
 	case !lying:                              return m
 	case same(blocks, h, x - n.x, y, z - n.z, m): return GRAIN[m][0]
