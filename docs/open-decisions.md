@@ -64,10 +64,12 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
   - Many beaches of the default island are rock, which looks neither good nor real.
   - Falling water does not join the water above and below it and looks as if it floats; water running over a single block's edge does not join either. Water rushes too fast into a hole dug beside it, and the look of flowing water is poor. Falls should throw spray.
   - The default island's mountain is stepped in bands of different rock, like a mesa. Compare it with real mountains.
+- **Fallen trees are still too common**, said after they had been halved and made into a stump and a log.
 - **The creatures of step 16 are models built of blocks**: a bird or a fish is a few small boxes, as a Minecraft animal is, and not a flat picture or a smooth model. Said when asked before step 16.
 
 **2026-11-12, Claude's call**
 
+- **One thrown tree in ten leaves a log, and one in ten a stub** (`STANDS.fallen`), after the owner found fallen trees still too common: about one or two logs to a hectare of old wood, where there were seven or eight. The other places in a gap grow young trees.
 - **Falling water is white, joins its stream and throws spray** (the rest of the owner's feedback of 18:11). The fall the owner saw as a floating blue ribbon was a fault of the merge of steps 11 and 14: both used the same spare value of a water quad, so every fall was drawn as still water half under a roof and its own look never showed. A fall's quads now mark themselves below zero. The sheet is as wide as the stream, begins on it a stride back from the lip, and is white strands with gaps where little water crosses. Spray is small white boxes posed each frame from the fall and the clock, through the creatures' draw: thrown up where the water lands, more and higher under a taller fall, and shed down its length. Not done: mist, and sound.
 - **A step in a stream is the stream's own water with thin white streaks**, smooth above the lip and foaming only below. It was an opaque white slab with foam on both sides.
 - **Water runs into a dug hole at 1.8 m/s for a drop of one in one, where it ran at 5**, and never faster than 3: a hole beside a river filled in a fifth of a second, and now takes about a second a block. Rivers and the sea are held at their levels and are not affected; a breached lake drains more slowly.

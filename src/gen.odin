@@ -633,8 +633,9 @@ Stand_Rule :: struct {
 	between:  f32,      // share of the places between the canopy trees where a smaller tree stands
 	snags:    f32,      // share of an old stand's canopy trees standing dead, as broken stubs
 	young:    f32,      // share of the places in a gap where young growth has come up
+	fallen:   f32,      // share of the canopy trees thrown in a gap whose trunk still lies, and as many again stand as stubs; the rest have rotted away
 }
-STANDS := Stand_Rule{across = 140, interval = {2000, 40}, spacing = {3.5, 7.5}, grows = 40, thins = 150, gaps = 0.2, gap = {4, 11}, refill = 50, between = 0.25, snags = 0.015, young = 0.2}
+STANDS := Stand_Rule{across = 140, interval = {2000, 40}, spacing = {3.5, 7.5}, grows = 40, thins = 150, gaps = 0.2, gap = {4, 11}, refill = 50, between = 0.25, snags = 0.015, young = 0.2, fallen = 0.1}
 
 // The land's cell a tree or a far cell reads its stand and community from: its own, with the
 // edges dithered over 24 m by the hash `r`, so that two stands or communities mix along their edge.
@@ -738,7 +739,7 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree, near := false) {
 			u := hash(gx, gz, seed + 142)
 			form: Tree_Form
 			switch {
-			case shade == 0 && gap: form = .Fallen if u%2 > 0 else .Dead
+			case shade == 0 && gap: form = .Fallen if f32(u%1000)/1000 < STANDS.fallen else .Dead if f32(u%1000)/1000 < 2*STANDS.fallen else .Under
 			case shade == 0:        form = .Dead if f32(u%1000)/1000 < old*STANDS.snags else .Canopy
 			case gap:               form = .Under
 			case shade < 0.5:       form = .Between if f32(u%1000)/1000 < STANDS.between else .Under
@@ -747,7 +748,7 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree, near := false) {
 			if !near && form > .Between || !inside && form != .Fallen do continue
 			com := Community_Kind(land.community[cell])
 			c := COMMUNITIES[com]
-			if f32((u >> 10) & 0xFF)/255 >= (c.density if form < .Under else 0.5*c.density if form > .Under else STANDS.young if gap else c.bushes) do continue   // in a gap half the thrown trunks have rotted away
+			if f32((u >> 10) & 0xFF)/255 >= (c.density if form != .Under else STANDS.young if gap else c.bushes) do continue
 			p := point_at(fx, fz, 1)
 			soil, g := surface_row(&p) == len(SURFACES) - 1, p.g
 			t := Tree{x = x, z = z, base = i32(math.round(g.h)), form = form}
