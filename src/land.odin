@@ -1218,5 +1218,14 @@ land_map :: proc(path, overlay: string) {
 			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
 		}
 	}
+	// Each fall a white dot, larger the taller it is, and each spring a small cyan one, ringed in black.
+	for f in region.features do if f.kind == .Fall || f.kind == .Spring {
+		px, py := int((f.at.x + region.size/2)*SIZE/region.size), int((f.at.y + region.size/2)*SIZE/region.size)
+		fall := f.kind == .Fall
+		r, colour := 1.5 + f.measured[0].value/30 if fall else 1, [3]u8{255, 255, 255} if fall else {90, 230, 255}
+		for dy in -4..=4 do for dx in -4..=4 do if d := math.hypot(f32(dx), f32(dy)); d <= r + 1 && px + dx >= 0 && py + dy >= 0 && px + dx < SIZE && py + dy < SIZE {
+			for k in 0..<3 do pixels[((py + dy)*SIZE + px + dx)*4 + k] = colour[k] if d <= r else 0
+		}
+	}
 	write_png(path, pixels, SIZE, SIZE, false)
 }

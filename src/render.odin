@@ -47,6 +47,8 @@ Gpu :: struct {
 	terrain, shadow_pipe, sky, water, river, pool, present: ^sdl.GPUGraphicsPipeline,
 	ribbon:         ^sdl.GPUBuffer,    // the rivers' water surface
 	ribbon_count:   u32,
+	falls:          ^sdl.GPUBuffer,    // the falling water, as quads of simulated water
+	falls_count:    u32,
 	quads_drawn:    int,
 	frame:          int,
 	cascade_at:     [4][3]f64,   // where each shadow map was last drawn, in the sun's frame
@@ -236,19 +238,22 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, blend = true,
 	})
 
-	if bytes := u32(len(rivers.ribbon)*size_of([4]f32)); bytes > 0 {
-		g.ribbon_count = u32(len(rivers.ribbon))
-		g.ribbon = sdl.CreateGPUBuffer(g.dev, {usage = {.VERTEX}, size = bytes})
-		staging := sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = bytes})
-		copy((cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:bytes], (cast([^]u8)raw_data(rivers.ribbon))[:bytes])
+	upload :: proc(g: ^Gpu, data: rawptr, bytes: int) -> ^sdl.GPUBuffer {
+		if bytes == 0 do return nil
+		buffer := sdl.CreateGPUBuffer(g.dev, {usage = {.VERTEX}, size = u32(bytes)})
+		staging := sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = u32(bytes)})
+		copy((cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:bytes], (cast([^]u8)data)[:bytes])
 		sdl.UnmapGPUTransferBuffer(g.dev, staging)
 		cmd := sdl.AcquireGPUCommandBuffer(g.dev)
 		pass := sdl.BeginGPUCopyPass(cmd)
-		sdl.UploadToGPUBuffer(pass, {staging, 0}, {g.ribbon, 0, bytes}, false)
+		sdl.UploadToGPUBuffer(pass, {staging, 0}, {buffer, 0, u32(bytes)}, false)
 		sdl.EndGPUCopyPass(pass)
 		_ = sdl.SubmitGPUCommandBuffer(cmd)
 		sdl.ReleaseGPUTransferBuffer(g.dev, staging)
+		return buffer
 	}
+	g.ribbon, g.ribbon_count = upload(g, raw_data(rivers.ribbon), len(rivers.ribbon)*size_of([4]f32)), u32(len(rivers.ribbon))
+	g.falls, g.falls_count = upload(g, raw_data(rivers.falls), len(rivers.falls)*size_of(Water_Quad)), u32(len(rivers.falls))
 }
 
 resize :: proc(g: ^Gpu, w, h: u32) {
@@ -469,6 +474,16 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		binding := sdl.GPUBufferBinding{buffer = g.ribbon}
 		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
 		sdl.DrawGPUPrimitives(pass, g.ribbon_count, 1, 0, 0)
+		// Falling water is drawn the same near and far, so the simulated water and the strip
+		// both leave the drop to it.
+		if g.falls != nil {
+			sdl.BindGPUGraphicsPipeline(pass, g.pool)
+			sdl.BindGPUFragmentSamplers(pass, 0, &water_mask, 1)
+			sdl.PushGPUVertexUniformData(cmd, 1, &from_eye, size_of(from_eye))
+			binding = {buffer = g.falls}
+			sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
+			sdl.DrawGPUPrimitives(pass, 4, g.falls_count, 0, 0)
+		}
 	}
 
 	sdl.BindGPUGraphicsPipeline(pass, g.water)

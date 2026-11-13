@@ -9,8 +9,7 @@ import sdl "vendor:sdl3"
 // into anything dug beside it.
 //
 // The land's own water is where it comes from. A column the generator says is river is
-// topped up to the river's level whenever it falls short, and a sea column is held at sea
-// level both ways. So a breached bank lets the river out and the river keeps coming,
+// held at the river's level, and a sea column at sea level, both ways. So a breached bank lets the river out and the river keeps coming,
 // while water with no supply behind it slowly sinks away.
 //
 // The columns live in a square window that wraps around: a column's place in the arrays
@@ -157,6 +156,7 @@ water_cross :: proc(wt: ^Water, a, b: int) -> f32 {
 	ha, hb := fa + wt.depth[a], fb + wt.depth[b]
 	open := max(ha, hb) - max(fa, fb)
 	if open <= 0.001 do return 0
+	if abs(wt.hold[a] - wt.hold[b]) > FALL_MIN && wt.hold[a] > fa && wt.hold[b] > fb do return 0   // a fall: the land holds the water above it and below, and the fall carries what crosses (falls_make)
 	drop := abs(ha - hb)
 	donor := wt.depth[a] if ha > hb else wt.depth[b]
 	amount := min(open*min(RUN*math.sqrt(drop), 5)*WATER_STEP, drop/4, donor/4)
@@ -219,7 +219,7 @@ water_step :: proc(wt: ^Water) {
 				switch {
 				case wt.sea[i] || rim: d = max(standing, 0)
 				case wt.still[i]:
-				case standing > d:     d = standing
+				case standing > 0:     d = standing   // the land's river, held at its level both ways: what runs into a lip goes over the fall
 				case standing <= 0 && d > 0:
 					d -= DRY_UP*WATER_STEP
 					if d < 0.002 do d = 0
@@ -306,7 +306,7 @@ water_surface :: proc(wt: ^Water, c: ^Chunk, out: ^[dynamic]Water_Quad) {
 					below = wt.floor[j]
 				}
 				drop := max(a - below[0], b - below[1])
-				if drop < 0.06 do continue
+				if drop < 0.06 || drop > FALL_MIN && (wt.hold[j] > wt.floor[j] || wt.depth[i] < 0.3) do continue   // a fall into the land's own water draws its own (falls_make), and a film makes no curtain
 				fall := clamp((drop - 0.06)/0.5, 0, 1)
 				ma, mb := more[ca], more[cb]
 				ma[3], mb[3] = fall, fall

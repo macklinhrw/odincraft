@@ -11,7 +11,7 @@ import "core:time"
 // of the forming (foundations/landforms.md, D4), and it leaves three kinds of feature: its own
 // scar and debris, the lake its debris dams, and the ponds among its hummocks.
 
-Feature_Kind :: enum u8 { Slide, Lake, Pond }
+Feature_Kind :: enum u8 { Slide, Lake, Pond, Fall, Spring }
 Measure :: struct { what: string, value: f32 }
 Feature :: struct {
 	kind:     Feature_Kind,
@@ -270,12 +270,26 @@ lakes_draw :: proc() {
 
 // The feature a point lies in, in a sentence, as --why prints it.
 feature_words :: proc(x, z: f64, h: f32) {
+	fall, by := -1, f64(1e9)
+	for f, i in region.features do if d := math.hypot(x - f.at.x, z - f.at.y); f.kind == .Fall && d < max(f64(f.reach), 12) && d < by do fall, by = i, d
+	if fall >= 0 {
+		f := region.features[fall]
+		fmt.printfln("%s a fall %.0f m high, %.0f m off: a stream draining %.2f km², %.3f m³/s, leaves a lip of %v and falls %s into a pool %.1f m deep that its floods have scoured (Veronese's rule, from the fall's height and a flood's flow over each metre of the lip)%s.",
+			"at the lip of" if h > f.level - 1.5 else "in the pool under" if by < 12 else "in the gorge below", f.measured[0].value, by, f.measured[1].value, f.size, fall_rock(f),
+			"to the sea" if f.level - f.measured[0].value < 0.5 else "past the weaker beds under it", f.measured[2].value,
+			fmt.tprintf("; below it the stream runs %.0f m in the gorge the fall cut as it wore back", f.reach) if f.reach > 8 else "")
+	}
+	for f in region.features do if f.kind == .Spring && math.hypot(x - f.at.x, z - f.at.y) < 30 {
+		c := land_cell(f.at.x, f.at.y)
+		fmt.printfln("by a spring %.0f m off: rain soaking down through %v comes out where it meets %v, which holds it, and %.2f km² of land above feed it %.4f m³/s; a brook starts here.",
+			math.hypot(x - f.at.x, z - f.at.y), rock_in(f.level + 3, land.grid.base[c], ROCK_SIM), rock_in(f.level - 2, land.grid.base[c], ROCK_SIM), f.measured[0].value, f.size)
+	}
 	if !in_slide(x, z) do return
 	s := region.features[landslide.feature]
 	ago := fmt.tprintf("the slide about %s years ago", years(s.age))
 	if level, inside, _ := lake_near(x, z); inside {
 		k := int(land.lake[land_cell(x, z)]) - 1
-		if k < 0 do for f, i in region.features do if f.kind != .Slide && f.level == level do k = i
+		if k < 0 do for f, i in region.features do if (f.kind == .Lake || f.kind == .Pond) && f.level == level do k = i
 		f, under := region.features[k], h < level
 		fmt.printfln("%s a %s of %.1f ha whose water stands at %.1f m%s, %s by %s; %s.", "in" if under else "on the shore of", "lake" if f.kind == .Lake else "pond", f.size/1e4, f.level,
 			fmt.tprintf(", %.1f m deep here", level - h) if under else "", "dammed" if f.kind == .Lake else "left in a hollow", ago,

@@ -1,5 +1,6 @@
 package main
 
+import "core:fmt"
 import "core:math"
 import "core:math/linalg"
 import "core:slice"
@@ -12,12 +13,23 @@ import "core:slice"
 // line. Near the player the water in the channel is simulated (water.odin); beyond that
 // it is a ribbon drawn at the true water level. Where the
 // channel turns, the outside bank is cut steep and the inside builds a gravel bar. Where
-// the ground is steep, the stream drops from pool to pool.
+// the ground is steep, the stream drops from pool to pool, and where it is steeper still across a
+// strong bed, it falls (`falls_make`).
 
 FREEBOARD   :: 0.4   // metres from the water up to the bank top
 MOUTH_BANK  :: -1    // bank level where a channel runs on under the sea
 RIVER_REACH :: 96    // metres from a channel beyond which the ground is never touched
 BUCKET      :: 64    // metres; segments are filed by the squares they can affect
+RUNOFF      :: 2.0   // metres of the year's rain that runs off: some 3 m falls on the Izu islands and about 1 m goes back to the air (a guess)
+FLOOD       :: 20    // how many times the mean flow a flood that scours a plunge pool carries (a guess)
+FALL_STEEP  :: 0.3   // a stream steeper than this over 30 m falls where a strong bed holds a lip
+SPRING_AREA :: 30_000   // m² of land above a contact that feeds a spring (a guess)
+// The rocks that pass water, through their pores or joints; the others hold it (after the ranges
+// in Freeze and Cherry, Groundwater, 1979, from memory): sandstone and grit, jointed limestone,
+// lava flows broken by their joints and the cinders and pumice between them. Mudstone and
+// siltstone hold it, as does stiff lava.
+PASSES :: bit_set[Mat]{.Sandstone, .Grit, .Limestone, .Basalt, .Scoria, .Tuff}
+FALL_MIN    :: 2.5   // metres: a drop taller than this is a fall with water of its own; a step pool's steps of a block or two are not
 
 River_Point :: struct {
 	p:    [2]f32,   // x, z
@@ -30,7 +42,9 @@ Segment :: struct {
 	bank_a, bank_b: f32,
 	half_a, half_b: f32,   // half the channel width
 	bend_a, bend_b: f32,   // how sharply the channel turns: -1 hard right to 1 hard left, looking downstream
-	lip:            bool,  // the water drops at the downstream end
+	drop:           f32,   // how far the water drops at the downstream end
+	pool:           f32,   // how much deeper than the channel a fall has scoured the bed at the upstream end
+	gorge:          bool,  // it runs in the gorge a fall cut, whose walls rise from the water
 }
 
 // A place on a river bank, for choosing where to start.
@@ -46,17 +60,25 @@ Rivers :: struct {
 	side:     int,
 	ribbon:   [dynamic][4]f32,   // the water surface as one triangle strip: x, y, z relative to the region's middle, and -1 to 1 across the channel
 	spots:    [dynamic]Spot,
+	falls:    [dynamic]Water_Quad,   // the falling water, relative to the region's middle, drawn near and far
 }
 
 rivers: Rivers
 
-// Channel width grows with the land drained: about 2 m at a spring, 9 m for 15 km².
+// The mean flow, m³/s, of the rain that runs off the land drained (water.md, D3).
+discharge :: proc(area: f32) -> f32 {
+	return RUNOFF*area/3.156e7
+}
+
+// A channel's width grows as the root of its flow and its depth as the flow to the power 0.4
+// (Leopold and Maddock): a brook a block wide and a hand deep where a stream starts, to be stepped
+// over; a stream 3.5 m wide and knee deep at 1 km², to be waded; 9 m and chest deep at 7 km².
 river_half :: proc(area: f32) -> f32 {
-	return 0.5*clamp(1.6 + 2.3*math.pow(area/1e6, 0.45), 2, 14)
+	return 0.5*clamp(14*math.sqrt(discharge(area)), 1, 28)
 }
 
 river_depth :: proc(half: f32) -> f32 {
-	return 0.8 + 0.2*half
+	return 2.1*math.pow(2*half/14, 0.8)
 }
 
 rivers_trace :: proc() {
@@ -79,6 +101,26 @@ rivers_trace :: proc() {
 		stream[c] = g.area[c] >= CHANNEL_AREA && land.lake[c] == 0 && (r == -1 || (r >= 0 && (stream[r] || land.lake[r] > 0)))
 		if stream[c] && r >= 0 do feeders[r] += 1
 	}
+	// Springs (foundations/water.md, D6). Rain soaks down through a bed that passes water until
+	// it meets one that does not, and comes out along the contact. Where the contact crosses a
+	// valley side in a hollow, with enough land above to feed it, a brook starts there and runs
+	// down to the stream below; on dry ground nearby the same hollow carries no water.
+	springs := 0
+	for c in g.order do if r := g.next[c]; r >= 0 && !stream[c] && g.area[c] >= SPRING_AREA && land.lake[c] == 0 && land.slope[c] > 0.15 && land.hump[c] < -2 {
+		over, under := rock_in(g.z[c] + 3, g.base[c], ROCK_SIM), rock_in(g.z[c] - 2, g.base[c], ROCK_SIM)
+		if over not_in PASSES || under in PASSES do continue
+		near := false   // one spring to a stretch of the contact: the water seeps along it to the lowest point
+		for f in region.features[len(region.features) - springs:] do near ||= math.hypot(f.at.x - middle_of(g, int(c)).x, f.at.y - middle_of(g, int(c)).y) < 150
+		if near do continue
+		append(&region.features, Feature{kind = .Spring, at = middle_of(g, int(c)), size = discharge(g.area[c]), level = g.z[c], cause = -1,
+			measured = {{"km² of land above it feeding it", g.area[c]/1e6}, {"strength of the bed it rises from", MATERIALS[under].strength}, {}}})
+		springs += 1
+		for k := int(c); k >= 0 && !stream[k] && land.lake[k] == 0; k = int(g.next[k]) {
+			stream[k] = true
+			if g.next[k] >= 0 do feeders[g.next[k]] += 1
+		}
+	}
+	fmt.printfln("springs: %d, where a bed that passes water lies on one that holds it, in a hollow on a valley side", springs)
 	points: [dynamic]River_Point
 	defer delete(points)
 	for c in g.order {
@@ -122,6 +164,17 @@ rivers_trace :: proc() {
 		if len(points) >= 2 do reach_build(points[:], u32(c))
 	}
 	lakes_draw()
+	heights, tallest := [4]int{}, -1
+	for f, i in region.features do if f.kind == .Fall {
+		h := f.measured[0].value
+		heights[0 if h < 5 else 1 if h < 10 else 2 if h < 30 else 3] += 1
+		if tallest < 0 || h > region.features[tallest].measured[0].value do tallest = i
+	}
+	if tallest >= 0 {
+		f := region.features[tallest]
+		fmt.printfln("falls: %d of 2.5 to 5 m, %d of 5 to 10, %d of 10 to 30, %d over 30; the tallest %.0f m, at %.0f, %.0f over %v",
+			heights[0], heights[1], heights[2], heights[3], f.measured[0].value, f.at.x + f64(region.origin.x), f.at.y + f64(region.origin.y), fall_rock(f))
+	} else do fmt.println("falls: none")
 }
 
 // One reach, from a spring or confluence down to the next confluence or the sea.
@@ -186,15 +239,18 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 	// Bank level at the two ends of each stretch between points. On gentle ground it
 	// follows the land. On steep ground the stream falls in steps: level pools with a
 	// sheer drop between them, which is what steep streams do and what blocks can show.
+	// Steeper than FALL_STEEP it cannot hold pools, and runs down the land as a cascade.
 	// A pool sits at or below the land's own level, never above it, and both ends of the
 	// reach keep the land's level so that reaches meet.
 	from := make([]f32, last, context.temp_allocator)
 	to := make([]f32, last, context.temp_allocator)
+	slope := make([]f32, last, context.temp_allocator)
 	level := pts[0].bank
 	for i in 0..<last {
 		up, down := max(i - 3, 0), min(i + 4, last)
 		fall := (pts[up].bank - pts[down].bank)/max(along[down] - along[up], 1)
-		if fall > 0.045 && min(along[i], along[last] - along[i + 1]) > 12 {
+		slope[i] = fall
+		if fall > 0.045 && fall <= FALL_STEEP && min(along[i], along[last] - along[i + 1]) > 12 {
 			pool := max(math.floor(pts[i + 1].bank - 0.55) + 0.55, pts[last].bank)   // so the water stands a little over a block top
 			from[i] = min(pool, level)
 			to[i] = from[i]
@@ -204,6 +260,8 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 		}
 		level = to[i]
 	}
+	gorge := make([]bool, last, context.temp_allocator)
+	falls_make(pts[:], along, slope, half, from, to, flow, gorge)
 
 	// The water surface: a pair of points across the channel at each end of each stretch.
 	// Where the level drops between stretches the two pairs stand one above the other and
@@ -238,19 +296,25 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 		}
 		if i < last && !at_sea && (i == 0 || from[i] < to[i - 1] - 0.01) {
 			water := from[i] - FREEBOARD
+			if i > 0 && to[i - 1] - from[i] > FALL_MIN {   // a fall: the strip breaks, and the fall draws the water between
+				l, _ := across(pts[i].p, flow[i], wide[i], max(water, MEETS))
+				append(&rivers.ribbon, rivers.ribbon[len(rivers.ribbon) - 1], l)
+			}
 			append(&rivers.ribbon, across(pts[i].p, flow[i], wide[i], max(water, MEETS)))
 			at_sea = water <= MEETS
 		}
 		if i == last do break
 
 		a, b := pts[i], pts[i + 1]
-		if i%8 == 4 {
+		if i%8 == 4 && slope[i] <= FALL_STEEP && !gorge[i] {   // a bank to start on, but not by a fall or a cascade
 			bank := a.p + [2]f32{-flow[i].y, flow[i].x}*(half[i]*1.3 + 5)
 			append(&rivers.spots, Spot{{bank.x, from[i], bank.y}, math.atan2(flow[i].x, -flow[i].y), a.area})
 		}
 		index := i32(len(rivers.segments))
-		lip := i + 1 < last && to[i] > from[i + 1] + 0.01
-		append(&rivers.segments, Segment{a.p, b.p, from[i], to[i], half[i], half[i + 1], bend[i], bend[i + 1], lip})
+		drop := to[i] - from[i + 1] if i + 1 < last else 0
+		pool := to[i - 1] - from[i] if i > 0 else 0
+		pool = plunge(pool, a.area, half[i]) - river_depth(half[i]) if pool > FALL_MIN else 0
+		append(&rivers.segments, Segment{a.p, b.p, from[i], to[i], half[i] + 0.5*pool, half[i + 1], bend[i], bend[i + 1], drop, max(pool, 0), gorge[i]})
 		lo := linalg.min(a.p, b.p) - RIVER_REACH + f32(region.size/2)
 		hi := linalg.max(a.p, b.p) + RIVER_REACH + f32(region.size/2)
 		for bz in max(int(lo.y)/BUCKET, 0)..=min(int(hi.y)/BUCKET, rivers.side - 1) {
@@ -262,12 +326,108 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 	free_all(context.temp_allocator)
 }
 
+// How deep a fall scours the pool under it, metres of water: Veronese's rule for the scour under
+// a falling jet, 1.9 H^0.225 q^0.54, with q the flow of a flood over each metre of the lip.
+plunge :: proc(height, area, half: f32) -> f32 {
+	return 1.9*math.pow(height, 0.225)*math.pow(FLOOD*discharge(area)/(2*half), 0.54)
+}
+
+// The rock a fall's lip is made of.
+fall_rock :: proc(f: Feature) -> Mat {
+	return rock_in(f.level - 0.6, rock_base(f.at.x, f.at.y, 1), 0)
+}
+
+// Falls (foundations/water.md, section 5). A stream steeper than FALL_STEEP cannot hold a bed of
+// pools. Where it runs so across a strong bed, that bed holds a lip on its top, and the weaker rock
+// under it is worn back by the water falling on it; so the stream falls in one drop from the strong
+// bed's top to the next strong bed's top or the foot of the steep ground, and below the fall runs at
+// that level in the gorge the fall cut as it wore back. Every drop taller than FALL_MIN, these and
+// the steps of a steep stream alike, is then a feature with water of its own: a sheet that leaves
+// the lip at the speed the water crosses it, falls freely to the pool, and churns it white.
+falls_make :: proc(pts: []River_Point, along, slope, half, from, to: []f32, flow: [][2]f32, gorge: []bool) {
+	last := len(pts) - 1
+	bed :: proc(q: River_Point, level: f32) -> (strong: bool, n: u16) {
+		n = rocks.bed[clamp(int(level - 1 - rock_base(f64(q.p.x), f64(q.p.y), 1) - STACK_LO), 0, STACK_LEN - 1)]
+		return MATERIALS[rocks.beds[n].kind].strength >= 0.5, n
+	}
+	for k := 1; k < last - 1; {
+		if slope[k] <= FALL_STEEP {
+			k += 1
+			continue
+		}
+		end := k
+		for end < last - 1 && slope[end] > FALL_STEEP do end += 1
+		lips := make([dynamic]int, context.temp_allocator)   // the first stretch of the run in each strong bed
+		for m in k..<end {
+			strong, n := bed(pts[m], from[m])
+			_, above := bed(pts[m - 1], from[m - 1])
+			if strong && (m == k || n != above) do append(&lips, m)
+		}
+		for m, j in lips {
+			next := lips[j + 1] if j + 1 < len(lips) else end
+			cliff := from[next] < 0.5 && land.grid.face[land_cell(f64(pts[m].p.x), f64(pts[m].p.y))] > 1.3   // it falls from the lowest strong bed over a cliff the waves undercut
+			_, n := bed(pts[m], from[m])
+			if _, below := bed(pts[next], from[next]); below == n && !cliff do continue   // it runs down the bed, as on a lava flow's back, and never falls past it
+			for s in m + 1..<next {
+				from[s], to[s] = from[next], from[next]
+				gorge[s] = pts[s].bank - from[next] > 6*half[s]   // walls several channel widths high
+			}
+		}
+		k = end
+	}
+	for i in 0..<last - 1 {
+		h := to[i] - from[i + 1]
+		if h <= FALL_MIN do continue
+		top, foot := to[i] - FREEBOARD, max(from[i + 1] - FREEBOARD, SEA_SURFACE)
+		gorge := i + 1
+		for gorge < last && pts[gorge].bank > from[i + 1] + 2 do gorge += 1
+		q := discharge(pts[i].area)
+		append(&region.features, Feature{kind = .Fall, at = {f64(pts[i + 1].p.x), f64(pts[i + 1].p.y)}, reach = along[gorge] - along[i + 1], size = q, level = top, cause = -1,
+			measured = {{"its height, metres", h}, {"km² draining over it", pts[i].area/1e6}, {"metres of water in the pool it scoured", plunge(h, pts[i].area, half[i + 1])}}})
+		v := max(math.cbrt(9.8*q/(2*half[i])), 0.4)
+		fall := math.sqrt(2*(top - foot)/9.8)
+		dir := flow[i + 1]
+		side := [2]f32{-dir.y, dir.x}
+		start := pts[i + 1].p + dir*0.6
+		ROWS :: 14
+		more := [4]f32{dir.x*v, dir.y*v, 1, 4}   // flow, depth, and 4 for a falling sheet (2 to 3 for the white water under it)
+		before: [2][3]f32
+		for r in 0..=ROWS {
+			t := fall*f32(r)/ROWS
+			c, y := start + dir*v*t, top + 0.05 - 4.9*t*t
+			w := 0.8*half[i] + 0.04*(top - y)   // it spreads as it falls
+			row := [2][3]f32{{c.x - side.x*w, y, c.y - side.y*w}, {c.x + side.x*w, y, c.y + side.y*w}}
+			if r > 0 do append(&rivers.falls, Water_Quad{{before[0], before[1], row[0], row[1]}, more})
+			before = row
+		}
+		// White water where it lands, fading out over a few metres.
+		at, spread := start + dir*v*fall, 1.2*half[i] + 0.6 + 0.08*h
+		for q in 0..<4 {
+			corner :: proc(at, dir, side: [2]f32, spread, y: f32, u, v: int) -> [3]f32 {
+				p := at + (dir*f32(u - 1) + side*f32(v - 1))*spread
+				return {p.x, y, p.y}
+			}
+			u, v := q & 1, q >> 1
+			quad: Water_Quad
+			for k in 0..<4 {
+				cu, cv := u + (k & 1), v + (k >> 1)
+				quad.p[k] = corner(at, dir, side, spread, foot + 0.06, cu, cv)
+				quad.more[k] = {dir.x, dir.y, 1, 3 if cu == 1 && cv == 1 else 2}
+			}
+			append(&rivers.falls, quad)
+		}
+	}
+}
+
 River_Near :: struct {
 	d:      f32,   // distance from the centre line
 	half:   f32,   // half the channel width there
 	bank:   f32,   // bank level there
 	inside: f32,   // 1 on the inside of a sharp bend, -1 on the outside, 0 on a straight
 	lip:    bool,  // just above a drop
+	fall:   bool,  // and the drop is a fall, whose lip is rock
+	pool:   f32,   // how much deeper a fall has scoured the bed here
+	gorge:  bool,  // in a fall's gorge
 }
 
 // The nearest river to a point, judged from the water's edge, if one is within reach.
@@ -286,8 +446,9 @@ river_near :: proc(x, z: f32) -> (r: River_Near, ok: bool) {
 		if d - half < nearest {
 			nearest = d - half
 			side: f32 = 1 if ab.x*ap.y - ab.y*ap.x > 0 else -1   // left or right of the flow
-			lip := s.lip && (1 - t)*linalg.length(ab) < 1.6
-			r, ok = {d, half, math.lerp(s.bank_a, s.bank_b, t), side*math.lerp(s.bend_a, s.bend_b, t), lip}, true
+			lip := s.drop > 0.01 && (1 - t)*linalg.length(ab) < 1.6
+			pool := s.pool*smoothstep(s.half_a*1.5, 0, t*linalg.length(ab))
+			r, ok = {d, half, math.lerp(s.bank_a, s.bank_b, t), side*math.lerp(s.bend_a, s.bend_b, t), lip, lip && s.drop > FALL_MIN, pool, s.gorge}, true
 		}
 	}
 	return
@@ -311,11 +472,11 @@ river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool, water: f3
 	}
 	bar, undercut := max(r.inside, 0), max(-r.inside, 0)
 	edge := r.half*(1.2 + 0.6*bar)   // where the bank top is reached
-	top := edge + 1.5                // the bank top is level this far, which keeps the water's edge in its banks
-	floor := top + r.half*2 + 5
+	top := edge + (0.3 if r.gorge else 1.5)   // the bank top is level this far, which keeps the water's edge in its banks
+	floor := top + (max(1.5, 0.3*(h - r.bank)) if r.gorge else r.half*2 + 5)   // and a gorge's walls rise from it, leaning back a little
 	if d >= floor do return h, false, NO_WATER
 	level := r.bank - FREEBOARD
-	bed := level - (0.15 if r.lip else river_depth(r.half))
+	bed := level - (0.15 if r.lip else river_depth(r.half) + r.pool)
 	// The bank top is a whole block that stands at least 30 cm clear of the water. Ground
 	// is cut into whole blocks, and a bank that rounded down would let the river out.
 	crest := math.ceil(level + 0.3)
@@ -323,7 +484,7 @@ river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool, water: f3
 		steep := bed + (crest - bed)*smoothstep(r.half*(0.55 + 0.3*undercut), r.half*1.2, d)
 		ramp := bed + (crest - bed)*d/edge
 		cut = math.lerp(steep, ramp, bar)
-		return cut, bar > 0.35 || math.round(cut) < level - 0.05, level   // gravel on a bar, or where the block's top is under water
+		return cut, !r.fall && (bar > 0.35 || math.round(cut) < level - 0.05), level   // gravel on a bar, or where the block's top is under water; a fall's lip is rock
 	}
 	return math.lerp(crest, h, smoothstep(top, floor, d)), false, NO_WATER
 }
