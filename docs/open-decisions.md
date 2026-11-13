@@ -55,6 +55,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Continue**: said when asked whether to commit step 7, with step 8 named as next. Taken as both, as with the steps before it.
 - **Run the steps that nothing blocks in parallel, each with its own subagent**, and keep their test runs out of the way: no windows, no taking the mouse or the focus, since open windows disturb each other and the owner.
 - **Small plants are drawn as crossed planes**, two flat cut-out pictures standing in an X, as Minecraft draws grass, ferns and reeds, using the artist's plant pictures from the same pack. Chosen over the plan's leaf cubes when asked before step 9. This answers item 6 of `foundations.md` section 9.
+- **The creatures of step 16 are models built of blocks**: a bird or a fish is a few small boxes, as a Minecraft animal is, and not a flat picture or a smooth model. Said when asked before step 16.
 
 **2026-11-12, Claude's call**
 

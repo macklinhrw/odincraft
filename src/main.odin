@@ -6,6 +6,7 @@ import "core:os"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
+import "core:sys/posix"
 import sdl "vendor:sdl3"
 
 // Controls
@@ -184,6 +185,12 @@ main :: proc() {
 	// A run that only takes a picture or measures opens no window and takes no focus: it draws
 	// unseen, at the size and pace it would have on a display.
 	unseen := (opt.shot != "" || opt.bench > 0) && !opt.show
+	// A window is opened only for a person: one asked for by --show, or a run started from a terminal.
+	// A script or an agent that forgets --shot or --bench is told so, and nothing appears on the owner's screen.
+	if !unseen && !opt.show && !posix.isatty(posix.STDIN_FILENO) {
+		fmt.eprintln("no terminal: this run would open the game's window. Add --shot=file or --bench=seconds to draw unseen, or --show if the owner asked to watch")
+		os.exit(2)
+	}
 	if unseen do sdl.SetHint(sdl.HINT_MAC_BACKGROUND_APP, "1")
 	if !sdl.Init({.VIDEO}) do fatal("SDL")
 	window := sdl.CreateWindow("OdinCraft", opt.width, opt.height, {.RESIZABLE, .HIGH_PIXEL_DENSITY} + ({.HIDDEN} if unseen else {}))
