@@ -300,11 +300,11 @@ water_surface :: proc(wt: ^Water, c: ^Chunk, out: ^[dynamic]Water_Quad) {
 
 			// Each side: the two corners along it, and the column beyond.
 			sides := [4][6]i32{{1, 0, 1, 3, 0, 0}, {-1, 0, 0, 2, 1, 1}, {0, 1, 2, 3, 0, 0}, {0, -1, 0, 1, 0, 1}}   // dx, dz, corner a, corner b, the neighbour's u or v on this side
-			for side in sides {
+			Sheet :: struct { falls: bool, below: [2]f32, white: f32 }
+			sheets: [4]Sheet
+			for side, n in sides {
 				nx, nz := x + side[0], z + side[1]
 				j := water_cell(nx, nz)
-				ca, cb := side[2], side[3]
-				a, b := y[ca], y[cb]
 				below: [2]f32
 				if wt.depth[j] > SHOWN {
 					if side[0] != 0 {
@@ -317,19 +317,31 @@ water_surface :: proc(wt: ^Water, c: ^Chunk, out: ^[dynamic]Water_Quad) {
 				} else {
 					below = wt.floor[j]
 				}
-				drop := max(a - below[0], b - below[1])
+				drop := max(y[side[2]] - below[0], y[side[3]] - below[1])
 				if drop < 0.06 || drop > FALL_MIN && (wt.hold[j] > wt.floor[j] || wt.depth[i] < 0.3) do continue   // a fall into the land's own water draws its own (falls_make), and a film makes no curtain
-				fall := clamp((drop - 0.06)/0.5, 0, 1)
-				ma, mb := more[ca], more[cb]
-				ma[3], mb[3] = fall + ma[3] - math.mod(ma[3], 2), fall + mb[3] - math.mod(mb[3], 2)
-				// The sheet leans out from the block it falls past, so the two never share a plane.
-				ax, az := fx + f32(ca & 1), fz + f32(ca >> 1)
-				bx, bz := fx + f32(cb & 1), fz + f32(cb >> 1)
-				ox, oz := f32(side[0])*0.12, f32(side[1])*0.12
-				append(out, Water_Quad{
-					{{ax, a, az}, {bx, b, bz}, {ax + ox, min(below[0], a), az + oz}, {bx + ox, min(below[1], b), bz + oz}},
-					{ma, mb, ma, mb},
-				})
+				sheets[n] = {true, below, clamp((drop - 0.06)/0.5, 0, 1)}
+			}
+			// A sheet leans out from the block it falls past, so the two never share a plane. Where
+			// two sheets meet at a corner of the column, both lean out along it to one line and end at
+			// one height, so the corner is closed.
+			LEAN :: 0.12
+			for side, n in sides {
+				if !sheets[n].falls do continue
+				top, foot: [2][3]f32
+				m: [2][4]f32
+				for c, e in ([2]i32{side[2], side[3]}) {
+					out, low := [2]f32{f32(side[0]), f32(side[1])}*LEAN, sheets[n].below[e]
+					round := (2 if c >> 1 == 1 else 3) if side[0] != 0 else (0 if c & 1 == 1 else 1)   // the side round this corner
+					if next := sheets[round]; next.falls {
+						out += [2]f32{f32(sides[round][0]), f32(sides[round][1])}*LEAN
+						low = min(low, next.below[0 if sides[round][2] == c else 1])
+					}
+					top[e] = {fx + f32(c & 1), y[c], fz + f32(c >> 1)}
+					foot[e] = {top[e].x + out.x, min(low, y[c]), top[e].z + out.y}
+					m[e] = more[c]
+					m[e][3] = sheets[n].white + m[e][3] - math.mod(m[e][3], 2)
+				}
+				append(out, Water_Quad{{top[0], top[1], foot[0], foot[1]}, {m[0], m[1], m[0], m[1]}})
 			}
 		}
 	}
