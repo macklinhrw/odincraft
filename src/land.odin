@@ -66,8 +66,31 @@ Phase :: struct($T: typeid) {
 	vents, spread, build, form, flank, crater, deep: T,
 }
 
+// The real islands the kinds stand for, by the figures start-up prints (measured on the game's own
+// grid: interesting-world/notes/real-islands.md): metres standing within 100 m of the shore, the
+// share of shore rising 30 m within 50 m, the slope of the first 100 m, the share of land under
+// 50 m and over 60°, the fall at a crest, the height above the nearest stream and the deepest
+// closed hollow. A kind is judged against the islands it is after, not against all of them.
+Real :: struct { name: string, v: [8]f32 }
+REAL := [?]Real{
+	{"Toshima", {82, 65, 40, 14, 1.2, 0.19, 130, 2}}, {"Mikurajima", {117, 81, 51, 5, 2.5, 0.69, 122, 7}}, {"Aogashima", {107, 85, 50, 9, 2.9, 0.63, 96, 77}},
+	{"Kōzushima", {70, 48, 34, 14, 1.8, 0.56, 72, 10}}, {"Hahajima", {85, 85, 39, 16, 1.9, 0.81, 79, 9}}, {"Chichijima", {60, 67, 29, 28, 0.8, 0.73, 54, 7}},
+	{"Kikaijima", {4, 0, 2, 57, 0, 0.05, 10, 1}}, {"Tsushima", {39, 40, 24, 74, 0, 1.25, 29, 4}},
+}
+
+// A figure of ours beside the same on the islands this kind is after, with a ! where ours lies
+// outside theirs by more than half as much again and `slack`.
+against :: proc(i: int, ours: f32, format: string, slack: f32) -> string {
+	lo, hi := max(f32), min(f32)
+	for k in KINDS do if k.name == region.kind do for name in k.after do for r in REAL do if r.name == name do lo, hi = min(lo, r.v[i]), max(hi, r.v[i])
+	if lo > hi do return fmt.tprintf(format, ours)
+	real := fmt.tprintf(format, lo) if lo == hi else fmt.tprintf("%s-%s", fmt.tprintf(format, lo), fmt.tprintf(format, hi))
+	return fmt.tprintf("%s (%s)%s", fmt.tprintf(format, ours), real, "!" if ours > 1.5*hi + slack || ours < lo/1.5 - slack else "")
+}
+
 Kind :: struct {
 	name:    string,
+	after:   []string, // the real islands it stands for (REAL); none is a guess
 	weight:  f32,      // how often the seed draws this kind, against the other rows' weights
 	story:   string,   // what the rock is (STORIES, rock.odin)
 	shape:   Shape([2]f64),
@@ -80,7 +103,7 @@ KINDS := [?]Kind{
 		// rises for 3 to 4 million years, and the sea then rises 40 to 60 m into the mouths of its
 		// valleys, leaving coves between the cliffs; much more and it is the inlets kind. After
 		// Hahajima, though its shore is half as long.
-		name = "ridge", weight = 3, story = "layered, gently tilted",
+		name = "ridge", after = {"Hahajima"}, weight = 3, story = "layered, gently tilted",
 		shape = {
 			radius = {0.35, 0.39}, xx = {0.85, 1.0}, zz = {1.3, 1.8}, xz = {-0.4, 0.4}, ragged = {0.35, 0.45}, ragged_wave = {2500, 3500},
 			rate = {0.00055, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.25, 0.35}, ridge = {0.8, 1.1},
@@ -99,7 +122,7 @@ KINDS := [?]Kind{
 		// last ice age, so its valleys are long branching inlets between high steep spurs, and in
 		// the 5,000 to 8,000 years since the rivers have filled the head of each with a flat.
 		// After Tsushima's Asō Bay and Chichijima.
-		name = "inlets", weight = 3, story = "layered, gently tilted",
+		name = "inlets", after = {"Tsushima", "Chichijima"}, weight = 3, story = "layered, gently tilted",
 		shape = {
 			radius = {0.40, 0.42}, xx = {0.85, 1.0}, zz = {1.15, 1.35}, xz = {-0.4, 0.4}, ragged = {0.35, 0.45}, ragged_wave = {2500, 3500},
 			rate = {0.0004, 0.0005}, swell = {0, 360}, silt = {0.4, 0.8}, floor = {0.25, 0.35}, ridge = {0.8, 1.1},
@@ -117,7 +140,7 @@ KINDS := [?]Kind{
 		// A cone after Toshima and Mikurajima, the rare inhospitable kind: one vent builds it out
 		// of the sea from lava and ash in a few tens of thousands of years, and the sea and its
 		// streams then cut it for a few hundred thousand, into a wall of cliffs round radial gorges.
-		name = "cone", weight = 1, story = "lava and ash",
+		name = "cone", after = {"Toshima", "Mikurajima"}, weight = 1, story = "lava and ash",
 		shape = {xx = {0.9, 1.1}, zz = {0.9, 1.1}, xz = {-0.2, 0.2}, rate = {0.0012, 0.0016}, swell = {0, 360}, silt = {0, 0.1}, lumps = {0.05, 0.1}, lumps_wave = {2000, 3000}},
 		history = {
 			{cell = 64, years = 2000, steps = {15, 25}, vents = {1, 1}, spread = {0, 400}, build = {700, 1000}, form = {0.7, 0.9}, flank = {0.28, 0.38}},
@@ -131,7 +154,7 @@ KINDS := [?]Kind{
 		// A crater after Aogashima: a steep cone of lava and ash, cut by the sea into cliffs for a
 		// few hundred thousand years, whose top then falls in after a last small eruption, leaving
 		// a rim round a closed floor, in which a small cone grows with a crater of its own.
-		name = "crater", weight = 1, story = "lava and ash",
+		name = "crater", after = {"Aogashima"}, weight = 1, story = "lava and ash",
 		shape = {xx = {0.75, 1}, zz = {1, 1.3}, xz = {-0.3, 0.3}, rate = {0.0011, 0.0015}, swell = {0, 360}, silt = {0, 0.1}, lumps = {0.04, 0.08}, lumps_wave = {1500, 2500}},
 		history = {
 			{cell = 64, years = 2000, steps = {15, 20}, vents = {1, 1}, build = {880, 980}, form = {1, 1.2}, flank = {0.55, 0.65}},
@@ -148,7 +171,7 @@ KINDS := [?]Kind{
 		// several vents of stiff pale lava pile steep-sided domes on it, with bays where the sea
 		// lies between them. The sea cuts the headlands, the streams fill the bays' heads, and at
 		// last a young dome grows with a shallow sunken top.
-		name = "domes", weight = 2, story = "pale lava and pumice",
+		name = "domes", after = {"Kōzushima"}, weight = 2, story = "pale lava and pumice",
 		shape = {xx = {0.9, 1.1}, zz = {0.9, 1.1}, xz = {-0.2, 0.2}, rate = {0.0011, 0.0016}, swell = {0, 360}, silt = {0.2, 0.5}, lumps = {0.15, 0.25}, lumps_wave = {1500, 2500}},
 		history = {
 			{cell = 64, years = 2000, steps = {3, 5}, vents = {1, 1}, spread = {0, 600}, build = {230, 290}, form = {2.5, 3.5}, flank = {0.1, 0.13}},
@@ -165,7 +188,7 @@ KINDS := [?]Kind{
 		// cutting the new shore since: low rounded hills round wide bays whose heads have filled
 		// with flats. No real island in the set is close; the drowned ones are the inlets kind.
 		// Much longer at rest and it wears down to the sea.
-		name = "worn", weight = 2, story = "layered, gently tilted",
+		name = "worn", after = {}, weight = 2, story = "layered, gently tilted",
 		shape = {
 			radius = {0.34, 0.38}, xx = {0.85, 1.15}, zz = {0.85, 1.2}, xz = {-0.5, 0.5}, ragged = {0.35, 0.5}, ragged_wave = {2500, 3500},
 			rate = {0.0005, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.3, 0.5}, ridge = {0.6, 0.95},
@@ -186,7 +209,7 @@ KINDS := [?]Kind{
 		// faster, until a last rise of 10 to 20 m floods their mouths into small coves. A step for
 		// each fall waits for the sea to cut its own shore. After Kikaijima, though steeper behind
 		// its terraces.
-		name = "raised", weight = 2, story = "layered, gently tilted",
+		name = "raised", after = {"Kikaijima"}, weight = 2, story = "layered, gently tilted",
 		shape = {
 			radius = {0.26, 0.30}, xx = {0.8, 1.2}, zz = {0.8, 1.25}, xz = {-0.5, 0.5}, ragged = {0.3, 0.45}, ragged_wave = {2500, 3500},
 			rate = {0.0005, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.3, 0.5}, ridge = {0.6, 0.95},
@@ -612,7 +635,10 @@ creep :: proc(g: ^Grid, dt: f32) {
 			for x in 1..<n - 1 {
 				c := y*n + x
 				if g.sea[c] do continue
-				g.z[c] = max(old[c] + k*wear(g, c, old[c]).creep*(old[c - 1] + old[c + 1] + old[c - n] + old[c + n] - 4*old[c]), 0.02)
+				// A mantle of ash creeps wherever it can lie, which is not on a face.
+				rate := wear(g, c, old[c]).creep
+				if m := region.story.mantle; m > rate do rate = math.lerp(m, rate, smoothstep(0.7, 1.2, math.hypot(old[c + 1] - old[c - 1], old[c + n] - old[c - n])/(2*g.d)))
+				g.z[c] = max(old[c] + k*rate*(old[c - 1] + old[c + 1] + old[c - n] + old[c + n] - 4*old[c]), 0.02)
 			}
 		}
 	}
@@ -1087,10 +1113,15 @@ land_figures :: proc(g: ^Grid) {
 	median :: proc(l: [dynamic]f32) -> f32 { slice.sort(l[:]); return l[len(l)/2] if len(l) > 0 else 0 }
 	rising := 0
 	for h in lists[4] do if h > 30 do rising += 1
-	fmt.printfln("against real high islands: shore height within 100 m %.0f m (60-117); shore rising 30 m in 50 m %.0f%% (40-85); slope in the first 100 m %.0f° (29-51)",
-		median(lists[0]), 100*f32(rising)/f32(max(len(lists[4]), 1)), math.to_degrees(math.atan(median(lists[1]))))
-	fmt.printfln("  land under 50 m %.0f%% (5-16); over 60° %.1f%% (0.8-2.9); fall at a crest %.2f m (0.56-1.25); height above the nearest stream %.0f m (54-130)",
-		100*f32(low)/f32(len(g.order)), 100*f32(steep)/f32(max(inner, 1)), median(lists[2]), median(lists[3]))
+	fmt.print("against")
+	for k in KINDS do if k.name == region.kind {
+		for name, i in k.after do fmt.printf("%s %s", "" if i == 0 else " and", name)
+		if len(k.after) == 0 do fmt.print(" no real island, this kind having none in the set")
+	}
+	fmt.printfln(": shore height within 100 m %s m; shore rising 30 m in 50 m %s%%; slope in the first 100 m %s°",
+		against(0, median(lists[0]), "%.0f", 8), against(1, 100*f32(rising)/f32(max(len(lists[4]), 1)), "%.0f", 10), against(2, math.to_degrees(math.atan(median(lists[1]))), "%.0f", 3))
+	fmt.printfln("  land under 50 m %s%%; over 60° %s%%; fall at a crest %s m; height above the nearest stream %s m",
+		against(3, 100*f32(low)/f32(len(g.order)), "%.0f", 5), against(4, 100*f32(steep)/f32(max(inner, 1)), "%.1f", 0.5), against(5, median(lists[2]), "%.2f", 0.15), against(6, median(lists[3]), "%.0f", 10))
 
 	// A sheltered landing is shore under 5 m where the sea fills less than a third of the
 	// square a kilometre across around it, with livable ground within 100 m; shore of that kind
@@ -1120,8 +1151,8 @@ land_figures :: proc(g: ^Grid) {
 	for c in g.order do hollow = max(hollow, g.fill[c] - g.z[c])
 	for &v in region.vents do v.fallen = v.crater > 0
 	route(g)
-	fmt.printfln("  livable %.0f%% of land, the largest patch %.0f ha (15-46, 63-417); sheltered landings %d, %.1f in 10 km of shore (0 on the cones, 7-14 and 1.3-1.9, 80 and 3.6 on Tsushima); deepest closed hollow %.0f m (2-10, 77 on Aogashima)",
-		100*f32(livable)/f32(len(g.order)), f32(slice.max(patch[:]) if len(patch) > 0 else 0)*g.d*g.d/10_000, len(landings), f32(len(landings))*10_000/(f32(len(lists[0]))*g.d), hollow)
+	fmt.printfln("  livable %.0f%% of land, the largest patch %.0f ha (15-46, 63-417); sheltered landings %d, %.1f in 10 km of shore (0 on the cones, 7-14 and 1.3-1.9, 80 and 3.6 on Tsushima); deepest closed hollow %s m",
+		100*f32(livable)/f32(len(g.order)), f32(slice.max(patch[:]) if len(patch) > 0 else 0)*g.d*g.d/10_000, len(landings), f32(len(landings))*10_000/(f32(len(lists[0]))*g.d), against(7, hollow, "%.0f", 8))
 }
 
 // Group marked cells lying within `reach` cells of each other: each cell's group, or -1, and

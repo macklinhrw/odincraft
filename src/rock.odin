@@ -33,6 +33,7 @@ Story :: struct {
 	fold:  [2]f32,   // height of the folds, metres
 	wave:  [2]f32,   // their wavelength, metres
 	drape: bool,     // the beds lie over the ground the vents built (land.odin), rather than level
+	mantle: f32,     // the least a hillside of it creeps where soil holds: ash and cinders mantle a volcano's lava and creep whatever lies under them
 }
 
 ANYWHERE :: [2]f32{-1e5, 1e5}
@@ -54,14 +55,14 @@ STORIES := [?]Story{
 		// sea cliffs of Toshima and Mikurajima.
 		name = "lava and ash",
 		kinds = {0 = {.Basalt, 1, ANYWHERE}, 1 = {.Scoria, 1, ANYWHERE}},
-		thick = {12, 40}, hard = 0.4, gap = 40, fold = {30, 70}, wave = {400, 1000}, drape = true,
+		thick = {12, 40}, hard = 0.4, gap = 40, fold = {30, 70}, wave = {400, 1000}, drape = true, mantle = 0.35,
 	},
 	{
 		// Stiff lava: pale domes and thick flows of rhyolite in sheets of pumice and ash, after
 		// Kōzushima.
 		name = "pale lava and pumice",
 		kinds = {0 = {.Rhyolite, 1, ANYWHERE}, 1 = {.Tuff, 1, ANYWHERE}},
-		thick = {10, 50}, hard = 0.5, gap = 60, fold = {15, 40}, wave = {600, 1500}, drape = true,
+		thick = {10, 50}, hard = 0.5, gap = 60, fold = {15, 40}, wave = {600, 1500}, drape = true, mantle = 0.35,
 	},
 }
 
