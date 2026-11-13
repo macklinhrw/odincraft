@@ -27,7 +27,8 @@ NEAR       :: 0.1
 // into it, and how many frames pass between redraws. A far cascade cannot resolve single
 // blocks, so it does not draw them, and it covers so much ground that the camera barely
 // moves across it in a few frames. The second and third take turns, a frame each: between them
-// they draw every tree in a kilometre, which is most of what a wooded view costs.
+// they draw every tree in a kilometre, which is most of what a wooded view costs. Each draws
+// only the chunks that can shade ground in view (see the shadow pass in `render`).
 CASCADE_RADIUS    :: [4]f32{64, 256, 1024, 4096}
 CASCADE_MIN_LEVEL :: [4]i32{0, 0, 1, 3}
 CASCADE_INTERVAL  :: [4]int{1, 2, 2, 4}
@@ -450,6 +451,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 
 	// Everything that could be drawn, with the quarters each chunk should show.
 	items := make([dynamic]Item, 0, len(w.chunks), context.temp_allocator)
+	lowest := f32(0)   // the lowest ground there is, from the eye: no shadow falls farther
 	for key, c in w.chunks {
 		if !c.ready || c.buffer == nil do continue
 		s := i32(1) << u32(key.level)
@@ -467,11 +469,17 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 			}
 		}
 		append(&items, it)
+		lowest = min(lowest, it.lo.y)
 	}
 
 	// Sun shadows.
 	if sun.y > -0.05 {
 		min_level := CASCADE_MIN_LEVEL
+		// Only what can shade ground in view is drawn: a chunk's box, drawn out down the sunlight as
+		// far as its shadow can fall, is tried against the view, widened by what a turn of the head
+		// can bring in before the map is next drawn.
+		WIDE :: 1.4
+		wide := [4][3]f32{fwd*tan_x*WIDE + right, fwd*tan_x*WIDE - right, fwd*tan_y*WIDE + up, fwd*tan_y*WIDE - up}
 		for r, i in radius {
 			if !redraw[i] do continue
 			target := sdl.GPUDepthStencilTargetInfo {
@@ -481,11 +489,16 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 			pass := sdl.BeginGPURenderPass(cmd, nil, 0, &target)
 			sdl.BindGPUGraphicsPipeline(pass, g.shadow_pipe)
 			sdl.PushGPUVertexUniformData(cmd, 0, &f.shadow_vp[i], size_of(f.shadow_vp[i]))
-			for &it in items {
+			casts: for &it in items {
 				if it.level < min_level[i] do continue
 				centre := (it.lo + it.hi)/2
 				reach := r + linalg.length(it.hi - it.lo)/2
 				if abs(linalg.dot(centre, l_right) + offset[i].x) > reach || abs(linalg.dot(centre, l_up) + offset[i].y) > reach do continue
+				fall := min((it.hi.y - lowest)/max(-light.y, 0.05), 2*r)
+				for p in wide {
+					far := [3]f32{it.hi.x if p.x > 0 else it.lo.x, it.hi.y if p.y > 0 else it.lo.y, it.hi.z if p.z > 0 else it.lo.z}
+					if linalg.dot(p, far) + fall*max(linalg.dot(p, light), 0) < 0 do continue casts
+				}
 				mask := it.mask
 				if it.level == min_level[i] do mask = 1 if it.level == 0 else 0xF
 				draw_item(g, cmd, pass, &it, mask)
