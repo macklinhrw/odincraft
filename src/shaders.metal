@@ -424,15 +424,29 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
     alpha *= 1.0 - 0.8 * in.river.y * smoothstep(0.35, 0.85, abs(in.river.x));
     alpha *= 0.25 + 0.75 * smoothstep(0.0, 0.35, in.kind.z);
 
+    float3 geometric = normalize(cross(dfdx(in.rel), dfdy(in.rel)));
+    float3 whitish = float3(0.55, 0.62, 0.68) * (sun_light(sun) * 0.3 * shade + sky_ambient(float3(0, 1, 0), sun, f.weather.x));
+    // A fall's own water (falls_make, rivers.odin): strands streaming down, nearly solid where
+    // much water crosses the lip, with gaps where little does; and where it lands, foam carried
+    // off by the flow, thinning away from the fall.
+    if (in.kind.y > 1.5) {
+        float y = in.rel.y + f.cam.y;
+        float u = dot(w, normalize(float2(-geometric.z, geometric.x) + 1e-4));
+        float strands = 0.6 * vnoise(float2(u * 2.5, y * 0.15 + t * 1.8)) + 0.4 * vnoise(float2(u * 8.0, y * 0.5 + t * 5.0));
+        float solid = smoothstep(0.4, 1.3, speed);
+        float a = in.kind.y > 3.5 ? mix(smoothstep(0.3, 0.65, strands), 0.6 + 0.4 * strands, solid)
+                                  : smoothstep(0.2, 0.5, carried - 0.6 + 0.8 * (in.kind.y - 2.0)) * (in.kind.y - 2.0);
+        return finish(apply_fog(whitish * (0.8 + 0.3 * strands), in.rel, in.position.xy, f, lifted, smp), in.position.xy, 0.92 * a);
+    }
+
     // White water. On a fall it runs down in streaks. On the level it is foam carried by
     // the flow: none in slow water, patches as it quickens, nearly solid below a fall.
-    float3 geometric = normalize(cross(dfdx(in.rel), dfdy(in.rel)));
     float sheet = smoothstep(0.5, 0.9, 1.0 - abs(geometric.y));
     float streaks = vnoise(float2((w.x + w.y) * 4.0, (in.rel.y + f.cam.y) * 0.7 + t * 3.5));
     float churn = max(smoothstep(1.3, 3.2, speed), in.kind.y);
-    float foam = smoothstep(0.0, 0.3, carried - (1.05 - 1.15 * churn));
+    float foam = smoothstep(0.0, 0.3, carried - (1.05 - 0.8 * churn));   // never solid: churning water is foam in patches, carried off
     float white = mix(foam * 0.85, in.kind.y * (0.25 + 0.6 * streaks), sheet);
-    col = mix(col, float3(0.55, 0.62, 0.68) * (sun_light(sun) * 0.3 * shade + sky_ambient(float3(0, 1, 0), sun, f.weather.x)), white);
+    col = mix(col, whitish * (0.75 + 0.35 * carried), white);
     alpha = mix(alpha, 0.9, white);
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, alpha);
 }

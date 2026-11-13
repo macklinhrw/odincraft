@@ -11,7 +11,7 @@ import "core:math"
 Field :: enum u8 {
 	// on the land's 16 m grid
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
-	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted,
+	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge,
 	// from the ground the generator makes at the point
 	Height, Steepness, Gravel, Fallen, Beach, Too_Steep, Under_Water,
 }
@@ -76,6 +76,7 @@ FIELDS := [Field]Field_Info{
 	.Risen     = {"risen", " m", "the sea has risen over the island since it stood lowest, when it may have been joined to larger land", proc(p: ^Point) -> f32 { return risen() }, 0, 120, .Ramp, {0.90, 0.88, 0.80}, {0.10, 0.30, 0.70}},
 	.Trail     = {"trail", " m", "from the middle of the nearest animal trail, less half of any cell over a metre; far, at cells over 2 m", proc(p: ^Point) -> f32 { return trail_near(p.x, p.z) - 0.5*f32(p.cell - 1) if p.cell <= 2 else ANY }, 0, 20, .Ramp, {0.60, 0.12, 0.05}, {0.95, 0.95, 0.90}},
 	.Lifted    = {"lifted", " m", "the wind off the sea has been raised to by the ground it crossed; cloud caps the ground where this passes the cloud base", proc(p: ^Point) -> f32 { return grid_at(land.lifted, p) }, 0, 400, .Ramp, {0.20, 0.30, 0.55}, {0.95, 0.95, 0.95}},
+	.Discharge = {"discharge", " m³/s", "the mean flow of the stream the ground drains to, the share of the rain on the land it drains that runs off", proc(p: ^Point) -> f32 { return discharge(land.valley[land_cell(p.x, p.z)]) }, -3, 0, .Log, {0.95, 0.95, 0.90}, {0.05, 0.10, 0.45}},
 	.Height    = {"height", " m", "of the ground over the sea", proc(p: ^Point) -> f32 { return p.h }, 0, 400, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Steepness = {"steepness", "", "rise over run of the ground in blocks, ledges and all", proc(p: ^Point) -> f32 { return p.steep }, 0, 1.5, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
 	.Gravel    = {"gravel", "", "1 on a bar or bed where a river lays gravel", proc(p: ^Point) -> f32 { return 1 if p.cover == .Gravel else 0 }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},

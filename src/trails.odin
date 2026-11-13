@@ -113,7 +113,7 @@ trails_make :: proc() {
 	for s in rivers.segments do for t in ([5]f32{0, 0.25, 0.5, 0.75, 1}) {
 		p, half := math.lerp(s.a, s.b, t), math.lerp(s.half_a, s.half_b, t)
 		c := land_cell(f64(p.x), f64(p.y))
-		deep := f32(0.15) if s.lip && t == 1 else river_depth(half)
+		deep := f32(0.15) if s.drop > 0 && t == 1 else river_depth(half)
 		if deep < 0.2 do lips[c] = p
 		if w := 2*half*(1 + 100*deep*deep) + 4; !g.sea[c] do trails.wade[c] = w if trails.wade[c] == 0 else min(trails.wade[c], w)
 	}
