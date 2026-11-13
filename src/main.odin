@@ -191,6 +191,7 @@ main :: proc() {
 	start := p.pos
 	intervals: [dynamic]f32   // seconds between frames
 	work: [dynamic]f32        // seconds of our own work per frame: everything but the wait for the display
+	drawn: [dynamic][2]int    // faces and ground plants drawn each frame
 	idle_frames, title_from := 0, 0
 
 	running := true
@@ -296,6 +297,7 @@ main :: proc() {
 		}
 		render(&g, w, view, shot)
 		append(&work, f32(f64(sdl.GetPerformanceCounter() - now)/frequency - g.waited))
+		append(&drawn, [2]int{g.quads_drawn, g.plants_drawn})
 
 		if seconds - title_at > 0.5 {
 			recent := intervals[title_from:]
@@ -327,6 +329,12 @@ main :: proc() {
 		}
 		report("frame interval", intervals[skip:])
 		report("our work      ", work[skip:])
+		if skip < len(drawn) {
+			slice.sort_by(drawn[skip:], proc(a, b: [2]int) -> bool { return a.x < b.x })
+			faces := drawn[skip + (len(drawn) - skip)/2].x
+			slice.sort_by(drawn[skip:], proc(a, b: [2]int) -> bool { return a.y < b.y })
+			fmt.printfln("drawn a frame (median): %d k faces, %d k ground plants", faces/1000, drawn[skip + (len(drawn) - skip)/2].y/1000)
+		}
 		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(p.pos.x - start.x, p.pos.z - start.z), p.pos.x, p.pos.y, p.pos.z, height_at(p.pos.x - f64(region.origin.x), p.pos.z - f64(region.origin.y), 1))
 	}
 	if opt.has_probe {

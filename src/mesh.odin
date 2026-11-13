@@ -66,7 +66,9 @@ sky_seen :: proc(blocks: []u8, h: i32, cover: ^[P*P]i32, at: [3]i32, x, y, z: i3
 	return seen/all
 }
 
-mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out: ^[dynamic]Quad, at: [3]i32) {
+// A column's ground plant (plants.odin) stands on the top face of its ground where that block is
+// still the one the plant grows on and air is over it, so digging, building or a tree takes it away.
+mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Quad, at: [3]i32) {
 	cover: [P*P]i32   // the highest block in each column that is not part of a plant
 	for k in 0..<P*P {
 		cover[k] = h - 1
@@ -108,6 +110,12 @@ mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out: ^[dynamic]Quad, at: 
 					q := quad(x + max(n.x, 0), y + max(n.y, 0), z + max(n.z, 0), 1, 1, f, m, corners, slope)
 					q.info |= closed << 4
 					append(out, q)
+					if k := (z + 1)*P + x + 1; f == 2 && c.plant[k] > 0 && at.y + y == c.top[k] - 1 {
+						row := GROUND_PLANTS[Plant_Kind(c.plant[k] - 1)]
+						if m in row.on && (!row.tall || !solid(blocks, h, x, y + 2, z)) {
+							append(plants, plant_quad(x, y + 1, z, Plant_Kind(c.plant[k] - 1), at.x + x, at.z + z, (corners[0] + corners[1] + corners[2] + corners[3])/4 | closed << 4, slope))
+						}
+					}
 				}
 			}
 		}

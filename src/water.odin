@@ -354,6 +354,7 @@ water_update :: proc(wt: ^Water, dev: ^sdl.GPUDevice, dt: f64) {
 		first := len(quads)
 		water_surface(wt, c, &quads)
 		append(&pieces, Piece{c, first, len(quads) - first})
+		if plants_drowned(wt, c) != c.drowned do c.drowned = plants_upload(dev, c, wt)   // the water has risen over a plant, or left it
 		if len(pieces) == 12 {
 			wt.turn = s + 1
 			break

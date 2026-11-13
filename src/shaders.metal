@@ -273,6 +273,79 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, 1.0);
 }
 
+// ---- ground plants ------------------------------------------------------------------------
+
+// Two pictures crossed in an X over a column (plants.odin), set off its middle, turned and sized
+// by its hash. They thin out from PLANT_NEAR to PLANT_FAR, each sinking into the ground as it
+// reaches its own distance, so the edge of where they are drawn is never a line.
+constant float PLANT_NEAR = 70.0, PLANT_FAR = 190.0;   // render.odin skips chunks beyond PLANT_FAR
+
+struct PlantV {
+    float4 position [[position]];
+    float3 rel;
+    float2 uv;            // across the picture, and up the plant in pictures
+    float up;             // metres over the ground
+    float ao;
+    uint layer [[flat]];  // the lower picture; the upper one follows it
+    uint info [[flat]];
+    float3 soft [[flat]]; // the ground's normal, by which the plant is lit as the ground is
+    float2 facing [[flat]]; // the picture's own normal across the ground, either way
+};
+
+vertex PlantV vs_plant(QuadIn q [[stage_in]], uint vid [[vertex_id]],
+                       constant Frame &f [[buffer(0)]], constant Draw &d [[buffer(1)]]) {
+    uint v = vid < 4u ? vid : vid < 6u ? 3u : vid - 2u;   // ten vertices: one picture, two that join nothing, the other
+    uint plane = vid < 5u ? 0u : 1u, c = vid == 5u ? 0u : v & 3u;
+    uint kind = uint(ushort(q.a.w)), h = q.b.x;
+    float pictures = (kind >> 8u) != 0u ? 2.0 : 1.0;
+    float r0 = float(h & 255u) / 255.0, r1 = float(h >> 8u) / 255.0;
+    float3 foot = d.origin.xyz + float3(q.a.xyz) + float3(0.2 + 0.6 * r0, 0.0, 0.2 + 0.6 * r1);
+    float reach = mix(PLANT_NEAR, PLANT_FAR, fract(r0 * 13.7 + r1 * 5.3));
+    float size = float(q.b.y) / 100.0 * (1.0 - smoothstep(0.8 * reach, reach, length(foot)));
+    float turn = float(plane) * 1.571 + fract(r0 * 7.1 + r1 * 3.3) * 1.571;   // any turn: an X repeats every quarter
+    float across = float(c & 1u) * 2.0 - 1.0, rise = float(c >> 1u) * pictures * size;
+    float3 p = foot + float3(cos(turn), 0.0, sin(turn)) * (0.7071 * size * across) + float3(0.0, rise, 0.0);
+    float3 world = foot + f.cam.xyz;
+    p.xz += rise * 0.03 * sin(f.sun.w * 1.6 + world.x * 0.35 + world.z * 0.27) * float2(0.8, 0.6);   // the wind stirs the tops
+    PlantV o;
+    o.rel = p;
+    o.position = f.view_proj * float4(p, 1.0);
+    o.uv = float2(float(c & 1u), float(c >> 1u) * pictures);
+    o.up = rise;
+    o.ao = float(q.b.z & 15u) / 15.0;
+    o.layer = (kind & 255u) * 2u;
+    o.facing = float2(-sin(turn), cos(turn));
+    o.info = q.b.z;
+    uint packed = q.b.w;
+    float2 g = (float2(packed & 255u, packed >> 8u) - 128.0) / 127.0;
+    o.soft = packed == 0u ? float3(0, 1, 0) : normalize(float3(0, 1, 0) + float3(g.x, sqrt(max(1.0 - dot(g, g), 0.0)), g.y));
+    return o;
+}
+
+fragment float4 fs_plant(PlantV in [[stage_in]], constant Frame &f [[buffer(0)]],
+                         depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]],
+                         texture2d_array<float> pictures [[texture(1)]], sampler pic_smp [[sampler(1)]],
+                         texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]]) {
+    uint upper = in.uv.y >= 1.0 ? 1u : 0u;
+    float2 uv = float2(in.uv.x, 1.0 - (in.uv.y - float(upper)));
+    float2 dx = dfdx(in.uv), dy = dfdy(in.uv);   // from the whole plant, so the seam between its pictures is not a jump
+    float4 tex = pictures.sample(pic_smp, uv, in.layer + upper, gradient2d(dx, dy));
+    // The smaller copies average the cut-out away, so far plants would thin and vanish: keep their
+    // coverage, then turn the edge into a sharp one a pixel wide (after Ben Golus, 2017).
+    float lod = max(log2(max(length(dx), length(dy)) * 16.0), 0.0);
+    float a = tex.a * (1.0 + 0.25 * lod);
+    a = saturate((a - 0.5) / max(fwidth(a), 1e-4) + 0.5);
+
+    float3 sun = f.sun.xyz;
+    float ndl = saturate(dot(in.soft, sun)) * mix(0.55, 1.15, abs(dot(in.facing, normalize(sun.xz + 1e-4))));   // a picture turned to the sun takes more of it, as a block's faces do
+    float shade = cloud_shade(in.rel, f, lifted, smp);
+    float lit = ndl > 0.0 ? shadow_at(in.rel, in.soft, f, shadow_map, shadow_smp) * shade : 0.0;
+    float ao = mix(0.5, 1.0, in.ao) * mix(0.6, 1.0, saturate(in.up / 0.6));   // darker toward the root, in the plant's own shade
+    float sky = 1.0 - float((in.info >> 4u) & 15u) / 15.0;
+    float3 col = tex.rgb * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) + sky_ambient(in.soft, sun, f.weather.x) * ao * sky * mix(0.7, 1.0, shade));
+    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, a);
+}
+
 // ---- sky, water, present ------------------------------------------------------------------
 
 struct ScreenV {

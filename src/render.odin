@@ -17,6 +17,7 @@ import sdl "vendor:sdl3"
 
 SHADERS    :: #load("shaders.metal", string)
 BLOCKS     :: #load("../assets/blocks.png")   // the faces of every block, drawn by tools/blocks.py: a row for each material, its top then its side
+PLANTS     :: #load("../assets/plants.png")   // the ground plants' pictures, by tools/blocks.py: a row for each, its lower picture then any upper one
 TILE       :: 16
 SHADOW_RES :: 2048
 FOV        :: 70.0   // vertical, degrees
@@ -42,13 +43,16 @@ Gpu :: struct {
 	shadow:         ^sdl.GPUTexture,   // one layer per cascade
 	shadow_sampler: ^sdl.GPUSampler,
 	blocks:         ^sdl.GPUTexture,   // one layer per tile of the atlas
+	plant_pics:     ^sdl.GPUTexture,   // the same for the ground plants
+	plant_sampler:  ^sdl.GPUSampler,
 	lifted:         ^sdl.GPUTexture,   // the field `lifted`, for the cloud cap
 	block_sampler:  ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
-	terrain, shadow_pipe, sky, water, river, pool, present: ^sdl.GPUGraphicsPipeline,
+	terrain, shadow_pipe, sky, water, river, pool, present, plant: ^sdl.GPUGraphicsPipeline,
 	ribbon:         ^sdl.GPUBuffer,    // the rivers' water surface
 	ribbon_count:   u32,
 	quads_drawn:    int,
+	plants_drawn:   int,
 	frame:          int,
 	cascade_vp:     [4]matrix[4, 4]f32,   // each shadow map's view as it was last drawn
 	cascade_eye:    [4][3]f64,            // and the eye it was drawn round
@@ -129,6 +133,7 @@ Pipeline :: struct {
 	depth, depth_write:                   bool,
 	compare:                              sdl.GPUCompareOp,       // .INVALID for no depth test
 	blend, clamp_depth:                   bool,
+	coverage:                             bool,   // alpha to coverage, for cut-out pictures
 }
 
 make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
@@ -159,7 +164,7 @@ make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
 		vertex_shader = vs, fragment_shader = fs,
 		primitive_type = .TRIANGLESTRIP,
 		rasterizer_state = {cull_mode = p.cull, front_face = .COUNTER_CLOCKWISE, enable_depth_clip = !p.clamp_depth},
-		multisample_state = {sample_count = p.samples},
+		multisample_state = {sample_count = p.samples, enable_alpha_to_coverage = p.coverage},
 		depth_stencil_state = {
 			compare_op = p.compare if p.compare != .INVALID else .ALWAYS,
 			enable_depth_test = p.compare != .INVALID, enable_depth_write = p.depth_write,
@@ -185,6 +190,36 @@ make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
 	return pipe
 }
 
+// An atlas of tiles, each a layer, with smaller copies for the distance, so a far hillside is
+// the average of the pixels a near one shows. Near by, pixels stay square.
+atlas_layers :: proc(g: ^Gpu, file: []u8, rows: int, wrong: string) -> (tex: ^sdl.GPUTexture) {
+	atlas, err := png.load_from_bytes(file, {.alpha_add_if_missing})
+	if err != nil || atlas.width != 2*TILE || atlas.height != rows*TILE do fatal(wrong)
+	pixels := bytes.buffer_to_bytes(&atlas.pixels)
+	layers := u32(2*rows)
+	tex = sdl.CreateGPUTexture(g.dev, {
+		type = .D2_ARRAY, format = .R8G8B8A8_UNORM_SRGB, usage = {.SAMPLER, .COLOR_TARGET},
+		width = TILE, height = TILE, layer_count_or_depth = layers, num_levels = 5,
+	})
+	staging := sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = layers*TILE*TILE*4})
+	mapped := (cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:layers*TILE*TILE*4]
+	for layer in 0..<int(layers) do for y in 0..<TILE {
+		from := ((layer/2*TILE + y)*2*TILE + layer%2*TILE)*4
+		copy(mapped[(layer*TILE + y)*TILE*4:][:TILE*4], pixels[from:][:TILE*4])
+}
+	sdl.UnmapGPUTransferBuffer(g.dev, staging)
+	cmd := sdl.AcquireGPUCommandBuffer(g.dev)
+	pass := sdl.BeginGPUCopyPass(cmd)
+	for layer in 0..<layers {
+		sdl.UploadToGPUTexture(pass, {transfer_buffer = staging, offset = layer*TILE*TILE*4}, {texture = tex, layer = layer, w = TILE, h = TILE, d = 1}, false)
+}
+	sdl.EndGPUCopyPass(pass)
+	sdl.GenerateMipmapsForGPUTexture(cmd, tex)
+	_ = sdl.SubmitGPUCommandBuffer(cmd)
+	sdl.ReleaseGPUTransferBuffer(g.dev, staging)
+	return
+}
+
 gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 	g.window = window
 	g.dev = sdl.CreateGPUDevice({.MSL}, false, nil)
@@ -207,46 +242,27 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		address_mode_u = .CLAMP_TO_EDGE, address_mode_v = .CLAMP_TO_EDGE, address_mode_w = .CLAMP_TO_EDGE,
 	})
 
-	// The block faces: each tile of the atlas a layer, with smaller copies for the distance, so
-	// a far hillside is the average of the pixels a near one shows. Near by, pixels stay square.
-	atlas, err := png.load_from_bytes(BLOCKS, {.alpha_add_if_missing})
-	if err != nil || atlas.width != 2*TILE || atlas.height != len(Mat)*TILE do fatal("assets/blocks.png does not have a row of two tiles for each material")
-	pixels := bytes.buffer_to_bytes(&atlas.pixels)
-	layers := u32(2*len(Mat))
-	g.blocks = sdl.CreateGPUTexture(g.dev, {
-		type = .D2_ARRAY, format = .R8G8B8A8_UNORM_SRGB, usage = {.SAMPLER, .COLOR_TARGET},
-		width = TILE, height = TILE, layer_count_or_depth = layers, num_levels = 5,
-	})
-	staging := sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = layers*TILE*TILE*4})
-	mapped := (cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:layers*TILE*TILE*4]
-	for layer in 0..<int(layers) do for y in 0..<TILE {
-		from := ((layer/2*TILE + y)*2*TILE + layer%2*TILE)*4
-		copy(mapped[(layer*TILE + y)*TILE*4:][:TILE*4], pixels[from:][:TILE*4])
-	}
-	sdl.UnmapGPUTransferBuffer(g.dev, staging)
-	cmd := sdl.AcquireGPUCommandBuffer(g.dev)
-	pass := sdl.BeginGPUCopyPass(cmd)
-	for layer in 0..<layers {
-		sdl.UploadToGPUTexture(pass, {transfer_buffer = staging, offset = layer*TILE*TILE*4}, {texture = g.blocks, layer = layer, w = TILE, h = TILE, d = 1}, false)
-	}
-	sdl.EndGPUCopyPass(pass)
-	sdl.GenerateMipmapsForGPUTexture(cmd, g.blocks)
-	_ = sdl.SubmitGPUCommandBuffer(cmd)
-	sdl.ReleaseGPUTransferBuffer(g.dev, staging)
+	g.blocks = atlas_layers(g, BLOCKS, len(Mat), "assets/blocks.png does not have a row of two tiles for each material")
+	g.plant_pics = atlas_layers(g, PLANTS, len(Plant_Kind), "assets/plants.png does not have a row of two pictures for each ground plant")
 	g.block_sampler = sdl.CreateGPUSampler(g.dev, {
 		min_filter = .LINEAR, mag_filter = .NEAREST, mipmap_mode = .LINEAR,
 		address_mode_u = .REPEAT, address_mode_v = .REPEAT, address_mode_w = .REPEAT,
+		max_anisotropy = 4, enable_anisotropy = true,
+	})
+	g.plant_sampler = sdl.CreateGPUSampler(g.dev, {
+		min_filter = .LINEAR, mag_filter = .NEAREST, mipmap_mode = .LINEAR,
+		address_mode_u = .CLAMP_TO_EDGE, address_mode_v = .CLAMP_TO_EDGE, address_mode_w = .CLAMP_TO_EDGE,
 		max_anisotropy = 4, enable_anisotropy = true,
 	})
 
 	// The field `lifted`, one texel to a cell of the land, read by the cloud cap.
 	n := u32(land.n)
 	g.lifted = sdl.CreateGPUTexture(g.dev, {type = .D2, format = .R16_FLOAT, usage = {.SAMPLER}, width = n, height = n, layer_count_or_depth = 1, num_levels = 1})
-	staging = sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = n*n*2})
+	staging := sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = n*n*2})
 	for &v, i in (cast([^]f16)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:n*n] do v = f16(land.lifted[i])
 	sdl.UnmapGPUTransferBuffer(g.dev, staging)
-	cmd = sdl.AcquireGPUCommandBuffer(g.dev)
-	pass = sdl.BeginGPUCopyPass(cmd)
+	cmd := sdl.AcquireGPUCommandBuffer(g.dev)
+	pass := sdl.BeginGPUCopyPass(cmd)
 	sdl.UploadToGPUTexture(pass, {transfer_buffer = staging}, {texture = g.lifted, w = n, h = n, d = 1}, false)
 	sdl.EndGPUCopyPass(pass)
 	_ = sdl.SubmitGPUCommandBuffer(cmd)
@@ -256,6 +272,11 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 	g.terrain = make_pipeline(g, {
 		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 3, quads = true,
 		cull = .BACK, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER,
+	})
+	// Ground plants: crossed pictures cut out by alpha to coverage, seen from both sides, casting no shadow.
+	g.plant = make_pipeline(g, {
+		vs = "vs_plant", fs = "fs_plant", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 3, quads = true,
+		cull = .NONE, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, coverage = true,
 	})
 	g.shadow_pipe = make_pipeline(g, {
 		vs = "vs_shadow", fs = "fs_shadow", vs_uniforms = 2, quads = true,
@@ -354,7 +375,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		sw, sh = u32(pw), u32(ph)
 	}
 	resize(g, sw, sh)
-	g.quads_drawn = 0
+	g.quads_drawn, g.plants_drawn = 0, 0
 
 	// Camera. Positions sent to the GPU are relative to the eye.
 	tan_y := math.tan(math.to_radians(f32(FOV))/2)
@@ -495,6 +516,21 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		}
 		it.seen = true
 		draw_item(g, cmd, pass, &it, it.mask)
+	}
+
+	// The ground plants in the nearest chunks, two pictures crossed in a strip of ten vertices.
+	sdl.BindGPUGraphicsPipeline(pass, g.plant)
+	plant_bindings := [3]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.plant_pics, g.plant_sampler}, lifted}
+	sdl.BindGPUFragmentSamplers(pass, 0, &plant_bindings[0], 3)
+	PLANT_FAR :: 190   // as in shaders.metal: no plant is drawn farther off
+	for &it in items {
+		if !it.seen || it.chunk.plant_buf == nil do continue
+		if near := linalg.clamp([2]f32{0, 0}, it.lo.xz, it.hi.xz); linalg.length(near) > PLANT_FAR do continue
+		sdl.PushGPUVertexUniformData(cmd, 1, &it.origin, size_of(it.origin))
+		binding := sdl.GPUBufferBinding{buffer = it.chunk.plant_buf}
+		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
+		sdl.DrawGPUPrimitives(pass, 10, it.chunk.plant_count, 0, 0)
+		g.plants_drawn += int(it.chunk.plant_count)
 	}
 
 	sdl.BindGPUGraphicsPipeline(pass, g.sky)

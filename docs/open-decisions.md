@@ -57,6 +57,13 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 
 **2026-11-12, Claude's call**
 
+- **Ground plants are drawn only within about 190 m**, thinning from 70 m, and the ground's tile stands in beyond. Drawing them farther cost more than it showed.
+- **Plants cast no shadow and are lit as the ground they stand on**, a little brighter where a picture faces the sun. Shadows from grass would speckle at the resolution of the near shadow map.
+- **Fifteen ground plants from the warm islands' flora**, each matched to the nearest picture in the pack: ferns, bracken, susuki, dwarf bamboo, evergreen shrubs, manryō, forest grass, short grass, reeds, sedges, itadori and its dead stems, kōbōmugi, hamagō and nigana. Itadori and the evergreen shrubs are berry bushes recoloured, a weak likeness.
+- **Susuki stands 1.3 to 1.6 m, not the 2 m it can reach**, so a walker sees over most of it.
+- **Reeds stand from 0.8 m of water to 0.4 m above it, and sedges above them**: a band as wide as the shore is gentle. Along streams only where the ground is gentler than 1 in 5, as slow water.
+- **No floating leaves.** The pack's water lily is credited to another author than the pack's, and no other picture looks like one.
+- **The plants are the same all year**: no plumes in autumn and the spring daisies always in flower, as the rest of the island has no season.
 - **Roofed places are three features with hosts, carved into the blocks** (step 14): sea notches, rock shelters and sea caves, a few of each on an island, each where its host ranks best, as the slide is. The default island has four shelters and no notch or cave, because its shore is low mudstone and sand; the cones, the ridge and the domes have all three.
 - **A sea cave asks for rock of strength 0.5 or more and a real face.** In mudstone it came out as an open cleft, since its roof fell in. Real sea caves at Dogashima are cut in a soft tuff, so this may be too strict.
 - **A face under a roof is lit by the square root of the share of sky it sees, and never below 2 of 15.** Taken straight, a cave was black a metre in. It is a choice of look, not a measure.
