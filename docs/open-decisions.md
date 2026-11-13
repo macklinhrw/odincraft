@@ -54,6 +54,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Commit steps 5 and 6, the flora and the textures, and go on to step 7**, stands with ages.
 - **Continue**: said when asked whether to commit step 7, with step 8 named as next. Taken as both, as with the steps before it.
 - **Run the steps that nothing blocks in parallel, each with its own subagent**, and keep their test runs out of the way: no windows, no taking the mouse or the focus, since open windows disturb each other and the owner.
+- **Small plants are drawn as crossed planes**, two flat cut-out pictures standing in an X, as Minecraft draws grass, ferns and reeds, using the artist's plant pictures from the same pack. Chosen over the plan's leaf cubes when asked before step 9. This answers item 6 of `foundations.md` section 9.
 
 **2026-11-12, Claude's call**
 
