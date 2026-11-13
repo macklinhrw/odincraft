@@ -351,7 +351,10 @@ waters_edge :: proc(h: f32, x, z, cell: f64) -> (top, laid: f32) {
 	surf := land_at(land.surf, land.n, x, z)
 	if surf < 0.01 do return
 	slope := max(land_at(land.slope, land.n, x, z), 0.02)
-	if open := smoothstep(0.1, 0.2, surf); open > 0 {   // gullies and pools along the strike of the beds, where the waves found a weakness
+	// A bench at the sea's level under steep ground, where the waves cut the foot of a cliff back,
+	// with gullies and pools along the strike of the beds, where they found a weakness. A gentle
+	// shore has none: the land runs down into the sea, and the rock the forming cut lies under it.
+	if open := smoothstep(0.1, 0.2, surf)*smoothstep(0.45, 0.8, slope); open > 0 {
 		along := rock_strike(x, z)
 		u, v := x*along.x + z*along.y, z*along.x - x*along.y
 		flat := 0.2 + 0.9*fbm(u/2, v, 10, cell, 3, seed + 740) - (1.3 if fbm(u/4, v, 5, cell, 2, seed + 741) < -0.2 else 0)
@@ -409,7 +412,7 @@ SURFACES := [?]Surface{
 	{"sand", "the waves keep the sand the rivers bring where the shore is sheltered enough", .Sand, {{.Beach, 0.3, ANY, 0}, {.Sand_Kept, 0, ANY, 0}}},
 	{"boulders", "the swell breaks on this shore and leaves only stones too large for it to move", .Air, {{.Beach, 0.3, ANY, 0}, {.Surf, 0.25, ANY, 0}}},
 	{"shingle", "the waves round the stones the shore gives them and throw them up in a bank", .Shingle, {{.Beach, 0.3, ANY, 0}}},
-	{"washed rock", "the waves wash the rock bare to this height and cut it flat at the sea's level", .Air, {{.Surf, 0.1, ANY, 0}, {.Washed, 0, ANY, 0}}},
+	{"washed rock", "the waves wash the rock bare to this height, and a little way under the sea, where sand cannot settle for them", .Air, {{.Surf, 0.1, ANY, 0}, {.Washed, 0, ANY, 0}, {.Height, -1.5, ANY, 0}}},
 	{"lake bed", "silt settles out of the still water of a lake or pond", .Silt, {{.Under_Water, 0, ANY, 0}}},
 	{"loose rock", "rock fallen from the face above lies at its angle of rest", .Air, {{.Fallen, 0, ANY, 0}}},
 	{"bare rock", "soil cannot hold on ground this steep, so the beds show", .Air, {{.Too_Steep, 0, ANY, 0}}},
@@ -990,6 +993,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			heights[k], c.water[k], c.base[k], c.mat[k] = g.h, g.water, g.base, m
 			if s == 1 do if kind, ok := plant_at(&p, m, plants); ok && g.water - g.h <= GROUND_PLANTS[kind].wet do c.plant[k] = u8(kind) + 1
 			c.top[k] = i32(math.round(heights[k]))
+			if heights[k] < SEA_SURFACE do c.top[k] = min(c.top[k], SEA_LEVEL - 1)   // what the land says is under the sea is drawn under it: a shoal is a shallow, not a raft of sand
 			c.ground[k] = c.top[k]
 			if s <= 8 do c.hollow[k] = hollow_at(x, z, cell)
 			// The canopy: a cell is the leaf of a tree its community would grow, raised to about
