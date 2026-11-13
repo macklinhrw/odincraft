@@ -212,4 +212,5 @@ why_at :: proc(wx, wz: f64) {
 	feature_words(x, z, p.h)
 	hollow_words(x, z)
 	trail_words(x, z)
+	named_words(x, z)
 }

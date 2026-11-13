@@ -12,7 +12,7 @@ import "core:time"
 // of the forming (foundations/landforms.md, D4), and it leaves three kinds of feature: its own
 // scar and debris, the lake its debris dams, and the ponds among its hummocks.
 
-Feature_Kind :: enum u8 { Slide, Lake, Pond, Notch, Shelter, Cave, Trail, Ford, Fall, Spring }
+Feature_Kind :: enum u8 { Slide, Lake, Pond, Notch, Shelter, Cave, Trail, Ford, Fall, Spring, Place }
 Measure :: struct { what: string, value: f32 }
 Feature :: struct {
 	kind:     Feature_Kind,

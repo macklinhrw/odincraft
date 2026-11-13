@@ -1246,5 +1246,6 @@ land_map :: proc(path, overlay: string) {
 			for k in 0..<3 do pixels[((py + dy)*SIZE + px + dx)*4 + k] = colour[k] if d <= r else 0
 		}
 	}
+	places_mark(pixels, SIZE)
 	write_png(path, pixels, SIZE, SIZE, false)
 }
