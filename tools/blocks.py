@@ -28,8 +28,12 @@ TILES = {
     "Dirt": ("mcl_core_coarse_dirt", None, 0, 1), "Loam": ("mcl_lush_caves_rooted_dirt", None, 0, 1), "Litter": ("mcl_core_dirt_podzol_top", None, 0, 1),
     "Silt": ("mcl_mud_packed_mud", "mcl_mud", 0, 1), "Red_Clay": ("hardened_clay", None, 0, 1), "Ash": ("mcl_colorblocks_concrete_powder_grey", None, 0, 1),
     "Stone": ("default_stone", None, 0, 1), "Sand": ("default_sand", None, 0, 1), "Black_Sand": ("default_sand", None, 0, 1), "Snow": ("default_snow", None, 0, 1), "Gravel": ("default_gravel", None, 0, 1),
+    "Shingle": ("default_gravel", None, 1, 0.8), "Black_Shingle": ("default_gravel", None, 1, 0.8),
     # bark on every face, as limbs run aslant and trunks lie fallen: a log's cut end would show on each step
     "Wood": (OAK, None, 0, 1), "Shii_Bark": (DARK, None, 0, 1), "Grey_Bark": (GREY, None, 0, 0.8), "Pine_Bark": (SPRUCE, None, 0, 1),
+    # the faces the mesher gives a trunk by the way it runs (grain, src/mesh.odin): its rings where it is cut across, and its bark turned along a lying one
+    "Wood_End": (OAK + "_top", None, 0, 1), "Shii_End": (DARK + "_top", None, 0, 1), "Grey_End": (GREY + "_top", None, 0, 1), "Pine_End": (SPRUCE + "_top", None, 0, 1),
+    "Wood_Across": (OAK, None, 1, 1), "Shii_Across": (DARK, None, 1, 1), "Grey_Across": (GREY, None, 1, 0.8), "Pine_Across": (SPRUCE, None, 1, 1),
     "Leaves": ("mcl_core_leaves_big_oak", None, 0, 1), "Shii_Leaves": ("default_leaves", None, 0, 1), "Camellia_Leaves": ("default_jungleleaves", None, 0, 1),
     "Hisakaki_Leaves": ("mcl_core_leaves_birch", None, 0, 1), "Pine_Needles": ("mcl_core_leaves_spruce", None, 0, 1), "Scrub_Leaves": ("default_acacia_leaves", None, 0, 1),
     # the rocks: a top, and a side that shows how each is built

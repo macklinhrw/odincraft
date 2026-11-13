@@ -20,8 +20,11 @@ import "core:time"
 Mat :: enum u8 {
 	Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel,
 	Shii_Bark, Shii_Leaves, Grey_Bark, Camellia_Leaves, Hisakaki_Leaves, Pine_Bark, Pine_Needles, Scrub_Leaves,   // each species' bark and leaf (SPECIES); the tabu's are Wood and Leaves
+	Wood_End, Shii_End, Grey_End, Pine_End,               // a trunk cut across: its rings. Only faces are these, never blocks (grain, mesh.odin)
+	Wood_Across, Shii_Across, Grey_Across, Pine_Across,   // and the bark of a lying trunk, turned to run along it
 	Litter, Susuki, Dune,             // what covers the ground between the trees (COMMUNITIES)
 	Black_Sand,                       // a beach ground from dark lava
+	Shingle, Black_Shingle,           // the stones the waves round and throw up where they leave no sand
 	Loam, Silt, Red_Clay, Ash,        // the soils under it (SOILS)
 	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff,
 	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree,
@@ -52,10 +55,20 @@ MATERIALS := [Mat]Material{
 	.Pine_Bark       = {{0.106, 0.087, 0.074}, 0, 0, .Air},   // black pine: dark plates
 	.Pine_Needles    = {{0.015, 0.058, 0.028}, 0, 0, .Air},
 	.Scrub_Leaves    = {{0.058, 0.128, 0.030}, 0, 0, .Air},  // tobira and its like: glossy mid green
+	.Wood_End        = {{0.300, 0.190, 0.105}, 0, 0, .Air},   // the wood inside: tabu's is reddish
+	.Shii_End        = {{0.330, 0.240, 0.140}, 0, 0, .Air},
+	.Grey_End        = {{0.400, 0.320, 0.210}, 0, 0, .Air},   // camellia's pale and fine
+	.Pine_End        = {{0.380, 0.260, 0.120}, 0, 0, .Air},   // pine's yellow with resin
+	.Wood_Across     = {{0.105, 0.068, 0.036}, 0, 0, .Air},
+	.Shii_Across     = {{0.087, 0.070, 0.055}, 0, 0, .Air},
+	.Grey_Across     = {{0.184, 0.177, 0.151}, 0, 0, .Air},
+	.Pine_Across     = {{0.106, 0.087, 0.074}, 0, 0, .Air},
 	.Litter    = {{0.096, 0.058, 0.025}, 0, 0, .Air},      // fallen evergreen leaves
 	.Susuki    = {{0.096, 0.157, 0.038}, 0, 0, .Air},    // susuki grass and dwarf bamboo
 	.Dune      = {{0.128, 0.139, 0.062}, 0, 0, .Air},   // dune grass, straw
 	.Black_Sand = {{0.060, 0.057, 0.054}, 0, 0, .Air},   // basalt and cinder sand, dark grey
+	.Shingle       = {{0.128, 0.120, 0.108}, 0, 0, .Air},   // sea-worn pebbles, paler than the rock they came from
+	.Black_Shingle = {{0.075, 0.072, 0.070}, 0, 0, .Air},
 	.Loam      = {{0.058, 0.040, 0.026}, 0, 0, .Air},   // dark topsoil
 	.Silt      = {{0.050, 0.046, 0.038}, 0, 0, .Air},   // grey river silt
 	.Red_Clay  = {{0.184, 0.062, 0.030}, 0, 0, .Air},     // the red clay long rain leaves on old ground
@@ -183,7 +196,7 @@ Ground :: struct {
 }
 
 REPOSE     :: 0.67   // loose rock comes to rest at about 34°
-SOIL_HOLDS :: 1      // and soil holds on ground up to about 45°, rise over run
+SOIL_HOLDS :: 1.3    // and soil holds on ground up to about 52°, rise over run: forest to 45° and scrub clinging above it
 
 // How strongly a bed of `lo` under a bed of `hi` stands as a ledge on a hillside this steep:
 // a riser at the foot of `lo` and a tread on its top. Only a stronger bed under a weaker one,
@@ -205,7 +218,7 @@ Ledge :: struct {
 // stay where the rock has them; only the ground between them moves, and the change fades
 // once a cell is too coarse to hold a riser. Under a riser, rock fallen from it lies at its
 // angle of rest.
-ledges :: proc(h, steep, base: f32, cell: f64) -> (l: Ledge) {
+ledges :: proc(h, steep, base: f32, x, z, cell: f64) -> (l: Ledge) {
 	l.h, l.rise = h, 1
 	y := h - base - STACK_LO
 	n := int(rocks.bed[clamp(int(y), 0, STACK_LEN - 1)])
@@ -215,8 +228,15 @@ ledges :: proc(h, steep, base: f32, cell: f64) -> (l: Ledge) {
 	// A tread on this bed's top: under a weaker bed, or on a thick hard bed standing at the
 	// steepest slope it holds, which breaks as a face whatever lies above it.
 	massive := smoothstep(0.4, 0.6, MATERIALS[bed.kind].strength)*smoothstep(25, 40, bed.thick)*smoothstep(0.85, 1, steep/rocks.law[bed.kind].limit)
-	top := fade*max(ledge(bed.kind, rocks.beds[n + 1].kind, steep), massive)
-	foot := fade*ledge(rocks.beds[n - 1].kind, bed.kind, steep)   // a tread at its foot, on the bed below's top
+	// A bed is not equally strong all along: it stands as a face only in stretches, most of the
+	// way along the strongest rocks and about a third of the way along the least of the strong, and
+	// between them the hillside runs smooth through it under scrub. So a hill wears crags and
+	// bluffs, not a wall round it at every strong bed.
+	stands :: proc(n: int, x, z, cell: f64) -> f32 {
+		return smoothstep(0, 0.15, fbm(x, z, 320, cell, 2, seed + 420 + u32(n)) - 0.25 + 2*(MATERIALS[rocks.beds[n].kind].strength - 0.6))
+	}
+	top := fade*max(ledge(bed.kind, rocks.beds[n + 1].kind, steep), massive)*stands(n, x, z, cell)
+	foot := fade*ledge(rocks.beds[n - 1].kind, bed.kind, steep)*stands(n - 1, x, z, cell)   // a tread at its foot, on the bed below's top
 	if top + foot > 1 do top, foot = top/(top + foot), foot/(top + foot)   // so the ground never folds back over itself
 	q := clamp((y - floor)/bed.thick, 0, 1)
 	p := 1 - q
@@ -228,7 +248,7 @@ ledges :: proc(h, steep, base: f32, cell: f64) -> (l: Ledge) {
 	// angle of rest, or where the hillside is steeper than that, no steeper than the hillside,
 	// so it always comes to ground within this bed.
 	above := rocks.beds[n + 1].kind
-	if face := fade*max(ledge(above, rocks.beds[n + 2].kind, steep), smoothstep(0.9, 1.1, steep/max(rocks.law[above].limit, SOIL_HOLDS))); face > 0 {
+	if face := fade*max(ledge(above, rocks.beds[n + 2].kind, steep), smoothstep(0.9, 1.1, steep/max(rocks.law[above].limit, SOIL_HOLDS)))*stands(n + 1, x, z, cell); face > 0 {
 		l.face = above
 		fall := max(REPOSE/max(steep, 0.01), 1)   // its fall per metre of the smooth hillside's
 		if lift := face*(h + bed.thick*p*(1 - fall) - l.h); lift > 0 {
@@ -244,7 +264,7 @@ shaped :: proc(x, z, cell: f64, back: f32 = 0) -> (l: Ledge, steep, base: f32) {
 	level := 0 if cell <= 16 else 1 if cell <= 32 else 2
 	steep = max(land_at(land.slope, land.n, x, z), 0)
 	base = rock_base(x, z, cell)
-	l = ledges(land_at(land.z[level], land.n >> uint(level), x, z) - back*steep, steep, base, cell)
+	l = ledges(land_at(land.z[level], land.n >> uint(level), x, z) - back*steep, steep, base, x, z, cell)
 	return
 }
 
@@ -281,7 +301,9 @@ ground :: proc(x, z, cell: f64) -> (g: Ground) {
 		if r := hash(gx, gz, seed + 710); f32(r & 0xFF)/255 < min(t/60, 0.3) {
 			size := 2 + f64((r >> 8)%4)
 			bx, bz := f64(gx)*7 + size/2 + f64((r >> 12)%u32(8 - size)), f64(gz)*7 + size/2 + f64((r >> 16)%u32(8 - size))
-			if abs(x - bx) < size/2 && abs(z - bz) < size/2 do h, g.cover, g.fallen = h + f32(1 + (r >> 20)%u32(size)), landslide.rock, 1
+			// Its corners are worn and its top is humped, longer one way than the other: a box reads as built.
+				u, v := (x - bx)/(size/2), (z - bz)/(size/2)*(1.5 if (r >> 28) & 1 == 0 else 0.7)
+				if q := f32(u*u*u*u + v*v*v*v); q < 1 do h, g.cover, g.fallen = h + f32(1 + (r >> 20)%u32(size))*math.sqrt(1 - q) + 0.5, landslide.rock, 1
 		}
 	}
 	h, g.laid = waters_edge(h, x, z, cell)
@@ -316,7 +338,7 @@ ground :: proc(x, z, cell: f64) -> (g: Ground) {
 // steeper than its face, and neither stands under a sheer cliff or on a shore the swell breaks on.
 // There the waves have cut the rock flat at the sea's level, with pools where it is worn deeper,
 // and boulders too large for them to move lie along the foot of what stands over it.
-CARRY :: 4   // the sand a shore loses to the swell, against the supply from a mouth (land_local)
+CARRY :: 2.5 // the sand a shore loses to the swell, against the supply from a mouth (land_local)
 
 sand_kept :: proc(x, z: f64) -> f32 {
 	return land_at(land.supply, land.n, x, z) - CARRY*land_at(land.surf, land.n, x, z)
@@ -346,7 +368,7 @@ waters_edge :: proc(h: f32, x, z, cell: f64) -> (top, laid: f32) {
 	if cell <= 2 {
 		// Boulders lie in heaps along the foot of what stands over the platform, larger under a cliff.
 		chance := smoothstep(0.15, 0.3, surf)*smoothstep(0.6, 1.2, top)*(1 - smoothstep(3, 6, top))*smoothstep(-0.3, 0.1, fbm(x, z, 40, cell, 2, seed + 743))
-		if b := stones(x, z, 0.9*chance, 1 + 1.2*smoothstep(0.4, 1.5, slope)); b > 0 do top, laid = top + b, laid + b
+		if b := stones(x, z, 0.45*chance, 1 + 0.6*smoothstep(0.4, 1.5, slope)); b > 0 do top, laid = top + b, laid + b
 	}
 	return
 }
@@ -359,9 +381,9 @@ stones :: proc(x, z: f64, chance, size: f32) -> (h: f32) {
 	for j in gz - 1..=gz + 1 do for i in gx - 1..=gx + 1 {
 		r := hash(i, j, seed + 730)
 		if f32(r & 0xFF)/255 >= chance do continue
-		rad := size*(0.5 + f32((r >> 8) & 0xFF)/255)
+		rad := size*(1.3 + f32((r >> 8) & 0xFF)/255)   // none so small that it is one block, which reads as a box
 		dx, dz := f32(x) - (f32(i)*3 + 3*f32((r >> 16) & 0xFF)/255), f32(z) - (f32(j)*3 + 3*f32(r >> 24)/255)
-		if q := (dx*dx + dz*dz)/(rad*rad); q < 1 do h = max(h, 1.2*rad*math.sqrt(1 - q))
+		if q := (dx*dx + dz*dz)/(rad*rad); q < 1 do h = max(h, rad*math.sqrt(1 - q))
 	}
 	return
 }
@@ -372,8 +394,9 @@ height_at :: proc(x, z, cell: f64) -> f32 {
 
 // What covers the ground, as an ordered catalogue: the first row whose host holds is the
 // surface. Air brings the rock itself: what has fallen there, or else the bed.
-// Soil and forest hold on ground up to about 45°, as on real flanks; only a face steeper than
-// that is bare, which a weak rock makes only where the sea undercuts it or as the riser of a ledge.
+// Forest holds on ground up to about 45° and scrub clings to about 52°, as on real flanks in a
+// wet climate; only a face steeper than that is bare, which a weak rock makes only where the sea
+// undercuts it or as the riser of a ledge.
 Surface :: struct {
 	name, why: string,
 	brings:    Mat,
@@ -384,7 +407,7 @@ SURFACES := [?]Surface{
 	{"river gravel", "a river lays gravel on its bars and its bed", .Gravel, {{.Gravel, 0, ANY, 0}}},
 	{"sand", "the waves keep the sand the rivers bring where the shore is sheltered enough", .Sand, {{.Beach, 0.3, ANY, 0}, {.Sand_Kept, 0, ANY, 0}}},
 	{"boulders", "the swell breaks on this shore and leaves only stones too large for it to move", .Air, {{.Beach, 0.3, ANY, 0}, {.Surf, 0.25, ANY, 0}}},
-	{"shingle", "the waves round the stones the shore gives them and throw them up in a bank", .Air, {{.Beach, 0.3, ANY, 0}}},
+	{"shingle", "the waves round the stones the shore gives them and throw them up in a bank", .Shingle, {{.Beach, 0.3, ANY, 0}}},
 	{"washed rock", "the waves wash the rock bare to this height and cut it flat at the sea's level", .Air, {{.Surf, 0.1, ANY, 0}, {.Washed, 0, ANY, 0}}},
 	{"lake bed", "silt settles out of the still water of a lake or pond", .Silt, {{.Under_Water, 0, ANY, 0}}},
 	{"loose rock", "rock fallen from the face above lies at its angle of rest", .Air, {{.Fallen, 0, ANY, 0}}},
@@ -395,9 +418,12 @@ SURFACES := [?]Surface{
 	{"soil", "soil holds, and the plants cover it", .Grass, {}},   // the plant community brings what covers it
 }
 
-// Sand is ground from the island's rock: black from basalt and scoria (Miyakejima, Ōshima), pale
-// from every other (Kōzushima's rhyolite, Kikaijima's coral, sandstone).
-SAND_OF := #partial [Mat]Mat{.Basalt = .Black_Sand, .Scoria = .Black_Sand}
+// Sand and shingle are ground from the island's rock: black from basalt and scoria (Miyakejima,
+// Ōshima), pale from every other (Kōzushima's rhyolite, Kikaijima's coral, sandstone).
+shore_of :: proc(m, bed: Mat) -> Mat {
+	if bed != .Basalt && bed != .Scoria do return m
+	return .Black_Sand if m == .Sand else .Black_Shingle if m == .Shingle else m
+}
 
 surface_row :: proc(p: ^Point) -> int {
 	for r, i in SURFACES do if host(r.host, p) > 0 do return i
@@ -416,7 +442,7 @@ surface_at :: proc(x, z, cell: f64, at: ^Point = nil) -> (g: Ground, m: Mat, pla
 		m, plants = COMMUNITIES[k].cover, k
 	}
 	if m == .Air do m = p.cover if p.cover != .Air else rock_in(p.h - 0.5, p.base, rock_level(cell))
-	if m == .Sand && SAND_OF[rock_in(p.h - p.laid - 0.5, p.base, rock_level(cell))] != .Air do m = .Black_Sand
+	if m == .Sand || m == .Shingle do m = shore_of(m, rock_in(p.h - p.laid - 0.5, p.base, rock_level(cell)))
 	return p.g, m, plants
 }
 
@@ -473,19 +499,20 @@ Species :: struct {
 
 SPECIES := [Tree_Kind]Species{
 	// Machilus: a stout trunk forking into heavy spreading limbs under a broad dark dome
-	.Tabu     = {"tabu", .Wood, .Leaves, .Broad, {14, 20}, {5, 5}, {1, 1}, 0.3, false, {3, 5}, 0.75, 0.5, 0.8, 0.12, 0.05, 0.3},
+	.Tabu     = {"tabu", .Wood, .Leaves, .Broad, {14, 20}, {5, 5}, {1, 1}, 0.3, false, {3, 5}, 0.75, 0.5, 0.8, 0.06, 0.05, 0.2},
 	// Castanopsis: a short thick bole forking low into great ascending limbs, a dense crown of rounded lumps
-	.Shii     = {"shii", .Shii_Bark, .Shii_Leaves, .Dome, {13, 19}, {3, 5}, {1, 1}, 0.3, false, {3, 5}, 0.55, 0.55, 0.8, 0.12, 0.05, 0.3},
-	// much-branched, often on several stems, a dense dark oval
-	.Camellia = {"camellia", .Grey_Bark, .Camellia_Leaves, .Oval, {5, 9}, {2, 2}, {1, 3}, 0.45, false, {2, 3}, 0.35, 0.65, 1.2, 0.1, 0, 0.3},
-	// Eurya: thin stems with level spreading branches and an open, uneven crown
-	.Hisakaki = {"hisakaki", .Grey_Bark, .Hisakaki_Leaves, .Broad, {4, 8}, {2, 3}, {2, 3}, 0.5, false, {2, 3}, 0.8, 0.45, 0.9, 0.15, 0.15, 0.6},
+	.Shii     = {"shii", .Shii_Bark, .Shii_Leaves, .Dome, {13, 19}, {3, 5}, {1, 1}, 0.3, false, {3, 5}, 0.55, 0.55, 0.8, 0.06, 0.05, 0.2},
+	// much-branched from low down, a dense dark oval. In blocks every tree stands on one stem: two or
+	// three a block apart read as a wall, so the species that grow in clumps fork low instead
+	.Camellia = {"camellia", .Grey_Bark, .Camellia_Leaves, .Oval, {5, 9}, {2, 2}, {1, 1}, 0.35, false, {2, 3}, 0.35, 0.65, 1.2, 0.05, 0, 0.2},
+	// Eurya: a thin stem with level spreading branches and an open, uneven crown
+	.Hisakaki = {"hisakaki", .Grey_Bark, .Hisakaki_Leaves, .Broad, {4, 8}, {2, 3}, {1, 1}, 0.4, false, {2, 3}, 0.8, 0.45, 0.9, 0.08, 0.15, 0.3},
 	// a crooked bare trunk to the top, with a few long level limbs carrying flat plates of needles
-	.Pine     = {"black pine", .Pine_Bark, .Pine_Needles, .Flat, {10, 15}, {3, 5}, {1, 1}, 0.6, true, {2, 4}, 0.8, 0.55, 0.3, 0.2, 0.2, 0.8},
+	.Pine     = {"black pine", .Pine_Bark, .Pine_Needles, .Flat, {10, 15}, {3, 5}, {1, 1}, 0.6, true, {2, 4}, 0.8, 0.55, 0.3, 0.1, 0.2, 0.5},
 	// tobira and other bushes, rounded from the ground up, cut into a wedge by the wind
 	.Scrub    = {"scrub", .Wood, .Scrub_Leaves, .Bush, {1, 3}, {1, 2}, {1, 1}, 0, false, {0, 0}, 0, 1, 1, 0, 0.6, 0},
-	// Alnus sieboldiana: sinuous grey stems from the base, spreading limbs, a rounded crown
-	.Alder    = {"alder", .Grey_Bark, .Scrub_Leaves, .Dome, {6, 10}, {2, 3}, {2, 3}, 0.45, false, {2, 3}, 0.6, 0.55, 0.8, 0.2, 0.1, 0.8},
+	// Alnus sieboldiana: a sinuous grey stem forking low, spreading limbs, a rounded crown
+	.Alder    = {"alder", .Grey_Bark, .Scrub_Leaves, .Dome, {6, 10}, {2, 3}, {1, 1}, 0.35, false, {2, 3}, 0.6, 0.55, 0.8, 0.1, 0.1, 0.4},
 }
 PLANT_BLOCKS :: bit_set[Mat]{.Wood, .Leaves, .Shii_Bark, .Shii_Leaves, .Grey_Bark, .Camellia_Leaves, .Hisakaki_Leaves, .Pine_Bark, .Pine_Needles, .Scrub_Leaves}
 
@@ -506,11 +533,11 @@ Community :: struct {
 
 COMMUNITIES := [Community_Kind]Community{
 	.Valley = {"valley forest", "tall tabu trees stand in the deep moist soil of valley floors and hollows", 4, 150,
-		{{{.Cold, -ANY, 3, 3}, {.Slope, -ANY, 0.2, 0.1}}, {{.Humped, -ANY, -8, 4}, {.Wetness, 0.35, ANY, 0.1}}}, 0.8, 0.3, {0.8, 0.2, 0, 0, 0, 0, 0}, .Grass, {0.45, 0.85, 0.30}},
+		{{{.Cold, -ANY, 3, 3}, {.Slope, -ANY, 0.2, 0.1}}, {{.Humped, -ANY, -8, 4}, {.Wetness, 0.35, ANY, 0.1}}}, 0.7, 0.08, {0.8, 0.2, 0, 0, 0, 0, 0}, .Grass, {0.45, 0.85, 0.30}},
 	.Slope = {"laurel forest", "shii and tabu close over the slopes wherever nothing else does better, with camellia under them", 1, 400,
-		{}, 0.95, 0.3, {0.15, 0.7, 0.15, 0, 0, 0, 0}, .Litter, {0.10, 0.42, 0.16}},
+		{}, 0.85, 0.1, {0.15, 0.7, 0.15, 0, 0, 0, 0}, .Litter, {0.10, 0.42, 0.16}},
 	.Ridge = {"ridge wood", "a low wood of small-leaved evergreens and pine holds dry humps and thin soil over rock", 3, 250,
-		{{{.Humped, 4, ANY, 3}, {.Wetness, -ANY, 0.25, 0.1}}, {{.Soil_Depth, -ANY, 0.5, 0.25}}}, 0.95, 0.15, {0, 0.1, 0.1, 0.6, 0.2, 0, 0}, .Litter, {0.20, 0.55, 0.60}},
+		{{{.Humped, 4, ANY, 3}, {.Wetness, -ANY, 0.25, 0.1}}, {{.Soil_Depth, -ANY, 0.5, 0.25}}}, 0.6, 0.1, {0, 0.1, 0.1, 0.6, 0.2, 0, 0}, .Litter, {0.20, 0.55, 0.60}},
 	.Windy = {"susuki grass and scrub", "sea wind and salt keep the trees out: tall grass, dwarf bamboo and wind-cut bushes", 4, 200,
 		{{{.Exposure, 0.8, ANY, 0.08}}}, 0.35, 0, {0, 0, 0, 0.1, 0.05, 0.85, 0}, .Susuki, {0.80, 0.80, 0.45}},
 	.Coast = {"coast strand", "salt and blown sand behind the shore: black pine and tobira scrub over dune grass", 5, 150,
@@ -521,9 +548,9 @@ COMMUNITIES := [Community_Kind]Community{
 	.Fresh = {"susuki on raw ground", "susuki grass is first onto rock and rubble a slide laid bare", 40, 60,
 		{{{.Disturbed, -ANY, 30, 30}}}, 0.04, 0, {0, 0, 0, 0, 0, 1, 0}, .Susuki, {1.00, 0.55, 0.55}},
 	.Alder = {"alder scrub", "alders follow the grass onto raw ground and shade it for the forest to return", 12, 80,
-		{{{.Disturbed, -ANY, 120, 180}}}, 0.75, 0.2, {0, 0, 0, 0, 0, 0.2, 0.8}, .Susuki, {0.80, 1.00, 0.30}},
+		{{{.Disturbed, -ANY, 120, 180}}}, 0.6, 0.1, {0, 0, 0, 0, 0, 0.2, 0.8}, .Susuki, {0.80, 1.00, 0.30}},
 	.Young = {"young wood", "tabu and small evergreens grow up through the alders, a darker and lower wood than the old forest round it", 8, 100,
-		{{{.Disturbed, -ANY, 400, 500}}}, 0.9, 0.4, {0.45, 0, 0.1, 0.25, 0, 0, 0.2}, .Litter, {0.30, 0.65, 0.55}},
+		{{{.Disturbed, -ANY, 400, 500}}}, 0.8, 0.12, {0.45, 0, 0.1, 0.25, 0, 0, 0.2}, .Litter, {0.30, 0.65, 0.55}},
 }
 COVERS :: bit_set[Mat]{.Grass, .Litter, .Susuki, .Dune, .Dirt}   // and the earth of a trail
 crowns: [Community_Kind]f32   // the mean radius of a community's crowns, metres
@@ -571,8 +598,7 @@ Tree :: struct {
 	radius: i32,   // of the crown
 	kind:   Tree_Kind,
 	form:   Tree_Form,
-	fall:   [2]f32,   // a fallen trunk: the way it lies from its root
-	tip:    i32,      // and the ground under its tip
+	fall:   [2]f32,   // a fallen trunk: the way it lies from its stump
 	open:   [2]f32,   // how far the crown's middle stands off the trunk, toward the light and downwind, metres
 	wind:   [2]f32,   // downwind, times how open the tree's place is to the wind
 }
@@ -583,7 +609,7 @@ Tree_Form :: enum u8 { Canopy, Between, Under, Dead, Fallen }
 TREE_GRID   :: 3     // at most one tree stands in a square of this many metres
 TREE_REACH  :: 6     // the farthest a crown reaches from its trunk
 CROWNS_MEET :: 0.75 // a crown's radius is at most this share of the spacing, so neighbours' crowns interlock
-FALLEN     :: 15   // the longest fallen trunk
+FALLEN     :: 8    // the longest fallen trunk, and its stump
 
 // How storms age the woods (foundations/vegetation.md, D3 and D6). The land's grid is cut into
 // stands round middles `across` metres apart, the reach of each drawn from the seed, and each has
@@ -604,9 +630,10 @@ Stand_Rule :: struct {
 	gap:      [2]f32,   // radius of a gap, metres
 	refill:   f32,      // years a gap stays open before its young growth closes it
 	between:  f32,      // share of the places between the canopy trees where a smaller tree stands
-	snags:    f32,      // share of an old stand's canopy trees standing dead
+	snags:    f32,      // share of an old stand's canopy trees standing dead, as broken stubs
+	young:    f32,      // share of the places in a gap where young growth has come up
 }
-STANDS := Stand_Rule{across = 140, interval = {2000, 40}, spacing = {2.5, 6.5}, grows = 40, thins = 150, gaps = 0.15, gap = {3, 8}, refill = 50, between = 0.5, snags = 0.04}
+STANDS := Stand_Rule{across = 140, interval = {2000, 40}, spacing = {3.5, 7.5}, grows = 40, thins = 150, gaps = 0.2, gap = {4, 11}, refill = 50, between = 0.25, snags = 0.015, young = 0.2}
 
 // The land's cell a tree or a far cell reads its stand and community from: its own, with the
 // edges dithered over 24 m by the hash `r`, so that two stands or communities mix along their edge.
@@ -710,7 +737,7 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree, near := false) {
 			u := hash(gx, gz, seed + 142)
 			form: Tree_Form
 			switch {
-			case shade == 0 && gap: form = .Fallen if u%4 > 0 else .Dead
+			case shade == 0 && gap: form = .Fallen if u%2 > 0 else .Dead
 			case shade == 0:        form = .Dead if f32(u%1000)/1000 < old*STANDS.snags else .Canopy
 			case gap:               form = .Under
 			case shade < 0.5:       form = .Between if f32(u%1000)/1000 < STANDS.between else .Under
@@ -719,7 +746,7 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree, near := false) {
 			if !near && form > .Between || !inside && form != .Fallen do continue
 			com := Community_Kind(land.community[cell])
 			c := COMMUNITIES[com]
-			if f32((u >> 10) & 0xFF)/255 >= (c.density if form != .Under else 1 if gap else c.bushes) do continue
+			if f32((u >> 10) & 0xFF)/255 >= (c.density if form < .Under else 0.5*c.density if form > .Under else STANDS.young if gap else c.bushes) do continue   // in a gap half the thrown trunks have rotted away
 			p := point_at(fx, fz, 1)
 			soil, g := surface_row(&p) == len(SURFACES) - 1, p.g
 			t := Tree{x = x, z = z, base = i32(math.round(g.h)), form = form}
@@ -740,10 +767,13 @@ trees_in :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree, near := false) {
 			case .Canopy:  t.height = max(i32(full), 3)
 			case .Between: t.height, t.radius = max(i32(0.65*full), 3), clamp(t.radius - 1, 1, 2)
 			case .Under:   t.height, t.radius = clamp(i32(4 + ago/6) if gap else (1 + i32((w >> 16)%2) if t.kind == .Scrub else 4 + i32((w >> 16)%3)), 1, max(i32(full), 2)), 1   // a bush a walker sees over, or a sapling whose leaves begin over his head
-			case .Dead:    t.height = max(i32(0.6*full), 2)
+			case .Dead:    t.height = clamp(i32(0.3*full), 2, 6)   // broken off by the storm that killed it
 			case .Fallen:
-				t.height, t.fall = clamp(i32(full), 6, FALLEN - 2), fall
-				t.tip = i32(math.round(ground(fx + f64(fall.x*f32(t.height)), fz + f64(fall.y*f32(t.height)), 1).h))
+				// In blocks a trunk lies along the grid, or it is a row of steps: a stump, a stride of
+				// clear ground, and the trunk for as far as the ground stays level under it.
+				t.fall = {math.round(fall.x), 0} if abs(fall.x) > abs(fall.y) else {0, math.round(fall.y)}
+				for t.height < 4 + i32((w >> 16)%4) && i32(math.round(ground(fx + f64(t.fall.x)*f64(t.height + 2), fz + f64(t.fall.y)*f64(t.height + 2), 1).h)) == t.base do t.height += 1
+				if t.height < 3 do t.height = 0
 			}
 			// Which way the crown reaches: away from stronger neighbours out to twice the reach of a
 			// crown, toward a gap beside it, down the slope, where the light comes from, and downwind
@@ -832,7 +862,7 @@ grow :: proc(blocks: []u8, t: Tree, o: [3]i32, c: ^Columns) {
 	mid := crown_at(t)
 	middle := [3]f32{mid.x, foot.y, mid.y}
 	big := t.height >= 18 && t.form == .Canopy   // the tallest trees stand on a trunk two blocks across
-	small := t.form >= .Between && t.form != .Dead || t.height < 6   // crowns too small to carry limbs that show
+	small := t.form >= .Between || t.height < 6   // crowns too small to carry limbs that show, and a dead stub
 	stems := 1 if small else sp.stems[0] + i32(draw(&h)*f32(sp.stems[1] - sp.stems[0] + 1))
 	limbs := 0 if small else sp.limbs[0] + i32(draw(&h)*f32(sp.limbs[1] - sp.limbs[0] + 1))
 	clear := 0 if sp.crown == .Bush else min(f32(3), H - 1)
@@ -841,12 +871,14 @@ grow :: proc(blocks: []u8, t: Tree, o: [3]i32, c: ^Columns) {
 	Lobe :: struct { at: [3]f32, a, b: f32 }
 	lobes: [24]Lobe
 	n := 0
+	ends: [24][3]f32   // where each stem and limb gives out: leaves close over it whatever the wind has cut
+	e := 0
 	for s in 0..<stems {
 		spread := [3]f32{math.cos(turn + 2*math.PI*f32(s)/f32(stems)), 0, math.sin(turn + 2*math.PI*f32(s)/f32(stems))}
 		base := foot + (0.5*spread if s > 0 else 0) - {0, 1, 0}
 		// Where the stem gives out, or for a leader its top. Stems of a clump splay apart.
 		fork := max(sp.fork*H, min(4, H - 2)) if !sp.leader else H - 2
-		if small do fork = H - 1
+		if small do fork = max(H - 2, 1)   // under its crown's top
 		end := foot + (middle - foot)*(fork/H) + {0, fork, 0}
 		if stems > 1 do end += 0.35*r*spread
 		// The stem in three lengths, each kinked aside by up to the species' crook.
@@ -860,6 +892,10 @@ grow :: proc(blocks: []u8, t: Tree, o: [3]i32, c: ^Columns) {
 			return knee[i] + (knee[i + 1] - knee[i])*(f*3 - f32(i))
 		}
 		if sp.crown != .Bush do for i in 0..<3 do line(blocks, layers, o, knee[i], knee[i + 1], sp.bark, big && s == 0, true)
+		if small || sp.leader {
+			ends[e] = end
+			e += 1
+		}
 		if small || sp.crown == .Bush {
 			// One crown, as wide as the room it has over the clear bole is deep; a bush is a dome from
 			// the ground, low at its edge.
@@ -889,11 +925,13 @@ grow :: proc(blocks: []u8, t: Tree, o: [3]i32, c: ^Columns) {
 				under, over := envelope(t, d)
 				tip.y = foot.y + max(math.lerp(min(under + b, over - b), over - b, draw(&h)), clear + 0.7*b)   // and rounded underneath, over the clear bole
 			}
-			if t.form != .Dead || draw(&h) < 0.6 do line(blocks, layers, o, from, tip - {0, 0.5*b, 0}, sp.bark, false, false)
+			line(blocks, layers, o, from, tip - {0, 0.5*b, 0}, sp.bark, false, false)
+			if e < len(ends) do ends[e] = tip - {0, 0.5*b, 0}
+			e = min(e + 1, len(ends))
 			if n < len(lobes) do lobes[n] = {tip, a, b}
 			n += 1
 			// The limb forks once near its end, and the twig carries a smaller lobe beside the first.
-			if sp.leader || t.form == .Dead do continue
+			if sp.leader do continue
 			side := az + (0.5*math.PI if l%2 == 0 else -0.5*math.PI)*(0.6 + 0.6*draw(&h))
 			twig := tip + 0.9*a*[3]f32{math.cos(side), (draw(&h) - 0.4)*sp.squash, math.sin(side)}
 			if n < len(lobes) do lobes[n] = {twig, 0.75*a, 0.75*b}
@@ -903,6 +941,11 @@ grow :: proc(blocks: []u8, t: Tree, o: [3]i32, c: ^Columns) {
 		a := sp.lobe*r*(1.1 if sp.leader else 0.9)
 		if n < len(lobes) do lobes[n] = {{mid.x, foot.y + H - a*sp.squash, mid.y}, a, a*sp.squash}
 		n += 1
+	}
+	if t.form == .Dead || sp.crown == .Bush do e = 0
+	for p in ends[:e] {
+		at := [3]i32{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))} - o
+		for d in ([5][3]i32{{0, 1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) do put(blocks, layers, at + d, sp.leaf, false)
 	}
 	if t.form == .Dead do return
 	// The leaves: every lobe, its edge a little uneven, inside the envelope and over the clear
@@ -1017,7 +1060,7 @@ block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, 
 		return soil.top if depth == 1 else soil.foot if depth == deep - 1 && deep > 2 else soil.sub
 	}
 	#partial switch surface {
-	case .Sand, .Silt, .Black_Sand: return surface if depth < 4 else bed
+	case .Sand, .Silt, .Black_Sand, .Shingle, .Black_Shingle: return surface if depth < 4 else bed
 	case .Snow:  return .Snow if depth < 2 else bed
 	case .Gravel: return .Gravel if depth < 2 else bed
 	}
@@ -1051,7 +1094,7 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 			stone := hash01(x + y*131, z, seed + 190) < soil.stones
 			bed := (landslide.rock if c.mat[k] == landslide.rock && t - y <= 6 else MATERIALS[landslide.rock].loose) if f32(t - y) <= debris else rock_in(f32(y) + 0.5, c.base[k], 0)   // a block of the cap is whole
 			b := block_below(c.mat[k], t - 1 - y, bed, soil, deep, stone)
-			blocks[k + int(y - y_base)*P*P] = u8(Mat.Black_Sand if b == .Sand && SAND_OF[bed] != .Air else b)
+			blocks[k + int(y - y_base)*P*P] = u8(shore_of(b, bed))
 		}
 		for y in c.hollow[k][0]..<min(c.hollow[k][1], t) do blocks[k + int(y - y_base)*P*P] = 0   // a hollow under a roof of the beds
 	}
@@ -1065,23 +1108,10 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 			grow(blocks, t, {x0, y_base, z0}, c)
 			continue
 		}
-		{
-			// The root plate torn up on edge across the way the trunk fell, the pit it left, and the
-			// trunk lying from it toward the ground at its tip, straight, resting on any rise between.
-			ground :: proc(c: ^Columns, x, z: i32) -> i32 { return c.top[clamp(z, 0, P - 1)*P + clamp(x, 0, P - 1)] }
-			for h in 0..=2*t.height + 4 {
-				d := f32(h)/2 - 1   // half a metre at a time, so a trunk lying aslant is a joined line of blocks
-				for side in -1..=1 do if d > 0 || side == 0 {
-					x, z := t.x - x0 + i32(math.round(d*t.fall.x - f32(side)*t.fall.y)), t.z - z0 + i32(math.round(d*t.fall.y + f32(side)*t.fall.x))
-					y := ground(c, x, z)
-					switch {
-					case d <= 0: put(blocks, x, y - 1 - y_base, z, .Air, true)
-					case d <= 1: for k in 0..<i32(2 - abs(side)) do put(blocks, x, y + k - y_base, z, .Dirt, false)
-					case side == 0: put(blocks, x, max(y, t.base + 1 + i32(f32(t.tip - t.base - 1)*d/f32(t.height + 1))) - y_base, z, SPECIES[t.kind].bark, false)
-					}
-				}
-			}
-		}
+		// A stump, and the trunk lying beyond it (trees_in).
+		bark := SPECIES[t.kind].bark
+		put(blocks, t.x - x0, t.base - y_base, t.z - z0, bark, false)
+		for d in 2..<2 + t.height do put(blocks, t.x - x0 + i32(t.fall.x)*d, t.base - y_base, t.z - z0 + i32(t.fall.y)*d, bark, false)
 	}
 	return
 }

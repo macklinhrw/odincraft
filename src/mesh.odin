@@ -66,6 +66,33 @@ sky_seen :: proc(blocks: []u8, h: i32, cover: ^[P*P]i32, at: [3]i32, x, y, z: i3
 	return seen/all
 }
 
+// Bark has a grain, and which way it runs is read from the blocks round it, so a trunk the player
+// cuts or lays shows it as one the world grew does. A standing trunk shows its rings on top where
+// it is cut across, unless a limb leaves it there. A block of bark on the ground
+// with none of its own over it lies: its ends show the rings, its sides the bark turned to run
+// along it and its top the moss a fallen trunk wears; one alone is a stump. Limbs in the air are
+// bark all round.
+GRAIN := #partial [Mat][2]Mat{.Wood = {.Wood_End, .Wood_Across}, .Shii_Bark = {.Shii_End, .Shii_Across}, .Grey_Bark = {.Grey_End, .Grey_Across}, .Pine_Bark = {.Pine_End, .Pine_Across}}
+grain :: proc(blocks: []u8, h, x, y, z: i32, n: [3]i32, m: Mat) -> Mat {
+	same :: proc(blocks: []u8, h, x, y, z: i32, m: Mat) -> bool {
+		return y >= 0 && y < h && x >= -1 && x <= CHUNK && z >= -1 && z <= CHUNK && Mat(blocks[(x + 1) + (z + 1)*P + y*P*P]) == m
+	}
+	beside :: proc(blocks: []u8, h, x, y, z: i32, m: Mat) -> bool {
+		return same(blocks, h, x + 1, y, z, m) || same(blocks, h, x - 1, y, z, m) || same(blocks, h, x, y, z + 1, m) || same(blocks, h, x, y, z - 1, m)
+	}
+	below, above, joined := same(blocks, h, x, y - 1, z, m), same(blocks, h, x, y + 1, z, m), beside(blocks, h, x, y, z, m)
+	lying := !above && solid(blocks, h, x, y - 1, z) && Mat(blocks[(x + 1) + (z + 1)*P + max(y - 1, 0)*P*P]) not_in PLANT_BLOCKS   // on the ground with none of its own over it
+	switch {
+	case n.y > 0 && lying:                    return .Grass if joined else GRAIN[m][0]   // moss on a lying trunk, the rings of a stump
+	case n.y > 0:                             return GRAIN[m][0] if below && !joined else m
+	case n.y < 0:                             return m   // a limb's underside, far more often than a trunk cut from beneath
+	case !lying:                              return m
+	case same(blocks, h, x - n.x, y, z - n.z, m): return GRAIN[m][0]
+	case same(blocks, h, x + n.z, y, z + n.x, m) || same(blocks, h, x - n.z, y, z - n.x, m): return GRAIN[m][1]
+	}
+	return m
+}
+
 // A column's ground plant (plants.odin) stands on the top face of its ground where that block is
 // still the one the plant grows on and air is over it, so digging, building or a tree takes it away.
 mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Quad, at: [3]i32) {
@@ -107,7 +134,7 @@ mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Qu
 						closed = u16(math.round(13*(1 - math.sqrt(sky_seen(blocks, h, &cover, at, nx, ny, nz, n)))))   // light the walls throw keeps the deepest from black
 						slope = {}
 					}
-					q := quad(x + max(n.x, 0), y + max(n.y, 0), z + max(n.z, 0), 1, 1, f, m, corners, slope)
+					q := quad(x + max(n.x, 0), y + max(n.y, 0), z + max(n.z, 0), 1, 1, f, grain(blocks, h, x, y, z, n, m) if GRAIN[m] != {} else m, corners, slope)
 					q.info |= closed << 4
 					append(out, q)
 					if k := (z + 1)*P + x + 1; f == 2 && c.plant[k] > 0 && at.y + y == c.top[k] - 1 {

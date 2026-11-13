@@ -86,7 +86,7 @@ FIELDS := [Field]Field_Info{
 	.Gravel    = {"gravel", "", "1 on a bar or bed where a river lays gravel", proc(p: ^Point) -> f32 { return 1 if p.cover == .Gravel else 0 }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
 	.Fallen    = {"fallen", " m", "depth of rock fallen from the face above", proc(p: ^Point) -> f32 { return p.fallen }, 0, 3, .Ramp, {0.95, 0.95, 0.90}, {0.40, 0.30, 0.25}},
 	.Beach     = {"beach", " m", "of sand or stones the waves have laid on the shore (waters_edge, gen.odin)", proc(p: ^Point) -> f32 { return p.laid }, 0, 3, .Ramp, {0.30, 0.55, 0.30}, {0.95, 0.85, 0.50}},
-	.Too_Steep = {"too-steep", "", "how much steeper than soil holds, which is a rise over run of 1 (45°) give or take 0.15 in patches", proc(p: ^Point) -> f32 { return p.steep - (SOIL_HOLDS + 0.15*p.vary) }, -0.5, 0.5, .Ramp, {0.30, 0.55, 0.30}, {0.55, 0.50, 0.45}},
+	.Too_Steep = {"too-steep", "", "how much steeper than soil holds, which is a rise over run of 1.3 (52°) give or take 0.15 in patches", proc(p: ^Point) -> f32 { return p.steep - (SOIL_HOLDS + 0.15*p.vary) }, -0.5, 0.5, .Ramp, {0.30, 0.55, 0.30}, {0.55, 0.50, 0.45}},
 	.Under_Water = {"under-water", " m", "of a lake's or pond's still water over the ground", proc(p: ^Point) -> f32 { l, inside, _ := lake_near(p.x, p.z); return max(l - p.h, 0) if inside else 0 }, 0, 5, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
 	.Over_Water = {"over-water", " m", "of the ground over the level of the lake or pond it lies in or beside, or of a slow stream (on ground gentler than 1 in 5) within 8 m; under 0, the depth of water over it", proc(p: ^Point) -> f32 { return over_water(p) }, -1, 3, .Ramp, {0.10, 0.30, 0.75}, {0.95, 0.95, 0.90}},
 }

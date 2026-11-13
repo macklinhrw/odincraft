@@ -121,22 +121,31 @@ options :: proc() -> Options {
 }
 
 // Start on the bank of the largest river, above the reach the sea floods, facing downstream,
-// with no tree within 6 m and no small one within 2; where every bank is wooded closer than that,
-// with none within 3 m. Found relative to the region's middle, returned in the world.
+// with no tree within 6 m and no small one within 3, on gentle ground with nothing in the three
+// strides ahead to fill the first view if any bank has that; where every bank is wooded closer,
+// with none within 3 m and no small one within 1.5. Found relative to the region's middle, returned in the world.
 find_start :: proc() -> (pos: [3]f64, yaw: f32) {
 	ox, oz := f64(region.origin.x), f64(region.origin.y)
 	slice.sort_by(rivers.spots[:], proc(a, b: Spot) -> bool { return a.area > b.area })
 	trees: [dynamic]Tree
 	defer delete(trees)
-	for clear_of in ([2]f32{6, 3}) do for s in rivers.spots {
-		if s.p.y < 12 do continue
+	for clear_of in ([2]f32{6, 3}) do for steep in ([2]f32{0.2, 1e9}) do for s in rivers.spots {
+		if s.p.y < 12 || land.slope[land_cell(f64(s.p.x), f64(s.p.z))] > steep do continue
 		clear(&trees)
 		trees_in(i32(s.p.x) - 6, i32(s.p.z) - 6, i32(s.p.x) + 6, i32(s.p.z) + 6, &trees, true)
 		near := false
-		for t in trees do near ||= max(abs(f32(t.x) - s.p.x), abs(f32(t.z) - s.p.z)) <= (clear_of if t.form <= .Between else 2)
+		for t in trees do near ||= max(abs(f32(t.x) - s.p.x), abs(f32(t.z) - s.p.z)) <= (clear_of if t.form <= .Between else clear_of/2)
 		if near do continue
 		x, z := math.floor(f64(s.p.x)) + 0.5, math.floor(f64(s.p.z)) + 0.5
 		if g := ground(x, z, 1); g.water > g.h do continue   // a bank a lake has drowned
+		hidden := false   // nor one where a plant or a rise in the three strides ahead fills the first view
+		for d in 1..=3 {
+			at: Point
+			g, m, com := surface_at(x + f64(d)*math.sin(f64(s.yaw)), z - f64(d)*math.cos(f64(s.yaw)), 1, &at)
+			kind, ok := plant_at(&at, m, com)
+			hidden ||= g.h > s.p.y + 1.5 || ok && (GROUND_PLANTS[kind].tall || g.h > s.p.y + 0.5)
+		}
+		if hidden && steep < 1 do continue
 		return {x + ox, math.round(f64(height_at(x, z, 1))) + 0.1, z + oz}, s.yaw
 	}
 	return {0.5 + ox, math.round(f64(height_at(0.5, 0.5, 1))) + 0.1, 0.5 + oz}, 0
