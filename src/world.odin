@@ -53,6 +53,8 @@ World :: struct {
 	edits:   map[Key][dynamic]Edit,   // by level-0 chunk
 	dirty:   [dynamic]Key,
 	center:  [LEVELS][2]i32,          // chunk under the camera at each level
+	finest:  i32,                     // the finest level any ground is near enough to need
+	sited:   [3]f64,                  // where the camera was when that was last worked out
 	started: bool,
 	water:   Water,
 
@@ -174,8 +176,35 @@ in_ring :: proc(w: ^World, key: Key, radius: i32) -> bool {
 	return abs(key.x - c.x) <= radius && abs(key.z - c.y) <= radius
 }
 
+// How far it is from a point to the nearest ground or sea, crowns and all: the land tried at eighty-one
+// points round it at each of five spacings, the wider ones allowed more relief between points.
+clearance :: proc(p: [3]f64) -> (clear: f64) {
+	clear = max(f64)
+	for l in 0..<5 {
+		step := f64(i32(CHUNK*2) << u32(l))
+		for j in -4..=4 do for i in -4..=4 {
+			d := [2]f64{f64(i), f64(j)}*step
+			top := f64(max(height_at(p.x + d.x - f64(region.origin.x), p.z + d.y - f64(region.origin.y), step), SEA_SURFACE)) + 30 + step/4
+			clear = min(clear, math.sqrt(d.x*d.x + d.y*d.y + math.pow(max(p.y - top, 0), 2)))
+		}
+	}
+	return
+}
+
 world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 	moved := !w.started
+	// A level's ring reaches RADIUS chunks from the camera, and beyond that the next level is fine
+	// enough. From high in the air no ground is that near, so the level is not built or drawn at all;
+	// it comes back a fifth of its reach sooner than it went, so hovering at the height costs nothing.
+	if !w.started || abs(cam.x - w.sited.x) + abs(cam.y - w.sited.y) + abs(cam.z - w.sited.z) > 8 {
+		w.sited = cam
+		clear := clearance(cam)
+		finest := w.finest
+		for finest < LEVELS - 2 && clear > f64(i32(RADIUS*CHUNK) << u32(finest))*1.2 do finest += 1
+		for finest > 0 && clear < f64(i32(RADIUS*CHUNK) << u32(finest - 1)) do finest -= 1
+		if finest != w.finest do moved = true
+		w.finest = finest
+	}
 	for l in 0..<LEVELS {
 		size := f64(i32(CHUNK) << u32(l))
 		c := [2]i32{i32(math.floor(cam.x/size)), i32(math.floor(cam.z/size))}
@@ -188,7 +217,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		// Chunks get one chunk of slack before they are dropped, so pacing back and forth
 		// across a boundary costs nothing.
 		gone := make([dynamic]Key, context.temp_allocator)
-		for key in w.chunks do if !in_ring(w, key, RADIUS + 1) do append(&gone, key)
+		for key in w.chunks do if !in_ring(w, key, RADIUS + 1) || key.level < w.finest do append(&gone, key)
 		for key in gone {
 			c := w.chunks[key]
 			if c.buffer != nil do sdl.ReleaseGPUBuffer(dev, c.buffer)
@@ -203,12 +232,12 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		sync.lock(&w.mutex)
 		w.focus = w.center
 		for i := len(w.pending) - 1; i >= 0; i -= 1 {
-			if !in_ring(w, w.pending[i].key, RADIUS + 1) {
+			if !in_ring(w, w.pending[i].key, RADIUS + 1) || w.pending[i].key.level < w.finest {
 				delete(w.pending[i].edits)
 				unordered_remove(&w.pending, i)
 			}
 		}
-		for l in 0..<i32(LEVELS) {
+		for l in w.finest..<i32(LEVELS) {
 			for dz in -i32(RADIUS)..=RADIUS {
 				for dx in -i32(RADIUS)..=RADIUS {
 					key := Key{l, w.center[l].x + dx, w.center[l].y + dz}

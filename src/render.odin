@@ -11,7 +11,7 @@ import "core:os"
 import "core:strings"
 import sdl "vendor:sdl3"
 
-// Drawing. A frame is: four sun shadow maps, then terrain, sky (where no terrain is) and water
+// Drawing. A frame is: four sun shadow maps, the cloud layer at half size, then terrain, sky (where no terrain is) and water
 // into a 4x multisampled target that resolves to the scene texture, then the scene to the
 // window. Lighting, clouds, fog and tone mapping live in shaders.metal.
 
@@ -41,6 +41,7 @@ Gpu :: struct {
 	w, h:           u32,
 	color, depth:   ^sdl.GPUTexture,   // multisampled
 	scene:          ^sdl.GPUTexture,   // resolved frame
+	clouds:         ^sdl.GPUTexture,   // the cloud layer along each line of sight, at half size
 	shadow:         ^sdl.GPUTexture,   // one layer per cascade
 	shadow_sampler: ^sdl.GPUSampler,
 	blocks:         ^sdl.GPUTexture,   // one layer per tile of the atlas
@@ -49,7 +50,7 @@ Gpu :: struct {
 	lifted:         ^sdl.GPUTexture,   // the field `lifted`, for the cloud cap
 	block_sampler:  ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
-	terrain, shadow_pipe, sky, water, river, pool, present, plant: ^sdl.GPUGraphicsPipeline,
+	terrain, shadow_pipe, sky, water, river, pool, present, plant, cloud_pipe: ^sdl.GPUGraphicsPipeline,
 	ribbon:         ^sdl.GPUBuffer,    // the rivers' water surface
 	ribbon_count:   u32,
 	falls:          ^sdl.GPUBuffer,    // the falling water, as quads of simulated water
@@ -273,12 +274,12 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 
 	// Depth runs from 1 at the near plane to 0 at infinity, which keeps precision at long range.
 	g.terrain = make_pipeline(g, {
-		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 3, quads = true,
+		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 4, quads = true,
 		cull = .BACK, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER,
 	})
 	// Ground plants: crossed pictures cut out by alpha to coverage, seen from both sides, casting no shadow.
 	g.plant = make_pipeline(g, {
-		vs = "vs_plant", fs = "fs_plant", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 3, quads = true,
+		vs = "vs_plant", fs = "fs_plant", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 4, quads = true,
 		cull = .NONE, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, coverage = true,
 	})
 	g.shadow_pipe = make_pipeline(g, {
@@ -287,18 +288,19 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 	})
 	g.sky = make_pipeline(g, {vs = "vs_screen", fs = "fs_sky", fs_uniforms = 1, fs_samplers = 1, color = g.format, samples = ._4, depth = true, compare = .GREATER_OR_EQUAL})   // drawn where the terrain left the depth cleared
 	g.water = make_pipeline(g, {
-		vs = "vs_water", fs = "fs_water", vs_uniforms = 1, fs_uniforms = 1, fs_samplers = 2,
+		vs = "vs_water", fs = "fs_water", vs_uniforms = 1, fs_uniforms = 1, fs_samplers = 3,
 		color = g.format, samples = ._4, depth = true, compare = .GREATER, blend = true,
 	})
 	// Simulated water writes depth, so a sheet of falling water is not seen through the pool in front of it.
 	g.pool = make_pipeline(g, {
-		vs = "vs_pool", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 2, pool = true,
+		vs = "vs_pool", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 3, pool = true,
 		color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, blend = true,
 	})
 	g.present = make_pipeline(g, {vs = "vs_screen", fs = "fs_present", fs_uniforms = 1, fs_samplers = 1, color = g.format})
+	g.cloud_pipe = make_pipeline(g, {vs = "vs_screen", fs = "fs_clouds", fs_uniforms = 1, fs_samplers = 1, color = .R16G16B16A16_FLOAT})
 	// River water writes depth, so where two reaches meet the water is drawn once.
 	g.river = make_pipeline(g, {
-		vs = "vs_river", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 2, ribbon = true,
+		vs = "vs_river", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 3, ribbon = true,
 		color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, blend = true,
 	})
 
@@ -322,7 +324,7 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 
 resize :: proc(g: ^Gpu, w, h: u32) {
 	if w == g.w && h == g.h do return
-	for t in ([3]^sdl.GPUTexture{g.color, g.depth, g.scene}) do if t != nil do sdl.ReleaseGPUTexture(g.dev, t)
+	for t in ([4]^sdl.GPUTexture{g.color, g.depth, g.scene, g.clouds}) do if t != nil do sdl.ReleaseGPUTexture(g.dev, t)
 	g.w, g.h = w, h
 	target :: proc(g: ^Gpu, format: sdl.GPUTextureFormat, usage: sdl.GPUTextureUsageFlags, samples: sdl.GPUSampleCount) -> ^sdl.GPUTexture {
 		return sdl.CreateGPUTexture(g.dev, {
@@ -333,6 +335,7 @@ resize :: proc(g: ^Gpu, w, h: u32) {
 	g.color = target(g, g.format, {.COLOR_TARGET}, ._4)
 	g.depth = target(g, .D32_FLOAT, {.DEPTH_STENCIL_TARGET}, ._4)
 	g.scene = target(g, g.format, {.COLOR_TARGET, .SAMPLER}, ._1)
+	g.clouds = sdl.CreateGPUTexture(g.dev, {type = .D2, format = .R16G16B16A16_FLOAT, usage = {.COLOR_TARGET, .SAMPLER}, width = (w + 1)/2, height = (h + 1)/2, layer_count_or_depth = 1, num_levels = 1})
 }
 
 // The direction to the sun at an hour of solar time on a day of the year, at the region's latitude:
@@ -508,6 +511,18 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	}
 	shadow_quads := g.quads_drawn
 
+	// The cloud layer along each line of sight, once for the frame at half size: the sky reads it,
+	// and so does whatever is seen through the layer (fs_clouds, shaders.metal).
+	lifted := sdl.GPUTextureSamplerBinding{g.lifted, g.linear}
+	seen := sdl.GPUTextureSamplerBinding{g.clouds, g.linear}
+	sdl.PushGPUFragmentUniformData(cmd, 0, &f, size_of(f))
+	to_clouds := sdl.GPUColorTargetInfo{texture = g.clouds, load_op = .DONT_CARE, store_op = .STORE, cycle = true}
+	pass := sdl.BeginGPURenderPass(cmd, &to_clouds, 1, nil)
+	sdl.BindGPUGraphicsPipeline(pass, g.cloud_pipe)
+	sdl.BindGPUFragmentSamplers(pass, 0, &lifted, 1)
+	sdl.DrawGPUPrimitives(pass, 3, 1, 0, 0)
+	sdl.EndGPURenderPass(pass)
+
 	// The scene.
 	color := sdl.GPUColorTargetInfo {
 		texture = g.color, load_op = .DONT_CARE, store_op = .RESOLVE, resolve_texture = g.scene,
@@ -517,14 +532,13 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		texture = g.depth, clear_depth = 0, load_op = .CLEAR, store_op = .DONT_CARE,
 		stencil_load_op = .DONT_CARE, stencil_store_op = .DONT_CARE, cycle = true,
 	}
-	pass := sdl.BeginGPURenderPass(cmd, &color, 1, &depth)
+	pass = sdl.BeginGPURenderPass(cmd, &color, 1, &depth)
 	sdl.PushGPUVertexUniformData(cmd, 0, &f, size_of(f))
 	sdl.PushGPUFragmentUniformData(cmd, 0, &f, size_of(f))
 
 	sdl.BindGPUGraphicsPipeline(pass, g.terrain)
-	lifted := sdl.GPUTextureSamplerBinding{g.lifted, g.linear}
-	terrain_bindings := [3]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.blocks, g.block_sampler}, lifted}
-	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 3)
+	terrain_bindings := [4]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.blocks, g.block_sampler}, lifted, seen}
+	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 4)
 	// The view volume as four planes through the eye; a chunk wholly outside one is skipped.
 	planes := [4][3]f32{fwd*tan_x + right, fwd*tan_x - right, fwd*tan_y + up, fwd*tan_y - up}
 	each: for &it in items {
@@ -538,8 +552,8 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 
 	// The ground plants in the nearest chunks, two pictures crossed in a strip of ten vertices.
 	sdl.BindGPUGraphicsPipeline(pass, g.plant)
-	plant_bindings := [3]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.plant_pics, g.plant_sampler}, lifted}
-	sdl.BindGPUFragmentSamplers(pass, 0, &plant_bindings[0], 3)
+	plant_bindings := [4]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.plant_pics, g.plant_sampler}, lifted, seen}
+	sdl.BindGPUFragmentSamplers(pass, 0, &plant_bindings[0], 4)
 	PLANT_FAR :: 190   // as in shaders.metal: no plant is drawn farther off
 	for &it in items {
 		if !it.seen || it.chunk.plant_buf == nil do continue
@@ -552,15 +566,15 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	}
 
 	sdl.BindGPUGraphicsPipeline(pass, g.sky)
-	sdl.BindGPUFragmentSamplers(pass, 0, &lifted, 1)
+	sdl.BindGPUFragmentSamplers(pass, 0, &seen, 1)
 	sdl.DrawGPUPrimitives(pass, 3, 1, 0, 0)
 
 	// Water. Near the player it is simulated and drawn chunk by chunk. Beyond that the
 	// rivers and the sea are drawn whole, and give way wherever the mask says a chunk has
 	// simulated water, so the two never lie over each other.
-	water_mask := [2]sdl.GPUTextureSamplerBinding{{w.water.mask, g.linear}, lifted}
+	water_mask := [3]sdl.GPUTextureSamplerBinding{{w.water.mask, g.linear}, lifted, seen}
 	sdl.BindGPUGraphicsPipeline(pass, g.pool)
-	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 2)
+	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 3)
 	for &it in items {
 		if !it.seen || it.chunk.water == nil do continue
 		origin := [4]f32{it.origin.x, f32(-v.eye.y), it.origin.z, 1}
@@ -572,7 +586,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 
 	if g.ribbon != nil {
 		sdl.BindGPUGraphicsPipeline(pass, g.river)
-		sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 2)
+		sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 3)
 		from_eye := [4]f32{f32(f64(region.origin.x) - v.eye.x), f32(-v.eye.y), f32(f64(region.origin.y) - v.eye.z), 0}   // the strip is stored relative to the region
 		sdl.PushGPUVertexUniformData(cmd, 1, &from_eye, size_of(from_eye))
 		binding := sdl.GPUBufferBinding{buffer = g.ribbon}
@@ -582,7 +596,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		// both leave the drop to it.
 		if g.falls != nil {
 			sdl.BindGPUGraphicsPipeline(pass, g.pool)
-			sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 2)
+			sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 3)
 			sdl.PushGPUVertexUniformData(cmd, 1, &from_eye, size_of(from_eye))
 			binding = {buffer = g.falls}
 			sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
@@ -591,7 +605,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	}
 
 	sdl.BindGPUGraphicsPipeline(pass, g.water)
-	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 2)
+	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 3)
 	sdl.DrawGPUPrimitives(pass, 4, 1, 0, 0)
 	sdl.EndGPURenderPass(pass)
 	g.quads_drawn -= shadow_quads

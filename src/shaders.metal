@@ -101,19 +101,25 @@ static float cloud_shade(float3 rel, constant Frame &f, texture2d<float> lifted,
     return 1.0 - 0.85 * smoothstep(0.0, 60.0, cloud_top(rel.xz + f.sun.xz * up, f, lifted, smp, 0.0));
 }
 
+// Where a ray from the camera enters and leaves the layer the clouds can fill, 0 and 0 if it never does.
+static float2 cloud_span(float3 rd, constant Frame &f) {
+    float lo = f.weather.y - f.cam.y, hi = lo + 300.0;
+    if (abs(rd.y) < 1e-5) return lo > 0.0 || hi < 0.0 ? float2(0.0) : float2(0.0, 20000.0);
+    float t0 = max(min(lo / rd.y, hi / rd.y), 0.0);
+    return t0 > 60000.0 ? float2(0.0) : float2(t0, min(max(lo / rd.y, hi / rd.y), t0 + 20000.0));
+}
+
 // The cloud along a ray from the camera out to `far`, a few steps through the layer it can fill:
-// its colour, hazed by its distance, and in w how much of what lies beyond still shows.
-static float4 clouds(float3 rd, float far, float2 pixel, constant Frame &f, texture2d<float> lifted, sampler smp) {
-    float lo = f.weather.y - f.cam.y, hi = lo + 300.0, t0 = 0.0, t1 = far;
-    if (abs(rd.y) > 1e-5) {
-        t0 = max(min(lo / rd.y, hi / rd.y), 0.0);
-        t1 = min(max(lo / rd.y, hi / rd.y), min(far, t0 + 20000.0));
-    } else if (lo > 0.0 || hi < 0.0) return float4(0, 0, 0, 1);
-    if (t1 <= t0 || t0 > 60000.0) return float4(0, 0, 0, 1);
+// its colour, hazed by its distance, and in w how much of what lies beyond still shows. The steps
+// `steps` of them, starting `start` of a step in, which differs from pixel to pixel.
+static float4 clouds(float3 rd, float far, int steps, float start, constant Frame &f, texture2d<float> lifted, sampler smp) {
+    float2 span = cloud_span(rd, f);
+    float lo = f.weather.y - f.cam.y, t0 = span.x, t1 = min(span.y, far);
+    if (t1 <= t0) return float4(0, 0, 0, 1);
     float3 lit = sun_light(f.sun.xyz), sky = sky_ambient(float3(0, 1, 0), f.sun.xyz, f.weather.x);
-    float dt = (t1 - t0) / 16.0, trans = 1.0, first = -1.0, t = t0 + dt * hash21(pixel + 17.0);   // steps start at a different point in each pixel
+    float dt = (t1 - t0) / float(steps), trans = 1.0, first = -1.0, t = t0 + dt * start;
     float3 col = float3(0.0);
-    for (int i = 0; i < 16 && trans > 0.03; i++, t += dt) {
+    for (int i = 0; i < steps && trans > 0.03; i++, t += dt) {
         float h = rd.y * t - lo, top = cloud_top(rd.xz * t, f, lifted, smp, saturate(2.0 - t / 4000.0));
         float a = 1.0 - exp(-saturate((top - h) / max(abs(rd.y) * dt, 20.0) + 0.5) * min(dt, 80.0) * 0.02);   // the share of the step inside; a long step is not let make the cloud opaque alone, or far cloud sparkles
         if (a <= 0.0 || top <= 0.0) continue;
@@ -126,12 +132,24 @@ static float4 clouds(float3 rd, float far, float2 pixel, constant Frame &f, text
     return float4(col, trans);
 }
 
-// What lies at `rel`, seen through the haze and the clouds between it and the camera.
-static float3 apply_fog(float3 col, float3 rel, float2 pixel, constant Frame &f, texture2d<float> lifted, sampler smp) {
+// The cloud layer along the line of sight through a pixel, from `seen`, where fs_clouds drew it
+// at half size: four readings a pixel apart, which cancel the pattern its steps started in.
+static float4 clouds_seen(float2 pixel, constant Frame &f, texture2d<float> seen, sampler smp) {
+    float4 c = float4(0.0);
+    for (int i = 0; i < 4; i++) c += 0.25 * seen.sample(smp, (pixel + float2(i & 1, i >> 1) * 2.0 - 1.0) / f.screen.xy);
+    return c;
+}
+
+// What lies at `rel`, seen through the haze and the clouds between it and the camera. What lies
+// beyond the whole cloud layer reads the layer from `seen`; only what stands inside the layer has
+// its own cloud counted.
+static float3 apply_fog(float3 col, float3 rel, float2 pixel, constant Frame &f, texture2d<float> lifted, sampler smp, texture2d<float> seen) {
     float dist = length(rel);
     float3 rd = rel / max(dist, 1e-4);
     col = mix(col, sky_color(float3(rd.x, max(rd.y, 0.0), rd.z), f.sun.xyz, f.weather.x), haze(rel, f));
-    float4 c = clouds(rd, dist, pixel, f, lifted, smp);
+    float2 span = cloud_span(rd, f);
+    if (dist <= span.x || span.y <= span.x) return col;
+    float4 c = dist < span.y ? clouds(rd, dist, 16, hash21(pixel + 17.0), f, lifted, smp) : clouds_seen(pixel, f, seen, smp);
     return col * c.w + c.rgb;
 }
 
@@ -220,7 +238,7 @@ static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<fl
 fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(0)]],
                            depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]],
                            texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]],
-                           texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]]) {
+                           texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]], texture2d<float> seen [[texture(3)]]) {
     uint face = in.info & 7u;
     uint mat = (in.info >> 8u) & 255u;
     float3 N = FACE_N[face];
@@ -270,7 +288,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
         }
     }
 
-    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, 1.0);
+    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, 1.0);
 }
 
 // ---- ground plants ------------------------------------------------------------------------
@@ -325,7 +343,7 @@ vertex PlantV vs_plant(QuadIn q [[stage_in]], uint vid [[vertex_id]],
 fragment float4 fs_plant(PlantV in [[stage_in]], constant Frame &f [[buffer(0)]],
                          depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]],
                          texture2d_array<float> pictures [[texture(1)]], sampler pic_smp [[sampler(1)]],
-                         texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]]) {
+                         texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]], texture2d<float> seen [[texture(3)]]) {
     uint upper = in.uv.y >= 1.0 ? 1u : 0u;
     float2 uv = float2(in.uv.x, 1.0 - (in.uv.y - float(upper)));
     float2 dx = dfdx(in.uv), dy = dfdy(in.uv);   // from the whole plant, so the seam between its pictures is not a jump
@@ -343,7 +361,7 @@ fragment float4 fs_plant(PlantV in [[stage_in]], constant Frame &f [[buffer(0)]]
     float ao = mix(0.5, 1.0, in.ao) * mix(0.6, 1.0, saturate(in.up / 0.6));   // darker toward the root, in the plant's own shade
     float sky = 1.0 - float((in.info >> 4u) & 15u) / 15.0;
     float3 col = tex.rgb * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) + sky_ambient(in.soft, sun, f.weather.x) * ao * sky * mix(0.7, 1.0, shade));
-    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, a);
+    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, a);
 }
 
 // ---- sky, water, present ------------------------------------------------------------------
@@ -362,13 +380,25 @@ vertex ScreenV vs_screen(uint vid [[vertex_id]]) {
 }
 
 fragment float4 fs_sky(ScreenV in [[stage_in]], constant Frame &f [[buffer(0)]],
-                       texture2d<float> lifted [[texture(0)]], sampler smp [[sampler(0)]]) {
+                       texture2d<float> seen [[texture(0)]], sampler smp [[sampler(0)]]) {
     float2 ndc = float2(in.uv.x * 2.0 - 1.0, 1.0 - in.uv.y * 2.0);
     float3 d = normalize(f.cam_f.xyz + f.cam_r.xyz * ndc.x + f.cam_u.xyz * ndc.y);
     float3 col = sky_color(d, f.sun.xyz, f.weather.x);
     col += sun_light(f.sun.xyz) * 6.0 * smoothstep(0.99955, 0.9998, dot(d, f.sun.xyz)) * step(0.0, d.y);
-    float4 c = clouds(d, 1e6, in.position.xy, f, lifted, smp);
+    float4 c = clouds_seen(in.position.xy, f, seen, smp);
     return finish(col * c.w + c.rgb, in.position.xy, 1.0);
+}
+
+// The clouds along each line of sight through the whole layer, drawn once a frame at half size
+// for the sky and for everything seen through the layer. Counting them at each face of the ground
+// instead cost three frames in four from over the clouds. The steps start at four depths in a
+// pattern two pixels square, which the four readings of clouds_seen average away, each shifted a
+// little by chance so the steps do not show as terraces.
+fragment float4 fs_clouds(ScreenV in [[stage_in]], constant Frame &f [[buffer(0)]],
+                          texture2d<float> lifted [[texture(0)]], sampler smp [[sampler(0)]]) {
+    float2 ndc = float2(in.uv.x * 2.0 - 1.0, 1.0 - in.uv.y * 2.0);
+    uint2 p = uint2(in.position.xy) & 1u;
+    return clouds(normalize(f.cam_f.xyz + f.cam_r.xyz * ndc.x + f.cam_u.xyz * ndc.y), 1e6, 24, (float(p.x ^ p.y) * 2.0 + float(p.y) + hash21(in.position.xy + 17.0)) / 4.0, f, lifted, smp);
 }
 
 struct WaterV {
@@ -444,7 +474,7 @@ static float2 ripples(float2 p) {
 
 fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]],
                          texture2d<float> simulated [[texture(0)]], sampler unused [[sampler(0)]],
-                         texture2d<float> lifted [[texture(1)]], sampler smp [[sampler(1)]]) {
+                         texture2d<float> lifted [[texture(1)]], sampler smp [[sampler(1)]], texture2d<float> seen [[texture(2)]]) {
     float dist = length(in.rel);
     float3 rd = in.rel / dist;
     float2 w = in.rel.xz + f.cam.xz;
@@ -509,7 +539,7 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
         float solid = smoothstep(0.4, 1.3, speed);
         float a = in.kind.y > 3.5 ? mix(smoothstep(0.3, 0.65, strands), 0.6 + 0.4 * strands, solid)
                                   : smoothstep(0.2, 0.5, carried - 0.6 + 0.8 * (in.kind.y - 2.0)) * (in.kind.y - 2.0);
-        return finish(apply_fog(whitish * (0.8 + 0.3 * strands), in.rel, in.position.xy, f, lifted, smp), in.position.xy, 0.92 * a);
+        return finish(apply_fog(whitish * (0.8 + 0.3 * strands), in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, 0.92 * a);
     }
 
     // White water. On a fall it runs down in streaks. On the level it is foam carried by
@@ -521,7 +551,7 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
     float white = mix(foam * 0.85, in.kind.y * (0.25 + 0.6 * streaks), sheet);
     col = mix(col, whitish * (0.75 + 0.35 * carried), white);
     alpha = mix(alpha, 0.9, white);
-    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, alpha);
+    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, alpha);
 }
 
 fragment float4 fs_present(ScreenV in [[stage_in]], constant Frame &f [[buffer(0)]],
