@@ -7,6 +7,10 @@ by an artist: they come from the Pixel Perfection pack in assets/pixel-perfectio
 see assets/LICENSE.md). This script only says which tile each material takes and recolours it
 to the material's colour in MATERIALS, so a face keeps the artist's pixels and the game's hue.
 
+It also builds assets/plants.png, the ground plants' pictures (src/plants.odin): a row for each
+plant in the order of `Plant_Kind`, its lower picture then its upper one (clear for a plant one
+picture high), from the same pack's plant pictures, recoloured or kept as the artist drew them.
+
 Run from the repository root with a Python that has Pillow:  python3 tools/blocks.py
 With a file name it also writes an enlarged sheet to look at. A tile in the PNG can be painted
 over by hand, and then this script would overwrite it.
@@ -41,6 +45,27 @@ TILES = {
 }
 BEDDED = ("Mudstone", "Siltstone", "Sandstone")   # their scree is slabs, the others' lumps
 
+# plant: (lower picture, upper picture or None, colour (linear, as in MATERIALS) or None to keep the
+# artist's). The grey pictures are drawn to be tinted; those already coloured keep their colours.
+FERN, GRASS = "mcl_flowers_fern", "mcl_flowers_tallgrass"
+PLANTS = {
+    "Reed": ("mcl_core_papyrus", "mcl_flowers_double_plant_grass_top", (0.085, 0.125, 0.040)),
+    "Sedge": (GRASS, None, (0.065, 0.120, 0.035)),
+    "Susuki": ("mcl_flowers_double_plant_grass_bottom", "mcl_flowers_double_plant_grass_top", (0.105, 0.165, 0.040)),
+    "Bamboo": ("mcl_bamboo_leaf_small", None, (0.075, 0.150, 0.030)),
+    "Bracken": ("mcl_flowers_double_plant_fern_bottom", "mcl_flowers_double_plant_fern_top", (0.110, 0.170, 0.035)),
+    "Fern": (FERN, None, (0.045, 0.105, 0.025)),
+    "Shrub": ("mcl_farming_sweet_berry_bush_1", None, None),
+    "Ardisia": ("mcl_farming_sweet_berry_bush_2", None, None),
+    "Forest_Grass": (GRASS, None, (0.040, 0.090, 0.025)),
+    "Grass": (GRASS, None, (0.090, 0.150, 0.040)),
+    "Knotweed": ("mcl_farming_sweet_berry_bush_0", None, (0.085, 0.150, 0.040)),
+    "Dead_Stems": ("default_dry_shrub", None, None),
+    "Dune_Sedge": (GRASS, None, (0.120, 0.150, 0.055)),
+    "Vitex": ("mcl_farming_sweet_berry_bush_0", None, (0.075, 0.110, 0.070)),
+    "Flower": ("flowers_dandelion_yellow", None, None),
+}
+
 
 def srgb(c):
     return tuple(255 * (max(v, 0) ** (1 / 2.2)) for v in c)
@@ -70,6 +95,28 @@ def face(tile, colour, turns, keep, flowers=False):
     return out
 
 
+def picture(name, colour):
+    """An artist's plant picture, recoloured to a colour as a face is, or kept. The clear pixels take
+    the plant's mean colour, so the smaller copies the game makes for the distance stay its colour
+    rather than darkening toward the black behind it."""
+    if name is None:
+        return Image.new("RGBA", (T, T), (0, 0, 0, 0))
+    im = Image.open(SOURCE + "plants/" + name + ".png").convert("RGBA").crop((0, 0, T, T))
+    px = [im.getpixel((x, y)) for y in range(T) for x in range(T)]
+    solid = [p for p in px if p[3] > 127]
+    mean = [sum(p[k] for p in solid) / len(solid) for k in range(3)]
+    if colour:
+        grey = sum(colour) / 3
+        target = [min(max((grey + (colour[k] - grey) * RICH) * LIFT, 0), 255) for k in range(3)]
+        px = [tuple(target[k] * p[k] / mean[k] for k in range(3)) + (p[3],) for p in px]
+        mean = target
+    out = Image.new("RGBA", (T, T))
+    for i, p in enumerate(px):
+        c = p[:3] if p[3] > 127 else mean
+        out.putpixel((i % T, i // T), tuple(max(0, min(255, round(v))) for v in c) + (255 if p[3] > 127 else 0,))
+    return out
+
+
 def main():
     source = open("src/gen.odin").read()
     body = re.sub(r"//[^\n]*", "", re.search(r"Mat :: enum u8 \{(.*?)\n\}", source, re.S).group(1))
@@ -85,6 +132,16 @@ def main():
         atlas.paste(face(top, colours[name], turns, keep, name == "Camellia_Leaves"), (0, row * T))
         atlas.paste(face(side or top, colours[name], 0 if side else turns, keep, name == "Camellia_Leaves"), (T, row * T))
     atlas.save("assets/blocks.png")
+    plants = re.sub(r"//[^\n]*", "", re.search(r"Plant_Kind :: enum u8 \{(.*?)\}", open("src/plants.odin").read(), re.S).group(1))
+    plants = [n.strip() for n in plants.split(",") if n.strip()]
+    sheet = Image.new("RGBA", (2 * T, len(plants) * T))
+    for row, name in enumerate(plants):
+        if name not in PLANTS:
+            raise SystemExit("no picture is named for the plant " + name)
+        lower, upper, colour = PLANTS[name]
+        sheet.paste(picture(lower, colour and srgb(colour)), (0, row * T))
+        sheet.paste(picture(upper, colour and srgb(colour)), (T, row * T))
+    sheet.save("assets/plants.png")
     if len(sys.argv) > 1:   # a sheet for looking at: each tile enlarged and repeated, so its seams show
         K, cols = 6, 6
         sheet = Image.new("RGB", (cols * (2 * T * K + 8), ((len(names) + cols // 2 - 1) // (cols // 2)) * (2 * T * K + 8)), (40, 40, 40))

@@ -29,13 +29,17 @@ Chunk :: struct {
 	h:                  i32,           // layers in blocks
 	water:              ^sdl.GPUBuffer, // level 0 only: the water surface, built in water.odin
 	water_count:        u32,
+	plants:             []Quad,        // level 0 only: the ground plants (plants.odin), all of them
+	plant_buf:          ^sdl.GPUBuffer, // and those drawn: all but any the water has drowned
+	plant_count:        u32,
+	drowned:            int,
 }
 
 Job :: struct { key: Key, edits: []Edit, urgent: bool }
 
 Built :: struct {
 	key:                Key,
-	quads:              []Quad,
+	quads, plants:      []Quad,
 	ranges:             [4][2]u32,
 	y_base, y_lo, y_hi: i32,
 	blocks:             []u8,
@@ -117,10 +121,11 @@ build :: proc(job: Job) -> (b: Built) {
 	gen_columns(job.key.level, job.key.x, job.key.z, c)
 
 	quads := make([dynamic]Quad, 0, 4096)
+	plants: [dynamic]Quad
 	b.key = job.key
 	if job.key.level == 0 {
 		b.blocks, b.y_base, b.h = build_volume(job.key, c, job.edits)
-		mesh_volume(b.blocks, b.h, c, &quads, {job.key.x*CHUNK - region.origin.x, b.y_base, job.key.z*CHUNK - region.origin.y})
+		mesh_volume(b.blocks, b.h, c, &quads, &plants, {job.key.x*CHUNK - region.origin.x, b.y_base, job.key.z*CHUNK - region.origin.y})
 		b.ranges[0] = {0, u32(len(quads))}
 		b.y_lo, b.y_hi = b.y_base, b.y_base + b.h
 		// What the water needs to know about each column.
@@ -143,7 +148,7 @@ build :: proc(job: Job) -> (b: Built) {
 		mesh_columns(c, s, b.y_base, &quads, &b.ranges)
 		b.y_lo, b.y_hi = b.y_base, c.hi
 	}
-	b.quads = quads[:]
+	b.quads, b.plants = quads[:], plants[:]
 	return
 }
 
@@ -188,6 +193,8 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 			c := w.chunks[key]
 			if c.buffer != nil do sdl.ReleaseGPUBuffer(dev, c.buffer)
 			if key.level == 0 do water_unload(&w.water, dev, c)
+			if c.plant_buf != nil do sdl.ReleaseGPUBuffer(dev, c.plant_buf)
+			delete(c.plants)
 			delete(c.blocks)
 			free(c)
 			delete_key(&w.chunks, key)
@@ -241,7 +248,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		b := w.done[0]
 		ordered_remove(&w.done, 0)
 		append(&batch, b)
-		bytes += len(b.quads)*size_of(Quad)
+		bytes += (len(b.quads) + len(b.plants))*size_of(Quad)
 	}
 	sync.unlock(&w.mutex)
 	if len(batch) == 0 do return
@@ -254,16 +261,18 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		mapped = cast([^]u8)sdl.MapGPUTransferBuffer(dev, staging, false)
 		at := 0
 		for b in batch {
-			n := len(b.quads)*size_of(Quad)
-			if n > 0 do copy(mapped[at:at + n], (cast([^]u8)raw_data(b.quads))[:n])
-			at += n
+			for list in ([2][]Quad{b.quads, b.plants}) {
+				n := len(list)*size_of(Quad)
+				if n > 0 do copy(mapped[at:at + n], (cast([^]u8)raw_data(list))[:n])
+				at += n
+			}
 		}
 		sdl.UnmapGPUTransferBuffer(dev, staging)
 	}
 	pass := sdl.BeginGPUCopyPass(cmd)
 	at := u32(0)
 	for &b in batch {
-		n := u32(len(b.quads)*size_of(Quad))
+		n, plants := u32(len(b.quads)*size_of(Quad)), u32(len(b.plants)*size_of(Quad))
 		c := w.chunks[b.key] or_else nil
 		defer {
 			delete(b.floor)
@@ -274,6 +283,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		}
 		if c == nil {   // left the ring while it was being built
 			delete(b.blocks)
+			delete(b.plants)
 		} else {
 			if c.buffer != nil do sdl.ReleaseGPUBuffer(dev, c.buffer)
 			delete(c.blocks)
@@ -285,9 +295,20 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 			c.ranges, c.y_base, c.y_lo, c.y_hi = b.ranges, b.y_base, b.y_lo, b.y_hi
 			c.blocks, c.h = b.blocks, b.h
 			c.ready, c.building = true, false
-			if b.key.level == 0 do water_load(&w.water, c, &b)
+			if b.key.level == 0 {
+				// All its plants, as the generator left them clear of its water. If the simulated water
+				// has risen over any, the next rebuild of its surface takes them out (plants_drowned).
+				water_load(&w.water, c, &b)
+				if c.plant_buf != nil do sdl.ReleaseGPUBuffer(dev, c.plant_buf)
+				delete(c.plants)
+				c.plants, c.plant_buf, c.plant_count, c.drowned = b.plants, nil, u32(len(b.plants)), 0
+				if plants > 0 {
+					c.plant_buf = sdl.CreateGPUBuffer(dev, {usage = {.VERTEX}, size = plants})
+					sdl.UploadToGPUBuffer(pass, {staging, at + n}, {c.plant_buf, 0, plants}, false)
+				}
+			}
 		}
-		at += n
+		at += n + plants
 		delete(b.quads)
 	}
 	sdl.EndGPUCopyPass(pass)

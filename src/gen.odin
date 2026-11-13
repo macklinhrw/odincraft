@@ -100,6 +100,7 @@ Columns :: struct {
 	base:   [P*P]f32,   // height of the rock stack's base, which places the beds (rock.odin)
 	slope:  [P*P][2]u8, // the smooth ground normal's x and z, packed; zero in the border
 	hollow: [P*P][2]i32, // the floor and roof of a hollow carved under the top here (events.odin); far off, of its mouth
+	plant:  [P*P]u8,    // at the nearest level, 1 + the ground plant standing here (plants.odin), or 0
 	lo, hi: i32,        // lowest ground and highest top
 }
 
@@ -404,8 +405,9 @@ surface_row :: proc(p: ^Point) -> int {
 
 // What the ground is at a point, what covers it, and the plant community growing there, if
 // soil holds.
-surface_at :: proc(x, z, cell: f64) -> (g: Ground, m: Mat, plants: Maybe(Community_Kind)) {
+surface_at :: proc(x, z, cell: f64, at: ^Point = nil) -> (g: Ground, m: Mat, plants: Maybe(Community_Kind)) {
 	p := point_at(x, z, cell)
+	defer if at != nil do at^ = p
 	row := surface_row(&p)
 	m = SURFACES[row].brings
 	if row == len(SURFACES) - 1 {
@@ -937,8 +939,10 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			ix, iz := cx*CHUNK + i - 1, cz*CHUNK + j - 1   // cell coordinates at this level, in the world
 			x, z := (f64(ix) + 0.5)*cell - f64(ox), (f64(iz) + 0.5)*cell - f64(oz)
 			k := j*P + i
-			g, m, plants := surface_at(x, z, cell)
+			p: Point
+			g, m, plants := surface_at(x, z, cell, &p)
 			heights[k], c.water[k], c.base[k], c.mat[k] = g.h, g.water, g.base, m
+			if s == 1 do if kind, ok := plant_at(&p, m, plants); ok && g.water - g.h <= GROUND_PLANTS[kind].wet do c.plant[k] = u8(kind) + 1
 			c.top[k] = i32(math.round(heights[k]))
 			c.ground[k] = c.top[k]
 			if s <= 8 do c.hollow[k] = hollow_at(x, z, cell)

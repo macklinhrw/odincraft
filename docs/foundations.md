@@ -647,6 +647,30 @@ Left out: surf (white water where the swell breaks), since the sea's shader is b
 
 Still short: the sandstone platform's top tile reads as sand from eye height; the platform is still mostly flat floor; on the cone the shore under a sheer cliff is a ledge of basalt shingle a few metres wide, dark on dark; a beach under a steep wooded slope is a strip a few metres wide; the sea floor off a beach shows its 1 m steps through the water, as it did before.
 
+### Step 9, as built
+
+Built 2026-11-12: ground plants and the water's edge. The owner has not yet looked at it. The owner decided the same day that small plants are crossed pictures, not passable cubes, which made the engine's part most of the step.
+
+![The landslide lake's west shore from the water, with reeds in front of the bank; the old laurel forest's floor with shrubs, manryō and ferns; a gap in it holding bracken; the susuki grass at the start from 25 m up, where the plants fade into the ground's tile](interesting-world/real/ground-plants.jpg)
+
+- **A plant is two pictures crossed in an X** over a column, set off its middle, turned and sized by its hash, one or two pictures high (`vs_plant`, `fs_plant`). It is cut out by alpha to coverage, its coverage kept in the smaller copies so far plants do not thin away, and the picture's clear pixels hold its own mean colour so the far ones do not darken. It is lit by the ground's normal, as the ground it stands on is, and a little more where the picture faces the sun; it darkens toward its root, takes the light under a roof and the ground's corner shading, casts no shadow and stops nothing.
+- **Only near the player**: each nearest-level chunk carries a second buffer of plants beside its faces (`Chunk.plants`), built by the block mesher from the column's plant where the ground block is still the one the plant grows on and air stands over it, so digging, building or a tree removes it. The plants thin from 70 m to 190 m, each sinking into the ground at a distance drawn from its hash, and the ground's tile carries their colour beyond; chunks out of that reach are not drawn. Water that rises over a plant past what its row stands in takes it out of the drawn buffer the next time that chunk's water surface is rebuilt.
+- **Fifteen rows** (`GROUND_PLANTS`, `plants.odin`), each with what it grows on, the communities it grows in, the share of columns it takes, the size of its clumps (noise that leaves thick patches and bare ones), the water it can stand in and a host on the fields; the first row whose draw comes up wins. Two new fields: `canopy`, the share of the sky the stand's crowns hide (from the community's cover at the stand's spacing, regrowing in a gap), and `over-water`, the ground's height over a lake's level, or a slow stream's on ground under 1 in 5. Ferns thin as the canopy closes, bracken and susuki need it open, so a gap fills with bracken and the wood's edge is where the community changes; nothing grows on a trail, whose ground is earth.
+- **Reeds stand in a band** from 0.8 m of water to 0.4 m over it, 2.6 to 3.2 m tall, with sedges above them to 1.4 m; on the slide lake's steep shores the band is 2 to 4 m wide, and wider only where a shore is gentle. The first plants on slide rubble are itadori and its dead stems; the dune carries kōbōmugi above the wave line and hamagō behind it. `--why=` names the ground plant at a point, or the likeliest one and its share.
+- Nothing else changed: a hash of the block volumes and the far columns' faces over 3,024 chunks at every level, on the raised, ridge and cone kinds, matched the parent commit exactly.
+
+| | before | after |
+|---|---|---|
+| Ground plants drawn a frame (median) | | 17 k at the start, 37 to 39 k flying low over grass, 16 k over the forest, 7 k on the steep flight |
+| Forest flight, median frame interval (back to back, twice) | 10.65 and 10.71 ms, 44 and 49 frames over 12.5 | 10.81 and 10.80 ms, 62 and 50 over |
+| Steep flight, median (back to back, twice, after chunks out of reach were skipped) | 9.45 ms, 7 over (a second parent run was slowed by other agents to 14.89) | 9.54 and 9.54 ms, 12 and 14 over |
+| Low flight over grass, median | 8.54 and 8.54 ms | 8.57 and 8.83 ms |
+| Ground run from the start | 19 to 20 m | 19 to 20 m |
+
+**Given up**: floating leaves (the pack's water lily is credited to another author, and nothing else looks like one); susuki's plumes and the reed's plume (no picture); shadows cast by plants; plants beyond 190 m, where the ground's tile stands in. The plants are the same all year.
+
+Still short: close to the eye a plant's pixels are larger than a block's and read flat; from straight above a dense patch reads as stars; itadori is a berry bush recoloured; on the slide lake's steep shores the reed band is narrow and mostly on the bank, since few shallows exist; the beach at the dune is mostly below the line kōbōmugi needs, so the sand is bare.
+
 ### Experiments to run early
 
 Each is a scratch copy, folded in or deleted, as the rock experiment was.
@@ -913,6 +937,7 @@ Most livable real islands are larger than the 8 km region: Kikaijima is about 14
 | 8: the tree grower | 200 | 166 (209 added, 43 removed), and three lines in `tools/blocks.py` |
 | 11: falls, gorges, rivers by discharge, springs | 200 | 215 (245 added, 30 removed, 18 of them in the shader) |
 | 15: the shore in blocks, platforms with pools, stacks (no surf) | 100 | 203 (222 added, 19 removed), and one tile in `tools/blocks.py` |
+| 9: ground plants as crossed pictures, reeds, the water's edge | 80 (as cubes) | 313 (362 added, 49 removed; 73 of them in the shaders), and 57 lines in `tools/blocks.py` |
 
 `src/` went from 3,138 to 3,751 lines over steps 0 to 3, to 4,268 with the land-forming step, to 4,377 with step 4 (4,427 with the fixes after it), to 4,565 with the first half of step 5, and to 4,781 with the second. Step 6 started from 4,463 lines, counted after the warm-island flora and the tiles, and took it to 4,811. Step 7 started from 4,839, after the fixes to step 6, and took it to 5,008. Step 8 started from 5,034, after the change to unseen picture and bench runs, and took it to 5,200. Forming time fell, from about 1.0 s to 0.25 to 0.9 s depending on the kind.
 
