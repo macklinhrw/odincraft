@@ -55,6 +55,8 @@ Spot :: struct {
 	area: f32,
 }
 
+Drop :: struct { lip, dir: [2]f32, top, foot, half, speed: f32 }   // where the water leaves the lip, which way and how fast, and the levels it falls between
+
 Rivers :: struct {
 	segments: [dynamic]Segment,
 	buckets:  [][dynamic]i32,   // `side` to a side of the region
@@ -62,6 +64,7 @@ Rivers :: struct {
 	ribbon:   [dynamic][4]f32,   // the water surface as one triangle strip: x, y, z relative to the region's middle, and -1 to 1 across the channel
 	spots:    [dynamic]Spot,
 	falls:    [dynamic]Water_Quad,   // the falling water, relative to the region's middle, drawn near and far
+	drops:    [dynamic]Drop,         // each fall, for the spray it throws
 }
 
 rivers: Rivers
@@ -402,14 +405,19 @@ falls_make :: proc(pts: []River_Point, along, slope, half, from, to: []f32, flow
 		side := [2]f32{-dir.y, dir.x}
 		start := pts[i + 1].p + dir*0.6
 		ROWS :: 14
-		more := [4]f32{dir.x*v, dir.y*v, 1, 4}   // flow, depth, and 4 for a falling sheet (2 to 3 for the white water under it)
-		before: [2][3]f32
+		more := [4]f32{dir.x*v, dir.y*v, 1, -4}   // flow, depth, and -4 for a falling sheet (-2 to -3 for the white water under it): below zero, as the simulated water's own values are not (vs_pool)
+		append(&rivers.drops, Drop{start, dir, top, foot, half[i], v})
+		// The sheet is as wide as the stream that feeds it and begins on that stream, a stride back
+		// from the lip, so the two are one water; then it falls freely.
+		wide := max(half[i], 0.5) + 0.15
+		back := start - dir*1.6
+		before := [2][3]f32{{back.x - side.x*wide, top + 0.05, back.y - side.y*wide}, {back.x + side.x*wide, top + 0.05, back.y + side.y*wide}}
 		for r in 0..=ROWS {
 			t := fall*f32(r)/ROWS
 			c, y := start + dir*v*t, top + 0.05 - 4.9*t*t
-			w := 0.8*half[i] + 0.04*(top - y)   // it spreads as it falls
+			w := wide + min(0.04*(top - y), half[i] + 0.5)   // it spreads as it falls
 			row := [2][3]f32{{c.x - side.x*w, y, c.y - side.y*w}, {c.x + side.x*w, y, c.y + side.y*w}}
-			if r > 0 do append(&rivers.falls, Water_Quad{{before[0], before[1], row[0], row[1]}, more})
+			append(&rivers.falls, Water_Quad{{before[0], before[1], row[0], row[1]}, more})
 			before = row
 		}
 		// White water where it lands, fading out over a few metres.
@@ -424,7 +432,7 @@ falls_make :: proc(pts: []River_Point, along, slope, half, from, to: []f32, flow
 			for k in 0..<4 {
 				cu, cv := u + (k & 1), v + (k >> 1)
 				quad.p[k] = corner(at, dir, side, spread, foot + 0.06, cu, cv)
-				quad.more[k] = {dir.x, dir.y, 1, 3 if cu == 1 && cv == 1 else 2}
+				quad.more[k] = {dir.x, dir.y, 1, -3 if cu == 1 && cv == 1 else -2}
 			}
 			append(&rivers.falls, quad)
 		}
@@ -499,4 +507,37 @@ river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool, water: f3
 		return cut, !r.fall && (bar > 0.35 || math.round(cut) < level - 0.05), level   // gravel on a bar, or where the block's top is under water; a fall's lip is rock
 	}
 	return math.lerp(crest, h, smoothstep(top, floor, d)), false, NO_WATER
+}
+
+// Spray: drops thrown up where a fall lands and shed down its length, as small white boxes posed
+// each frame from the fall, the drop's number and the clock, as the creatures are (creatures.odin).
+// `e` is the eye from the region's middle.
+SPRAY_FAR :: 220
+spray :: proc(out: ^[dynamic]Box, e: [3]f64, clock: f64) {
+	WHITE :: f32(0xe4ecf2)
+	for d, n in rivers.drops {
+		if math.hypot(f64(d.lip.x) - e.x, f64(d.lip.y) - e.z) > SPRAY_FAR do continue
+		h := d.top - d.foot
+		fall := math.sqrt(2*h/9.8)
+		land, side := d.lip + d.dir*d.speed*fall, [2]f32{-d.dir.y, d.dir.x}
+		for k in 0..<int(clamp(8 + h/2 + 8*d.half, 10, 60)) {
+			r: [6]f32
+			for &v, j in r do v = hash01(i32(n), i32(k), seed + 900 + u32(j))
+			p: [2]f32
+			y, size: f32
+			if k%3 == 0 {   // shed from the sheet's edge on the way down
+				t := fall*f32(math.mod(clock/f64(fall) + f64(r[1]), 1))
+				p = d.lip + d.dir*(d.speed*t + 0.3*r[0]) + side*(d.half + 0.3 + 0.4*r[3])*(1 if r[4] < 0.5 else -1)
+				y, size = d.top - 4.9*t*t, 0.05
+			} else {   // thrown up from where it lands, farther by a taller fall
+				life := 0.5 + 0.7*r[0]
+				t := life*f32(math.mod(clock/f64(life) + f64(r[1]), 1))
+				bearing := math.TAU*r[4]
+				p = land + side*(2*r[5] - 1)*(d.half + 0.3) + ([2]f32{math.cos(bearing), math.sin(bearing)}*(0.4 + 1.4*r[3]) + 0.8*d.dir)*t
+				y, size = d.foot + (1.5 + 3*r[2])*min(math.sqrt(h/12), 1.3)*t - 4.9*t*t, (0.04 + 0.05*r[2])*(1 - 0.5*t/life)
+				if y < d.foot do continue
+			}
+			append(out, Box{{f32(f64(p.x) - e.x), f32(f64(y) - e.y), f32(f64(p.y) - e.z)}, WHITE, {size, 0, 0}, WHITE, {0, size, 0}, 0, {0, 0, size}, 0})
+		}
+	}
 }

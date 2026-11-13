@@ -290,6 +290,7 @@ creatures_pose :: proc(eye: [3]f64, clock: f64, dt, hour, day: f32, wt: ^Water) 
 			fish(&out, k, u64(c) << 24 | u64(j) << 4 | u64(k) | 1 << 63, middle_of(land.grid, c) + {f64(r[0] - 0.5), f64(r[1] - 0.5)}*LAND_CELL, {}, e, o, clock, dt, day, wt)
 		}
 	}
+	spray(&out, e, clock)
 	return out[:]
 }
 

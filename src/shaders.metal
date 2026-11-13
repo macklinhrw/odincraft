@@ -511,7 +511,8 @@ vertex WaterV vs_pool(PoolIn in [[stage_in]], uint vid [[vertex_id]], constant F
     o.rel = p + d.origin.xyz;
     o.river = float2(0.0, smoothstep(0.0, 1.2, p.y - f.cam.w));
     o.flow = m.xy;
-    float quarters = floor(m.w * 0.5);   // water.odin packs the share under a roof in whole twos over the falling
+    float quarters = max(floor(m.w * 0.5), 0.0);   // water.odin packs the share under a roof in whole twos over the falling
+    if (m.w < 0.0) m.w = -m.w;   // a fall's own water (falls_make, rivers.odin) is under no roof, and says what it is below zero
     o.kind = float3(1.0, m.w - 2.0 * quarters, m.z);
     o.roof = quarters * 0.25;
     o.position = f.view_proj * float4(o.rel, 1.0);
@@ -592,18 +593,20 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
         float solid = smoothstep(0.4, 1.3, speed);
         float a = in.kind.y > 3.5 ? mix(smoothstep(0.3, 0.65, strands), 0.6 + 0.4 * strands, solid)
                                   : smoothstep(0.2, 0.5, carried - 0.6 + 0.8 * (in.kind.y - 2.0)) * (in.kind.y - 2.0);
-        return finish(apply_fog(whitish * (0.8 + 0.3 * strands), in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, 0.92 * a);
+        float3 sky = sky_ambient(float3(0, 1, 0), sun, f.weather.x);   // broken water is white: it takes the sky's light, not its colour
+        float3 white = float3(0.86, 0.89, 0.91) * (sun_light(sun) * 0.35 * shade + mix(sky, float3(dot(sky, float3(0.333))), 0.6));
+        return finish(apply_fog(white * (0.75 + 0.35 * strands), in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, 0.92 * a);
     }
 
     // White water. On a fall it runs down in streaks. On the level it is foam carried by
     // the flow: none in slow water, patches as it quickens, nearly solid below a fall.
     float sheet = smoothstep(0.5, 0.9, 1.0 - abs(geometric.y));
-    float streaks = vnoise(float2((w.x + w.y) * 4.0, (in.rel.y + f.cam.y) * 0.7 + t * 3.5));
+    float streaks = vnoise(float2((w.x + w.y) * 7.0, (in.rel.y + f.cam.y) * 0.7 + t * 3.5));
     float churn = max(smoothstep(1.3, 3.2, speed), in.kind.y);
     float foam = smoothstep(0.0, 0.3, carried - (1.05 - 0.8 * churn));   // never solid: churning water is foam in patches, carried off
-    float white = mix(foam * 0.85, in.kind.y * (0.25 + 0.6 * streaks), sheet);
+    float white = mix(foam * 0.85, in.kind.y * 0.6 * smoothstep(0.45, 0.8, streaks), sheet);   // a step's sheet is the stream's own water with thin white streaks running down it, not a white slab
     col = mix(col, whitish * (0.75 + 0.35 * carried), white);
-    alpha = mix(alpha, 0.9, white);
+    alpha = mix(alpha, 0.9, max(white, 0.8 * sheet * saturate(in.kind.y)));
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, alpha);
 }
 

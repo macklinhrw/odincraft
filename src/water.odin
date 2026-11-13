@@ -19,7 +19,7 @@ import sdl "vendor:sdl3"
 WATER_N    :: 1024              // columns across the window
 WATER_SPAN :: WATER_N/CHUNK     // chunks across the window
 WATER_STEP :: 1.0/30            // seconds per step
-RUN        :: 5.0               // metres a second water runs down a drop of one in one
+RUN        :: 1.8               // metres a second water runs down a drop of one in one: a front a walker can watch come
 DRY_UP     :: 0.004             // metres a second a puddle with no supply sinks away
 SHOWN      :: 0.015             // water shallower than this is not drawn
 WALL       :: 1e6
@@ -168,7 +168,7 @@ water_cross :: proc(wt: ^Water, a, b: int) -> f32 {
 	if abs(wt.hold[a] - wt.hold[b]) > FALL_MIN && wt.hold[a] > fa && wt.hold[b] > fb do return 0   // a fall: the land holds the water above it and below, and the fall carries what crosses (falls_make)
 	drop := abs(ha - hb)
 	donor := wt.depth[a] if ha > hb else wt.depth[b]
-	amount := min(open*min(RUN*math.sqrt(drop), 5)*WATER_STEP, drop/4, donor/4)
+	amount := min(open*min(RUN*math.sqrt(drop), 3)*WATER_STEP, drop/4, donor/4)
 	return amount if ha > hb else -amount
 }
 
@@ -294,7 +294,9 @@ water_surface :: proc(wt: ^Water, c: ^Chunk, out: ^[dynamic]Water_Quad) {
 			more: [4][4]f32
 			for k in i32(0)..<4 do y[k], more[k] = water_corner(wt, x, z, k & 1, k >> 1)
 			fx, fz := f32(lx), f32(lz)
-			append(out, Water_Quad{{{fx, y[0], fz}, {fx + 1, y[1], fz}, {fx, y[2], fz + 1}, {fx + 1, y[3], fz + 1}}, more})
+			calm := more   // the water above a step runs smooth to its lip: the white is on the sheet and below it
+			for &m, k in calm do if wt.floor[i] + wt.depth[i] > y[k] + 0.12 do m[3] -= math.mod(m[3], 2)
+			append(out, Water_Quad{{{fx, y[0], fz}, {fx + 1, y[1], fz}, {fx, y[2], fz + 1}, {fx + 1, y[3], fz + 1}}, calm})
 
 			// Each side: the two corners along it, and the column beyond.
 			sides := [4][6]i32{{1, 0, 1, 3, 0, 0}, {-1, 0, 0, 2, 1, 1}, {0, 1, 2, 3, 0, 0}, {0, -1, 0, 1, 0, 1}}   // dx, dz, corner a, corner b, the neighbour's u or v on this side

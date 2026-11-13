@@ -265,6 +265,13 @@ places_make :: proc() {
 			c.seen += 1.0/120
 			if v := min(clear, 100) - abs(d - 1500)/25; clear >= 15 && land.slope[land_cell(x, z)] < 0.3 && (v > best || best == 1e9) do c.view, best = e, v
 		}
+		// A place no far viewpoint sees clear, as one in a gorge, is looked at from near by: from the
+		// lowest ground 150 m off, which is down its valley, at the tree tops.
+		if best == 1e9 do for a in 0..<24 {
+			bearing := f64(a)*math.PI/12
+			x, z := c.at.x + 150*math.sin(bearing), c.at.y - 150*math.cos(bearing)
+			if h := f64(max(land.z[0][land_cell(x, z)], 0)); h < best do c.view, best = {x, h + 30, z}, h
+		}
 		if c.kind not_in ON_FOOT do c.score *= min(0.3 + 1.4*c.seen, 1)*min(c.size/SEEN_SIZE, 1)
 	}
 	slice.sort_by(candidates[:], proc(a, b: Candidate) -> bool { return a.score > b.score })
