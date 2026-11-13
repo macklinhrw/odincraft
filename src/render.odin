@@ -8,6 +8,7 @@ import "core:image/png"
 import "core:math"
 import "core:math/linalg"
 import "core:os"
+import "core:slice"
 import "core:strings"
 import sdl "vendor:sdl3"
 
@@ -20,6 +21,7 @@ BLOCKS     :: #load("../assets/blocks.png")   // the faces of every block, drawn
 PLANTS     :: #load("../assets/plants.png")   // the ground plants' pictures, by tools/blocks.py: a row for each, its lower picture then any upper one
 TILE       :: 16
 SHADOW_RES :: 2048
+LEAF_FAR   :: 72     // metres within which leaves are seen through
 BOX_MAX    :: 8192   // creatures' boxes drawn a frame at most
 FOV        :: 70.0   // vertical, degrees
 NEAR       :: 0.1
@@ -51,7 +53,7 @@ Gpu :: struct {
 	lifted:         ^sdl.GPUTexture,   // the field `lifted`, for the cloud cap
 	block_sampler:  ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
-	terrain, shadow_pipe, sky, water, river, pool, present, plant, cloud_pipe, box: ^sdl.GPUGraphicsPipeline,
+	terrain, leaf, shadow_pipe, sky, water, river, pool, present, plant, cloud_pipe, box: ^sdl.GPUGraphicsPipeline,
 	ribbon:         ^sdl.GPUBuffer,    // the rivers' water surface
 	ribbon_count:   u32,
 	falls:          ^sdl.GPUBuffer,    // the falling water, as quads of simulated water
@@ -123,6 +125,7 @@ Item :: struct {
 	level:  i32,
 	mask:   u8,       // quarters not covered by a finer chunk
 	seen:   bool,     // inside the view this frame
+	near:   f32,      // metres to its nearest point on the map
 }
 
 fatal :: proc(what: string) -> ! {
@@ -287,6 +290,11 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 	g.terrain = make_pipeline(g, {
 		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 4, quads = true,
 		cull = .BACK, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER,
+	})
+	// Leaves near by: the terrain's faces with the gaps in their tiles cut out by alpha to coverage, seen from both sides.
+	g.leaf = make_pipeline(g, {
+		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 4, quads = true,
+		cull = .NONE, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, coverage = true,
 	})
 	// Ground plants: crossed pictures cut out by alpha to coverage, seen from both sides, casting no shadow.
 	g.plant = make_pipeline(g, {
@@ -529,7 +537,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 					if linalg.dot(p, far) + fall*max(linalg.dot(p, light), 0) < 0 do continue casts
 				}
 				mask := it.mask
-				if it.level == min_level[i] do mask = 1 if it.level == 0 else 0xF
+				if it.level == min_level[i] do mask = 3 if it.level == 0 else 0xF   // the blocks and their leaves, which cast shadows whole
 				draw_item(g, cmd, pass, &it, mask)
 			}
 			sdl.EndGPURenderPass(pass)
@@ -567,14 +575,26 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 4)
 	// The view volume as four planes through the eye; a chunk wholly outside one is skipped.
 	planes := [4][3]f32{fwd*tan_x + right, fwd*tan_x - right, fwd*tan_y + up, fwd*tan_y - up}
+	lacy := make([dynamic]^Item, context.temp_allocator)
 	each: for &it in items {
 		for p in planes {
 			far := [3]f32{it.hi.x if p.x > 0 else it.lo.x, it.hi.y if p.y > 0 else it.lo.y, it.hi.z if p.z > 0 else it.lo.z}
 			if linalg.dot(p, far) < 0 do continue each
 		}
 		it.seen = true
-		draw_item(g, cmd, pass, &it, it.mask)
+		// Leaves are seen through only near by (LEAF_FAR, as in shaders.metal, where they have closed by
+		// then): each layer of them is shaded in full, and a wood is many layers deep.
+		it.near = linalg.length(linalg.clamp([2]f32{0, 0}, it.lo.xz, it.hi.xz))
+		if it.level == 0 && it.near < LEAF_FAR do append(&lacy, &it)
+		draw_item(g, cmd, pass, &it, it.mask if it.level > 0 else 1 if it.near < LEAF_FAR else 3)
 	}
+
+	// The leaves of the nearest chunks, seen through and from both sides.
+	sdl.BindGPUGraphicsPipeline(pass, g.leaf)
+	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 4)
+	// Nearest first, and a crown's outer faces before those within it, so most of what is hidden is never shaded.
+	slice.sort_by(lacy[:], proc(a, b: ^Item) -> bool { return a.near < b.near })
+	for it in lacy do draw_item(g, cmd, pass, it, 6)
 
 	// The ground plants in the nearest chunks, two pictures crossed in a strip of ten vertices.
 	sdl.BindGPUGraphicsPipeline(pass, g.plant)

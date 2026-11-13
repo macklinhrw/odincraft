@@ -95,7 +95,14 @@ grain :: proc(blocks: []u8, h, x, y, z: i32, n: [3]i32, m: Mat) -> Mat {
 
 // A column's ground plant (plants.odin) stands on the top face of its ground where that block is
 // still the one the plant grows on and air is over it, so digging, building or a tree takes it away.
-mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Quad, at: [3]i32) {
+// Leaves are seen through: the gaps in their tiles are clear (fs_terrain), and each block of
+// leaves shows behind the one in front, with the limbs among them. A crown's outer faces come
+// after the solid faces in `out`, and after those the faces where two blocks of leaves meet, one
+// for each pair, seen from both sides and dim, as the inside of a crown is; how many of each is
+// returned, for the renderer to draw them apart.
+mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Quad, at: [3]i32) -> (outer, inner: u32) {
+	leaf :: proc(blocks: []u8, h, x, y, z: i32) -> bool { return y >= 0 && y < h && Mat(blocks[(x + 1) + (z + 1)*P + y*P*P]) in LEAVES }
+	leaves, within := make([dynamic]Quad, context.temp_allocator), make([dynamic]Quad, context.temp_allocator)
 	cover: [P*P]i32   // the highest block in each column that is not part of a plant
 	for k in 0..<P*P {
 		cover[k] = h - 1
@@ -107,10 +114,14 @@ mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Qu
 				m := Mat(blocks[(x + 1) + (z + 1)*P + y*P*P])
 				if m == .Air do continue
 				slope := c.slope[(z + 1)*P + x + 1] if m not_in PLANT_BLOCKS else {}
+				if m in LEAVES do for f in ([3]int{0, 2, 4}) {
+					n := FACE_N[f]
+					if leaf(blocks, h, x + n.x, y + n.y, z + n.z) do append(&within, quad(x + n.x, y + n.y, z + n.z, 1, 1, f, m, {6, 6, 6, 6}, {}))
+				}
 				for f in 0..<6 {
 					n := FACE_N[f]
 					nx, ny, nz := x + n.x, y + n.y, z + n.z
-					if solid(blocks, h, nx, ny, nz) {
+					if solid(blocks, h, nx, ny, nz) && (m in LEAVES || !leaf(blocks, h, nx, ny, nz)) {   // a limb shows through the leaves round it
 						// A buried face on the chunk's rim is kept for four blocks below the
 						// surface. The neighbour may be drawn at a coarser level whose ground
 						// sits a little lower, and this closes the gap.
@@ -136,7 +147,7 @@ mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Qu
 					}
 					q := quad(x + max(n.x, 0), y + max(n.y, 0), z + max(n.z, 0), 1, 1, f, grain(blocks, h, x, y, z, n, m) if GRAIN[m] != {} else m, corners, slope)
 					q.info |= closed << 4
-					append(out, q)
+					append(&leaves if m in LEAVES else out, q)
 					if k := (z + 1)*P + x + 1; f == 2 && c.plant[k] > 0 && at.y + y == c.top[k] - 1 {
 						row := GROUND_PLANTS[Plant_Kind(c.plant[k] - 1)]
 						if m in row.on && (!row.tall || !solid(blocks, h, x, y + 2, z)) {
@@ -147,6 +158,9 @@ mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Qu
 			}
 		}
 	}
+	append(out, ..leaves[:])
+	append(out, ..within[:])
+	return u32(len(leaves)), u32(len(within))
 }
 
 // ---- far: block columns -------------------------------------------------------------------

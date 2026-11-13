@@ -77,8 +77,8 @@ def srgb(c):
 
 def face(tile, colour, turns, keep, flowers=False):
     """An artist's tile in a material's colour: each channel scaled so the tile's average is the
-    colour, with the contrast between its pixels kept, or part of it. Gaps in leaves are filled
-    with the leaf's own shade."""
+    colour, with the contrast between its pixels kept, or part of it. Gaps in leaves are clear, and
+    hold the leaf's own shade for where the game draws them whole."""
     im = Image.open(SOURCE + tile + ".png").convert("RGBA").crop((0, 0, T, T)).rotate(90 * turns)
     px = [im.getpixel((x, y)) for y in range(T) for x in range(T)]
     solid = [p for p in px if p[3] > 127]
@@ -88,7 +88,7 @@ def face(tile, colour, turns, keep, flowers=False):
     out = Image.new("RGBA", (T, T))
     for i, p in enumerate(px):
         c = [target[k] * (1 + keep * (p[k] / mean[k] - 1)) if p[3] > 127 else target[k] * 0.42 for k in range(3)]
-        out.putpixel((i % T, i // T), tuple(max(0, min(255, round(v))) for v in c) + (255,))
+        out.putpixel((i % T, i // T), tuple(max(0, min(255, round(v))) for v in c) + (255 if p[3] > 127 else 0,))   # a leaf's gaps are clear near by; far off the game draws them in this shade
     if flowers:   # camellia: two blossoms, petals round a gold heart
         for x, y in ((4, 3), (11, 10)):
             for dx in (-1, 0, 1):

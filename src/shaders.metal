@@ -22,6 +22,7 @@ struct Frame {
 struct Draw { float4 origin; };   // xyz: chunk origin, w: cell size in metres
 
 constant float SHADOW_RES = 2048.0;
+constant float LEAF_FAR = 72.0;   // as in render.odin
 
 constant float3 FACE_N[6] = { float3(1,0,0), float3(-1,0,0), float3(0,1,0), float3(0,-1,0), float3(0,0,1), float3(0,0,-1) };
 constant float3 FACE_U[6] = { float3(0,1,0), float3(0,0,1), float3(0,0,1), float3(1,0,0), float3(1,0,0), float3(0,1,0) };
@@ -238,7 +239,8 @@ static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<fl
 fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(0)]],
                            depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]],
                            texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]],
-                           texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]], texture2d<float> seen [[texture(3)]]) {
+                           texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]], texture2d<float> seen [[texture(3)]],
+                           bool outside [[front_facing]]) {
     uint face = in.info & 7u;
     uint mat = (in.info >> 8u) & 255u;
     float3 N = FACE_N[face];
@@ -257,7 +259,11 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
         uint quarter = uint(hash21(floor(world.xz - N.xz * 0.01) + 3.0) * 4.0);
         uv = (quarter == 1u ? float2(-turned.y, turned.x) : quarter == 2u ? -turned : quarter == 3u ? float2(turned.y, -turned.x) : turned) + 0.5;
     }
-    float3 albedo = blocks.sample(block_smp, uv, mat * 2u + (face == 2u || face == 3u ? 0u : 1u), gradient2d(dx, dy)).rgb;
+    float4 tile = blocks.sample(block_smp, uv, mat * 2u + (face == 2u || face == 3u ? 0u : 1u), gradient2d(dx, dy));
+    float3 albedo = tile.rgb;
+    // Only a leaf's tile has clear gaps, and only the pipeline that draws the near leaves reads this.
+    // The edge is kept sharp at any size, so far off, where a tile is a pixel, a leaf is whole.
+    float cut = max(saturate((tile.a - 0.5) / max(fwidth(tile.a), 1e-4) + 0.5), smoothstep(0.6 * LEAF_FAR, LEAF_FAR, dist));   // and whole by where the far leaves are drawn whole
     float patches = vnoise(inside.xz / 41.0) * 0.6 + vnoise(inside.xz / 11.0) * 0.4;
     albedo *= 1.0 + (patches - 0.5) * 0.24 + (block - 0.5) * 0.10 * saturate(1.0 - dist / (in.cell * 200.0));
 
@@ -269,7 +275,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     bool turned = dot(N, sun) <= 0.0;
     float3 probe = turned ? in.rel + in.soft * (1.5 * in.cell) : in.rel;
     float shade = cloud_shade(in.rel, f, lifted, smp);   // under a cloud the sky round the sun is dimmed too
-    float lit = ndl > 0.0 ? shadow_at(probe, turned ? in.soft : N, f, shadow_map, shadow_smp) * shade : 0.0;
+    float lit = ndl > 0.0 && outside ? shadow_at(probe, turned ? in.soft : N, f, shadow_map, shadow_smp) * shade : 0.0;   // only a leaf is seen from inside, and the inside of a crown is in its own shade
     float ao = mix(0.5, 1.0, in.ao);
     float sky = 1.0 - float((in.info >> 4u) & 15u) / 15.0;   // the share of the sky a face under a roof sees (mesh.odin); far off, of the sunlight too
     float3 col = albedo * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) * (in.cell > 1.0 ? sky : 1.0) + sky_ambient(in.soft, sun, f.weather.x) * ao * sky * mix(0.7, 1.0, shade));
@@ -288,7 +294,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
         }
     }
 
-    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, 1.0);
+    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, cut);
 }
 
 // ---- ground plants ------------------------------------------------------------------------

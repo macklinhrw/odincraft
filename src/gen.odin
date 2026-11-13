@@ -518,6 +518,7 @@ SPECIES := [Tree_Kind]Species{
 	// Alnus sieboldiana: a sinuous grey stem forking low, spreading limbs, a rounded crown
 	.Alder    = {"alder", .Grey_Bark, .Scrub_Leaves, .Dome, {6, 10}, {2, 3}, {1, 1}, 0.35, false, {2, 3}, 0.6, 0.55, 0.8, 0.1, 0.1, 0.4},
 }
+LEAVES :: bit_set[Mat]{.Leaves, .Shii_Leaves, .Camellia_Leaves, .Hisakaki_Leaves, .Pine_Needles, .Scrub_Leaves}   // seen through, near by: the gaps in their tiles are clear
 PLANT_BLOCKS :: bit_set[Mat]{.Wood, .Leaves, .Shii_Bark, .Shii_Leaves, .Grey_Bark, .Camellia_Leaves, .Hisakaki_Leaves, .Pine_Bark, .Pine_Needles, .Scrub_Leaves}
 
 // The plant communities, which compete for ground in a race (race, fields.odin). A row brings

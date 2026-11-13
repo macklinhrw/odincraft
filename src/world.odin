@@ -23,7 +23,7 @@ Chunk :: struct {
 	ready:              bool,          // has a mesh, possibly empty
 	building, dirty:    bool,
 	buffer:             ^sdl.GPUBuffer,
-	ranges:             [4][2]u32,     // first quad and count for each quarter
+	ranges:             [4][2]u32,     // first quad and count for each quarter; at the nearest level, for the solid faces, the crowns' outer faces and the faces within them
 	y_base, y_lo, y_hi: i32,           // mesh origin and vertical extent, metres
 	blocks:             []u8,          // level 0 only: the block volume, for collision and edits
 	h:                  i32,           // layers in blocks
@@ -127,8 +127,9 @@ build :: proc(job: Job) -> (b: Built) {
 	b.key = job.key
 	if job.key.level == 0 {
 		b.blocks, b.y_base, b.h = build_volume(job.key, c, job.edits)
-		mesh_volume(b.blocks, b.h, c, &quads, &plants, {job.key.x*CHUNK - region.origin.x, b.y_base, job.key.z*CHUNK - region.origin.y})
-		b.ranges[0] = {0, u32(len(quads))}
+		outer, inner := mesh_volume(b.blocks, b.h, c, &quads, &plants, {job.key.x*CHUNK - region.origin.x, b.y_base, job.key.z*CHUNK - region.origin.y})
+		all := u32(len(quads))
+		b.ranges[0], b.ranges[1], b.ranges[2] = {0, all - outer - inner}, {all - outer - inner, outer}, {all - inner, inner}   // at this level: the solid faces, the crowns' outer faces, the faces within them
 		b.y_lo, b.y_hi = b.y_base, b.y_base + b.h
 		// What the water needs to know about each column.
 		b.floor, b.hold, b.sea, b.still, b.roof = make([]f32, CHUNK*CHUNK), make([]f32, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK)
