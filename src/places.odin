@@ -415,7 +415,7 @@ survey_print :: proc() {
 	fmt.print("\n  soil:")
 	for t, k in survey.soils do fmt.printf(" %s %s;", SOILS[k].name, spread(t, all))
 	fmt.print("\n  features:")
-	for count, k in survey.features do if k != .Place do fmt.printf(" %v %d;", k, count)
+	for count, k in survey.features do if k != .Place && k != .Haunt do fmt.printf(" %v %d;", k, count)
 	largest, tallest := -1, -1
 	for f, i in region.features {
 		if f.kind == .Lake && (largest < 0 || f.size > region.features[largest].size) do largest = i

@@ -346,6 +346,59 @@ fragment float4 fs_plant(PlantV in [[stage_in]], constant Frame &f [[buffer(0)]]
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, a);
 }
 
+// ---- creatures ----------------------------------------------------------------------------
+
+// A box of a creature's body (creatures.odin): its middle from the eye and its three half axes,
+// with its colour above and beneath and the depth of water over it in the spare places. The
+// fourteen corners of a strip that wraps a cube are read from three words of bits.
+struct BoxIn {
+    float4 c [[attribute(0)]];   // middle, colour of its top face as 0xRRGGBB
+    float4 x [[attribute(1)]];   // half axes; colour of its other faces
+    float4 y [[attribute(2)]];   //            water over it, metres
+    float4 z [[attribute(3)]];
+};
+
+struct BoxV {
+    float4 position [[position]];
+    float3 rel;
+    float3 local;               // -1 to 1 across the box
+    float3 upper [[flat]];
+    float3 under [[flat]];
+    float wet [[flat]];
+};
+
+static float3 unpack_rgb(float c) {
+    uint u = uint(c);
+    return pow(float3((u >> 16u) & 255u, (u >> 8u) & 255u, u & 255u) / 255.0, 2.2);
+}
+
+vertex BoxV vs_box(BoxIn b [[stage_in]], uint vid [[vertex_id]], constant Frame &f [[buffer(0)]]) {
+    float3 s = float3((0x287au >> vid) & 1u, (0x02afu >> vid) & 1u, (0x31e3u >> vid) & 1u) * 2.0 - 1.0;
+    BoxV o;
+    o.rel = b.c.xyz + b.x.xyz * s.x + b.y.xyz * s.y + b.z.xyz * s.z;
+    o.position = f.view_proj * float4(o.rel, 1.0);
+    o.local = s;
+    o.upper = unpack_rgb(b.c.w);
+    o.under = unpack_rgb(b.x.w);
+    o.wet = b.y.w;
+    return o;
+}
+
+fragment float4 fs_box(BoxV in [[stage_in]], constant Frame &f [[buffer(0)]],
+                       depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]],
+                       texture2d<float> lifted [[texture(1)]], sampler smp [[sampler(1)]]) {
+    float3 N = normalize(cross(dfdx(in.rel), dfdy(in.rel)));
+    if (dot(N, in.rel) > 0.0) N = -N;
+    float3 albedo = in.local.y >= max(abs(in.local.x), abs(in.local.z)) ? in.upper : in.under;   // the back, and the flanks and belly
+    float3 sun = f.sun.xyz;
+    float ndl = saturate(dot(N, sun));
+    float shade = cloud_shade(in.rel, f, lifted, smp);
+    float lit = ndl > 0.0 ? shadow_at(in.rel, N, f, shadow_map, shadow_smp) * shade : 0.0;
+    float3 col = albedo * (sun_light(sun) * ndl * lit + sky_ambient(N, sun, f.weather.x) * mix(0.7, 1.0, shade));
+    col *= exp(-in.wet * float3(0.30, 0.11, 0.08));   // light lost on the way down through water
+    return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp), in.position.xy, 1.0);
+}
+
 // ---- sky, water, present ------------------------------------------------------------------
 
 struct ScreenV {

@@ -20,6 +20,7 @@ BLOCKS     :: #load("../assets/blocks.png")   // the faces of every block, drawn
 PLANTS     :: #load("../assets/plants.png")   // the ground plants' pictures, by tools/blocks.py: a row for each, its lower picture then any upper one
 TILE       :: 16
 SHADOW_RES :: 2048
+BOX_MAX    :: 8192   // creatures' boxes drawn a frame at most
 FOV        :: 70.0   // vertical, degrees
 NEAR       :: 0.1
 
@@ -48,11 +49,14 @@ Gpu :: struct {
 	lifted:         ^sdl.GPUTexture,   // the field `lifted`, for the cloud cap
 	block_sampler:  ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
-	terrain, shadow_pipe, sky, water, river, pool, present, plant: ^sdl.GPUGraphicsPipeline,
+	terrain, shadow_pipe, sky, water, river, pool, present, plant, box: ^sdl.GPUGraphicsPipeline,
 	ribbon:         ^sdl.GPUBuffer,    // the rivers' water surface
 	ribbon_count:   u32,
 	falls:          ^sdl.GPUBuffer,    // the falling water, as quads of simulated water
 	falls_count:    u32,
+	boxes:          ^sdl.GPUBuffer,    // the creatures' boxes, written each frame
+	box_staging:    ^sdl.GPUTransferBuffer,
+	boxes_drawn:    int,
 	quads_drawn:    int,
 	plants_drawn:   int,
 	frame:          int,
@@ -74,6 +78,7 @@ View :: struct {
 	target:     [3]i32, // block being aimed at
 	has_target: bool,
 	crosshair:  bool,
+	boxes:      []Box,  // the creatures near enough to see (creatures.odin)
 }
 
 // Mirrors `Frame` in shaders.metal.
@@ -129,6 +134,7 @@ Pipeline :: struct {
 	quads:                                bool,   // takes Quad instances
 	ribbon:                               bool,   // takes plain positions
 	pool:                                 bool,   // takes Water_Quad instances
+	boxes:                                bool,   // takes Box instances
 	cull:                                 sdl.GPUCullMode,
 	color:                                sdl.GPUTextureFormat,   // .INVALID for depth only
 	samples:                              sdl.GPUSampleCount,
@@ -186,6 +192,11 @@ make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
 		buffers[0] = {slot = 0, pitch = size_of(Water_Quad), input_rate = .INSTANCE}
 		for &a, i in attributes do a = {location = u32(i), format = .FLOAT3 if i < 4 else .FLOAT4, offset = u32(i*12 if i < 4 else 48 + (i - 4)*16)}
 		info.vertex_input_state = {raw_data(&buffers), 1, raw_data(&attributes), 8}
+	}
+	if p.boxes {
+		buffers[0] = {slot = 0, pitch = size_of(Box), input_rate = .INSTANCE}
+		for i in 0..<4 do attributes[i] = {location = u32(i), format = .FLOAT4, offset = u32(16*i)}
+		info.vertex_input_state = {raw_data(&buffers), 1, raw_data(&attributes), 4}
 	}
 	pipe := sdl.CreateGPUGraphicsPipeline(g.dev, info)
 	if pipe == nil do fatal(string(p.vs))
@@ -280,6 +291,13 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		vs = "vs_plant", fs = "fs_plant", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 3, quads = true,
 		cull = .NONE, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, coverage = true,
 	})
+	// Creatures: boxes, each a strip of fourteen corners, seen from any side, casting no shadow.
+	g.box = make_pipeline(g, {
+		vs = "vs_box", fs = "fs_box", vs_uniforms = 1, fs_uniforms = 1, fs_samplers = 2, boxes = true,
+		cull = .NONE, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER,
+	})
+	g.boxes = sdl.CreateGPUBuffer(g.dev, {usage = {.VERTEX}, size = BOX_MAX*size_of(Box)})
+	g.box_staging = sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = BOX_MAX*size_of(Box)})
 	g.shadow_pipe = make_pipeline(g, {
 		vs = "vs_shadow", fs = "fs_shadow", vs_uniforms = 2, quads = true,
 		cull = .BACK, depth = true, depth_write = true, compare = .LESS, clamp_depth = true,
@@ -381,6 +399,14 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	}
 	resize(g, sw, sh)
 	g.quads_drawn, g.plants_drawn = 0, 0
+	g.boxes_drawn = min(len(v.boxes), BOX_MAX)
+	if g.boxes_drawn > 0 {
+		copy((cast([^]Box)sdl.MapGPUTransferBuffer(g.dev, g.box_staging, true))[:g.boxes_drawn], v.boxes[:g.boxes_drawn])
+		sdl.UnmapGPUTransferBuffer(g.dev, g.box_staging)
+		copy_pass := sdl.BeginGPUCopyPass(cmd)
+		sdl.UploadToGPUBuffer(copy_pass, {g.box_staging, 0}, {g.boxes, 0, u32(g.boxes_drawn*size_of(Box))}, true)
+		sdl.EndGPUCopyPass(copy_pass)
+	}
 
 	// Camera. Positions sent to the GPU are relative to the eye.
 	tan_y := math.tan(math.to_radians(f32(FOV))/2)
@@ -536,6 +562,15 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
 		sdl.DrawGPUPrimitives(pass, 10, it.chunk.plant_count, 0, 0)
 		g.plants_drawn += int(it.chunk.plant_count)
+	}
+
+	if g.boxes_drawn > 0 {
+		sdl.BindGPUGraphicsPipeline(pass, g.box)
+		box_bindings := [2]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, lifted}
+		sdl.BindGPUFragmentSamplers(pass, 0, &box_bindings[0], 2)
+		binding := sdl.GPUBufferBinding{buffer = g.boxes}
+		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
+		sdl.DrawGPUPrimitives(pass, 14, u32(g.boxes_drawn), 0, 0)
 	}
 
 	sdl.BindGPUGraphicsPipeline(pass, g.sky)
