@@ -57,6 +57,13 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 
 **2026-11-12, Claude's call**
 
+- **What a shore is made of follows the swell and the rivers** (step 15). Sand only where a river's mouth supplies more than the swell carries off; shingle where it does not; boulders and wave-washed rock where the swell breaks. The sand line that laid pale sand round every shore is gone. On the default island about an eighth of the shore is sand, a third shingle and a third bare washed rock.
+- **Black sand on basalt and scoria, pale sand on every other rock**, beach and shore soil alike, after Miyakejima and Ōshima against Kōzushima's rhyolite and Kikaijima's coral. One new material, black sand, takes the artist's sand tile in dark grey.
+- **The platform the forming cut 2 m under the sea is raised to the sea's level near an open shore**, so it can be seen and walked on, with gullies and pools along the strike of the beds. With no tide, a platform under the water would never show. This is a choice of look as much as a cause.
+- **Shingle and boulders are the island's own broken rock** (the rock's loose block), so they are dark on basalt and buff on sandstone, and they lie only in heaps along the foot of what stands behind the platform, never scattered one by one, which the owner rejected in step 2.
+- **Stacks are features ranked by host as notches are**: a headland open to the swell, in rock of strength 0.5 or more, at a cliff. Each stands 5 to 40 m off the cliff's foot, at 40 to 90% of the cliff's height, with up to three skerries, and its sides step at its beds. Every island so far gets two.
+- **No surf.** White water at the shore was left out: the sea shader is being changed by another step, and nothing tried in this one looked right.
+
 - **Roofed places are three features with hosts, carved into the blocks** (step 14): sea notches, rock shelters and sea caves, a few of each on an island, each where its host ranks best, as the slide is. The default island has four shelters and no notch or cave, because its shore is low mudstone and sand; the cones, the ridge and the domes have all three.
 - **A sea cave asks for rock of strength 0.5 or more and a real face.** In mudstone it came out as an open cleft, since its roof fell in. Real sea caves at Dogashima are cut in a soft tuff, so this may be too strict.
 - **A face under a roof is lit by the square root of the share of sky it sees, and never below 2 of 15.** Taken straight, a cave was black a metre in. It is a choice of look, not a measure.

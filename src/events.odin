@@ -12,7 +12,7 @@ import "core:time"
 // of the forming (foundations/landforms.md, D4), and it leaves three kinds of feature: its own
 // scar and debris, the lake its debris dams, and the ponds among its hummocks.
 
-Feature_Kind :: enum u8 { Slide, Lake, Pond, Notch, Shelter, Cave, Trail, Ford }
+Feature_Kind :: enum u8 { Slide, Lake, Pond, Notch, Shelter, Cave, Trail, Ford, Stack }
 Measure :: struct { what: string, value: f32 }
 Feature :: struct {
 	kind:     Feature_Kind,
@@ -313,6 +313,9 @@ HOLLOWS := #partial [Feature_Kind]Hollow_Row{
 	.Notch   = {"the waves cut it at the sea's level into the foot of a cliff open to the swell", {{.Swell, 0.15, ANY, 0.1}, {.Inland, -ANY, 24, 16}, {.Slope, 1.5, ANY, 0.5}}, {1, 3}, 400, {50, 110}, {2.5, 5}, {2.5, 4}, -1},
 	.Shelter = {"a weak bed weathered back under a strong one at the foot of a face", {{.Contact, 0.25, ANY, 0.1}, {.At_Limit, 0.8, ANY, 0.2}, {.Inland, 150, ANY, 100}}, {2, 4}, 400, {16, 40}, {4, 16}, {2, 4}, 0},
 	.Cave    = {"the waves drove it into a headland open to the swell along one of its cracks", {{.Headland, 0.5, ANY, 0.1}, {.Swell, 0.15, ANY, 0.1}, {.Slope, 1.5, ANY, 0.5}, {.Strength, 0.5, ANY, 0.1}}, {1, 2}, 300, {18, 40}, {4, 7}, {8, 14}, -2},
+	// A stack is not a hollow but is placed the same way: `reach` is how far off the cliff's foot it
+	// stands, `deep` its radius and `high` the share of the cliff's height it keeps.
+	.Stack   = {"the waves cut the cliff back round it and left its harder rock standing", {{.Headland, 0.5, ANY, 0.15}, {.Swell, 0.2, ANY, 0.1}, {.Strength, 0.5, ANY, 0.15}, {.Slope, 1, ANY, 0.5}}, {2, 6}, 250, {5, 40}, {6, 13}, {0.4, 0.9}, 0},
 }
 Hollow :: struct {
 	feature:   int,
@@ -343,6 +346,7 @@ hollows_make :: proc() {
 	started := time.now()
 	g := land.grid
 	made: [Feature_Kind]int
+	first := len(region.features)
 	for row, kind in HOLLOWS do if len(row.host) > 0 {
 		Spot :: struct { s: f32, c: i32 }
 		spots := make([dynamic]Spot, context.temp_allocator)
@@ -355,13 +359,96 @@ hollows_make :: proc() {
 		next: for sp in spots {
 			if made[kind] >= most do break
 			at := middle_of(g, int(sp.c))
-			for h in hollows do if math.hypot(region.features[h.feature].at.x - at.x, region.features[h.feature].at.y - at.y) < f64(row.apart) do continue next
-			made[kind] += int(hollow_carve(kind, int(sp.c), at))
+			for f in region.features[first:] do if math.hypot(f.at.x - at.x, f.at.y - at.y) < f64(row.apart) do continue next
+			made[kind] += int(stack_make(int(sp.c), at) if kind == .Stack else hollow_carve(kind, int(sp.c), at))
 		}
 	}
-	fmt.printf("roofed places in %.0f ms: %d sea notches, %d rock shelters, %d sea caves; at", time.duration_milliseconds(time.since(started)), made[.Notch], made[.Shelter], made[.Cave])
-	for h, i in hollows do fmt.printf("%s %v %.0f, %.0f", "," if i > 0 else "", region.features[h.feature].kind, region.features[h.feature].at.x + f64(region.origin.x), region.features[h.feature].at.y + f64(region.origin.y))
+	fmt.printf("roofed places and stacks in %.0f ms: %d sea notches, %d rock shelters, %d sea caves, %d sea stacks with %d skerries; at", time.duration_milliseconds(time.since(started)), made[.Notch], made[.Shelter], made[.Cave], made[.Stack], len(pillars) - made[.Stack])
+	for f, i in region.features[first:] do fmt.printf("%s %v %.0f, %.0f", "," if i > 0 else "", f.kind, f.at.x + f64(region.origin.x), f.at.y + f64(region.origin.y))
 	fmt.println()
+}
+
+// A sea stack and the skerries round it: columns of the cliff's own beds standing in the sea,
+// each longer along the strike of its beds, where its cracks part it, than across.
+Pillar :: struct {
+	at:      [2]f64,
+	along:   [2]f64,   // the strike of its beds
+	r, top:  f32,      // mean radius, and height of its top over the sea
+	long:    f32,      // its length over its breadth
+	feature: int,
+}
+pillars: [dynamic]Pillar
+
+// Stand a stack off the cliff at a headland, out from where the ground first lies under the sea,
+// as high as a share of the cliff, with up to three lower skerries seaward of it. False if the
+// sea there is too shallow.
+stack_make :: proc(c: int, at: [2]f64) -> bool {
+	row, g, i := HOLLOWS[.Stack], land.grid, i32(len(region.features))
+	draw :: proc(r: [2]f32, i, k: i32) -> f32 { return math.lerp(r[0], r[1], hash01(i, k, seed + 731)) }
+	b := math.to_radians(f64(land.facing[c]))
+	out := [2]f64{math.sin(b), -math.cos(b)}   // the way the ground falls, toward the sea
+	cliff: f32
+	for dy in -3..=3 do for dx in -3..=3 do cliff = max(cliff, g.z[clamp(c + dy*g.n + dx, 0, g.n*g.n - 1)])
+	foot := at
+	for k := 0; ground(foot.x, foot.y, 1).h > -1; k += 1 {
+		if k == 100 do return false
+		foot += out
+	}
+	r := draw(row.deep, i, 1)
+	middle := foot + out*f64(draw(row.reach, i, 0) + r)
+	if ground(middle.x, middle.y, 1).h > -1 do return false
+	top := cliff*draw(row.high, i, 2)
+	along, long := rock_strike(middle.x, middle.y), draw({1, 1.8}, i, 4)
+	append(&pillars, Pillar{middle, along, r, top, long, len(region.features)})
+	for k in 0..<i32(draw({0, 3.99}, i, 3)) {
+		a, d := f64(draw({-1.4, 1.4}, i, 10 + k)), f64(draw({12, 40}, i, 20 + k))
+		p := middle + d*[2]f64{out.x*math.cos(a) - out.y*math.sin(a), out.x*math.sin(a) + out.y*math.cos(a)}
+		if ground(p.x, p.y, 1).h < -0.5 do append(&pillars, Pillar{p, along, draw({2, 4.5}, i, 30 + k), draw({1.5, max(0.35*top, 2)}, i, 40 + k), long, len(region.features)})
+	}
+	append(&region.features, Feature{kind = .Stack, at = middle, reach = f32(math.hypot(middle.x - foot.x, middle.y - foot.y)) - r, size = math.PI*r*r*top, level = top,
+		age = region.history[len(region.history) - 1].years*region.history[len(region.history) - 1].steps, cause = -1,
+		measured = {{"how open its shore is to the swell", land.swell[c]}, {"the share of sea within 48 m of the headland", headland(c)}, {"the strength of the rock at the cliff's foot", MATERIALS[rock_in(g.z[c] - 2, g.base[c], ROCK_SIM)].strength}}})
+	return true
+}
+
+// The top of any stack or skerry at a point over ground at `under`, whose rock base is `base`,
+// and whether it is the rubble round its foot rather than the column. Each bed of the column
+// stands out as far as it is strong, its outline ragged and shifted by its own amount, and the
+// column widens toward its foot; so its sides step at the beds as the cliff's do, and its top is
+// whatever bed the waves have left last. Far off, it is widened by a third of a cell, so that the
+// cells it touches draw it.
+stack_at :: proc(x, z, cell: f64, under, base: f32) -> (h: f32, rubble: bool) {
+	h = under
+	for p in pillars {
+		dx, dz := x - p.at.x, z - p.at.y
+		reach := f64(p.r*p.long*2 + 8)
+		if abs(dx) > reach || abs(dz) > reach do continue
+		grow := 0.35*f32(cell) if cell > 1 else 0
+		u, v := f32(dx*p.along.x + dz*p.along.y)/(p.r*p.long + grow), f32(dz*p.along.x - dx*p.along.y)/(p.r/math.sqrt(p.long) + grow)
+		ragged := 0.25*fbm(x, z, f64(1.5*p.r), cell, 3, seed + 732)
+		top := p.top*(1 - 0.15*(1 + fbm(x, z, f64(p.r), cell, 2, seed + 733)))
+		for y := top; y > under; y -= 1 {   // from the top down, the first bed that reaches out to here
+			n := rocks.bed[clamp(int(y - base - STACK_LO), 0, STACK_LEN - 1)]
+			wide := (0.6 + 0.5*MATERIALS[rocks.beds[n].kind].strength + 0.3*(hash01(i32(n), 0, seed + 734) - 0.5))*(1 + 0.7*(1 - y/p.top)*(1 - y/p.top))
+			if du, dv := u - 0.3*(hash01(i32(n), 1, seed + 734) - 0.5), v - 0.3*(hash01(i32(n), 2, seed + 734) - 0.5); math.sqrt(du*du + dv*dv)*(1 + ragged) < wide {
+				if y > h do h, rubble = y, false
+				break
+			}
+		}
+		if cell <= 2 && math.sqrt(u*u + v*v) < 2.2 do if s := under + stones(x, z, 0.7, 1.2); s > h do h, rubble = s, true
+	}
+	return
+}
+
+// The stack a point lies on or beside, in a sentence, as --why prints it.
+stack_words :: proc(x, z: f64) {
+	for p in pillars do if math.hypot(x - p.at.x, z - p.at.y) < f64(2.2*p.r*p.long + 3) {
+		f := region.features[p.feature]
+		fmt.printfln("%s, %.0f m high and %.0f m across, %.0f m off the foot of the cliff: %s. Measured when it was made: %s %.2f; %s %.2f; %s %.2f.",
+			"a sea stack" if p.top == f.level else "a skerry beside a sea stack", p.top, 2*p.r, f.reach, HOLLOWS[.Stack].why,
+			f.measured[0].what, f.measured[0].value, f.measured[1].what, f.measured[1].value, f.measured[2].what, f.measured[2].value)
+		return
+	}
 }
 
 // Draw a hollow's size from the seed, find its outline in the ground and record it. False if
