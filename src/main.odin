@@ -33,6 +33,8 @@ import sdl "vendor:sdl3"
 //   map=file.png    save a map of the land and exit
 //   overlay=name    with map: paint one field over the relief (names in FIELDS, fields.odin)
 //   why=x,z         print what the ground is at this point in the world and why, and exit
+//   survey          print what the island holds and the ranked candidates for named places, and exit
+//   place=N         look at named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground
 //   show            with shot or bench: open the window. Without it they draw unseen and take no focus
@@ -59,6 +61,8 @@ Options :: struct {
 	kind:          string,
 	why:           [2]f64,
 	has_why:       bool,
+	survey:        bool,
+	place:         int,
 }
 
 options :: proc() -> Options {
@@ -102,6 +106,8 @@ options :: proc() -> Options {
 		case "map":   o.map_path = value
 		case "why":   ok = numbers(value, ",", o.why[:]); o.has_why = true
 		case "fly":   o.fly = true
+		case "survey": o.survey = true
+		case "place": ok = numbers(value, ",", v[:1]); o.place = int(v.x)
 		case "show":  o.show = true
 		case:         ok = false
 		}
@@ -144,6 +150,21 @@ main :: proc() {
 		os.exit(2)
 	}
 	if opt.above do opt.pos.y += f64(height_at(opt.pos.x - f64(region.origin.x), opt.pos.z - f64(region.origin.y), 1))
+	if opt.place != 0 {
+		if opt.place < 1 || opt.place > len(places) {
+			fmt.eprintfln("no place %d: the island has %d named places", opt.place, len(places))
+			os.exit(2)
+		}
+		c := candidates[places[opt.place - 1].c]
+		d := [3]f64{c.at.x, f64(c.top), c.at.y} - c.view
+		opt.pos, opt.has_pos, opt.has_look, opt.fly = c.view + {f64(region.origin.x), -EYE, f64(region.origin.y)}, true, true, true
+		opt.yaw, opt.pitch = f32(math.to_degrees(math.atan2(d.x, -d.z))), f32(math.to_degrees(math.atan2(d.y, math.hypot(d.x, d.z))))
+		fmt.printfln("looking at %s from %.0f, %.0f, %.0f m up, %.1f km off", places[opt.place - 1].name, opt.pos.x, opt.pos.z, c.view.y, math.hypot(d.x, d.z)/1000)
+	}
+	if opt.survey {
+		survey_print()
+		return
+	}
 	if opt.map_path != "" {
 		land_map(opt.map_path, opt.overlay)
 		return
@@ -301,10 +322,12 @@ main :: proc() {
 
 		if seconds - title_at > 0.5 {
 			recent := intervals[title_from:]
+			near, far := place_near(p.pos.x - f64(region.origin.x), p.pos.z - f64(region.origin.y))
 			sdl.SetWindowTitle(window, fmt.ctprintf(
-				"OdinCraft   %.0f fps   worst %.1f ms   %d k quads   %d loading   %.0f %.0f %.0f   %02d:%02d   %s%s",
+				"OdinCraft   %.0f fps   worst %.1f ms   %d k quads   %d loading   %.0f %.0f %.0f   %s   %02d:%02d   %s%s",
 				f64(len(recent))/(seconds - title_at), slice.max(recent)*1000, g.quads_drawn/1000, backlog,
-				p.pos.x, p.pos.y, p.pos.z, int(hour), int(hour*60)%60, "flying" if p.fly else "walking",
+				p.pos.x, p.pos.y, p.pos.z, "" if near < 0 else fmt.tprintf("at %s", places[near].name) if far < GATHER else fmt.tprintf("%s %.1f km", places[near].name, far/1000),
+				int(hour), int(hour*60)%60, "flying" if p.fly else "walking",
 				"" if captured else "   (click to look around)",
 			))
 			title_at, title_from = seconds, len(intervals)

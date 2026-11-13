@@ -169,6 +169,7 @@ gen_init :: proc(kind: string) -> bool {
 	plants_init()
 	hollows_make()
 	trails_make()
+	places_make()
 	return true
 }
 

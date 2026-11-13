@@ -220,4 +220,5 @@ why_at :: proc(wx, wz: f64) {
 	hollow_words(x, z)
 	stack_words(x, z)
 	trail_words(x, z)
+	named_words(x, z)
 }
