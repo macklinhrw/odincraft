@@ -14,13 +14,17 @@ import "core:time"
 
 // The animal (interesting-world/notes/real-animals.md). Of the reference islands only Tsushima,
 // once joined to larger land while the sea stood low, has a large wild animal of its own, the sika
-// deer; the oceanic ones have only what people brought. Its host is the island; it lies up on dry,
-// gentle, sheltered, wooded ground, a bed in each square `across` metres wide, and walks to water,
-// to open ground to feed and to the next bed, at most `limit` seconds of a person's walking away.
-Animal :: struct { name: string, host, bed, feed: []Window, across: f64, limit: f32 }
+// deer; the oceanic ones have only what people brought. Whether an island has the animal is never
+// a preference (the owner, 2026-11-12): it must have been able to reach the island, which is the
+// row's host on the island's story, and the island must be able to keep it, which is `herd`, the
+// fewest squares with ground to lie up on that hold a herd (Okinoshima of Tomogashima, 1.5 km²,
+// keeps one), with fresh water and ground to feed on. It lies up on dry, gentle, sheltered,
+// wooded ground, a bed in each square `across` metres wide, and walks to water, to open ground to
+// feed and to the next bed, at most `limit` seconds of a person's walking away.
+Animal :: struct { name: string, host, bed, feed: []Window, across: f64, limit: f32, herd: int }
 DEER := Animal{"sika deer", {{.Risen, 100, ANY, 0}},
 	{{.Slope, -ANY, 0.36, 0.15}, {.Wetness, -ANY, 0.5, 0.2}, {.Exposure, -ANY, 0.6, 0.2}, {.Woods, 0.7, ANY, 0.2}, {.Humped, 0, ANY, 6}},
-	{{.Woods, -ANY, 0.5, 0}}, 500, 2400}
+	{{.Woods, -ANY, 0.5, 0}}, 500, 2400, 6}
 
 // How many times slower than open ground a person goes through each community's plants (guesses):
 // old laurel and valley forest are halls with an open floor, the ridge wood is low and close, susuki
@@ -133,6 +137,18 @@ trails_make :: proc() {
 		feeds[c] = host(DEER.feed, &p) > 0
 		k := int((p.z + region.size/2)/DEER.across)*side + int((p.x + region.size/2)/DEER.across)
 		if s := host(DEER.bed, &p)*(0.8 + 0.4*hash01(i32(c), 0, seed + 800)); s > 0.3 && s > best[k] do beds[k], best[k] = c, s
+	}
+	// Reached is not kept: the island must hold a herd.
+	lie, feed, water := 0, 0, 0
+	for b in beds do lie += int(b >= 0)
+	for ci in g.order {
+		feed += int(feeds[ci])
+		water += int(trails.wade[ci] > 0 || land.lake[ci] > 0)
+	}
+	if lie < DEER.herd || feed == 0 || water == 0 {
+		fmt.printfln("no large animal: %s could walk here when the sea stood low, but the island cannot keep a herd: %s", DEER.name,
+			"it has no fresh water" if water == 0 else "it has no open ground to feed on" if feed == 0 else fmt.tprintf("it has sheltered wood to lie up in in only %d squares of %.0f m, and a herd needs %d", lie, DEER.across, DEER.herd))
+		return
 	}
 
 	// Each bed's routes: to water, to feed and to the bed beside it to the east or the south, as the
