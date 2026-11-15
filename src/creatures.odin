@@ -83,7 +83,6 @@ Fauna :: struct {
 	lakes:   map[int]u8,           // and in each lake, by its feature
 	fled:    map[u64][3]f32,       // how far each startled fish near the player has fled, 0 to 1, and which way
 }
-fauna: Fauna
 
 // Where the animals live, and the start-up lines that say so.
 creatures_make :: proc() {
@@ -210,9 +209,19 @@ water_at :: proc(wt: ^Water, x, z: f64) -> (floor, depth: f32, ok: bool) {
 	return wt.floor[i], wt.depth[i], wt.floor[i] < WALL/2
 }
 
-// The boxes of every animal near enough to see, posed for the clock, from the eye.
+// The boxes of every animal near enough to see, posed for the clock, from the eye: those of each
+// formed island whose region lies within a bird's reach.
 creatures_pose :: proc(eye: [3]f64, clock: f64, dt, hour, day: f32, wt: ^Water) -> []Box {
 	out := make([dynamic]Box, 0, 512, context.temp_allocator)
+	for &f in formed do if is_formed(&f) && off_island(&f, eye.x, eye.z) < BIRD_FAR {
+		bound(&f)
+		island_pose(&out, eye, clock, dt, hour, day, wt)
+	}
+	return out[:]
+}
+
+// The animals of the island bound.
+island_pose :: proc(out: ^[dynamic]Box, eye: [3]f64, clock: f64, dt, hour, day: f32, wt: ^Water) {
 	o := [2]f64{f64(region.origin.x), f64(region.origin.y)}
 	e := [3]f64{eye.x - o.x, eye.y, eye.z - o.y}
 	rel :: proc(p: [2]f64, y: f32, e: [3]f64) -> [3]f32 { return {f32(p.x - e.x), f32(f64(y) - e.y), f32(p.y - e.z)} }
@@ -225,14 +234,14 @@ creatures_pose :: proc(eye: [3]f64, clock: f64, dt, hour, day: f32, wt: ^Water) 
 		along := [2]f64{-h.out.y, h.out.x}
 		if row.home == .Stack {   // the nest: a heap of sticks with a rim
 			at := rel(h.at, h.nest, e)
-			append(&out, Box{at + {0, 0.12, 0}, f32(0x6e5f4a), {0.65, 0, 0}, f32(0x6e5f4a), {0, 0.12, 0}, 0, {0, 0, 0.6}, 0})
-			for s in ([4][2]f32{{0.55, 0}, {-0.55, 0}, {0, 0.5}, {0, -0.5}}) do append(&out, Box{at + {s.x, 0.3, s.y}, f32(0x5c4e3a), {0.12 + 0.55*abs(s.y), 0, 0}, f32(0x5c4e3a), {0, 0.1, 0}, 0, {0, 0, 0.12 + 0.6*abs(s.x)}, 0})
+			append(out, Box{at + {0, 0.12, 0}, f32(0x6e5f4a), {0.65, 0, 0}, f32(0x6e5f4a), {0, 0.12, 0}, 0, {0, 0, 0.6}, 0})
+			for s in ([4][2]f32{{0.55, 0}, {-0.55, 0}, {0, 0.5}, {0, -0.5}}) do append(out, Box{at + {s.x, 0.3, s.y}, f32(0x5c4e3a), {0.12 + 0.55*abs(s.y), 0, 0}, f32(0x5c4e3a), {0, 0.1, 0}, 0, {0, 0, 0.12 + 0.6*abs(s.x)}, 0})
 		}
 		for k in 0..<h.n {
 			r := draws(i32(i), i32(k))
 			if row.motion == .Soar && !day_lit do break   // at night it roosts in the woods
 			if row.motion == .Hover && (k == 0 || !day_lit) {   // on the nest, upright, facing the wind
-				body(&out, row, {at = rel(h.at + along*(0.5*f64(k)), h.nest + 0.62, e), bearing = wind + 0.4*r[0], pitch = 0.7, flap = -1.4, sweep = 1.45, tail = -0.5, scale = 1, stand = true})
+				body(out, row, {at = rel(h.at + along*(0.5*f64(k)), h.nest + 0.62, e), bearing = wind + 0.4*r[0], pitch = 0.7, flap = -1.4, sweep = 1.45, tail = -0.5, scale = 1, stand = true})
 				continue
 			}
 			phase := f64(r[0])*math.TAU
@@ -259,13 +268,13 @@ creatures_pose :: proc(eye: [3]f64, clock: f64, dt, hour, day: f32, wt: ^Water) 
 				flap, bend = 0.1 + (0.35 + 0.25*hover)*wave(clock, f64(row.beat*(1 + hover)), phase), 0.25*wave(clock, f64(row.beat*(1 + hover)), phase - 0.8)
 			}
 			bearing := f32(math.atan2(v.x, -v.y))
-			body(&out, row, {at = rel(p, y, e), bearing = bearing, bank = bank, pitch = pitch, flap = flap, bend = bend, sweep = 0.12, tail = -0.05 - 0.3*pitch, scale = 1})
+			body(out, row, {at = rel(p, y, e), bearing = bearing, bank = bank, pitch = pitch, flap = flap, bend = bend, sweep = 0.12, tail = -0.05 - 0.3*pitch, scale = 1})
 		}
 	}
 	// Fish in the streams and lakes round the eye.
 	rim := region.size/2
 	bx, bz := int(e.x + rim)/BUCKET, int(e.z + rim)/BUCKET
-	if bx < 0 || bz < 0 || bx >= rivers.side || bz >= rivers.side do return out[:]
+	if bx < 0 || bz < 0 || bx >= rivers.side || bz >= rivers.side do return
 	for id in rivers.buckets[bz*rivers.side + bx] do if bits := fauna.fish[id]; bits != 0 {
 		s := rivers.segments[id]
 		ab, ae := s.b - s.a, [2]f32{f32(e.x), f32(e.z)} - s.a
@@ -278,7 +287,7 @@ creatures_pose :: proc(eye: [3]f64, clock: f64, dt, hour, day: f32, wt: ^Water) 
 				r := draws(i32(id), i32(j) + 1000*i32(k))
 				u := r[0]*r[0] if s.pool > 0 else r[0]   // crowded into a fall's pool, at the segment's head
 				at := [2]f64{f64(s.a.x + ab.x*u), f64(s.a.y + ab.y*u)} + side*f64((r[1] - 0.5)*1.4*math.lerp(s.half_a, s.half_b, u))
-				fish(&out, k, u64(id) << 24 | u64(j) << 4 | u64(k), at, flow, e, o, clock, dt, day, wt)
+				fish(out, k, u64(id) << 24 | u64(j) << 4 | u64(k), at, flow, e, o, clock, dt, day, wt)
 			}
 		}
 	}
@@ -287,11 +296,10 @@ creatures_pose :: proc(eye: [3]f64, clock: f64, dt, hour, day: f32, wt: ^Water) 
 		bits := fauna.lakes[int(land.lake[c]) - 1] or_else 0
 		for k in 0..<len(CREATURES) do if bits >> uint(k) & 1 != 0 do for j in 0..<int(LAND_CELL*LAND_CELL*CREATURES[k].number[0]) {
 			r := draws(i32(c), i32(j) + 1000*i32(k))
-			fish(&out, k, u64(c) << 24 | u64(j) << 4 | u64(k) | 1 << 63, middle_of(land.grid, c) + {f64(r[0] - 0.5), f64(r[1] - 0.5)}*LAND_CELL, {}, e, o, clock, dt, day, wt)
+			fish(out, k, u64(c) << 24 | u64(j) << 4 | u64(k) | 1 << 63, middle_of(land.grid, c) + {f64(r[0] - 0.5), f64(r[1] - 0.5)}*LAND_CELL, {}, e, o, clock, dt, day, wt)
 		}
 	}
-	spray(&out, e, clock)
-	return out[:]
+	spray(out, e, clock)
 }
 
 // Four draws in 0..1 for an animal.

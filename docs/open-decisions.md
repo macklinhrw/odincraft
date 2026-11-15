@@ -88,6 +88,13 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **The order of Phase 2's steps** is the table in `foundations.md` section 8, steps 17 to 30, the world frame first. Steps 17 to 20 start together.
 - **The start island stays today's island at the origin**, its kind drawn by the seed as now, and the archipelago is built round it, so the coordinates, places and benches in `CLAUDE.md` keep their meaning.
 - **Defaults taken from the world-frame design's questions to the owner** (`foundations/world-frame.md`, section 8), each the owner's to overturn: the archipelago lies at today's latitude, 30° N, with the warm-island plants already chosen, rather than at 36 to 45° N; the world is drawn round; the islands within 64 km are formed before entering and the rest in the background; each kind keeps its own history of the sea for now, rather than one shared rise of 120 m.
+- **Each island's region is held whole in one record, `Formed`, and each thread binds the island it reads** (step 18, `regions.odin`, `docs/adr/0005-...`): every system keeps its old name for its state, now a thread-local pointer, so the code that forms and draws one island did not change. The alternative, passing the island to every procedure, was several hundred lines more.
+- **Islands are formed in this order**: the start island first, alone, so its start-up lines and forming time read as before; then every island within 64 km side by side on half the cores before entering, each saying one line; then the rest on three threads of low priority once play has begun, nearest first. `--near=km` changes the 64 km; `--near=0` forms all but the start island beside play.
+- **A chunk over an island not yet formed is not built**: until the island is formed the sea shows there, with nothing on it.
+- **Every formed island stays in memory, about 40 MB each**, 1.2 GB for 25; no summaries of distant islands are made, as the world-frame design proposed, until memory or step 17's count calls for them.
+- **The clouds drift from the start island's swell everywhere, and the cloud cap is the nearest island's**, so the clouds do not jump when crossing between islands; each island's own fields (exposure, `lifted`, the birds' wind) still come from its own swell until the climate step gives the archipelago one wind. The weather is drawn from the world's seed.
+- **`--kind=` forces the kind of the island `--island=` names**, island 0 by default, so it means what it meant; the other islands keep their kinds.
+- **The open sea between regions is a floor of sand at `SEA_BED`, 200 m down**, level with every region's rim, so the floor is continuous and the near water is plain sea across a region's edge (probed at x = 4,096).
 
 **2026-11-12, Claude's call**
 

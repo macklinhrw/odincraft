@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:math"
+import "core:sync"
 import "core:time"
 
 // The world generator. Everything the engine knows about the world comes through
@@ -99,7 +100,7 @@ P           :: CHUNK + 2        // a chunk plus a one-cell border, which meshing
 SEA_LEVEL   :: 0
 SEA_SURFACE :: SEA_LEVEL - 0.15   // where the sea stands, a little under the block tops at the shore
 NO_WATER    :: -1e6
-seed        := u32(7)   // every random choice in the world is keyed from this; --seed= sets it
+@(thread_local) seed: u32   // every random choice in a region is keyed from this: its island's seed (bind)
 
 // The ground under one chunk and its border.
 Columns :: struct {
@@ -173,9 +174,13 @@ smoothstep :: proc(a, b, x: f32) -> f32 {
 	return t*t*(3 - 2*t)
 }
 
-// Form the land and its rivers. Call once, before anything asks about the world.
-gen_init :: proc(kind: string) -> bool {
-	region_init(kind) or_return
+// Form an island's land and its rivers, and all that lies and lives on them, from its record and
+// seed alone (regions.odin), on whichever thread calls. Nothing asks about the island before.
+gen_init :: proc(f: ^Formed) {
+	bound(f)
+	started := time.now()
+	f.region.origin, f.region.size, f.landslide = f.island.origin, f.island.size, {box = {1e9, 1e9, -1e9, -1e9}}
+	region_init(KINDS[f.island.kind].name)
 	rock_init()
 	land_form()
 	rivers_trace()
@@ -184,7 +189,8 @@ gen_init :: proc(kind: string) -> bool {
 	trails_make()
 	places_make()
 	creatures_make()
-	return true
+	f.seconds = time.duration_seconds(time.since(started))
+	sync.atomic_store_explicit(&f.ready, true, .Release)
 }
 
 Ground :: struct {
@@ -559,6 +565,9 @@ COMMUNITIES := [Community_Kind]Community{
 }
 COVERS :: bit_set[Mat]{.Grass, .Litter, .Susuki, .Dune, .Dirt}   // and the earth of a trail
 crowns: [Community_Kind]f32   // the mean radius of a community's crowns, metres
+@(init) crowns_init :: proc "contextless" () {
+	for com, k in COMMUNITIES do for share, s in com.trees do crowns[k] += share*f32(SPECIES[Tree_Kind(s)].radius[0] + SPECIES[Tree_Kind(s)].radius[1])/2
+}
 
 // The community at a point: the race's winner on the land's grid, read a little way off by
 // noise, so its edges wander over 10 to 50 m rather than follow the grid. And the cell read.
@@ -586,7 +595,6 @@ plants_init :: proc() {
 		row, _ := soil_at(&p)
 		soils[row] += 1
 	}
-	for com, k in COMMUNITIES do for share, s in com.trees do crowns[k] += share*f32(SPECIES[Tree_Kind(s)].radius[0] + SPECIES[Tree_Kind(s)].radius[1])/2
 	fmt.printf("plants in %.0f ms:", time.duration_milliseconds(time.since(started)))
 	for k, i in count do fmt.printf(" %s %.0f%%", COMMUNITIES[i].name, 100*f32(k)/f32(len(land.grid.order)))
 	fmt.print("; soil:")
@@ -978,17 +986,21 @@ grow :: proc(blocks: []u8, t: Tree, o: [3]i32, c: ^Columns) {
 
 // The ground under a chunk at a level of detail. Beyond the nearest level, single trees are
 // crowns hung over the ground on their trunks while cells are small enough to show them, then
-// a canopy that is part of the columns.
+// a canopy that is part of the columns. Each column is the island's whose region holds it, or
+// the open sea's, whose floor lies level with every region's rim.
 gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 	s := i32(1) << u32(level)
 	cell := f64(s)
-	ox, oz := region.origin.x, region.origin.y
 	heights: [P*P]f32
 	for j in 0..<i32(P) {
 		for i in 0..<i32(P) {
 			ix, iz := cx*CHUNK + i - 1, cz*CHUNK + j - 1   // cell coordinates at this level, in the world
-			x, z := (f64(ix) + 0.5)*cell - f64(ox), (f64(iz) + 0.5)*cell - f64(oz)
 			k := j*P + i
+			if !bind_at((f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell) {
+				heights[k], c.water[k], c.mat[k], c.top[k], c.ground[k] = SEA_BED, SEA_SURFACE, .Sand, SEA_BED, SEA_BED
+				continue
+			}
+			x, z := (f64(ix) + 0.5)*cell - f64(region.origin.x), (f64(iz) + 0.5)*cell - f64(region.origin.y)
 			p: Point
 			g, m, plants := surface_at(x, z, cell, &p)
 			heights[k], c.water[k], c.base[k], c.mat[k] = g.h, g.water, g.base, m
@@ -1022,9 +1034,9 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			c.slope[k] = {u8(128 - gx*inv), u8(128 - gz*inv)}
 		}
 	}
-	if level == 1 || level == 2 {
+	if (level == 1 || level == 2) && bind_at(f64((cx*CHUNK + CHUNK/2)*s), f64((cz*CHUNK + CHUNK/2)*s)) {   // the trees of the island under the chunk's middle
 		trees := make([dynamic]Tree, context.temp_allocator)
-		x0, z0 := (cx*CHUNK - 1)*s - ox, (cz*CHUNK - 1)*s - oz
+		x0, z0 := (cx*CHUNK - 1)*s - region.origin.x, (cz*CHUNK - 1)*s - region.origin.y
 		trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P*s + TREE_REACH, z0 + P*s + TREE_REACH, &trees)
 		for t in trees {
 			if t.form > (.Between if level == 1 else .Canopy) do continue   // past half a kilometre only the canopy trees: the ones between them are smaller than a cell there
@@ -1076,11 +1088,14 @@ block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, 
 }
 
 // The blocks of a nearest-level chunk and its border, in layers from y_base up. `lo` and
-// `hi` widen the vertical range, for edits that reach outside the generated ground.
+// `hi` widen the vertical range, for edits that reach outside the generated ground. They are
+// the island's under the chunk's middle, which stays bound for meshing; a column of the open sea
+// is sand to the bottom.
 gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_base, h: i32) {
 	trees := make([dynamic]Tree, context.temp_allocator)
+	sea := !bind_at(f64(cx*CHUNK + CHUNK/2), f64(cz*CHUNK + CHUNK/2))
 	x0, z0 := cx*CHUNK - 1 - region.origin.x, cz*CHUNK - 1 - region.origin.y
-	trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P + TREE_REACH, z0 + P + TREE_REACH, &trees, true)
+	if !sea do trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P + TREE_REACH, z0 + P + TREE_REACH, &trees, true)
 	top := max(hi, c.hi)
 	for t in trees do top = max(top, t.base + t.height + 1)
 
@@ -1090,6 +1105,10 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 	for k in 0..<P*P {
 		t := c.top[k]
 		x, z := x0 + i32(k%P), z0 + i32(k/P)
+		if sea || island_at(f64(x + region.origin.x) + 0.5, f64(z + region.origin.y) + 0.5) == nil {
+			for y in y_base..<t do blocks[k + int(y - y_base)*P*P] = u8(Mat.Sand)
+			continue
+		}
 		soil, deep := &SOILS[0], i32(0)
 		if c.mat[k] in COVERS {
 			p := Point{x = f64(x) + 0.5, z = f64(z) + 0.5, cell = 1}

@@ -67,7 +67,6 @@ Rivers :: struct {
 	drops:    [dynamic]Drop,         // each fall, for the spray it throws
 }
 
-rivers: Rivers
 
 // The mean flow, m³/s, of the rain that runs off the land drained (water.md, D3).
 discharge :: proc(area: f32) -> f32 {

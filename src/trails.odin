@@ -40,7 +40,6 @@ Trails :: struct {
 	first, ford, back: []i32,     // the first route through it (a feature) or -1; 1 + its ford, or 0; where the tracer came from
 	seen:       []u32, stamp: u32,   // when the tracer reached it, and the tracer's count
 }
-trails: Trails
 TRAIL_REACH :: 4   // metres from a trail's line within which anything asks about it
 
 // Metres the sea has risen over the island since it stood lowest.

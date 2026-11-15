@@ -30,13 +30,18 @@ import sdl "vendor:sdl3"
 //   dig=x0,y0,z0,x1,y1,z1   once the world has loaded, clear this box of blocks; may be repeated
 //   probe=x0,z0,x1,z1       on exit, print the ground and water in these columns
 //   seed=N          which world: every random choice is keyed from it (default 7)
-//   kind=name       which kind of island, whatever the seed would pick (names in KINDS, land.odin)
-//   origin=x,z      where the island's middle lies in the world, in whole metres (default 0,0)
-//   map=file.png    save a map of the land and exit
+//   island=N        which island of the archipelago the start, map, why, survey and place act on (default 0,
+//                   the start island at the origin); it is formed first, with all its start-up lines
+//   near=km         the islands within this many km of that one are formed before entering (default 64);
+//                   the rest form in the background, nearest first, and the world waits for each
+//   kind=name       which kind of island that one is, whatever the seed would pick (names in KINDS, land.odin)
+//   origin=x,z      where island 0's middle lies in the world, in whole metres (default 0,0); the
+//                   archipelago moves with it
+//   map=file.png    save a map of the island's land and exit
 //   overlay=name    with map: paint one field over the relief (names in FIELDS, fields.odin)
 //   why=x,z         print what the ground is at this point in the world and why, and exit
 //   survey          print what the island holds and the ranked candidates for named places, and exit
-//   place=N         look at named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
+//   place=N         look at the island's named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground
 //   show            with shot or bench: open the window. Without it they draw unseen and take no focus
@@ -65,10 +70,13 @@ Options :: struct {
 	has_why:       bool,
 	survey:        bool,
 	place:         int,
+	island:        int,
+	near:          f64,
+	origin:        [2]i32,
 }
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -82,10 +90,12 @@ options :: proc() -> Options {
 		switch name {
 		case "pos":   ok = numbers(value, ",", v[:]); o.pos, o.has_pos = v, true
 		case "above": ok = numbers(value, ",", v[:]); o.pos, o.has_pos, o.above = v, true, true   // the ground is added once the land is formed
-		case "seed":  ok = numbers(value, ",", v[:1]); seed = u32(v.x)
+		case "seed":  ok = numbers(value, ",", v[:1]); world_seed = u32(v.x)
 		case "overlay": o.overlay = value
 		case "kind":  o.kind = value
-		case "origin": ok = numbers(value, ",", v[:2]); region.origin = {i32(v.x), i32(v.y)}
+		case "origin": ok = numbers(value, ",", v[:2]); o.origin = {i32(v.x), i32(v.y)}
+		case "island": ok = numbers(value, ",", v[:1]); o.island = int(v.x)
+		case "near":  ok = numbers(value, ",", v[:1]); o.near = v.x
 		case "look":  ok = numbers(value, ",", v[:2]); o.yaw, o.pitch, o.has_look = f32(v.x), f32(v.y), true
 		case "size":  ok = numbers(value, "x", v[:2]); o.width, o.height = i32(v.x), i32(v.y)
 		case "hour":  ok = numbers(value, ",", v[:1]); o.hour = f32(v.x)
@@ -154,13 +164,30 @@ find_start :: proc() -> (pos: [3]f64, yaw: f32) {
 
 main :: proc() {
 	opt := options()
-	if !gen_init(opt.kind) {
-		fmt.eprint("no kind of island named", opt.kind, "; there are:")
-		for k in KINDS do fmt.eprint("", k.name)
-		fmt.eprintln()
+	quiet_init()
+	seed = world_seed   // the islands are made from the world's seed
+	archipelago_make()
+	if opt.island < 0 || opt.island >= len(archipelago) {
+		fmt.eprintfln("no island %d: the archipelago has %d, from 0", opt.island, len(archipelago))
 		os.exit(2)
 	}
-	if opt.above do opt.pos.y += f64(height_at(opt.pos.x - f64(region.origin.x), opt.pos.z - f64(region.origin.y), 1))
+	if opt.kind != "" {
+		kind := -1
+		for k, i in KINDS do if k.name == opt.kind do kind = i
+		if kind < 0 {
+			fmt.eprint("no kind of island named", opt.kind, "; there are:")
+			for k in KINDS do fmt.eprint("", k.name)
+			fmt.eprintln()
+			os.exit(2)
+		}
+		archipelago[opt.island].kind = kind
+	}
+	formed = make([]Formed, len(archipelago))
+	for &f, i in formed do f.island = archipelago[i]
+	for &f in formed do f.island.origin += opt.origin
+	home = &formed[opt.island]
+	gen_init(home)
+	bind(home)   // the frame thread reads the start island unless it binds another
 	if opt.place != 0 {
 		if opt.place < 1 || opt.place > len(places) {
 			fmt.eprintfln("no place %d: the island has %d named places", opt.place, len(places))
@@ -184,6 +211,16 @@ main :: proc() {
 		why_at(opt.why.x, opt.why.y)
 		return
 	}
+	// The other islands, nearest the start first: those within `near` km formed side by side before
+	// entering, the rest on three threads of low priority once play has begun.
+	others := make([dynamic]int)
+	for _, i in formed do if &formed[i] != home do append(&others, i)
+	apart :: proc(i: int) -> f64 { return math.hypot(f64(formed[i].island.origin.x - home.island.origin.x), f64(formed[i].island.origin.y - home.island.origin.y)) }
+	slice.sort_by(others[:], proc(a, b: int) -> bool { return apart(a) < apart(b) })
+	soon := 0
+	for soon < len(others) && apart(others[soon]) <= opt.near*1000 do soon += 1
+	islands_form(others[:soon], max(os.get_processor_core_count()/2, 1), .Normal, true)
+	if opt.above && opt.place == 0 do opt.pos.y += f64(height_in_world(opt.pos.x, opt.pos.z, 1))
 	// With no day named, the first fair day from the March equinox on: a person looking at the
 	// land sees it in sunlight, and pictures taken on different days of work can be compared.
 	if !opt.has_day do for c, _ := weather_at(opt.day, opt.hour); c > FAIR && opt.day < 140; c, _ = weather_at(opt.day, opt.hour) do opt.day += 1
@@ -219,6 +256,7 @@ main :: proc() {
 		p.pos, yaw = find_start()
 		if !opt.has_look do p.yaw = yaw
 	}
+	islands_form(others[soon:], 3, .Low, false)
 	hour := opt.hour
 	place := Mat.Stone
 	captured := false
@@ -342,11 +380,13 @@ main :: proc() {
 
 		if seconds - title_at > 0.5 {
 			recent := intervals[title_from:]
+			island := island_near(p.pos.x, p.pos.z)
+			bound(island)
 			near, far := place_near(p.pos.x - f64(region.origin.x), p.pos.z - f64(region.origin.y))
 			sdl.SetWindowTitle(window, fmt.ctprintf(
-				"OdinCraft   %.0f fps   worst %.1f ms   %d k quads   %d loading   %.0f %.0f %.0f   %s   %02d:%02d   %s%s",
+				"OdinCraft   %.0f fps   worst %.1f ms   %d k quads   %d loading   %.0f %.0f %.0f   island %d   %s   %02d:%02d   %s%s",
 				f64(len(recent))/(seconds - title_at), slice.max(recent)*1000, g.quads_drawn/1000, backlog,
-				p.pos.x, p.pos.y, p.pos.z, "" if near < 0 else fmt.tprintf("at %s", places[near].name) if far < GATHER else fmt.tprintf("%s %.1f km", places[near].name, far/1000),
+				p.pos.x, p.pos.y, p.pos.z, island.island.id, "" if near < 0 else fmt.tprintf("at %s", places[near].name) if far < GATHER else fmt.tprintf("%s %.1f km", places[near].name, far/1000),
 				int(hour), int(hour*60)%60, "flying" if p.fly else "walking",
 				"" if captured else "   (click to look around)",
 			))
@@ -381,7 +421,7 @@ main :: proc() {
 			slice.sort_by(drawn[skip:], proc(a, b: [3]int) -> bool { return a.y < b.y })
 			fmt.printfln("drawn a frame (median): %d k faces, %d k ground plants, %d creatures' boxes (at most %d)", faces/1000, drawn[mid].y/1000, boxes, most)
 		}
-		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(p.pos.x - start.x, p.pos.z - start.z), p.pos.x, p.pos.y, p.pos.z, height_at(p.pos.x - f64(region.origin.x), p.pos.z - f64(region.origin.y), 1))
+		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(p.pos.x - start.x, p.pos.z - start.z), p.pos.x, p.pos.y, p.pos.z, height_in_world(p.pos.x, p.pos.z, 1))
 	}
 	if opt.has_probe {
 		for z in opt.probe[1]..=opt.probe[3] {
