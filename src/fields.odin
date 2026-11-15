@@ -122,6 +122,20 @@ host :: proc(windows: []Window, p: ^Point) -> (s: f32) {
 	return
 }
 
+// A host at the middle of every land cell, in the order of land.grid.order, worked out in parts.
+hosts :: proc(windows: []Window) -> []f32 {
+	Hosts :: struct { windows: []Window, s: []f32 }
+	h := Hosts{windows, make([]f32, len(land.grid.order), context.temp_allocator)}
+	shared(len(h.s), 2048, &h, proc(h: ^Hosts, lo, hi: int) {
+		g := land.grid
+		for ci, i in g.order[lo:hi] {
+			p := Point{x = middle_of(g, int(ci)).x, z = middle_of(g, int(ci)).y, cell = LAND_CELL}
+			h.s[lo + i] = host(h.windows, &p)
+		}
+	})
+	return h.s
+}
+
 // A window as words, "beach is 0.42 m (how far under ...); it needs over 0", and how far
 // into it (or, below zero, short of it) the value lies, in the field's span.
 window_words :: proc(w: Window, p: ^Point) -> (words: string, margin: f32) {

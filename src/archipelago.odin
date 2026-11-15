@@ -315,7 +315,7 @@ archipelago_map :: proc(path: string) {
 	all := make([]int, len(formed))
 	defer delete(all)
 	for &a, i in all do a = i
-	islands_form(all, max(os.get_processor_core_count() - 1, 1), .Normal, true)   // side by side, each saying its line
+	islands_done(islands_form(all, max(os.get_processor_core_count() - 1, 1), .Normal, false), all)   // side by side, each saying its line
 	heights := make([]f32, MAP*MAP)
 	defer delete(heights)
 	pixel :: proc(px, py: int) -> [2]f64 { return plates.mid - VIEW/2 + ([2]f64{f64(px), f64(py)} + 0.5)*VIEW/MAP }

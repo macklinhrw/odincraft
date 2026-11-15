@@ -756,7 +756,7 @@ Started 2026-11-14 at the owner's word, in this order (Claude's proposal; the ow
 | 28 | Who reached which island: animals by whether they fly, swim or walk, from the straits to their neighbours | 18 | `--why` on two islands |
 | 29 | People: one people in two eras, the ruins of the first among the farms of the second, names from that history | 18, 25, 26 | A ruin and a farm |
 | 30 | The fantastic: an older sea level and its drowned coasts, landmarks on every island, the first marvel (one elder wood) | 26, 29 | The marvel, and how it is found |
-| 31 | Forming speed: every stage of forming an island measured and made faster with the land unchanged bit for bit, so the islands within 64 km can be formed before entering again, and continents and the plate story start from a faster loop (started 2026-11-15, beside steps 21 and 22) | 18 | The same islands, sooner: entering the world, and the time per km² |
+| 31 | Forming faster: the same land, bit for bit, in less time, so the islands within 64 km are formed before entering again and continents (21) and the plate story (22) keep their budget | | Entering with 64 km of islands in under 2 s; maps identical to the parent's |
 
 Steps 17 to 20 started together; step 21 followed the seam test's failure, and step 22 the owner's goal of 2026-11-15 that every island and continent comes out of one history of moving plates. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 25; people (item 9) before step 29; the fantastic (item 10) before step 30.
 
@@ -982,6 +982,71 @@ Weak points:
 - A cut across rivers formed downstream first took the rock coming in from the 64 m pass, which was low: a silt flat 11.7 ha smaller at the largest river's mouth, 21 ha of land and sea differing against 9 ha for the nudge.
 - Where a cut meets the sea, exposure and silt read past the band. On the 16 km default island that changed the slide beside it from 2.8 to 2.5 million m³.
 - Continent costs are extrapolated, on a loaded machine. The recommended method's maps were not judged blind, and Claude is not the owner.
+
+### Step 31, as built
+
+Built 2026-11-15 by Claude: forming faster, every island coming out bit for bit as before. The owner has not yet looked at it; there is nothing new to see but the time it takes.
+
+**Where the time went.** The default island (seed 7, 8.2 km, 19.2 km² of land) formed alone in 1.13 s, all on one core: the land 1.03 s, then the plants 44 ms, the places 29, the roofed places 22 and the rest under 3 ms each. In the land, routing the water (`route`) took 0.55 s over all its calls: the flood from the shore upward through a binary heap 352 ms, each cell's steepest way down 115, setting up 77 and the sums of land drained 10. Then `erode` 196 ms, the land's fields made twice (`land_local`, before and after the slide) 97, the figures against the real islands 41 (two more routings among them), `coast` 48, `refine` 39 and `creep` 24. Three things were not as expected:
+
+- **The flood is serial and has to stay so.** Every later step reads the order it takes the cells in (`erode` and `coast` follow it, and the land drained and the rock the streams carry are summed in it), and where two cells flood at exactly the same height, as every shore cell under 5 cm and every silt flat at 4 m does, the heap's own arrangement decides which goes first. So the land comes out the same only if the same binary heap makes the same pushes and pops.
+- **`erode` was slow from the cache, not its arithmetic.** It reads a dozen of the grid's arrays at each cell, in the flood's order. Each array, made alone, began at the same place in a 16 KB page, so one cell's values in all of them fell into one set of the processor's first cache, which holds eight: it took 100 ms in some processes and 205 in others, the same build at the same time.
+- **Forming is held by its own loops, not by memory bandwidth.** Twelve copies of the parent forming the default island at once, in twelve processes, took 1.35 s each against 1.20 alone. Allocation cost 7 ms an island: a fresh megabyte table of the sea for every step of the coast.
+
+**What changed**, none of it changing a value:
+
+- **The heap and the flood** (`land.odin`): bounds checks off; a pop passes its hole down the smaller child, the left on a tie, with no branch on which is smaller, and puts the last item back up that path past every item no lower than it, which leaves the heap item for item as the old sift down did; the distance to a neighbour comes from its offset instead of dividing to find its row (`step`). The flood went from 352 to 293 ms.
+- **The grid's arrays in one block** (`grid_make`, `carve`), each begun 20 cache lines further into a page than the one before: `erode` 196 → 65 ms, every run.
+- **Work shared among threads inside an island** (`shared`, `regions.odin`): a loop in which each cell's result stands alone is cut into parts that the forming thread and any idle helper take, each helper reading the same island (`bind`). Shared: `grid_make` and `refine` (noise at every cell), the forms the vents build and the rock's drape over them, `creep`, each cell's steepest way down, the land's local fields, the plants' race, and every land cell's host for the slide and the roofed places (`hosts`, `fields.odin`). What follows the drainage stays in order on the forming thread: the flood, `erode`, `coast`, the land drained, and the height over the stream with the land it drains (`land_drained`). An island formed beside play works alone.
+- **Work done once.** The figures against the real islands read the routing the land already has instead of routing it twice more, unless a crater's floor drinks its water, when the routing is put aside and back; their medians are found by selection, not by sorting all 75,000 values. Before the slide the land's fields are made only as far as its place needs (slope, height over the stream, land drained), and in full once, after it. The coast keeps its table of the sea from step to step.
+- **The start** (`main.odin`): the islands within `--near=` km are formed beside the start island, on all cores but one, instead of after it on half; each says its line once all are done, in order of distance; `--near=` is 64 km again.
+
+**Identical.** On the parent build and this one: the `--map` of island 0 on seed 7, of `--kind=cone`, `crater`, `inlets` and `domes` on seed 3, of islands 1, 2, 4, 6 (14.3 km), 7, 8 and 16 of seed 7, ten overlays, two `--survey`s and two `--why`s, every start-up line but the times, the same byte for byte; and a hash of everything forming leaves (every per-cell array of the land and its grid, the drainage order, the features, the rivers' segments, ribbon and falls, the trails, stacks, roofed places, fish and the places' candidates) the same for every island of seeds 7, 3 and 5 (17, 21 and 22 islands), each formed alone and all formed side by side. The thread sanitizer found no race forming one island, nor all 17 side by side.
+
+**Times**, medians of five runs alternating with the parent, each island formed alone and timed inside the forming, under a load of 4 to 10 from other work:
+
+| The default island | before, ms | after, ms |
+|---|---|---|
+| all forming | 1,133 | 565 |
+| routing: the flood, all calls | 352 | 293 |
+| routing: the steepest way down | 115 | 23 |
+| routing: setting up | 77 | 15 |
+| `erode` | 196 | 65 |
+| `coast` | 48 | 48 |
+| `refine` | 39 | 5 |
+| `creep` | 24 | 20 |
+| the land's fields, twice | 104 | 17 |
+| the slide, with its wear | 60 | 31 |
+| the figures | 57 | 8 |
+| plants | 44 | 5 |
+| roofed places and stacks | 22 | 9 |
+| places | 29 | 30 |
+
+By kind on seed 3 (8.2 km): ridge 807 → 402 ms, inlets 1,179 → 651, cone 487 → 205, crater 407 → 169, domes 727 → 293, worn 1,046 → 530, raised 942 → 479. By size on seed 7: island 8 (ridge, 12.3 km, 31.0 km² of land) 2,187 → 1,066 ms, island 4 (cone, 14.3 km, 28.4 km²) 1,705 → 717, island 6 (raised, 14.3 km, 37.3 km²) 2,547 → 1,222, its flood 776 → 659. No region of 16 km occurs: sizes are floored to steps of 2,048 m below 16,384, so 14.3 km is the largest on seeds 1 to 40.
+
+On one core (every part on the forming thread, a scratch build): the default island 1.12 → 0.71 s of CPU, island 6 2.5 → 1.6 s. With helpers the default island takes 0.56 s and 0.80 s of CPU, island 6 1.21 s and 1.79 s.
+
+**Cost per km².** On one core, all of forming: 59 → 37 ms per km² of land on the default island, 67 → 43 on island 6; with helpers, 29 and 33 ms of waiting. The world-frame design's 32 to 43 ms measured the land's forming alone on an earlier island; the parent took 54 ms per km² for that on today's.
+
+**Extrapolated to a continent.** 30,000 to 50,000 km² of land at 37 to 43 ms of one core per km² is 1,100 to 2,200 core-seconds: 1.5 to 3 minutes on twelve cores, against 2.5 to 5 before, if a continent can be formed in pieces side by side at an island's cost. Two things will make it worse: the flood is serial and its heap grows with the coast, so a larger piece costs more per km² (island 6 costs 16% more than the default island); and how a continent is to be formed in pieces is what step 21 is finding.
+
+**Entering**, from launch to the line beginning "sky on day", medians of four or five runs alternating with the parent: with `--near=64` 3.78 → 1.39 s, with 24 2.37 → 0.66 s, with the start island alone (`--near=0`) 1.14 → 0.57 s. 64 km fits within 2 s, so it is the default again. What holds it is island 6, 1.4 to 1.5 s beside the others, whose flood alone is 0.66 s. `--archipelago=` forms seed 7's 17 islands in 3.0 to 3.1 s against 4.2 to 4.3.
+
+What the premises had right and wrong:
+
+- **That forming is CPU-bound in its own loops**: right, but for one effect of memory, the cache sets above, which halved `erode` once found, and 7 ms an island of allocation.
+- **How it scales side by side**: the parent's islands lost 12% each, twelve at once against one alone. This build's lose more beside each other (the default island 0.56 s alone, 0.82 to 0.90 s among the 17 of `--archipelago=`), because with every core busy an island's shared parts run on its own thread, which falls back to its one-core time.
+- **That sharing inside an island does not slow islands formed side by side**: right. The 17 islands of `--archipelago=` took 3.0 to 3.1 s and 18.4 s of CPU with helpers, against 3.3 to 3.4 s and 17.6 s with every island working alone: 4% more CPU, done sooner.
+- **That it does not slow play**: right, by design: islands formed beside play work alone and the helpers sleep. The forest flight with `--near=0` was level with the parent's (below).
+- **What sharing gains inside one island** is less than the cores suggest. A pass shared among cores leaves its lines in the other cores' caches, and the next pass in order on the forming thread reads them back: the steepest way down fell from 69 to 23 ms shared, and the land drained and `erode` after it rose by 23 ms. Sharing the routing's setting up gained nothing and was dropped. With helpers the default island takes 0.56 s against 0.71 on one core.
+
+Tried and dropped: a branch-free halving search for where the heap's items rise to (exact, but five dependent reads cost more than the mispredicted branches: the flood 310 → 407 ms); fetching `erode`'s cells a dozen ahead (10 to 14% before the arrays were staggered, nothing after); the land's local fields in one staggered block (no change: they cost arithmetic); flags for land beside the sea made once a step for `coast` (9 ms slower); and a queue that takes cells flooding at the same height in the order of the cells (a radix heap on fill, then cell), which changes the land wherever such ties fall (the default island's map differs) and saved only 10% of the flood, 270 against 296 ms. Not taken, being a change to the land; the owner can ask for it.
+
+Not done: the places' sort of the cells by height (17 of their 30 ms), whose library sort decides the order of equal heights, which the sweep for summits reads; the trails on an inlets island (65 ms); `coast` and `erode` stay serial, and sharing `erode` by drainage basin was weighed and not built, since finding the basins each step costs about what `erode` does.
+
+**Cost.** Benches against the parent, alternately, two rounds each under a load of 4.9 to 10.4 (frame interval median, 99th percentile, worst and frames over 12.5 ms, parent first; then our work median): the forest flight 8.34, 9.25, 10.57, 0 and 8.33, 9.14, 10.56, 0 against 8.33, 9.36, 11.48, 0 and 8.33, 9.32, 12.77, 1, our work 0.80 and 0.84 against 0.81 and 0.84, 1,048 thousand faces on both; again with this build's `--near=64`, 8.33, 9.13, 10.21, 0 and 8.33, 9.09, 9.94, 0 against 8.33, 9.15, 10.22, 0 and 8.33, 9.19, 9.97, 0, our work 0.84 and 0.83 against 0.77 and 0.80; with `--near=0`, every other island formed beside play, 8.33, 9.44, 10.86, 0 and 8.33, 9.18, 11.77, 0 against 8.33, 9.35, 12.89, 1 and 8.34, 9.50, 11.87, 0, our work 0.84 and 0.87 against 0.84 and 0.81; the flight from 700 m 8.35, 9.35, 10.80, 0 and 8.36, 9.86, 11.26, 0 against 8.36, 9.47, 11.07, 0 and 8.37, 9.29, 10.43, 0, our work 0.68 and 0.69 against 0.67 and 0.69, 839 thousand faces; the start 8.33 on all eight runs (with 24 km and 64 km), 99th percentile 8.88 to 9.54, none over, our work 0.81 to 0.89 against 0.79 to 0.82, 43 m walked on all; north to south 8.34 on all four, 9.79 and 9.57 against 9.52 and 9.62, none over, our work 0.96 and 0.97 against 0.97 and 0.94; across the sea 8.36, 10.28, 12.32, 0 and 8.49, 11.14, 12.92, 5 against 8.34, 9.93, 12.15, 0 and 8.45, 11.25, 15.26, 5, our work 0.72 and 0.71 against 0.73 and 0.72. Every difference turns over from one round to the next. The most memory held on the start bench, all 17 islands formed: 1,417 MB for the parent, 1,284 MB for this. The start's picture is the same to the eye. `src/` grew by 207 lines of Odin (421 added and 214 removed, most of both the loops moved into shared parts), to 8,751.
+
+Weak points: the flood is now half of forming and cannot be shared or reordered while the land is to stay bit for bit, so the next large gain changes the land; the start island's "land formed in" line now reads its time beside the near islands (0.68 s on the default island against 0.53 alone); the near islands' lines come once all are done, in order of distance, not each as it is done; fifteen helper threads are made at the first shared loop and never end (they sleep when idle), some of them on efficiency cores, where a part runs slower and the forming thread waits for it at the loop's end, spinning with a yield; sharing gains 1.25 times inside one island beyond the one-core gains, not the cores' twelve; a median exactly at zero could come out as −0 by selection where sorting gave +0 (no island measured has one); there is no 16 km island to measure; and every time was taken under load from other agents' work, while the benches cannot show headroom, only that frames are no worse.
 
 ### Phase 3: the mainland and the known lands
 

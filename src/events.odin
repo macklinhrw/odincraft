@@ -77,10 +77,7 @@ slide_make :: proc(g: ^Grid) -> bool {
 	started := time.now()
 	n := g.n
 	best, head := f32(0), -1
-	for ci in g.order {
-		p := Point{x = middle_of(g, int(ci)).x, z = middle_of(g, int(ci)).y, cell = LAND_CELL}
-		if s := host(SLIDE.host, &p); s > 0 && s + 0.02*hash01(ci, 0, seed + 700) > best do best, head = s + 0.02*hash01(ci, 0, seed + 700), int(ci)
-	}
+	for s, i in hosts(SLIDE.host) do if ci := g.order[i]; s > 0 && s + 0.02*hash01(ci, 0, seed + 700) > best do best, head = s + 0.02*hash01(ci, 0, seed + 700), int(ci)
 	if head < 0 {
 		fmt.println("no slide: no slope near the steepest its rock holds, over a weaker bed, stands 60 m above a valley draining 0.5 to 5 km²")
 		return false
@@ -362,10 +359,7 @@ hollows_make :: proc() {
 	for row, kind in HOLLOWS do if len(row.host) > 0 {
 		Spot :: struct { s: f32, c: i32 }
 		spots := make([dynamic]Spot, context.temp_allocator)
-		for ci in g.order {
-			p := Point{x = middle_of(g, int(ci)).x, z = middle_of(g, int(ci)).y, cell = LAND_CELL}
-			if s := host(row.host, &p); s > 0.5 do append(&spots, Spot{s + 0.05*hash01(ci, i32(kind), seed + 720), ci})
-		}
+		for s, i in hosts(row.host) do if s > 0.5 do append(&spots, Spot{s + 0.05*hash01(g.order[i], i32(kind), seed + 720), g.order[i]})
 		slice.sort_by(spots[:], proc(a, b: Spot) -> bool { return a.s > b.s })
 		most := int(math.round(math.lerp(row.most[0], row.most[1], hash01(i32(kind), 0, seed + 721))))
 		next: for sp in spots {
