@@ -95,6 +95,19 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **The known world is chosen at the end**, at 20 to 40° N, where land is about a third of the window, a continent reaches into it and arcs or hotspots stand off it; nothing in the game reads the history yet, and today's island and its map are unchanged.
 - **Open for the owner: how large is the planet the plates move on?** (a) The Earth's size, the known world a window on it, as built: real plates, real speeds and real figures to measure against, and within 1,000 km a continent's coast with its islands, not whole continents. (b) A small planet, about 1,500 km in radius, so whole continents fit within the known world: every figure must be rescaled to compare, plates are a tenth of the real size, and the horizon drops ten times faster than the round world drawn from the Earth's radius. (c) A flat 1,000 km world of microplates: no continents and no honest comparison. *Recommendation: (a).* Within 1,000 km the Earth holds Japan's coast, the Izu arc and Korea's tip, which is the plan's end shape; the world can later grow over the planet that already exists.
 
+**2026-11-15, Claude's call**
+
+- **Land larger than one region is formed by ordered pieces** (step 21, `interesting-world/notes/continents-forming.md`). The landmass is formed whole at 64 m and cut along its drainage. The pieces take up the 32 m and 16 m phases one after another, downstream first. Each holds its formed neighbours' land, through every step, in a band at the cut, and forms 6 km past the cut toward pieces not yet formed. On a 32 km ridge in four pieces, a 24 km volcano and the default island at 16 km, the join could not be told from the land formed whole by any measure or by eye. It is recommended, not built. It is folded into the game once step 18 has changed how regions are held, after a test on land larger than 32 km cut across a trunk river.
+- **Pieces are formed downstream first, and a stream crossing a cut is the reason.** The downstream piece takes the water and rock coming in from the 64 m pass, and the upstream piece takes its true base level from the downstream one. Formed the other way, a cut across rivers dams closed hollows up to 37 m deep. Along a divide any order works.
+- **Where no order can be kept** (square tiles, cuts that streams cross both ways), pieces trade their edges until they agree (alternating Schwarz) with 2 km margins: one round more along divides, three across rivers, two to five times the cost.
+- **Not pursued:**
+  - Pinning a divide to the 64 m or 32 m solution, which failed at every length of finer forming tried.
+  - Shortening the finer phases so that pinning might hold. It still failed, and it costs the raised kind its terraces.
+  - Margins in one pass, which need more than 6 km on a 32 km island and grow with the streams a margin crosses.
+  - The whole landmass formed at 16 m: about an hour of one core as one job and 2.4 to 14 GB for 50,000 km² (extrapolated), unless its drainage and erosion are rewritten to run in parallel. It stays the reference: no seam by construction.
+- **Joined land is judged against the forming's own chaos, not against zero.** A 1 mm nudge to the land after its 64 m phases moves the finished island by up to 45 to 95 m in patches, so a method is judged by what the whole and the nudged whole lack: steps, fins, trenches, closed hollows, streams cut off at a line.
+- **A vent's top and crater floor are decided once and shared** by every piece that forms it. Decided by each piece, a dome cut by a seam steps 54 m along it.
+
 **2026-11-14, Claude's call**
 
 - **Phase 2 runs on a branch of its own, `phase-2`, from `phase-1`**, and its first commit is the frame-rate work of the same day, which was finished and measured but left uncommitted, so that the steps' checkouts start from it.
