@@ -1,6 +1,6 @@
 #!/bin/sh
 # ./build.sh            build build/odincraft
-# ./build.sh run [...]  build, then run with the given options (see src/main.odin)
+# ./build.sh run [...]  build, then run with the given options (see src/options.odin)
 set -e
 cd "$(dirname "$0")"
 mkdir -p build

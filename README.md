@@ -25,7 +25,7 @@ Needs Odin and SDL3 (`brew install odin sdl3`) on an Apple Silicon Mac.
 
 The window title shows frame rate, the slowest recent frame, quads drawn, chunks still loading, position and time of day.
 
-Options are listed at the top of `src/main.odin`, including ones that dig and report water depths for testing. Three are for checking work without playing:
+Options are listed at the top of `src/options.odin`, including ones that dig and report water depths for testing. Three are for checking work without playing:
 
 ```sh
 build/odincraft --map=island.png                                                # a map of the land and rivers
