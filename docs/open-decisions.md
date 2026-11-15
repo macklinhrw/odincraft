@@ -79,11 +79,12 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 **2026-11-15, by the owner**
 
 - **The world is one cohesive simulation, with continents and islands where the simulation makes them. An ocean of islands is not the end shape and not a fallback.** Said on reading Claude's report of the seam test (step 20), which offered the ocean of islands as what the test supported; the owner said that is the opposite of what the game is for, and that even suggesting it shows the vision was not understood. The test's failure rules out one method of forming land larger than one region, not continents: finding a method that leaves no seam is now a problem to solve.
+- **Islands and continents are formed as part of one story of the world: how its tectonic plates and continents have moved.** No island is formed on its own. Said the same day, adding that the owner did not know where in the plan this fits or whether it was recorded, but that it is the goal. It was not recorded as a goal: the owner raised it on 2026-11-11 (question 10 below), and the plan answered with a fixed stand-in for plates that picks a kind for each island and deferred a plate simulation "until the stand-in makes a contradiction the owner can see". That deferral is withdrawn. The owner's v4 brief already asked the same: tectonic causality must include relative motion and deformation, not simply coloured plate regions (`reference/odincraft-v4/foundation-plan-2026-09-05.html`). What follows for the plan: a history of moving plates over the whole world makes the continents and the islands, and each region's record (its outline, the uplift and sinking it went through, its vents, its rock, its sea level) is read from that history at its place rather than drawn from a kind's ranges; a kind becomes the name of a kind of history the plates make. It is step 22 in `foundations.md` section 8; the stand-in of step 17 is its placeholder.
 
 **2026-11-14, Claude's call**
 
 - **Phase 2 runs on a branch of its own, `phase-2`, from `phase-1`**, and its first commit is the frame-rate work of the same day, which was finished and measured but left uncommitted, so that the steps' checkouts start from it.
-- **The order of Phase 2's steps** is the table in `foundations.md` section 8, steps 17 to 29, the world frame first. Steps 17 to 20 start together.
+- **The order of Phase 2's steps** is the table in `foundations.md` section 8, steps 17 to 30, the world frame first. Steps 17 to 20 start together.
 - **The start island stays today's island at the origin**, its kind drawn by the seed as now, and the archipelago is built round it, so the coordinates, places and benches in `CLAUDE.md` keep their meaning.
 - **Defaults taken from the world-frame design's questions to the owner** (`foundations/world-frame.md`, section 8), each the owner's to overturn: the archipelago lies at today's latitude, 30° N, with the warm-island plants already chosen, rather than at 36 to 45° N; the world is drawn round; the islands within 64 km are formed before entering and the rest in the background; each kind keeps its own history of the sea for now, rather than one shared rise of 120 m.
 
@@ -378,6 +379,8 @@ Raised by `interesting-world/notes/real-islands.md` (2026-11-11), which compared
 - **Keep the comparison as a tool?** A `--real=` option that loads a real island in place of a formed one exists in a scratch build. *Recommendation: fold it in, with the figures, since real islands are now the yardstick.*
 
 ### 10. Is a kind a shape or a history?
+
+*The owner set the goal on 2026-11-15: every island and continent comes out of one history of moving plates, and a region's history is read from it (above). What remains open below is how.*
 
 *Taken up on 2026-11-11: the inlets kind and the vent are built, and the three volcanic kinds are histories of events. The layered kinds still have shape fields. Sediment is in, as silt at bay heads.*
 

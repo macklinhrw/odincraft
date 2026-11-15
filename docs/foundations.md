@@ -729,7 +729,7 @@ Each is a scratch copy, folded in or deleted, as the rock experiment was.
 
 Starts when the owner has accepted at least steps 1, 2 and 5 on one island; an archipelago of dull islands would be v4 at a larger size. Ten to thirty islands near the start, as the plates make them, in one world whose plates also make a continent: the islands lie off its coast and its range shows on their horizon (`foundations/fantasy.md`, decision 4). The world is one cohesive simulation with continents and islands where it makes them, never an ocean of islands (the owner, 2026-11-15).
 
-- World frame: a small stand-in for plates that decides continental and oceanic crust and where islands form (an arc, a hotspot chain, a shelf), finding the region under a point, levels at 128 and 256 m, the round world, forming in the background; and a way to form land larger than one region with no seam, which step 20 showed the designed method does not give.
+- World frame: a history of moving plates over the whole world that makes the continents and islands, each region's history read from it (the owner's goal, 2026-11-15; a fixed stand-in first), finding the region under a point, levels at 128 and 256 m, the round world, forming in the background; and a way to form land larger than one region with no seam, which step 20 showed the designed method does not give.
 - Geology and landforms: eight rock stories and six to eight histories, so no two neighbouring islands are alike; faults, intrusions and lava; volcanic events; coast kinds; deposition for islands over about 10 km.
 - Water: wetlands by kind, river mouths by kind, rivers that a player's dam can raise.
 - Climate: a coarse grid with rain carried on the wind, so a high island has a wet side and a dry side; weather fronts that cross from island to island; three to six climate zones.
@@ -742,21 +742,22 @@ Started 2026-11-14 at the owner's word, in this order (Claude's proposal; the ow
 
 | # | Change | Needs | The owner looks at |
 |---|---|---|---|
-| 17 | The islands near the start as records: a stand-in for plates over the world near the start decides where the crust is continental and where islands form (an arc, a hotspot chain, a shelf off the continent's coast), and places 10 to 30 islands within about 150 km, each a record (middle, size, setting, age, kind chosen by rules from its setting, seed), no two neighbours of a kind; the continent is a record too, its coast an outline until it can be formed; `--archipelago=out.png` forms each island in turn and draws the group with the continent's coast | | One grey map: the islands named by kind and setting, and the continent they lie off |
+| 17 | The islands near the start as records: a stand-in for plates over the world near the start decides where the crust is continental and where islands form (an arc, a hotspot chain, a shelf off the continent's coast), and places 10 to 30 islands within about 150 km, each a record (middle, size, setting, age, kind chosen by rules from its setting, seed), no two neighbours of a kind (a stand-in for step 22's plate story, which replaces it); the continent is a record too, its coast an outline until it can be formed; `--archipelago=out.png` forms each island in turn and draws the group with the continent's coast | | One grey map: the islands named by kind and setting, and the continent they lie off |
 | 18 | Many islands in one world: everything formed for an island kept in one record per region; the generator finds the region under a point and answers the sea between; the islands within 64 km formed before entering, the rest on three low-priority threads; `--island=N` for the map, `--why` and the survey | 17 (a stub of three islands until it lands) | From a summit, the next island; flying to it, its kind differs; the benches while islands form |
 | 19 | Far sight: levels at 128 and 256 m, the world drawn round (a drop of d²/2R, R ≈ 7,400 km), haze that lets land 30 to 60 km off show | | Today's island from 20 and 40 km out at sea, sinking under the curve |
 | 20 | The seam test (an experiment, section 7): today's island formed whole, and as two basin pieces cut on its 64 m solution with the divide pinned | | Both maps with the seam drawn, and the largest step along it |
 | 21 | Continents: a way to form land larger than one region with no seam, found by experiment (wider margins, which came closest in step 20; a forming whose finer phases refine the land rather than reshape it; pieces that trade their edges until they agree; a landmass formed whole at 16 m in less memory), then a piece of the continent formed beside the start's islands | 20 | A continent's land formed in pieces, whose joins cannot be found on the map or on foot |
-| 22 | Blocks widen to 16 bits | 18, 19 | Identical pictures; the benches |
-| 23 | Rock stories: eight of the twelve rows in use, faults, intrusions and lava packages, about 20 rock kinds; each island's story from its setting | 17, 22 | Islands of different rock side by side; a cut face on each |
-| 24 | Climate per island: base climate across the sea, rain carried on the wind so a high island has a wet side and a dry one, three to six zones | 18 | The rain on the map; the windward and lee sides on foot |
-| 25 | Floras: three or four, about twenty species in ten silhouettes, chosen by climate, in the same site slots | 22, 24 | A warm island and a cooler one; a high island's belts |
-| 26 | Ground and water by kind: deposition on islands over 10 km, wetlands, river mouths by kind, lava tubes on a young volcanic island, solution caves on limestone | 23 | A river mouth, a marsh and a cave on three islands |
-| 27 | Who reached which island: animals by whether they fly, swim or walk, from the straits to their neighbours | 18 | `--why` on two islands |
-| 28 | People: one people in two eras, the ruins of the first among the farms of the second, names from that history | 18, 24, 25 | A ruin and a farm |
-| 29 | The fantastic: an older sea level and its drowned coasts, landmarks on every island, the first marvel (one elder wood) | 25, 28 | The marvel, and how it is found |
+| 22 | The world's plate story: plates moving over the whole world through tens of millions of years (spreading, sinking under one another, colliding, rifting, carrying continents, hotspots tracking under them), which makes the continents, the island arcs, the hotspot chains and the shelves; each region's record (outline, the uplift and sinking it went through, its vents, its rock, its sea level) read from that history at its place, and a kind becoming the name of a kind of history; replaces step 17's stand-in | 17 | The world's plates as a sequence of maps through time, and the land they leave; then an island's history traced back to them with `--why` |
+| 23 | Blocks widen to 16 bits | 18, 19 | Identical pictures; the benches |
+| 24 | Rock stories: eight of the twelve rows in use, faults, intrusions and lava packages, about 20 rock kinds; each island's story from its setting | 17, 23 | Islands of different rock side by side; a cut face on each |
+| 25 | Climate per island: base climate across the sea, rain carried on the wind so a high island has a wet side and a dry one, three to six zones | 18 | The rain on the map; the windward and lee sides on foot |
+| 26 | Floras: three or four, about twenty species in ten silhouettes, chosen by climate, in the same site slots | 23, 25 | A warm island and a cooler one; a high island's belts |
+| 27 | Ground and water by kind: deposition on islands over 10 km, wetlands, river mouths by kind, lava tubes on a young volcanic island, solution caves on limestone | 24 | A river mouth, a marsh and a cave on three islands |
+| 28 | Who reached which island: animals by whether they fly, swim or walk, from the straits to their neighbours | 18 | `--why` on two islands |
+| 29 | People: one people in two eras, the ruins of the first among the farms of the second, names from that history | 18, 25, 26 | A ruin and a farm |
+| 30 | The fantastic: an older sea level and its drowned coasts, landmarks on every island, the first marvel (one elder wood) | 26, 29 | The marvel, and how it is found |
 
-Steps 17 to 20 started together; step 21 followed the seam test's failure. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 24; people (item 9) before step 28; the fantastic (item 10) before step 29.
+Steps 17 to 20 started together; step 21 followed the seam test's failure, and step 22 the owner's goal of 2026-11-15 that every island and continent comes out of one history of moving plates. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 25; people (item 9) before step 29; the fantastic (item 10) before step 30.
 
 ### Step 20, as built
 
@@ -799,7 +800,7 @@ Starts when the seam test has passed and the archipelago is accepted.
 | Deposits and ores beyond a few rows | Digging has a purpose |
 | Limestone cave systems | The owner decides an island has limestone and the cave design starts |
 | Glaciation | A region kind with an ice history is chosen |
-| A plate simulation | The stand-in makes a contradiction the owner can see |
+| ~~A plate simulation~~ | Withdrawn on 2026-11-15: a history of moving plates is the goal (step 22) |
 | A disk cache of formed regions | Saves exist, or forming a region again is noticed |
 | Seasons that advance during play | A year length is chosen |
 | Water under a roof that flows | A cave reaches below the water table |
@@ -874,7 +875,7 @@ The four island kinds were written from what the forming's knobs could already m
 
 The owner asked what stops a tectonics simulator from producing the kinds, so that none is written by hand. Two answers:
 
-- **A plate model picks and places kinds; it cannot shape one.** It works at hundreds of kilometres and millions of years and yields a setting for each island: arc or hotspot, age, uplift rate. The stand-in in `foundations/world-frame.md` D4 already does this. What separates the real islands happened on the island itself, mostly in its last few hundred thousand years. v4 had the plate model and dull ground.
+- **A plate model picks and places kinds; it cannot shape one.** It works at hundreds of kilometres and millions of years and yields a setting for each island: arc or hotspot, age, uplift rate. The stand-in in `foundations/world-frame.md` D4 already does this. What separates the real islands happened on the island itself, mostly in its last few hundred thousand years. v4 had the plate model and dull ground. *(The owner, 2026-11-15: the goal is that every island and continent comes out of one history of moving plates, and that a region's own history, including those last few hundred thousand years, is read from it at its place. The ground at walking scale still comes from the region's forming, which is what v4 lacked.)*
 - **The hand is in what a row says.** A row describes the result: the cone has `peak` and `peak_width`, the ridge has `axis` and `bend`. A cone is a bump of uplift that was drawn, not something a vent built.
 
 The proposal is that a row becomes a list of events over a few general processes, and the shape fields mostly go. The four missing kinds as histories:

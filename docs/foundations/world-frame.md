@@ -145,7 +145,7 @@ Counts: today 1 kind; Stage 0 4; archipelago of 10 to 30 islands 10 to 14, no tw
 
 **Stage 2, the wide world.** First the seam test on today's island: form it whole, then as two basin units cut on its 64 m solution with the divide pinned, and show both maps with the seam drawn and the largest height step along it. Only if the owner cannot find the seam: the landmass pass and Pfafstetter cut, then the 1,000 km world rung, summaries and the 512 m level.
 
-**Not yet, with triggers.** A plate simulation: the stand-in makes a contradiction the owner can see. Erosion at the world rung: a landmass larger than one region. A disk cache: saves exist, or a re-form is noticed. Parallel routing: a landmass pass over two minutes. Ice forming: a fjord or cirque kind is chosen. Levels beyond 512 m: curvature and haze shown to need them.
+**Not yet, with triggers.** ~~A plate simulation: the stand-in makes a contradiction the owner can see.~~ Withdrawn by the owner on 2026-11-15: a history of moving plates that makes the continents and islands is the goal (`foundations.md` section 8, step 22). Erosion at the world rung: a landmass larger than one region. A disk cache: saves exist, or a re-form is noticed. Parallel routing: a landmass pass over two minutes. Ice forming: a fjord or cirque kind is chosen. Levels beyond 512 m: curvature and haze shown to need them.
 
 ## 7. Risks and known failures
 
