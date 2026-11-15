@@ -76,10 +76,14 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 
 - **Start Phase 2, the archipelago, with subagents wherever steps can run in parallel.** Said after Claude set out what accepting step 5 would mean (a walk from river to ridge, `--why=` at three spots, forest held on slopes of 35 to 45°) and compared the communities with the real islands. Step 5 was not accepted in so many words, and the gate in `foundations.md` section 8 is taken as passed by this. Left open from that comparison: the low ridge wood takes every dry crest down to 88 m, where real low ridges carry the same tall evergreen forest as their slopes with evergreen oaks and isunoki in it; susuki may take too much of a wild island; a deep-soiled flat may be tabu's rather than shii's.
 
+**2026-11-15, by the owner**
+
+- **The world is one cohesive simulation, with continents and islands where the simulation makes them. An ocean of islands is not the end shape and not a fallback.** Said on reading Claude's report of the seam test (step 20), which offered the ocean of islands as what the test supported; the owner said that is the opposite of what the game is for, and that even suggesting it shows the vision was not understood. The test's failure rules out one method of forming land larger than one region, not continents: finding a method that leaves no seam is now a problem to solve.
+
 **2026-11-14, Claude's call**
 
 - **Phase 2 runs on a branch of its own, `phase-2`, from `phase-1`**, and its first commit is the frame-rate work of the same day, which was finished and measured but left uncommitted, so that the steps' checkouts start from it.
-- **The order of Phase 2's steps** is the table in `foundations.md` section 8, steps 17 to 28, the world frame first. Steps 17 to 20 start together.
+- **The order of Phase 2's steps** is the table in `foundations.md` section 8, steps 17 to 29, the world frame first. Steps 17 to 20 start together.
 - **The start island stays today's island at the origin**, its kind drawn by the seed as now, and the archipelago is built round it, so the coordinates, places and benches in `CLAUDE.md` keep their meaning.
 - **Defaults taken from the world-frame design's questions to the owner** (`foundations/world-frame.md`, section 8), each the owner's to overturn: the archipelago lies at today's latitude, 30° N, with the warm-island plants already chosen, rather than at 36 to 45° N; the world is drawn round; the islands within 64 km are formed before entering and the rest in the background; each kind keeps its own history of the sea for now, rather than one shared rise of 120 m.
 
@@ -350,7 +354,7 @@ Raised by `interesting-world.md`, section 9. The answers decide which landforms,
 Raised by `foundations.md`, section 9, which lists twelve decisions with a recommendation each. The ones that shape the most:
 
 - **The fifteen foundational decisions** in its section 3 (kinds as rows of data, one rock function, a region's recipe as a record, features that record cause and age, fields as a base plus terms, and the rest). *Recommendation: adopt them as each first becomes real in a step, and record each here then.*
-- **The end shape of the world.** An ocean of islands, or a mainland with islands off its coast inside known lands about 300 km across. *Recommendation: the mainland, which the fantasy vision needs, if an early test shows that regions can join along a drainage divide without a visible seam.* The seam test (step 20, 2026-11-15, `interesting-world/notes/seam-test.md`) found the seam visible on both islands tried, so it supports the ocean of islands, each formed whole with seams only at sea, and not yet the mainland; the choice is the owner's.
+- **The end shape of the world.** *Decided by the owner on 2026-11-15 (above):* one cohesive simulated world, with continents and islands where the simulation makes them. The seam test (step 20, `interesting-world/notes/seam-test.md`) showed that basin pieces pinned to the 64 m solution leave a visible seam, so continents need another method of forming land larger than one region; that search is a step of its own.
 - **Cold to hot.** A true slice of about nine degrees of latitude, or 1,000 km standing for about thirty. *Recommendation: thirty.*
 - **Rock before lakes.** *Recommendation: yes*, so the first landslide sits on its real host.
 - **People and the fantastic.** *Recommendation: the first island is wild; people arrive with the archipelago, first as ruins; the fantastic enters only as a cause with a source, a reach and an age, at most one marvel per region.*

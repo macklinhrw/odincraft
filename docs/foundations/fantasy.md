@@ -161,7 +161,7 @@ Their demands on the foundations: halls need honest rock. The largest built cave
 
 ## 8. Decisions for the owner
 
-1. **Mainland or archipelago as the end shape?** *Recommendation:* the archipelago first, framed as the coast of a mainland; a mainland later for the long road.
+1. **Mainland or archipelago as the end shape?** *Recommendation:* the archipelago first, framed as the coast of a mainland; a mainland later for the long road. *Decided by the owner on 2026-11-15:* one cohesive simulated world with continents and islands where the simulation makes them.
 2. **How compressed are journeys?** *Recommendation:* the long road between two realms is 3 to 8 hours on foot, to be judged by walking.
 3. **Does inspection tell the cause of a fantastic thing outright?** *Recommendation:* no. Signs first, and the cause once learned.
 4. **How many ages?** *Recommendation:* three.

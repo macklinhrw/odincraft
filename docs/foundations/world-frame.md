@@ -162,7 +162,7 @@ Counts: today 1 kind; Stage 0 4; archipelago of 10 to 30 islands 10 to 14, no tw
 
 ## 8. Decisions for the owner
 
-1. **What "1,000 km wide" means.** *Recommendation: an ocean with islands, about 5% land (option B), and no landmass over about 10,000 km² until the seam test passes.* That is about 1,800 of today's island, and creation still fits four minutes.
+1. **What "1,000 km wide" means.** *Recommendation: an ocean with islands, about 5% land (option B), and no landmass over about 10,000 km² until the seam test passes.* That is about 1,800 of today's island, and creation still fits four minutes. *Overruled by the owner on 2026-11-15:* one cohesive simulated world with continents and islands where the simulation makes them, never an ocean of islands.
 2. **Where the world sits.** *Recommendation: about 36° to 45° north with a warm current along the south, after Japan from Kyushu to Tohoku:* beech in the north, evergreen laurel forest in the south, glaciers only on the highest northern peaks, no atolls. Choose a tropical south edge if atolls and coral limestone are wanted.
 3. **A round world.** *Recommendation: yes, drawn to about 64 km.*
 4. **Forming.** *Recommendation: the start and 64 km around it before entering, the rest in the background, the atlas waiting for every summary.*

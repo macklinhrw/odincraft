@@ -100,7 +100,7 @@ Who owns each catalogue, where the designs differed: soil belongs to vegetation;
 
 ## 5. Where the designs disagreed, and what this plan settles
 
-1. **The end shape of the world.** The world frame recommends an ocean with islands at about 5% land and no large landmass until a land seam is proven. The fantasy design needs a mainland. *Settled:* the end shape is a mainland with islands off its coast, inside known lands about 300 km across; the path is island, archipelago, mainland. The land-seam test moves forward to an early experiment, because it decides whether the mainland can be made this way.
+1. **The end shape of the world.** The world frame recommends an ocean with islands at about 5% land and no large landmass until a land seam is proven. The fantasy design needs a mainland. *Settled:* the end shape is a mainland with islands off its coast, inside known lands about 300 km across; the path is island, archipelago, mainland. The land-seam test moves forward to an early experiment, because it decides whether the mainland can be made this way. *Decided by the owner on 2026-11-15:* the world is one cohesive simulation with continents and islands where the simulation makes them, never an ocean of islands. The seam test decides how a continent is formed, not whether.
 2. **Cold to hot.** The world frame suggests a true slice of about nine degrees of latitude; climate recommends letting 1,000 km stand for about thirty. *Settled:* compress, as climate proposes. The known lands, 300 km of it, then span about nine degrees, as varied as Japan from south to north, and the far lands reach cold and hot.
 3. **Where lakes come from.** Landform processes proposed keeping the hollows the forming makes. Water measured that there are none. I confirmed it: three cells on today's island, 11 to 17 with rock beds, the deepest 3.4 m. *Settled:* ground and water stay separate fields as both designs want, and lakes come from events and later from rock basins.
 4. **Lake before rock, or after.** Water proposes placing the first landslide by relief alone so a lake appears sooner. Landform processes waits for the rock function. *Settled:* after rock, so the slide sits on its real host (a strong bed over a weak one) and is built once. This is the owner's to overturn if water matters sooner.
@@ -153,18 +153,17 @@ How this compares:
 
 The land forming costs 32 to 43 ms of one core per square kilometre (measured by the world-frame designer, consistent with mine). A constant in absolute metres also surfaced: stretched to 33 km, today's island grows a range one kilometre wide, because the uplift pattern does not scale with the region. Step 3 fixes that.
 
-**How much land.** At 37 ms per km² and ten threads:
+**How much land.** How much of the world is land, and how much of that is continent, is what the simulation makes, not an option chosen (the owner, 2026-11-15). What forming it costs, at 37 ms per km² and ten threads:
 
-| Option | Land | Time to form all of it | Note |
-|---|---|---|---|
-| Ocean with islands, 2% | 20,000 km² | about 1.2 min | Earthsea |
-| Ocean with islands, 5% | 50,000 km² | about 3.5 min | The world frame's recommendation |
-| Known lands with a mainland, 5 to 8% | a mainland of 30,000 to 50,000 km² plus islands | 2 to 5 min, most of it in the background | This plan's recommendation; needs the land seam |
-| A continent, 15 to 30% | 150,000 km² or more | 11 to 20 min | Background only |
+| Land formed | Time to form all of it |
+|---|---|
+| 20,000 km² | about 1.2 min |
+| 50,000 km² (a mainland of 30,000 to 50,000 km² and its islands) | about 3.5 min, most of it in the background |
+| 150,000 km² or more | 11 to 20 min, in the background |
 
 Every region within 64 km of the start is formed before the player enters; the rest form in the background and are kept as summaries of a few kilobytes, then formed again, identically, when the player comes near. Nothing far is a placeholder: beyond 64 km a region shows as a coarse outline under the horizon. The world is drawn round, so distant land sinks under the sea's curve.
 
-**The risk.** Nobody has tested whether a divide pinned between two basin pieces leaves a visible seam. The test is small: form today's island whole, then as two pieces cut on its 64 m solution, and show the owner both maps with the seam drawn. If the seam shows, the end shape falls back to an ocean of islands, or to regions large enough to hold a whole realm at coarser cells.
+**The risk.** Nobody has tested whether a divide pinned between two basin pieces leaves a visible seam. The test is small: form today's island whole, then as two pieces cut on its 64 m solution, and show the owner both maps with the seam drawn. If the seam shows, another way of forming land larger than one region has to be found; the end shape does not change. (Run as step 20: it showed, and the search for another way is step 21.)
 
 ## 8. The order of work
 
@@ -728,9 +727,9 @@ Each is a scratch copy, folded in or deleted, as the rock experiment was.
 
 ### Phase 2: the archipelago
 
-Starts when the owner has accepted at least steps 1, 2 and 5 on one island; an archipelago of dull islands would be v4 at a larger size. Ten to thirty islands in a sea about 150 km across.
+Starts when the owner has accepted at least steps 1, 2 and 5 on one island; an archipelago of dull islands would be v4 at a larger size. Ten to thirty islands near the start, as the plates make them, in one world whose plates also make a continent: the islands lie off its coast and its range shows on their horizon (`foundations/fantasy.md`, decision 4). The world is one cohesive simulation with continents and islands where it makes them, never an ocean of islands (the owner, 2026-11-15).
 
-- World frame: a small stand-in for plates (one arc, one hotspot chain, one platform), finding the region under a point, levels at 128 and 256 m, the round world, forming in the background.
+- World frame: a small stand-in for plates that decides continental and oceanic crust and where islands form (an arc, a hotspot chain, a shelf), finding the region under a point, levels at 128 and 256 m, the round world, forming in the background; and a way to form land larger than one region with no seam, which step 20 showed the designed method does not give.
 - Geology and landforms: eight rock stories and six to eight histories, so no two neighbouring islands are alike; faults, intrusions and lava; volcanic events; coast kinds; deposition for islands over about 10 km.
 - Water: wetlands by kind, river mouths by kind, rivers that a player's dam can raise.
 - Climate: a coarse grid with rain carried on the wind, so a high island has a wet side and a dry side; weather fronts that cross from island to island; three to six climate zones.
@@ -743,20 +742,21 @@ Started 2026-11-14 at the owner's word, in this order (Claude's proposal; the ow
 
 | # | Change | Needs | The owner looks at |
 |---|---|---|---|
-| 17 | The archipelago as records: a stand-in for plates (one arc, one hotspot chain, one platform) places 10 to 30 islands in a sea about 150 km square, each a record (middle, size, setting, age, kind chosen by rules from its setting, seed), no two neighbours of a kind; `--archipelago=out.png` forms each in turn and draws the group | | One grey map of the group, each island named by its kind and setting |
-| 18 | Many islands in one world: everything formed for an island kept in one record per region; the generator finds the region under a point and answers open sea between; the islands within 64 km formed before entering, the rest on three low-priority threads; `--island=N` for the map, `--why` and the survey | 17 (a stub of three islands until it lands) | From a summit, the next island; flying to it, its kind differs; the benches while islands form |
+| 17 | The islands near the start as records: a stand-in for plates over the world near the start decides where the crust is continental and where islands form (an arc, a hotspot chain, a shelf off the continent's coast), and places 10 to 30 islands within about 150 km, each a record (middle, size, setting, age, kind chosen by rules from its setting, seed), no two neighbours of a kind; the continent is a record too, its coast an outline until it can be formed; `--archipelago=out.png` forms each island in turn and draws the group with the continent's coast | | One grey map: the islands named by kind and setting, and the continent they lie off |
+| 18 | Many islands in one world: everything formed for an island kept in one record per region; the generator finds the region under a point and answers the sea between; the islands within 64 km formed before entering, the rest on three low-priority threads; `--island=N` for the map, `--why` and the survey | 17 (a stub of three islands until it lands) | From a summit, the next island; flying to it, its kind differs; the benches while islands form |
 | 19 | Far sight: levels at 128 and 256 m, the world drawn round (a drop of d²/2R, R ≈ 7,400 km), haze that lets land 30 to 60 km off show | | Today's island from 20 and 40 km out at sea, sinking under the curve |
 | 20 | The seam test (an experiment, section 7): today's island formed whole, and as two basin pieces cut on its 64 m solution with the divide pinned | | Both maps with the seam drawn, and the largest step along it |
-| 21 | Blocks widen to 16 bits | 18, 19 | Identical pictures; the benches |
-| 22 | Rock stories: eight of the twelve rows in use, faults, intrusions and lava packages, about 20 rock kinds; each island's story from its setting | 17, 21 | Islands of different rock side by side; a cut face on each |
-| 23 | Climate per island: base climate across the sea, rain carried on the wind so a high island has a wet side and a dry one, three to six zones | 18 | The rain on the map; the windward and lee sides on foot |
-| 24 | Floras: three or four, about twenty species in ten silhouettes, chosen by climate, in the same site slots | 21, 23 | A warm island and a cooler one; a high island's belts |
-| 25 | Ground and water by kind: deposition on islands over 10 km, wetlands, river mouths by kind, lava tubes on a young volcanic island, solution caves on limestone | 22 | A river mouth, a marsh and a cave on three islands |
-| 26 | Who reached which island: animals by whether they fly, swim or walk, from the straits to their neighbours | 18 | `--why` on two islands |
-| 27 | People: one people in two eras, the ruins of the first among the farms of the second, names from that history | 18, 23, 24 | A ruin and a farm |
-| 28 | The fantastic: an older sea level and its drowned coasts, landmarks on every island, the first marvel (one elder wood) | 24, 27 | The marvel, and how it is found |
+| 21 | Continents: a way to form land larger than one region with no seam, found by experiment (wider margins, which came closest in step 20; a forming whose finer phases refine the land rather than reshape it; pieces that trade their edges until they agree; a landmass formed whole at 16 m in less memory), then a piece of the continent formed beside the start's islands | 20 | A continent's land formed in pieces, whose joins cannot be found on the map or on foot |
+| 22 | Blocks widen to 16 bits | 18, 19 | Identical pictures; the benches |
+| 23 | Rock stories: eight of the twelve rows in use, faults, intrusions and lava packages, about 20 rock kinds; each island's story from its setting | 17, 22 | Islands of different rock side by side; a cut face on each |
+| 24 | Climate per island: base climate across the sea, rain carried on the wind so a high island has a wet side and a dry one, three to six zones | 18 | The rain on the map; the windward and lee sides on foot |
+| 25 | Floras: three or four, about twenty species in ten silhouettes, chosen by climate, in the same site slots | 22, 24 | A warm island and a cooler one; a high island's belts |
+| 26 | Ground and water by kind: deposition on islands over 10 km, wetlands, river mouths by kind, lava tubes on a young volcanic island, solution caves on limestone | 23 | A river mouth, a marsh and a cave on three islands |
+| 27 | Who reached which island: animals by whether they fly, swim or walk, from the straits to their neighbours | 18 | `--why` on two islands |
+| 28 | People: one people in two eras, the ruins of the first among the farms of the second, names from that history | 18, 24, 25 | A ruin and a farm |
+| 29 | The fantastic: an older sea level and its drowned coasts, landmarks on every island, the first marvel (one elder wood) | 25, 28 | The marvel, and how it is found |
 
-Steps 17 to 20 start together. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 23; people (item 9) before step 27; the fantastic (item 10) before step 28.
+Steps 17 to 20 started together; step 21 followed the seam test's failure. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 24; people (item 9) before step 28; the fantastic (item 10) before step 29.
 
 ### Step 20, as built
 
@@ -777,7 +777,7 @@ Run 2026-11-15 by Claude as an experiment in a scratch copy; nothing of it is me
   - That the 64 m divide is where the 16 m land puts it: a median of half a 64 m cell off, up to four cells.
   - That the forming's rules behave the same in a piece: creep, the coast's exposure and cliff height, silt and the refine's warp all read beyond a cell, and each needed a choice.
 - **Variants.** Holding nothing on the piece's side is worse (cliffs of 136 to 142 m across the cut). Pinning to a 64 m run of the whole history is still off a median 30 to 36 m. A margin of 2 km past the cut, formed freely and discarded, made 90% of a 16 km island's seam match the whole within 5 m, but left cliffs of 100 to 160 m on 1%. On the 8 km islands a margin covers most of the other piece and says nothing.
-- **What it means** *(inference)*: the last two stages reshape the land rather than refine it, so the mainland as designed is not supported, and the ocean of islands is. A mainland would need a seam method that has not yet passed, or each landmass formed whole at 16 m.
+- **What it means** *(inference)*: the last two stages reshape the land rather than refine it, so a continent cannot be made of basin pieces pinned to the 64 m solution. It needs a method that has not yet passed (the margin came closest), or each landmass formed whole at 16 m. The owner has decided the world has continents (2026-11-15), so finding that method is step 21.
 
 Weak points: two islands of layered rock, one seed each; the cut ran along the highest divide, where the finer forming changes most; one cell held each side; one margin run at 16 km; the judge of the maps was Claude, not the owner.
 
@@ -825,7 +825,7 @@ Each has the plan's recommendation. Section 8 of each design holds the rest.
 
 **Before the archipelago**
 
-7. **The end shape of the world.** *A mainland with islands off its coast inside known lands about 300 km across, far lands beyond*, subject to the seam test.
+7. **The end shape of the world.** *A mainland with islands off its coast inside known lands about 300 km across, far lands beyond*, subject to the seam test. *Decided by the owner on 2026-11-15:* one cohesive simulated world with continents and islands where the simulation makes them; the seam test decides only the method.
 8. **Cold to hot.** *Let 1,000 km stand for about thirty degrees of latitude.*
 9. **People.** *The first island is wild; people arrive with the archipelago, first as ruins; history is a short pass over a few eras that writes dated facts*, not a simulation.
 10. **The fantastic.** *Admitted only as a cause with a source, a reach and an age; at most one marvel per region; inspection gives signs first and the cause once learned.*
@@ -834,7 +834,7 @@ Each has the plan's recommendation. Section 8 of each design holds the rest.
 
 ## 10. Not verified, and the largest risks
 
-- **The land seam** was tested in step 20 (2026-11-15) and failed: on two islands a divide pinned to the 64 m solution leaves a seam the map shows, because the finer phases move the land on a divide a median 54 to 97 m, not the tens of metres guessed. Forming each piece 2 km past the cut made 90% of a 16 km island's seam match the whole within 5 m but left cliffs of 100 to 160 m on 1% of it. It remains the largest risk to the end shape.
+- **The land seam** was tested in step 20 (2026-11-15) and failed: on two islands a divide pinned to the 64 m solution leaves a seam the map shows, because the finer phases move the land on a divide a median 54 to 97 m, not the tens of metres guessed. Forming each piece 2 km past the cut made 90% of a 16 km island's seam match the whole within 5 m but left cliffs of 100 to 160 m on 1% of it. It is now the largest open problem: continents need land larger than one region formed with no seam, by a method not yet found (step 21).
 - **Reading rock in the finished frame** was run in step 1 (2026-11-11) and the landforms survive: on seeds 7, 1 and 2, 3.1%, 3.4% and 5.3% of land is steeper than 45°, with faces of 136, 129 and 235 m. The strength mapping in `geology.md` D4 lowered the island to 202 m, so `rock.odin` uses erosion (0.4/strength)² and slope limits from 35° to 55°.
 - **How unfinished to leave the land** was run in step 3 (2026-11-11) on the ridge island, seed 7. A last phase of 30, 90 (today) or 450 thousand years changes mostly how finely the slopes are cut, and the longest takes 3.2 s to form; the last phase is also the only one on 16 m cells, so its length mixes "how finished" with "how resolved". A sea that falls 20 m and rises 8 gives a raised apron under the old coast but no gorges far inland. The same run showed the erosion wears land faster than the designs assumed: an island at rest for two million years is gone, so the worn kind rests for about 0.4.
 - **Every cost and line count** is a designer's guess, apart from the forming times, the build time, the walking speed, the hollow counts and the facts read from the code that I checked: the four-bit material mask, the fixed sun, the 20 uses of the seed constant.
