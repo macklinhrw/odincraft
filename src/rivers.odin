@@ -25,11 +25,11 @@ FLOOD       :: 20    // how many times the mean flow a flood that scours a plung
 FALL_STEEP  :: 0.3   // a stream steeper than this over 30 m falls where a strong bed holds a lip
 FALL_AREA   :: 120_000   // m² a stream must drain to wear a fall back into a gorge; a smaller one hangs and runs down the face (Crosby & Whipple 2006: knickpoints stall at 0.1 to 1 km²)
 SPRING_AREA :: 30_000   // m² of land above a contact that feeds a spring (a guess)
-// The rocks that pass water, through their pores or joints; the others hold it (after the ranges
-// in Freeze and Cherry, Groundwater, 1979, from memory): sandstone and grit, jointed limestone,
-// lava flows broken by their joints and the cinders and pumice between them. Mudstone and
-// siltstone hold it, as does stiff lava.
-PASSES :: bit_set[Mat]{.Sandstone, .Grit, .Limestone, .Basalt, .Scoria, .Tuff}
+// The rocks that pass water, through their pores or joints, have this trait in TRAITS (gen.odin);
+// the others hold it (after the ranges in Freeze and Cherry, Groundwater, 1979, from memory):
+// sandstone and grit, jointed limestone, lava flows broken by their joints and the cinders and
+// pumice between them. Mudstone and siltstone hold it, as does stiff lava.
+PASSES :: bit_set[Trait]{.Passes}
 FALL_MIN    :: 2.5   // metres: a drop taller than this is a fall with water of its own; a step pool's steps of a block or two are not
 
 River_Point :: struct {
@@ -111,7 +111,7 @@ rivers_trace :: proc() {
 	springs := 0
 	for c in g.order do if r := g.next[c]; r >= 0 && !stream[c] && g.area[c] >= SPRING_AREA && land.lake[c] == 0 && land.slope[c] > 0.15 && land.hump[c] < -2 {
 		over, under := rock_in(g.z[c] + 3, g.base[c], ROCK_SIM), rock_in(g.z[c] - 2, g.base[c], ROCK_SIM)
-		if over not_in PASSES || under in PASSES do continue
+		if !is(over, PASSES) || is(under, PASSES) do continue
 		near := false   // one spring to a stretch of the contact: the water seeps along it to the lowest point
 		for f in region.features[len(region.features) - springs:] do near ||= math.hypot(f.at.x - middle_of(g, int(c)).x, f.at.y - middle_of(g, int(c)).y) < 150
 		if near do continue
