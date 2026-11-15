@@ -782,6 +782,44 @@ Run 2026-11-15 by Claude as an experiment in a scratch copy; nothing of it is me
 
 Weak points: two islands of layered rock, one seed each; the cut ran along the highest divide, where the finer forming changes most; one cell held each side; one margin run at 16 km; the judge of the maps was Claude, not the owner.
 
+### Step 21, as built
+
+Run 2026-11-15 by Claude as an experiment in a scratch copy; nothing of it is merged. The owner has not yet looked at it. The method, every number and the pictures are in `interesting-world/notes/continents-forming.md`.
+
+![The 32 km ridge as four ordered pieces joined, less the land formed whole (left), beside the whole nudged by 1 mm, less the whole (right): the join differs from the whole less than the forming differs from itself](interesting-world/real/continents-ridge-difference.jpg)
+
+- **What was done.** Seven ways of forming land larger than one region were run and measured as step 20 measured them, against the land formed whole. The test land, one seed each:
+  - the default island stretched to 16 km, in two pieces;
+  - the ridge on seed 3 at 32 km, in four pieces whose seams run 10 km along the main crest and down three spurs, plus a straight cut across 38 streams and square tiles;
+  - the domes on seed 3 at 24 km, in three pieces, and cut straight through a dome whose vent opens in a 16 m phase.
+- **A way was found: ordered pieces.**
+  - The landmass is formed whole at 64 m, as designed, and cut along its drainage.
+  - The pieces take up the 32 m and 16 m phases one after another, downstream first.
+  - Each holds, right at the cut, the land its formed neighbours left, through every step: heights, filled surface, drainage, land drained and rock carried, in a band 8 cells wide.
+  - Toward neighbours not yet formed it forms 6 km past the cut, held beyond to the landmass pass with the water and rock that pass says come in.
+  - A vent is decided once and shared.
+- **On the ridge in four pieces** the joined land's steps across the cut are the whole's (largest 49.6 m against 51.9; within 48 m, p99 27.3 against 27.1). It has no closed hollow and every figure against Hahajima unchanged, with the same slide and the same seven named places. It differs from the whole by a mean 0.02 m, less than a 1 mm nudge moves the whole (0.14 m).
+  - A cut across 38 streams formed downstream first is the whole's to 14 m. Formed upstream first it ponds 1,623 cells of closed hollow up to 37 m deep.
+  - Cut through the young dome, the land is within 0.6 m of the whole when the vent is shared. When each piece decides the vent itself, a step of up to 54 m runs along the cut.
+  - I could not find the seam. I looked at a joined map of the ridge blind and could not say where the cut ran; from 300 m and from the ground, the whole and joined pictures from the same camera differ in under 0.1% of their pixels.
+- **What failed.**
+  - Pinning failed at every length of finer forming: steps of up to 239 m with 96 kyr left to the pieces, and 170 m with 21 kyr.
+  - Shortening the finer phases so that pinning might hold costs the raised kind its terraces (method 3, failed twice).
+  - Margins in one pass left 80 to 92 m steps at 4 to 6 km on the ridge. A wrong edge's error runs up the streams that leave a piece through it, 4 to 6 km on the 16 km island and more on the ridge.
+- **Pieces that trade their edges until they agree** (alternating Schwarz, 2 km margins) also leave no seam. Along divides they need one round more (2.5× the cost); on square tiles cut across rivers, three (5×). They are the fallback where an order cannot be kept.
+- **The forming is chaotic.** A 1 mm nudge moves the whole island up to 45 to 95 m in patches where a stream captured another. So joined land is judged against that floor, not against zero.
+- **Cost.** The ridge forms in 16.9 s on one thread (64 m phases 2.7 s, 32 m 3.5 s, 16 m 10.7 s), 54 ms a km² of land. The 64 m landmass pass of a 128 km landmass (4,970 km² of land) took 60.6 s and 1.0 GB. *(Extrapolated, a guess:)* for a continent of 30,000 to 50,000 km², the landmass pass takes 7 to 12 min of one core and the pieces 32 to 54 core-minutes, about 18 to 30 min on three background threads. Each worker holds about 0.4 GB as the grid is kept today. Forming the whole at 16 m instead costs about the same core time as one job, unless rewritten to run in parallel, and holds 2.4 to 14 GB.
+- **What it changes in the plan** *(inference)*.
+  - Decision 10 and `foundations/world-frame.md` D1 to D3 hold with changes. The cut's edges are not pinned to the 64 m solution but to the formed neighbour's land, and pieces are formed in drainage order.
+  - A region becomes a pure function of the seed, its record, the landmass pass and the bands of the regions before it in a fixed order. Forming one again needs those bands kept: about 1 MB a kilometre of cut as recorded, about 3 GB for a large continent unless reduced (untested).
+  - The plate story (step 22) must give a landmass one history over its whole extent, and fix vents and other events that read a neighbourhood once.
+
+Weak points:
+- One seed each of three kinds, on land no larger than 32 km. No Pfafstetter cut was tried; the 6 km margin was measured on a 32 km island only.
+- A cut across rivers formed downstream first took the rock coming in from the 64 m pass, which was low: a silt flat 11.7 ha smaller at the largest river's mouth, 21 ha of land and sea differing against 9 ha for the nudge.
+- Where a cut meets the sea, exposure and silt read past the band. On the 16 km default island that changed the slide beside it from 2.8 to 2.5 million m³.
+- Continent costs are extrapolated, on a loaded machine. The recommended method's maps were not judged blind, and Claude is not the owner.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.
@@ -835,7 +873,7 @@ Each has the plan's recommendation. Section 8 of each design holds the rest.
 
 ## 10. Not verified, and the largest risks
 
-- **The land seam** was tested in step 20 (2026-11-15) and failed: on two islands a divide pinned to the 64 m solution leaves a seam the map shows, because the finer phases move the land on a divide a median 54 to 97 m, not the tens of metres guessed. Forming each piece 2 km past the cut made 90% of a 16 km island's seam match the whole within 5 m but left cliffs of 100 to 160 m on 1% of it. It is now the largest open problem: continents need land larger than one region formed with no seam, by a method not yet found (step 21).
+- **The land seam** was tested in step 20 (2026-11-15) and failed: on two islands a divide pinned to the 64 m solution leaves a seam the map shows, because the finer phases move the land on a divide a median 54 to 97 m. Step 21 the same day found a method that leaves none, by experiment: ordered pieces, formed in drainage order, each holding its formed neighbours' land through time at the cut, with 6 km margins toward the rest (`interesting-world/notes/continents-forming.md`). On a 32 km ridge in four pieces, a 24 km volcano and the default island at 16 km, the joined land's steps, hollows, streams and start-up figures are the whole's (on the default island, all but the slide beside where the cut meets the coast: 2.5 million m³ against 2.8), and the joined land differs from the whole less than a 1 mm nudge moves the whole. Still untested: land larger than 32 km, a Pfafstetter cut with trunks crossing, the band store a continent would keep, and the coast's exposure and silt across a cut. Continent costs are extrapolated: 7 to 12 min of one core for the 64 m landmass pass of 30,000 to 50,000 km², then 18 to 30 min on three threads. Pinning, and finer phases shortened so that pinning might hold, both failed.
 - **Reading rock in the finished frame** was run in step 1 (2026-11-11) and the landforms survive: on seeds 7, 1 and 2, 3.1%, 3.4% and 5.3% of land is steeper than 45°, with faces of 136, 129 and 235 m. The strength mapping in `geology.md` D4 lowered the island to 202 m, so `rock.odin` uses erosion (0.4/strength)² and slope limits from 35° to 55°.
 - **How unfinished to leave the land** was run in step 3 (2026-11-11) on the ridge island, seed 7. A last phase of 30, 90 (today) or 450 thousand years changes mostly how finely the slopes are cut, and the longest takes 3.2 s to form; the last phase is also the only one on 16 m cells, so its length mixes "how finished" with "how resolved". A sea that falls 20 m and rises 8 gives a raised apron under the old coast but no gorges far inland. The same run showed the erosion wears land faster than the designs assumed: an island at rest for two million years is gone, so the worn kind rests for about 0.4.
 - **Every cost and line count** is a designer's guess, apart from the forming times, the build time, the walking speed, the hollow counts and the facts read from the code that I checked: the four-bit material mask, the fixed sun, the 20 uses of the seed constant.
