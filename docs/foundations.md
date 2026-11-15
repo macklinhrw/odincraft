@@ -759,6 +759,99 @@ Started 2026-11-14 at the owner's word, in this order (Claude's proposal; the ow
 
 Steps 17 to 20 started together; step 21 followed the seam test's failure, and step 22 the owner's goal of 2026-11-15 that every island and continent comes out of one history of moving plates. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 25; people (item 9) before step 29; the fantastic (item 10) before step 30.
 
+### Step 17, as built
+
+Built 2026-11-15 by Claude: the islands near the start, and the continent they lie off, as records. The owner has not yet looked at it.
+
+![Seed 5: the islands near the start and the continent they lie off, 200 km across, north up. Across the middle the arc's volcanic front, with domes, cones and craters along it; below it the forearc's ridge and raised islands; below the trench, the hotspot's chain, ticked each million years from the hotspot toward the trench; above, layered islands on the pale shelf and the continent's coast and range, hatched as a record not yet formed](interesting-world/real/archipelago.jpg)
+
+- **A fixed stand-in for the plates near the start** (`PLATES` and `world_at`, `archipelago.odin`), and only that: it is the placeholder for step 22, the world's plate story, which replaces it. One plate goes down under another along a trench, an arc of a circle 200 to 360 km in radius. The arc's volcanic front stands 38 to 46 km behind it (100 to 250 km on real arcs, squeezed in). Between them is the forearc, rising 1.3 to 2 mm/yr along its outer ridge, two fifths of the way back. Behind the front come a trough, then a shelf 15 to 35 km wide, the drowned margin of a continent, then the continent's coast. On the plate going down, a hotspot 34 to 48 km beyond the trench builds islands that the plate carries toward the trench at 9 to 13 km a million years, 38 to 56° off straight at it; they sink as they cool. Every number is a range in the row, drawn from the seed.
+- **The world's fields.** The stand-in makes seven fields, read like every other field and painted by `--overlay=`:
+  - `setting`: open sea, hotspot, forearc, arc, back-arc, shelf or continent.
+  - `front`: km from the volcanic front.
+  - `trench`: km from the trench, below 0 on the plate going down.
+  - `track`: km from the hotspot's track.
+  - `age`: Myr, of a young volcano on the front, of the plate's carrying on the track, else of the crust (40 for the arc's, 60 for the ocean's, 200 for the continent's).
+  - `rising`: mm/yr the crust rises.
+  - `depth`: m of sea over the floor, 0 on the continent.
+- **Kinds by their hosts.** Each kind row in `KINDS` gained `hosts`, windows on those fields:
+  - the cone, crater and domes within 6 km of the front;
+  - raised where the crust rises faster than 1 mm/yr: the forearc's outer ridge (Kikaijima);
+  - ridge where it rises 0.3 to 1.2 (Hahajima);
+  - inlets where it rises under 0.3 mm/yr or sinks and the land is older than 1 Myr, so the sea's rise drowned valleys already cut (Tsushima on its shelf, Chichijima in its forearc);
+  - worn where it is still or sinking and older than 2.5 Myr;
+  - every layered kind only on a floor shallower than 4,000 m, since nothing raises an old island off the abyssal plain.
+- **How an island gets its kind.** It is the row whose host it holds best, ties broken by a draw keyed by the row's name and weighted by its weight; a kind its nearest neighbour has, or that has it as nearest, is passed over for the next best.
+- **The start island** keeps the kind the seed draws, as before. The plates are put so that kind's host holds fully where it stands, at least 6 km off the continent's coast. Its record is today's (8,192 m, the world's seed, its own swell), and its map is identical bit for bit on seed 7 and on `--kind=cone --seed=3`.
+- **The islands** (`archipelago`, the `Island` record step 18 reads). They are placed along the front at 10 to 31 km, across the forearc at 13 to 36 km, along the hotspot's track at 10 to 20 km from the hotspot to 10 km short of the trench, and three to six on the shelf, all within a square 150 km across round the start.
+  - Each takes a region 8 to 16 km across, in steps of 2,048 m, drawn by Korčák's law: the number of islands larger than an area falls as that area to the power −0.65. The exponent is a guess, half a coast's fractal dimension of about 1.3, not measured on a real group.
+  - No two regions overlap, and none reaches the continent.
+  - Each records its region's middle, size, kind and seed (the world's seed hashed with its number), and its setting and age.
+- **The continent** (`continent`): its coast for 300 km round the start, wandering in bays and headlands over 3 to 50 km, closed far inland through the middle of the trench's circle. Behind it lies the crest of a range 20 to 40 km inland, 1,000 to 2,200 m high, which is a guess after the coastal ranges behind the arcs of Japan and China. None of it is formed: step 21 looks for how.
+- **The wind** is one bearing for every island, the start island's own drawn swell, so its swell is the one it always had.
+- **Seen.** `--archipelago=out.png` forms each island in turn with today's code, writes a grey map 200 km across, and prints:
+  - a line for each island;
+  - what was left out and why;
+  - whether each island sees its nearest neighbour's top and the continent's range over the curve (R = 7,400 km).
+
+  The map shows the trench, the front, the shelf's edge, the hotspot's track ticked each million years, the continent's coast and range, and each island named by number, kind and setting. It takes about a second an island, 20 to 35 s in all. Start-up prints one line on where today's island stands among them.
+
+On seeds 1 to 8 there are 17 to 22 islands: 4 to 8 on the front, 4 to 8 in the forearc, 2 to 5 on the hotspot's track and 2 to 5 on the shelf. Nearest neighbours are at most 24 to 31 km apart, and every island sees its nearest neighbour's top from its own shore. The continent's coast lies 5 to 127 km from the islands. Its range shows over the curve from every island's shore on six seeds, and from all but two on seeds 3 and 5. Forcing each kind on the start island with `--kind=` on the same eight seeds, its host holds fully every time: the volcanic kinds on the front, ridge and raised in the forearc, inlets and worn on the shelf, the hotspot's track or the forearc.
+
+Seed 5, in the picture, shows the causes best: all three volcanic kinds alternating along a strongly curved front, ridge and raised islands across the forearc below it, a chain of inlets, worn and inlets ageing from 1.5 to 5 Myr toward the trench, and layered islands on the shelf under the continent's coast. Seed 2 is nearly as clear. The default seed, 7, is middling. Its chain runs straight at the trench, with three islands, and its shelf holds two. Seeds 1 and 4 show it worst:
+
+- **Seed 1.** The start island is an inlets island in the back-arc trough, where nothing else stands. Its chain has two islands before the trench, and the continent lies along the bottom edge.
+- **Seed 4.** The chain has three islands, the forearc has no raised island, and the continent's coast and range are cut by the map's edge.
+
+What the premises had wrong:
+
+- **That today's kinds can fill such a setting.** They fill the arc, forearc and shelf honestly, each by the real islands it is after. They do not fill a hotspot chain.
+  - The active end needs a young shield and the middle an eroded shield, and neither kind exists. The site over the hotspot is left out and printed ("a young hotspot shield would stand here, and no kind makes one"), and the chain begins at about a million years with a drowned inlets island.
+  - Inlets and worn stand in for older hotspot islands by the landforms the plates give them (sinking, then worn low), but their rock is layered, not basalt, until rock comes from the setting (step 24).
+  - No atoll stands at 30° N, which is the right answer, not a gap.
+  - On the arc, nothing tells a cone from a crater from domes, so they alternate by the draw and the neighbour rule, not by cause.
+- **That the start island's kind can always be given a setting it belongs to.** It held on every seed and kind tried. But inlets or worn landed in the back-arc trough on three of sixteen tries, where real arcs have few islands and the stand-in places no others.
+- **That regions of other sizes form islands of their kind.** A 4 km region does not:
+  - the ridge, inlets and worn kinds come out as islets 120 to 150 m high of about 1 km² (the raised kind held up better, at 286 m);
+  - the volcanic kinds keep their height and halve their width, so 47 to 56% of their land is steeper than 45° and their crests fall 2.5 to 2.9 m, four to five times their real islands';
+  - the place finder's survey assumes an 8 km region and fails at 4 km (`places.odin`).
+
+  Regions of 10, 12 and 16 km form their kinds, larger and with finer valleys; a 16 km cone is gentler (1,127 m, 6% of its land over 45°). So sizes run from 8 to 16 km, which is a span of four in area, too narrow for Korčák's law to show much.
+- **That the islands would be seen from each other.** True at these spacings: nearest neighbours are 24 to 31 km apart at most, against horizons of 60 to 100 km. The continent's range shows too, at a guessed height.
+
+Tried and dropped:
+
+- **Islands with no continent beyond them.** That was the first form of this step. The owner's decision of 2026-11-15 made the shelf a continent's drowned margin and the continent a record.
+- **A weighted race for each island's kind**, as the plant communities use. It put kinds where their hosts held weakly; the best host now wins.
+- **Hotspot tracks up to 72° off the trench.** The chains ran along the trench instead of into it.
+- **A broad swell round the hotspot.** It lifted the open ocean floor enough for the layered kinds' depth window, and seed 3 put an inlets or worn start island on open sea.
+- **A worn island on the abyssal plain** (seed 8), before the depth window.
+- **Labels drawn in place on the lines**, which landed on islands; the lines now have a key.
+
+Not done:
+
+- the islands' rock and history from their setting (steps 22 and 24);
+- the forming of the continent (step 21);
+- neighbours by straits and fetch, rather than by nearest middle;
+- island ages that set a kind's history: a cone's history is still its row's, whatever its `age` says.
+
+Weak points:
+
+- **Everything in the stand-in is a fixed shape drawn from ranges.** Nothing moved to make it, and step 22 is to replace it. A plate history must give what these records give:
+  - the fields the hosts read, in the same units: `front` in km, `rising` in mm/yr, `age` in Myr, `depth` in m, with `setting` for names;
+  - each island's place, region size and age;
+  - the continent's coast and the height of its land;
+  - the wind.
+- **The section from trench to shelf is squeezed to a third of real arcs' widths**, and the trench's circle, the outer ridge at two fifths of the setback and the depth profile are guesses.
+- **The forearc holds 4 to 8 layered islands**, as many as the front's volcanoes on most seeds. Real forearcs hold fewer and larger ones.
+- **The rule that no two nearest neighbours share a kind** is satisfied by the next best host. On the hotspot's chain that makes inlets and worn alternate mechanically, not by age.
+- **The continent's range height and distance inland are guesses**, so whether it shows on the horizon is a guess too.
+- **The island records' `age` is the field's**, 40 Myr for every forearc island and 200 for every shelf island: the crust's age, not when the island rose.
+- **Islands' squares are kept off the continent only at their corners and edges' middles**, so a headland could cross one.
+- **`--archipelago` frees and re-forms one region at a time through the game's globals** (`region_clear`). It works because forming reads nothing else, but step 18 must hold each island's results apart.
+
+**Cost.** `archipelago_make` takes 1.25 ms at start-up. Forming today's island is unchanged (0.99 to 1.05 s), and start-up as a whole times 1.02 to 1.28 s on this build and on the parent rebuilt alike, under load 6. The start's bench against the parent, alternately: frame interval median 8.33 ms on all four runs, our work 0.83 and 0.73 ms against 1.01 and 0.76, 43 m travelled on all. `src/` grew by 506 lines of Odin (480 in `archipelago.odin`, about 200 of them the map: the forming loop, drawing, labels and a 3 by 5 letter font), twice the 200 to 300 guessed.
+
 ### Step 20, as built
 
 Run 2026-11-15 by Claude as an experiment in a scratch copy; nothing of it is merged. The owner has not yet looked at it. The method, every number and the pictures are in `interesting-world/notes/seam-test.md`.

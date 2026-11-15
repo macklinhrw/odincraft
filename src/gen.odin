@@ -184,6 +184,7 @@ gen_init :: proc(kind: string) -> bool {
 	trails_make()
 	places_make()
 	creatures_make()
+	archipelago_make()
 	return true
 }
 

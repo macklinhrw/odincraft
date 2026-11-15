@@ -33,6 +33,7 @@ import sdl "vendor:sdl3"
 //   kind=name       which kind of island, whatever the seed would pick (names in KINDS, land.odin)
 //   origin=x,z      where the island's middle lies in the world, in whole metres (default 0,0)
 //   map=file.png    save a map of the land and exit
+//   archipelago=file.png   form each island near the start in turn, save a map of them and the continent they lie off, and exit
 //   overlay=name    with map: paint one field over the relief (names in FIELDS, fields.odin)
 //   why=x,z         print what the ground is at this point in the world and why, and exit
 //   survey          print what the island holds and the ranked candidates for named places, and exit
@@ -57,6 +58,7 @@ Options :: struct {
 	probe:         [4]i32,
 	has_probe:     bool,
 	map_path:      string,
+	archipelago:   string,
 	overlay:       string,
 	above:         bool,
 	bench, speed:  f64,
@@ -106,6 +108,7 @@ options :: proc() -> Options {
 			ok = numbers(value, ",", box[:])
 			append(&o.digs, [6]i32{i32(box[0]), i32(box[1]), i32(box[2]), i32(box[3]), i32(box[4]), i32(box[5])})
 		case "map":   o.map_path = value
+		case "archipelago": o.archipelago = value
 		case "why":   ok = numbers(value, ",", o.why[:]); o.has_why = true
 		case "fly":   o.fly = true
 		case "survey": o.survey = true
@@ -154,12 +157,13 @@ find_start :: proc() -> (pos: [3]f64, yaw: f32) {
 
 main :: proc() {
 	opt := options()
-	if !gen_init(opt.kind) {
+	if opt.archipelago != "" && !archipelago_map(opt.archipelago, opt.kind) || opt.archipelago == "" && !gen_init(opt.kind) {
 		fmt.eprint("no kind of island named", opt.kind, "; there are:")
 		for k in KINDS do fmt.eprint("", k.name)
 		fmt.eprintln()
 		os.exit(2)
 	}
+	if opt.archipelago != "" do return
 	if opt.above do opt.pos.y += f64(height_at(opt.pos.x - f64(region.origin.x), opt.pos.z - f64(region.origin.y), 1))
 	if opt.place != 0 {
 		if opt.place < 1 || opt.place > len(places) {
