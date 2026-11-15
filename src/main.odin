@@ -45,7 +45,7 @@ import sdl "vendor:sdl3"
 //   survey          print what the island holds and the ranked candidates for named places, and exit
 //   plates=dir      run the world's history of moving plates, write its frames through time, the known
 //                   world's map and the comparison grids into dir, say what it made, and exit (plates.odin)
-//   plates-why=x,z  print what happened through that history at this point of the known world, and exit
+//   plates-why=x,z  print what happened through that history at this point in the world (as for why), and exit
 //   place=N         look at named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground
@@ -180,14 +180,10 @@ main :: proc() {
 		plates_main(opt.plates)
 		return
 	}
-	if opt.has_plates_why {
-		plates_why(opt.plates_why.x, opt.plates_why.y)
-		return
-	}
 	quiet_init()
 	seed = world_seed   // the islands are made from the world's seed
-	// The start island's record is drawn first, at its place, and the islands near it and the
-	// continent they lie off are put round it (archipelago.odin), as step 22's plate story will do.
+	// The start island's record is drawn first, at its place; the islands near it and the land they
+	// lie off are read from the world's history round it (known.odin, archipelago.odin).
 	first: Formed
 	first.island, first.region.origin = {origin = opt.origin, size = REFERENCE, seed = world_seed}, opt.origin
 	bind(&first)
@@ -197,7 +193,13 @@ main :: proc() {
 		fmt.eprintln()
 		os.exit(2)
 	}
+	known_make()
 	archipelago_make(opt.archipelago != "")
+	if opt.has_plates_why {
+		at := known_point(opt.plates_why.x, opt.plates_why.y)*1000
+		plates_why(f64(at.x), f64(at.y))
+		return
+	}
 	if opt.island < 0 || opt.island >= len(archipelago) {
 		fmt.eprintfln("no island %d: there are %d near the start, from 0", opt.island, len(archipelago))
 		os.exit(2)
