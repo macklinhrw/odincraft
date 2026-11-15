@@ -3,17 +3,19 @@ package main
 import "core:math"
 
 // Meshing. Every visible face is one Quad, drawn as an instanced four-vertex strip, so a
-// face costs 16 bytes. Coordinates are metres from the chunk origin.
+// face costs 20 bytes. Coordinates are metres from the chunk origin.
 
 Quad :: struct {
 	x, y, z: i16,   // corner the quad grows from
 	a:       i16,   // extent along the face's U axis
 	b:       u16,   // extent along the face's V axis
 	ao:      u16,   // light reaching each corner, four bits each, corner = u + 2v
-	info:    u16,   // face (3 bits), turned diagonal (1 bit), material (high byte)
+	info:    u16,   // face (3 bits), turned diagonal (1 bit), the sky it sees (4 bits); the high byte is spare
 	slope:   [2]u8, // smooth ground normal for lighting, or zero to light by the face alone
+	mat:     Mat,   // what it is made of: its tiles in the atlas
+	_:       u16,   // spare: the GPU reads a quad in steps of four bytes
 }
-#assert(size_of(Quad) == 16)
+#assert(size_of(Quad) == 20 && size_of(Mat) == 2)   // as the shader reads it (QuadIn, shaders.metal; make_pipeline, render.odin)
 
 // Faces in the order +X -X +Y -Y +Z -Z, with axes chosen so that U x V points outward.
 // The shader holds the same tables.
@@ -28,7 +30,7 @@ quad :: proc(x, y, z, a, b: i32, face: int, m: Mat, corners: [4]u16, slope: [2]u
 	// corner smears across the whole face.
 	flip := corners[1] + corners[2] < corners[0] + corners[3]
 	ao := corners[0] | corners[1] << 4 | corners[2] << 8 | corners[3] << 12
-	return {i16(x), i16(y), i16(z), i16(a), u16(b), ao, u16(face) | u16(flip) << 3 | u16(m) << 8, slope}
+	return {i16(x), i16(y), i16(z), i16(a), u16(b), ao, u16(face) | u16(flip) << 3, slope, m, 0}
 }
 
 // A chunk's quads are stored by the way they face, +X to -Z, and within that by part: the quarters
@@ -58,10 +60,10 @@ by_face :: proc(quads: []Quad, parts: [4][2]u32) -> (ranges: [6][4][2]u32) {
 
 // Blocks are stored for the chunk and its border, in layers from the bottom up. Below the
 // stored layers everything is solid and above them everything is air.
-solid :: #force_inline proc(blocks: []u8, h, x, y, z: i32) -> bool {
+solid :: #force_inline proc(blocks: []Mat, h, x, y, z: i32) -> bool {
 	if y < 0 do return true
 	if y >= h do return false
-	return blocks[(x + 1) + (z + 1)*P + y*P*P] != 0
+	return blocks[(x + 1) + (z + 1)*P + y*P*P] != .Air
 }
 
 // The share of the sky a block of air under a roof sees (ground-and-underground.md, D4): of
@@ -71,7 +73,7 @@ solid :: #force_inline proc(blocks: []u8, h, x, y, z: i32) -> bool {
 // a ray is taken to have come out. `at` is the block (0, 0, 0) relative to the region's middle.
 SKY_RAYS :: [13][3]f32{{0.99, 0.14, 0}, {0.70, 0.14, 0.70}, {0, 0.14, 0.99}, {-0.70, 0.14, 0.70}, {-0.99, 0.14, 0}, {-0.70, 0.14, -0.70}, {0, 0.14, -0.99}, {0.70, 0.14, -0.70},
 	{0.45, 0.77, 0.45}, {-0.45, 0.77, 0.45}, {-0.45, 0.77, -0.45}, {0.45, 0.77, -0.45}, {0, 1, 0}}
-sky_seen :: proc(blocks: []u8, h: i32, cover: ^[P*P]i32, at: [3]i32, x, y, z: i32, n: [3]i32) -> f32 {
+sky_seen :: proc(blocks: []Mat, h: i32, cover: ^[P*P]i32, at: [3]i32, x, y, z: i32, n: [3]i32) -> f32 {
 	seen, all: f32
 	for d in SKY_RAYS {
 		w := max(d.x*f32(n.x) + d.y*f32(n.y) + d.z*f32(n.z), 0) + 0.1
@@ -81,7 +83,7 @@ sky_seen :: proc(blocks: []u8, h: i32, cover: ^[P*P]i32, at: [3]i32, x, y, z: i3
 			u, v, t := i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))
 			if u >= -1 && t >= -1 && u <= CHUNK && t <= CHUNK {
 				if v > cover[(u + 1) + (t + 1)*P] { seen += w; break }
-				if solid(blocks, h, u, v, t) && Mat(blocks[(u + 1) + (t + 1)*P + v*P*P]) not_in PLANT_BLOCKS do break
+				if solid(blocks, h, u, v, t) && !is(blocks[(u + 1) + (t + 1)*P + v*P*P], PLANT_BLOCKS) do break
 			} else if rock, known := hollow_rock(at.x + u, at.y + v, at.z + t); rock do break
 			else if !known { seen += w; break }
 		}
@@ -96,18 +98,18 @@ sky_seen :: proc(blocks: []u8, h: i32, cover: ^[P*P]i32, at: [3]i32, x, y, z: i3
 // along it and its top the moss a fallen trunk wears; one alone is a stump. Limbs in the air are
 // bark all round.
 GRAIN := #partial [Mat][2]Mat{.Wood = {.Wood_End, .Wood_Across}, .Shii_Bark = {.Shii_End, .Shii_Across}, .Grey_Bark = {.Grey_End, .Grey_Across}, .Pine_Bark = {.Pine_End, .Pine_Across}}
-grain :: proc(blocks: []u8, h, x, y, z: i32, n: [3]i32, m: Mat) -> Mat {
-	same :: proc(blocks: []u8, h, x, y, z: i32, m: Mat) -> bool {
-		return y >= 0 && y < h && x >= -1 && x <= CHUNK && z >= -1 && z <= CHUNK && Mat(blocks[(x + 1) + (z + 1)*P + y*P*P]) == m
+grain :: proc(blocks: []Mat, h, x, y, z: i32, n: [3]i32, m: Mat) -> Mat {
+	same :: proc(blocks: []Mat, h, x, y, z: i32, m: Mat) -> bool {
+		return y >= 0 && y < h && x >= -1 && x <= CHUNK && z >= -1 && z <= CHUNK && blocks[(x + 1) + (z + 1)*P + y*P*P] == m
 	}
-	beside :: proc(blocks: []u8, h, x, y, z: i32, m: Mat) -> bool {
+	beside :: proc(blocks: []Mat, h, x, y, z: i32, m: Mat) -> bool {
 		return same(blocks, h, x + 1, y, z, m) || same(blocks, h, x - 1, y, z, m) || same(blocks, h, x, y, z + 1, m) || same(blocks, h, x, y, z - 1, m)
 	}
 	below, above, joined := same(blocks, h, x, y - 1, z, m), same(blocks, h, x, y + 1, z, m), beside(blocks, h, x, y, z, m)
-	lying := !above && solid(blocks, h, x, y - 1, z) && Mat(blocks[(x + 1) + (z + 1)*P + max(y - 1, 0)*P*P]) not_in PLANT_BLOCKS   // on the ground with none of its own over it
+	lying := !above && solid(blocks, h, x, y - 1, z) && !is(blocks[(x + 1) + (z + 1)*P + max(y - 1, 0)*P*P], PLANT_BLOCKS)   // on the ground with none of its own over it
 	switch {
 	case n.y > 0 && lying:                    return .Grass if joined else GRAIN[m][0]   // moss on a lying trunk, the rings of a stump
-	case n.y > 0:                             return GRAIN[m][0] if below && !joined && !(y + 1 < h && Mat(blocks[(x + 1) + (z + 1)*P + (y + 1)*P*P]) in LEAVES) else m   // not under leaves, where the stem goes on as twigs
+	case n.y > 0:                             return GRAIN[m][0] if below && !joined && !(y + 1 < h && is(blocks[(x + 1) + (z + 1)*P + (y + 1)*P*P], LEAVES)) else m   // not under leaves, where the stem goes on as twigs
 	case n.y < 0:                             return m   // a limb's underside, far more often than a trunk cut from beneath
 	case !lying:                              return m
 	case same(blocks, h, x - n.x, y, z - n.z, m): return GRAIN[m][0]
@@ -123,28 +125,28 @@ grain :: proc(blocks: []u8, h, x, y, z: i32, n: [3]i32, m: Mat) -> Mat {
 // after the solid faces in `out`, and after those the faces where two blocks of leaves meet, one
 // for each pair, seen from both sides and dim, as the inside of a crown is; how many of each is
 // returned, for the renderer to draw them apart.
-mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Quad, at: [3]i32) -> (outer, inner: u32) {
-	leaf :: proc(blocks: []u8, h, x, y, z: i32) -> bool { return y >= 0 && y < h && Mat(blocks[(x + 1) + (z + 1)*P + y*P*P]) in LEAVES }
+mesh_volume :: proc(blocks: []Mat, h: i32, c: ^Columns, out, plants: ^[dynamic]Quad, at: [3]i32) -> (outer, inner: u32) {
+	leaf :: proc(blocks: []Mat, h, x, y, z: i32) -> bool { return y >= 0 && y < h && is(blocks[(x + 1) + (z + 1)*P + y*P*P], LEAVES) }
 	leaves, within := make([dynamic]Quad, context.temp_allocator), make([dynamic]Quad, context.temp_allocator)
 	cover: [P*P]i32   // the highest block in each column that is not part of a plant
 	for k in 0..<P*P {
 		cover[k] = h - 1
-		for cover[k] >= 0 && (blocks[k + int(cover[k])*P*P] == 0 || Mat(blocks[k + int(cover[k])*P*P]) in PLANT_BLOCKS) do cover[k] -= 1
+		for cover[k] >= 0 && (blocks[k + int(cover[k])*P*P] == .Air || is(blocks[k + int(cover[k])*P*P], PLANT_BLOCKS)) do cover[k] -= 1
 	}
 	for y in 0..<h {
 		for z in 0..<i32(CHUNK) {
 			for x in 0..<i32(CHUNK) {
-				m := Mat(blocks[(x + 1) + (z + 1)*P + y*P*P])
+				m := blocks[(x + 1) + (z + 1)*P + y*P*P]
 				if m == .Air do continue
-				slope := c.slope[(z + 1)*P + x + 1] if m not_in PLANT_BLOCKS else {}
-				if m in LEAVES do for f in ([3]int{0, 2, 4}) {
+				slope := c.slope[(z + 1)*P + x + 1] if !is(m, PLANT_BLOCKS) else {}
+				if is(m, LEAVES) do for f in ([3]int{0, 2, 4}) {
 					n := FACE_N[f]
 					if leaf(blocks, h, x + n.x, y + n.y, z + n.z) do append(&within, quad(x + n.x, y + n.y, z + n.z, 1, 1, f, m, {6, 6, 6, 6}, {}))
 				}
 				for f in 0..<6 {
 					n := FACE_N[f]
 					nx, ny, nz := x + n.x, y + n.y, z + n.z
-					if solid(blocks, h, nx, ny, nz) && (m in LEAVES || !leaf(blocks, h, nx, ny, nz)) {   // a limb shows through the leaves round it
+					if solid(blocks, h, nx, ny, nz) && (is(m, LEAVES) || !leaf(blocks, h, nx, ny, nz)) {   // a limb shows through the leaves round it
 						// A buried face on the chunk's rim is kept for four blocks below the
 						// surface. The neighbour may be drawn at a coarser level whose ground
 						// sits a little lower, and this closes the gap.
@@ -170,10 +172,10 @@ mesh_volume :: proc(blocks: []u8, h: i32, c: ^Columns, out, plants: ^[dynamic]Qu
 					}
 					q := quad(x + max(n.x, 0), y + max(n.y, 0), z + max(n.z, 0), 1, 1, f, grain(blocks, h, x, y, z, n, m) if GRAIN[m] != {} else m, corners, slope)
 					q.info |= closed << 4
-					append(&leaves if m in LEAVES else out, q)
+					append(&leaves if is(m, LEAVES) else out, q)
 					if k := (z + 1)*P + x + 1; f == 2 && c.plant[k] > 0 && at.y + y == c.top[k] - 1 {
 						row := GROUND_PLANTS[Plant_Kind(c.plant[k] - 1)]
-						if m in row.on && (!row.tall || !solid(blocks, h, x, y + 2, z)) {
+						if is(m, row.on) && (!row.tall || !solid(blocks, h, x, y + 2, z)) {
 							append(plants, plant_quad(x, y + 1, z, Plant_Kind(c.plant[k] - 1), at.x + x, at.z + z, (corners[0] + corners[1] + corners[2] + corners[3])/4 | closed << 4, slope))
 						}
 					}
@@ -235,7 +237,7 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 				// A top level with the one before it, of the same stuff, slope and full light, lengthens that
 				// one, which draws the same: open sea floor and flat ground cost a face a row, not one a cell.
 				q := quad(i*s, t - y_base, j*s, s, s, 2, m, corners(c, i, j, t, s, false), slope)
-				if l := last; l >= 0 && q.ao == 0xFFFF && out[l].ao == q.ao && out[l].y == q.y && out[l].info == q.info && out[l].slope == q.slope {
+				if l := last; l >= 0 && q.ao == 0xFFFF && out[l].ao == q.ao && out[l].y == q.y && out[l].info == q.info && out[l].mat == q.mat && out[l].slope == q.slope {
 					out[l].b += u16(s)
 				} else {
 					last = len(out)

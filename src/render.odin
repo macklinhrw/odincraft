@@ -164,7 +164,7 @@ make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
 	defer sdl.ReleaseGPUShader(g.dev, fs)
 
 	buffers := [1]sdl.GPUVertexBufferDescription{{slot = 0, pitch = size_of(Quad), input_rate = .INSTANCE}}
-	attributes := [8]sdl.GPUVertexAttribute{0 = {location = 0, format = .SHORT4, offset = 0}, 1 = {location = 1, format = .USHORT4, offset = 8}}
+	attributes := [8]sdl.GPUVertexAttribute{0 = {location = 0, format = .SHORT4, offset = 0}, 1 = {location = 1, format = .USHORT4, offset = 8}, 2 = {location = 2, format = .USHORT2, offset = 16}}
 	targets := [1]sdl.GPUColorTargetDescription{{format = p.color}}
 	if p.blend {
 		targets[0].blend_state = {
@@ -187,7 +187,7 @@ make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
 			depth_stencil_format = .D32_FLOAT, has_depth_stencil_target = p.depth,
 		},
 	}
-	if p.quads do info.vertex_input_state = {raw_data(&buffers), 1, raw_data(&attributes), 2}
+	if p.quads do info.vertex_input_state = {raw_data(&buffers), 1, raw_data(&attributes), 3}
 	if p.ribbon {
 		buffers[0] = {slot = 0, pitch = size_of([4]f32), input_rate = .VERTEX}
 		attributes[0] = {location = 0, format = .FLOAT4, offset = 0}
@@ -260,6 +260,7 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		address_mode_u = .CLAMP_TO_EDGE, address_mode_v = .CLAMP_TO_EDGE, address_mode_w = .CLAMP_TO_EDGE,
 	})
 
+	#assert(2*len(Mat) <= 2048, "a texture array holds 2,048 layers on Metal: the atlas has room for 1,024 materials")
 	g.blocks = atlas_layers(g, BLOCKS, len(Mat), "assets/blocks.png does not have a row of two tiles for each material")
 	g.plant_pics = atlas_layers(g, PLANTS, len(Plant_Kind), "assets/plants.png does not have a row of two pictures for each ground plant")
 	g.block_sampler = sdl.CreateGPUSampler(g.dev, {
