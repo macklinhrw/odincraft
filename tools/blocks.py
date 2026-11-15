@@ -46,6 +46,7 @@ TILES = {
     "Scoria": ("mcl_nether_netherrack", None, 0, 1),                              # cinder, full of holes
     "Rhyolite": ("dripstone_block", "mcl_deepslate_tuff", 0, 1),                  # bands where it flowed
     "Tuff": ("mcl_blackstone_basalt_smooth", None, 0, 1),                         # ash set hard
+    "Reef": ("dripstone_block", "mcl_end_end_stone", 1, 1),                       # pitted where the rain dissolves it, lumpy with coral heads in a face
 }
 BEDDED = ("Mudstone", "Siltstone", "Sandstone")   # their scree is slabs, the others' lumps
 
@@ -130,7 +131,7 @@ def main():
     for row, name in enumerate(names):
         if name == "Air":
             continue
-        top, side, turns, keep = TILES.get(name) or ("mcl_deepslate_cobbled" if name[:-6] in BEDDED else "default_cobble", None, row % 4, 0.9)   # anything else is broken rock: the rock's scree
+        top, side, turns, keep = TILES.get(name) or ("mcl_deepslate_cobbled" if name[:-6] in BEDDED else "default_cobble", None, (row - names.index("Mudstone_Scree")) % 4, 0.9)   # anything else is broken rock: the rock's scree, each turned a quarter more than the one before
         if name not in TILES and not name.endswith("_Scree"):
             raise SystemExit("no tile is named for " + name)
         atlas.paste(face(top, colours[name], turns, keep, name == "Camellia_Leaves"), (0, row * T))

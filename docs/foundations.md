@@ -1125,6 +1125,43 @@ Adding a material is as before: its name in `Mat`, its row in `MATERIALS`, its t
 
 Weak points: a face is a quarter larger, 32 MB more of the GPU's memory at the start, and the upload's 3 MB a frame now carries a fifth fewer faces, so in fast flight chunks arrive a little more slowly (not measured); the near volume's blocks take twice the memory on land; the atlas holds 1,024 materials, and past that tiles must be shared between materials and tinted by the shader, which changes how every tile is coloured; the traits for the grounds a plant grows on carry the names of the materials they came from; a ground plant's quad carries a material it does not use; the pictures are identical only with the clock frozen, since what moves with the clock differs between any two runs; and every bench ran beside other agents' work, so the benches show only that frames are no worse, not what headroom is left.
 
+### The reef kind, as built
+
+Built 2026-11-15 by Claude, as the owner decided that day: a raised coral-reef island after Kikaijima, as a new kind, `reef`, with the raised kind and the island the default seed draws left as they were. The owner has not looked at it. See it with `--kind=reef` on any seed; the choices are Claude's call of 2026-11-15 in `open-decisions.md`.
+
+- **What happens.** A bank lies drowned about 105 m deep in a warm sea and rises with the island, most along a line and in lumps 500 to 850 m across, nothing at its edge (`taper`), its sea floor with it (`bank`). The sea falls about 25 m and rises again to about where it stands today six times in 100,000 years. Wherever the water is shallower than 30 m, coral builds up toward the sea at 10 to 15 mm/yr (`reef`, `REEF_DEPTH`) to 1.5 m under it (`REEF_TOP`), in `coast`: each rise floods a band of the land the last fall left, the coral fills it to a flat in a few thousand years, and the next fall leaves that flat as a terrace over the reef's front. So the island comes up a ring at a time, a flight of terraces round the oldest and highest flat, and only a few metres of each rise reach the slowly rising shore. The rock is a story, "reef on mudstone", and reef limestone (`Reef`) has the trait `.Sinks`: 95% of the rain on it sinks in (`SOAKS`), and `route` adds only the rest to what drains, so no stream forms and nothing cuts the terraces but creep, which strong reef (0.8) hardly does.
+- **What it took.** The earlier try, a row of the old machinery with a slow rise and four falls, made a dome of hills because streams cut layered rock as fast as the sea uncovered it. With the rain sinking, three more things decided whether terraces showed. The bank's edge had to stop rising, or it stood as a 35 m sea cliff. The opening drowning had to be deep enough that the first fall brought only the bank's top within the coral's reach; shallower, the whole bank was paved as one flat and the uplift tilted it into a smooth dome. And the stands had to be short and come back to the same level: with each stand lower than the last, as the real ones of the last 125,000 years were, the flanks came up during the long low stands as smooth slopes. Coral growing at 4 to 8 mm/yr left the flats unfinished; growing from 40 m it paved over the older fronts. The lumps in the uplift brought the height above the nearest stream from 25 to 45 m down to Kikaijima's range: without them the water on the dome spread out and never gathered.
+- **The rest of the island.** No river, no fall, no spring, no fish: the water that sinks comes out nowhere yet. Laurel forest takes about 63%, susuki and scrub the windward side, coast strand the shore; the soil is mostly brown forest soil. The sea cuts notches and caves into the reef at its shore, and the shore is pale reef rock and boulders over a shallow fringing reef. Step 28's arrivals say the deer never reached it, across 42 km of sea up to 2 km deep. On an island with no river the start is the ground 12 to 30 m over the sea nearest the shore, facing down to it; on seed 7 that is an opening in the scrub on a low terrace. The survey says "no river".
+- **Drawn.** The seed never draws it (weight 0). The archipelago's hosts put it on the forearc rising 1.2 mm/yr or more, or on the shelf rising a little; on seed 7 no island changes, on seeds 1, 2 and 3 one island each becomes a reef.
+
+![The reef kind on seeds 1 to 8, the maps' middle 6.4 km: flights of terraces round a lumpy flat top, a low shore and a shallow fringing reef](interesting-world/real/reef-maps.jpg)
+
+![Seed 7: from a terrace's edge over the flat below to the sea, and up at the same edge from below; the flat top; reef rock at a notch in the shore; the north shore from the sea, and from 900 m off and 110 m up](interesting-world/real/reef-views.jpg)
+
+Figures, the start-up lines, on seeds 1 to 12 (median and range), beside Kikaijima's and the raised kind's on the same seeds; no figure of the reef kind is marked far outside on any seed, where the raised kind has three to eight of its eight marked on every seed. The last four rows are not printed: they were measured from the formed grid on seeds 1 to 8 as `interesting-world/notes/real-islands.md` measured them.
+
+| Figure | Kikaijima | reef | raised |
+|---|---|---|---|
+| Height within 100 m of the shore, m | 4 | 5 (1 to 8) | 18 (8 to 35) |
+| Shore rising 30 m within 50 m, % | 0 | 0 (0 to 0) | 17 (4 to 45) |
+| Slope in the first 100 m, ° | 2 | 1 (0 to 4) | 6 (2 to 13) |
+| Land under 50 m, % | 57 | 61 (55 to 70) | 37 (24 to 44) |
+| Land over 60°, % | 0.0 | 0.0 (0.0 to 0.0) | 1.0 (0.0 to 2.8) |
+| Fall at a crest, m | 0.05 | 0.13 (0.11 to 0.15) | 0.55 (0.44 to 0.63) |
+| Height above the nearest stream, m | 10 | 17 (11 to 22) | 36 (24 to 46) |
+| Deepest closed hollow, m | 1 | 0.5 (0 to 2) | 12 (2 to 24) |
+| Highest point, m | 214 | 146 (115 to 201) | 404 (320 to 562) |
+| Land, km² | 38.7 in an 8 km window | 13 (10.5 to 15.6) | 17.7 (13.0 to 20.7) |
+| Median slope, ° | 3 | 4 (3 to 5) | 13.5 (9 to 18) |
+| Land under 3°, % | 54.8 | 30 (20 to 47) | |
+| Relief in 250 m, median, m | 15 | 27 (20 to 32) | |
+| Relief in 1 km, median, m | 80 | 126 (102 to 146) | |
+| Mean height over highest | 0.29 | 0.30 (0.25 to 0.32) | |
+
+Forming takes 0.18 to 0.30 s (the raised kind 0.38 to 0.81 on the same seeds, the machine loaded by other work). `src/` gained 116 lines and lost 16 (`land.odin` 71 and 6, `rock.odin` 20 and 1, the start in `main.odin` 14 and 3), and `tools/blocks.py` changed one line and gained one.
+
+Weak points: the island is a smaller Kikaijima, about a third of its land, steeper at 250 m and 1 km and with less flat ground, since in an 8 km region it rises about 150 m in 2 km where Kikaijima rises 214 m in 3 to 4; on a 12.3 km region (seed 1's island 9) it has 31 km². Under forest a riser reads only as the ground stepping up; it shows from a terrace's edge, from the air and on the open windward side. Its springs, sinkholes, dry valleys and caves are not made: `route` still fills every hollow, and the water that sinks comes out nowhere. "A warm sea" is not in its hosts, since no field says how warm the sea is. Its soil is the brown forest soil of every kind, where the Ryukyus' limestone carries a dark red clay, and its sand is the pale sand of every kind, not coral sand. The raised kind still names Kikaijima as the island it is after.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.
