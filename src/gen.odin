@@ -15,10 +15,11 @@ import "core:time"
 // than the cell fades out, so a coarse answer is the average of the fine one and distant
 // terrain shows the same hills as near terrain.
 
-// A block is an index into one table of materials. The shader's palette is written from it.
-// A rock kind's loose form follows the solid ones, so each kind can later gain its broken
-// and gravel forms as rows of their own.
-Mat :: enum u8 {
+// A block is an index into one table of materials, 16 bits wide wherever it is kept, meshed and
+// drawn, so the table can grow to many kinds of rock in their forms and the bark and leaf of many
+// species. The atlas of tiles is written from it (tools/blocks.py). A rock kind's loose form follows
+// the solid ones, so each kind can later gain its broken and gravel forms as rows of their own.
+Mat :: enum u16 {
 	Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel,
 	Shii_Bark, Shii_Leaves, Grey_Bark, Camellia_Leaves, Hisakaki_Leaves, Pine_Bark, Pine_Needles, Scrub_Leaves,   // each species' bark and leaf (SPECIES); the tabu's are Wood and Leaves
 	Wood_End, Shii_End, Grey_End, Pine_End,               // a trunk cut across: its rings. Only faces are these, never blocks (grain, mesh.odin)
@@ -95,6 +96,31 @@ MATERIALS := [Mat]Material{
 	.Tuff_Scree      = {{0.228, 0.212, 0.170}, 0, 0, .Air},
 	.Reef_Scree      = {{0.250, 0.240, 0.205}, 0, 0, .Air},
 }
+
+// What the rules ask of a material besides its row, a set of traits for each: a bit_set of
+// materials holds no more than 128 of them. A rule asks `is(m, LEAVES)`, true if the material
+// has any trait of the set.
+Trait :: enum u8 {
+	Leaf,     // seen through, near by: the gaps in its tile are clear
+	Bark,     // a stem or limb. Bark and leaf are a plant's, which the sky, the water and a column's ground see past
+	Cover,    // covers the ground over a soil (block_below)
+	Passes,   // a rock water passes through, so a spring rises where it lies on one that holds it (rivers.odin)
+	Sinks,    // a rock the rain sinks into rather than running off it, so few streams cut it (SOAKS, rock.odin)
+	Grass, Litter, Susuki, Dune, Silt, Sand, Rubble,   // the grounds a ground plant grows on (GROUND_PLANTS.on)
+}
+@(rodata) TRAITS := #partial [Mat]bit_set[Trait]{
+	.Grass = {.Cover, .Grass}, .Litter = {.Cover, .Litter}, .Susuki = {.Cover, .Susuki}, .Dune = {.Cover, .Dune}, .Dirt = {.Cover},   // the dirt is the earth of a trail
+	.Sand = {.Sand}, .Silt = {.Silt},
+	.Wood = {.Bark}, .Shii_Bark = {.Bark}, .Grey_Bark = {.Bark}, .Pine_Bark = {.Bark},
+	.Leaves = {.Leaf}, .Shii_Leaves = {.Leaf}, .Camellia_Leaves = {.Leaf}, .Hisakaki_Leaves = {.Leaf}, .Pine_Needles = {.Leaf}, .Scrub_Leaves = {.Leaf},
+	.Sandstone = {.Passes}, .Grit = {.Passes}, .Limestone = {.Passes}, .Basalt = {.Passes}, .Scoria = {.Passes}, .Tuff = {.Passes}, .Reef = {.Passes, .Sinks},
+	.Mudstone_Scree = {.Rubble}, .Siltstone_Scree = {.Rubble}, .Sandstone_Scree = {.Rubble}, .Grit_Scree = {.Rubble}, .Limestone_Scree = {.Rubble},
+	.Basalt_Scree = {.Rubble}, .Scoria_Scree = {.Rubble}, .Rhyolite_Scree = {.Rubble}, .Tuff_Scree = {.Rubble}, .Reef_Scree = {.Rubble},
+}
+is :: #force_inline proc "contextless" (m: Mat, traits: bit_set[Trait]) -> bool { return TRAITS[m] & traits != {} }
+LEAVES       :: bit_set[Trait]{.Leaf}
+PLANT_BLOCKS :: bit_set[Trait]{.Bark, .Leaf}
+COVERS       :: bit_set[Trait]{.Cover}
 
 CHUNK       :: 32               // cells along a chunk side
 CHUNK_SHIFT :: 5
@@ -190,6 +216,7 @@ gen_init :: proc(f: ^Formed) {
 	rivers_trace()
 	plants_init()
 	hollows_make()
+	arrivals_say()
 	trails_make()
 	places_make()
 	creatures_make()
@@ -528,8 +555,6 @@ SPECIES := [Tree_Kind]Species{
 	// Alnus sieboldiana: a sinuous grey stem forking low, spreading limbs, a rounded crown
 	.Alder    = {"alder", .Grey_Bark, .Scrub_Leaves, .Dome, {6, 10}, {2, 3}, {1, 1}, 0.35, false, {2, 3}, 0.6, 0.55, 0.8, 0.1, 0.1, 0.4},
 }
-LEAVES :: bit_set[Mat]{.Leaves, .Shii_Leaves, .Camellia_Leaves, .Hisakaki_Leaves, .Pine_Needles, .Scrub_Leaves}   // seen through, near by: the gaps in their tiles are clear
-PLANT_BLOCKS :: bit_set[Mat]{.Wood, .Leaves, .Shii_Bark, .Shii_Leaves, .Grey_Bark, .Camellia_Leaves, .Hisakaki_Leaves, .Pine_Bark, .Pine_Needles, .Scrub_Leaves}
 
 // The plant communities, which compete for ground in a race (race, fields.odin). A row brings
 // how thickly trees stand (the share of 6 m squares with one), how many of those squares have a
@@ -567,7 +592,6 @@ COMMUNITIES := [Community_Kind]Community{
 	.Young = {"young wood", "tabu and small evergreens grow up through the alders, a darker and lower wood than the old forest round it", 8, 100,
 		{{{.Disturbed, -ANY, 400, 500}}}, 0.8, 0.12, {0.45, 0, 0.1, 0.25, 0, 0, 0.2}, .Litter, {0.30, 0.65, 0.55}},
 }
-COVERS :: bit_set[Mat]{.Grass, .Litter, .Susuki, .Dune, .Dirt}   // and the earth of a trail
 crowns: [Community_Kind]f32   // the mean radius of a community's crowns, metres
 @(init) crowns_init :: proc "contextless" () {
 	for com, k in COMMUNITIES do for share, s in com.trees do crowns[k] += share*f32(SPECIES[Tree_Kind(s)].radius[0] + SPECIES[Tree_Kind(s)].radius[1])/2
@@ -858,16 +882,16 @@ crown_at :: proc(t: Tree) -> [2]f32 {
 // tree. Downwind the limbs are longer, and the wind cuts the windward side lower. Everything
 // is drawn from the tree's own hash and its place, so every chunk grows the same tree.
 // Blocks go into a volume whose block (0, 0, 0) is the world block `o`, over the ground in `c`.
-grow :: proc(blocks: []u8, t: Tree, o: [3]i32, c: ^Columns) {
+grow :: proc(blocks: []Mat, t: Tree, o: [3]i32, c: ^Columns) {
 	layers := i32(len(blocks)/(P*P))
-	put :: proc(blocks: []u8, layers: i32, p: [3]i32, m: Mat, replace: bool) {
+	put :: proc(blocks: []Mat, layers: i32, p: [3]i32, m: Mat, replace: bool) {
 		if p.x < 0 || p.x >= P || p.z < 0 || p.z >= P || p.y < 0 || p.y >= layers do return   // below y is this chunk's solid ground: a tree at a cliff's foot
 		k := int(p.x) + int(p.z)*P + int(p.y)*P*P
-		if replace || blocks[k] == 0 do blocks[k] = u8(m)
+		if replace || blocks[k] == .Air do blocks[k] = m
 	}
 	// A line of bark half a metre at a time, so it joins face to face where it runs aslant;
 	// `thick` makes it two blocks across.
-	line :: proc(blocks: []u8, layers: i32, o: [3]i32, a, b: [3]f32, m: Mat, thick: bool, replace: bool) {
+	line :: proc(blocks: []Mat, layers: i32, o: [3]i32, a, b: [3]f32, m: Mat, thick: bool, replace: bool) {
 		n := i32(2*max(abs(b.x - a.x), abs(b.y - a.y), abs(b.z - a.z))) + 1
 		for s in 0..=n {
 			f := f32(s)/f32(n)
@@ -1089,7 +1113,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 	c.lo, c.hi = max(i32), min(i32)
 	for k in 0..<P*P {
 		c.lo = min(c.lo, c.ground[k], c.hollow[k][0] if c.hollow[k][1] > c.hollow[k][0] else max(i32))
-		c.hi = max(c.hi, c.top[k], c.crown[k][1])
+		c.hi = max(c.hi, c.top[k], c.crown[k][1] if c.crown[k][1] > c.crown[k][0] else c.top[k])   // a column with no crown has {0, 0}, which over the sea is no top
 	}
 }
 
@@ -1097,7 +1121,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 // height. Bare rock is rock all the way down, so a face and a hole show the same beds. Under a
 // plant cover lie `deep` blocks of the soil, counting the cover, and some may be stones.
 block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, stone: bool) -> Mat {
-	if surface in COVERS {
+	if is(surface, COVERS) {
 		if depth == 0 do return surface
 		if depth >= deep do return bed
 		if stone && MATERIALS[bed].loose != .Air do return MATERIALS[bed].loose
@@ -1116,7 +1140,7 @@ block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, 
 // `hi` widen the vertical range, for edits that reach outside the generated ground. They are
 // the island's under the chunk's middle, which stays bound for meshing; a column of the open sea
 // is sand to the bottom.
-gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_base, h: i32) {
+gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []Mat, y_base, h: i32) {
 	trees := make([dynamic]Tree, context.temp_allocator)
 	sea := !bind_at(f64(cx*CHUNK + CHUNK/2), f64(cz*CHUNK + CHUNK/2))
 	x0, z0 := cx*CHUNK - 1 - region.origin.x, cz*CHUNK - 1 - region.origin.y
@@ -1126,16 +1150,16 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 
 	y_base = min(lo, c.lo) - 4   // room below for the rim faces and corner light
 	h = top - y_base + 1
-	blocks = make([]u8, P*P*int(h))
+	blocks = make([]Mat, P*P*int(h))
 	for k in 0..<P*P {
 		t := c.top[k]
 		x, z := x0 + i32(k%P), z0 + i32(k/P)
 		if sea || island_at(f64(x + region.origin.x) + 0.5, f64(z + region.origin.y) + 0.5) == nil {
-			for y in y_base..<t do blocks[k + int(y - y_base)*P*P] = u8(Mat.Sand)
+			for y in y_base..<t do blocks[k + int(y - y_base)*P*P] = .Sand
 			continue
 		}
 		soil, deep := &SOILS[0], i32(0)
-		if c.mat[k] in COVERS {
+		if is(c.mat[k], COVERS) {
 			p := Point{x = f64(x) + 0.5, z = f64(z) + 0.5, cell = 1}
 			row, depth := soil_at(&p)
 			soil, deep = &SOILS[row], 1 + i32(math.ceil(depth))
@@ -1145,15 +1169,15 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []u8, y_ba
 			stone := hash01(x + y*131, z, seed + 190) < soil.stones
 			bed := (landslide.rock if c.mat[k] == landslide.rock && t - y <= 6 else MATERIALS[landslide.rock].loose) if f32(t - y) <= debris else rock_in(f32(y) + 0.5, c.base[k], 0)   // a block of the cap is whole
 			b := block_below(c.mat[k], t - 1 - y, bed, soil, deep, stone)
-			blocks[k + int(y - y_base)*P*P] = u8(shore_of(b, bed))
+			blocks[k + int(y - y_base)*P*P] = shore_of(b, bed)
 		}
-		for y in c.hollow[k][0]..<min(c.hollow[k][1], t) do blocks[k + int(y - y_base)*P*P] = 0   // a hollow under a roof of the beds
+		for y in c.hollow[k][0]..<min(c.hollow[k][1], t) do blocks[k + int(y - y_base)*P*P] = .Air   // a hollow under a roof of the beds
 	}
 	for t in trees {
-		put :: proc(blocks: []u8, x, y, z: i32, m: Mat, replace: bool) {
+		put :: proc(blocks: []Mat, x, y, z: i32, m: Mat, replace: bool) {
 			if x < 0 || x >= P || z < 0 || z >= P || y < 0 do return   // below y is this chunk's solid ground: a tree at a cliff's foot
 			k := int(x) + int(z)*P + int(y)*P*P
-			if replace || blocks[k] == 0 do blocks[k] = u8(m)
+			if replace || blocks[k] == .Air do blocks[k] = m
 		}
 		if t.form != .Fallen {
 			grow(blocks, t, {x0, y_base, z0}, c)

@@ -224,6 +224,7 @@ main :: proc() {
 		}
 		archipelago[opt.island].kind = kind
 	}
+	arrivals_make()
 	formed = make([]Formed, len(archipelago))
 	for &f, i in formed do f.island = archipelago[i]
 	home = &formed[opt.island]

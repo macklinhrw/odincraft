@@ -21,13 +21,13 @@ Ground_Plant :: struct {
 	share:     f32,       // of the columns where its host holds, the share it takes on average
 	clump:     f32,       // metres across its clumps, with thin ground and bare patches between them
 	wet:       f32,       // metres of water it can stand in
-	on:        bit_set[Mat],
+	on:        bit_set[Trait],   // the grounds it grows on (TRAITS, gen.odin)
 	within:    bit_set[Community_Kind],   // empty for any, or where no community grows, as a lake's bed
 	host:      []Window,
 }
-SOIL_COVERS :: bit_set[Mat]{.Grass, .Litter, .Susuki, .Dune}
+SOIL_COVERS :: bit_set[Trait]{.Grass, .Litter, .Susuki, .Dune}
 FORESTS :: bit_set[Community_Kind]{.Valley, .Slope, .Ridge, .Young}
-RUBBLE :: bit_set[Mat]{.Mudstone_Scree, .Siltstone_Scree, .Sandstone_Scree, .Grit_Scree, .Limestone_Scree, .Basalt_Scree, .Scoria_Scree, .Rhyolite_Scree, .Tuff_Scree, .Reef_Scree}
+RUBBLE :: bit_set[Trait]{.Rubble}
 
 GROUND_PLANTS := [Plant_Kind]Ground_Plant{
 	.Reed = {"reeds", "common reed stands in a band in the shallows and on the wet margin of still or slow water, as wide as the shore is gentle", true, {1.3, 1.6}, 0.9, 5, 0.9, SOIL_COVERS + {.Silt}, {},
@@ -62,7 +62,7 @@ plant_at :: proc(p: ^Point, m: Mat, com: Maybe(Community_Kind), chances: ^[Plant
 	k, grows := com.?
 	cx, cz := i32(math.floor(p.x)), i32(math.floor(p.z))
 	for row, i in GROUND_PLANTS {
-		if m not_in row.on || card(row.within) > 0 && (!grows || k not_in row.within) do continue
+		if !is(m, row.on) || card(row.within) > 0 && (!grows || k not_in row.within) do continue
 		u := hash01(cx, cz, seed + 800 + u32(i))
 		if u >= 1.6*row.share && chances == nil do continue   // it could not come up here, however well it is hosted
 		// Clumps: smooth noise on the scale of the row's clumps, so it stands thick in some
@@ -98,14 +98,14 @@ over_water :: proc(p: ^Point) -> f32 {
 	return p.h - level
 }
 
-// A plant as the renderer takes it, in the Quad's 16 bytes: the column's corner from the chunk's
+// A plant as the renderer takes it, in a Quad: the column's corner from the chunk's
 // origin, the row (and 1 << 8 when two pictures high), a hash for its place, size and turn, its
 // height in centimetres and the row again for the water, the ground's light, and the ground's slope.
 plant_quad :: proc(x, y, z: i32, kind: Plant_Kind, wx, wz: i32, light: u16, slope: [2]u8) -> Quad {
 	row := GROUND_PLANTS[kind]
 	h := hash(wx, wz, seed + 830)
 	size := math.lerp(row.size[0], row.size[1], f32(h >> 16)/65535)
-	return {i16(x), i16(y), i16(z), i16(u16(kind) | u16(row.tall) << 8), u16(h), u16(size*100), light, slope}
+	return {i16(x), i16(y), i16(z), i16(u16(kind) | u16(row.tall) << 8), u16(h), u16(size*100), light, slope, .Air, 0}
 }
 
 // How many of a chunk's plants stand in more water than their row can.

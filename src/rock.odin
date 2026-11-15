@@ -75,9 +75,10 @@ STORIES := [?]Story{
 	},
 }
 
-// The rocks the rain sinks into rather than running off them, and the share of it that does: the
-// reef, full of holes, which the water widens as it dissolves it (karst), so that few streams cut it.
-SINKS :: bit_set[Mat]{.Reef}
+// The rocks the rain sinks into rather than running off them (the trait `.Sinks` in TRAITS,
+// gen.odin), and the share of it that does: the reef, full of holes, which the water widens as it
+// dissolves it (karst), so that few streams cut it.
+SINKS :: bit_set[Trait]{.Sinks}
 SOAKS :: 0.95
 
 STACK_LO    :: -2048   // the table covers this far below the base
@@ -135,10 +136,10 @@ rock_init :: proc() {
 	for m in Mat {
 		s := MATERIALS[m].strength
 		if s == 0 do continue
-		rocks.law[m] = {clamp(0.16/(s*s), 0.2, 5), math.tan(math.to_radians(35 + 25*math.pow((s - 0.2)/0.6, 1.5))), (1 - s)*(1 - s)/0.5625, 1 - SOAKS if m in SINKS else 1}
+		rocks.law[m] = {clamp(0.16/(s*s), 0.2, 5), math.tan(math.to_radians(35 + 25*math.pow((s - 0.2)/0.6, 1.5))), (1 - s)*(1 - s)/0.5625, 1 - SOAKS if is(m, SINKS) else 1}
 	}
 	rocks.sinks = false
-	for k in story.kinds do rocks.sinks ||= k.weight > 0 && k.kind in SINKS
+	for k in story.kinds do rocks.sinks ||= k.weight > 0 && is(k.kind, SINKS)
 
 	// The beds, from the bottom of the stack up.
 	beds: [dynamic]Bed

@@ -27,7 +27,7 @@ Chunk :: struct {
 	buffer:             ^sdl.GPUBuffer,
 	ranges:             [6][4][2]u32,  // first quad and count for each facing (+X to -Z) and part (by_face, mesh.odin)
 	y_base, y_lo, y_hi: i32,           // mesh origin and vertical extent, metres
-	blocks:             []u8,          // level 0 only: the block volume, for collision and edits
+	blocks:             []Mat,         // level 0 only: the block volume, for collision and edits
 	h:                  i32,           // layers in blocks
 	water:              ^sdl.GPUBuffer, // level 0 only: the water surface, built in water.odin
 	water_count:        u32,
@@ -45,7 +45,7 @@ Built :: struct {
 	quads, plants:      []Quad,
 	ranges:             [6][4][2]u32,
 	y_base, y_lo, y_hi: i32,
-	blocks:             []u8,
+	blocks:             []Mat,
 	h:                  i32,
 	floor, hold:        []f32,         // level 0 only, per column: top of the ground, and the land's water level
 	sea, still, roof:   []bool,        // the sea; a lake or pond, whose water is all there is of it; under a roof
@@ -169,7 +169,7 @@ build :: proc(job: Job) -> (b: Built) {
 }
 
 // The block volume for a nearest-level chunk: the generated world, then the player's edits.
-build_volume :: proc(key: Key, c: ^Columns, edits: []Edit) -> (blocks: []u8, y_base, h: i32) {
+build_volume :: proc(key: Key, c: ^Columns, edits: []Edit) -> (blocks: []Mat, y_base, h: i32) {
 	lo, hi := max(i32), min(i32)
 	for e in edits {
 		lo = min(lo, e.y)
@@ -178,7 +178,7 @@ build_volume :: proc(key: Key, c: ^Columns, edits: []Edit) -> (blocks: []u8, y_b
 	blocks, y_base, h = gen_volume(key.x, key.z, c, lo, hi)
 	ox, oz := key.x*CHUNK - 1, key.z*CHUNK - 1
 	for e in edits {
-		blocks[int(e.x - ox) + int(e.z - oz)*P + int(e.y - y_base)*P*P] = u8(e.mat)
+		blocks[int(e.x - ox) + int(e.z - oz)*P + int(e.y - y_base)*P*P] = e.mat
 	}
 	return
 }
@@ -395,7 +395,7 @@ world_block :: proc(w: ^World, x, y, z: i32) -> (m: Mat, known: bool) {
 	if ly < 0 do return .Stone, true
 	if ly >= c.h do return .Air, true
 	lx, lz := x & (CHUNK - 1), z & (CHUNK - 1)
-	return Mat(c.blocks[int(lx + 1) + int(lz + 1)*P + int(ly)*P*P]), true
+	return c.blocks[int(lx + 1) + int(lz + 1)*P + int(ly)*P*P], true
 }
 
 // Change one block. The edit is remembered for as long as the program runs.
@@ -415,7 +415,7 @@ world_set :: proc(w: ^World, x, y, z: i32, m: Mat) {
 	// Collision should not wait for the rebuild.
 	if c := w.chunks[key] or_else nil; c != nil && c.ready {
 		if ly := y - c.y_base; ly >= 0 && ly < c.h {
-			c.blocks[int(x & (CHUNK - 1) + 1) + int(z & (CHUNK - 1) + 1)*P + int(ly)*P*P] = u8(m)
+			c.blocks[int(x & (CHUNK - 1) + 1) + int(z & (CHUNK - 1) + 1)*P + int(ly)*P*P] = m
 			water_refloor(&w.water, x, z)
 		}
 	}

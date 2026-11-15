@@ -124,7 +124,7 @@ def picture(name, colour):
 
 def main():
     source = open("src/gen.odin").read()
-    body = re.sub(r"//[^\n]*", "", re.search(r"Mat :: enum u8 \{(.*?)\n\}", source, re.S).group(1))
+    body = re.sub(r"//[^\n]*", "", re.search(r"Mat :: enum u\d+ \{(.*?)\n\}", source, re.S).group(1))
     names = [n.strip() for n in body.split(",") if n.strip()]
     colours = {m.group(1): srgb(tuple(float(v) for v in m.group(2).split(","))) for m in re.finditer(r"\t\.(\w+)\s*= \{\{([\d., ]+)\}", source)}
     atlas = Image.new("RGBA", (2 * T, len(names) * T), (255, 0, 255, 255))
