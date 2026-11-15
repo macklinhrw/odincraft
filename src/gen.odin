@@ -98,6 +98,7 @@ CHUNK_SHIFT :: 5
 P           :: CHUNK + 2        // a chunk plus a one-cell border, which meshing needs
 SEA_LEVEL   :: 0
 SEA_SURFACE :: SEA_LEVEL - 0.15   // where the sea stands, a little under the block tops at the shore
+COARSE      :: 64               // metres: a column wider than this, 16 km off and more, is the mean of the land, with no stream cut or stack in it
 NO_WATER    :: -1e6
 seed        := u32(7)   // every random choice in the world is keyed from this; --seed= sets it
 
@@ -262,7 +263,7 @@ ledges :: proc(h, steep, base: f32, x, z, cell: f64) -> (l: Ledge) {
 // The ground the land forming left at a point, shaped by its beds, read `back` metres up the
 // hillside from where it stands.
 shaped :: proc(x, z, cell: f64, back: f32 = 0) -> (l: Ledge, steep, base: f32) {
-	level := 0 if cell <= 16 else 1 if cell <= 32 else 2
+	level := clamp(int(math.log2(cell)) - 4, 0, len(land.z) - 1)   // the land's grid as coarse as the cell, or its finest
 	steep = max(land_at(land.slope, land.n, x, z), 0)
 	base = rock_base(x, z, cell)
 	l = ledges(land_at(land.z[level], land.n >> uint(level), x, z) - back*steep, steep, base, x, z, cell)
@@ -975,6 +976,15 @@ grow :: proc(blocks: []u8, t: Tree, o: [3]i32, c: ^Columns) {
 }
 
 // ---- what the engine asks for -------------------------------------------------------------
+
+// Whether a chunk of columns wider than COARSE lies wholly outside the region, in the open sea round
+// it: under the sea such columns have no faces (mesh_columns), so nothing need be worked out for it.
+open_sea :: proc(key: Key) -> bool {
+	s := f64(i32(1) << u32(key.level))
+	x, z := f64(key.x*CHUNK)*s - f64(region.origin.x), f64(key.z*CHUNK)*s - f64(region.origin.y)
+	half := region.size/2
+	return s > COARSE && (x + CHUNK*s <= -half || x >= half || z + CHUNK*s <= -half || z >= half)
+}
 
 // The ground under a chunk at a level of detail. Beyond the nearest level, single trees are
 // crowns hung over the ground on their trunks while cells are small enough to show them, then

@@ -433,6 +433,7 @@ stack_make :: proc(c: int, at: [2]f64) -> bool {
 // cells it touches draw it.
 stack_at :: proc(x, z, cell: f64, under, base: f32) -> (h: f32, rubble: bool) {
 	h = under
+	if cell > COARSE do return
 	for p in pillars {
 		dx, dz := x - p.at.x, z - p.at.y
 		reach := f64(p.r*p.long*2 + 8)

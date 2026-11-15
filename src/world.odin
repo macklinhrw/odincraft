@@ -10,8 +10,10 @@ import sdl "vendor:sdl3"
 // level of detail. A chunk at level L has cells of 2^L metres, so each ring reaches twice
 // as far as the one inside it with the same number of chunks. Chunks are built on worker
 // threads from the generator and the player's edits; the frame thread only uploads them.
+// The rings reach about 256 m at the nearest level and 65 km at the farthest, where the round
+// world has taken land of a few hundred metres under the horizon (drawn, shaders.metal).
 
-LEVELS :: 7   // cells of 1 m to 64 m
+LEVELS :: 9   // cells of 1 m to 256 m
 RADIUS :: 8   // chunks kept on each side of the camera, per level
 
 Key :: struct { level, x, z: i32 }
@@ -116,16 +118,17 @@ worker :: proc(w: ^World) {
 }
 
 build :: proc(job: Job) -> (b: Built) {
+	defer delete(job.edits)
+	b.key = job.key
+	if open_sea(job.key) do return   // no faces to make
 	c := new(Columns)
 	defer free(c)
-	defer delete(job.edits)
 	defer free_all(context.temp_allocator)
 	gen_columns(job.key.level, job.key.x, job.key.z, c)
 
 	quads := make([dynamic]Quad, 0, 4096)
 	plants: [dynamic]Quad
 	parts: [4][2]u32
-	b.key = job.key
 	if job.key.level == 0 {
 		b.blocks, b.y_base, b.h = build_volume(job.key, c, job.edits)
 		outer, inner := mesh_volume(b.blocks, b.h, c, &quads, &plants, {job.key.x*CHUNK - region.origin.x, b.y_base, job.key.z*CHUNK - region.origin.y})

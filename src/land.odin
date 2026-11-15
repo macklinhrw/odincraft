@@ -377,7 +377,7 @@ Grid :: struct {
 // The finished land, read by the generator.
 Land :: struct {
 	n:     int,        // cells along a side at 16 m
-	z:     [3][]f32,   // elevation at 16, 32 and 64 m cells
+	z:     [5][]f32,   // elevation at 16 to 256 m cells, each the mean of the one finer
 	slope: []f32,      // steepness
 	wet:   []f32,      // 0 on ridges to 1 in valley floors
 	live:  []f32,      // 1 on ground a person could live on, else 0
@@ -867,7 +867,7 @@ land_form :: proc() {
 // and the local fields.
 land_finish :: proc(g: ^Grid) -> (highest: f32) {
 	n := g.n
-	for level in 1..<3 {
+	for level in 1..<len(land.z) {
 		m := n >> uint(level)
 		fine := land.z[level - 1]
 		delete(land.z[level])
