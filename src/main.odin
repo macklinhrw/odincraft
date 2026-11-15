@@ -195,7 +195,7 @@ main :: proc() {
 	seed = world_seed   // the islands are made from the world's seed
 	// The start island's record is drawn first, at its place; the islands near it and the land they
 	// lie off are read from the world's history round it (known.odin, archipelago.odin).
-	first: Formed
+	@(static) first: Formed   // static: the bound names keep pointing at it
 	first.island, first.region.origin = {origin = opt.origin, size = REFERENCE, seed = world_seed}, opt.origin
 	bind(&first)
 	if !region_init(opt.kind if opt.island == 0 else "") {

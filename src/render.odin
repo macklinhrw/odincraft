@@ -1,5 +1,6 @@
 package main
 
+import "base:intrinsics"
 import "core:encoding/endian"
 import "core:fmt"
 import "core:bytes"
@@ -213,7 +214,11 @@ make_pipeline :: proc(g: ^Gpu, p: Pipeline) -> ^sdl.GPUGraphicsPipeline {
 atlas_layers :: proc(g: ^Gpu, file: []u8, rows: int, wrong: string) -> (tex: ^sdl.GPUTexture) {
 	atlas, err := png.load_from_bytes(file, {.alpha_add_if_missing})
 	if err != nil || atlas.width != 2*TILE || atlas.height != rows*TILE do fatal(wrong)
-	pixels := bytes.buffer_to_bytes(&atlas.pixels)
+	// core:image holds the pixels in a bytes.Buffer in Odin dev-2026-07 and in a [dynamic]u8 by
+	// dev-2026-11: accept either, so the game builds with the Odin a package manager installs today.
+	pixels: []u8
+	when intrinsics.type_field_type(png.Image, "pixels") == bytes.Buffer do pixels = bytes.buffer_to_bytes(&atlas.pixels)
+	else do pixels = atlas.pixels[:]
 	layers := u32(2*rows)
 	tex = sdl.CreateGPUTexture(g.dev, {
 		type = .D2_ARRAY, format = .R8G8B8A8_UNORM_SRGB, usage = {.SAMPLER, .COLOR_TARGET},
