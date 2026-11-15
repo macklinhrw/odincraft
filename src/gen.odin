@@ -188,6 +188,7 @@ gen_init :: proc(f: ^Formed) {
 	rivers_trace()
 	plants_init()
 	hollows_make()
+	arrivals_say()
 	trails_make()
 	places_make()
 	creatures_make()

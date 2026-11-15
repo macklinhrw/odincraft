@@ -330,8 +330,8 @@ archipelago_map :: proc(path: string) {
 		for py in max(int(lo.y), 0)..<min(int(hi.y) + 1, MAP) do for px in max(int(lo.x), 0)..<min(int(hi.x) + 1, MAP) {
 			if p := pixel(px, py) - o; max(abs(p.x), abs(p.y)) < is.size/2 do heights[py*MAP + px] = max(land_at(land.z[2], land.n/4, p.x, p.y), 0)
 		}
-		fmt.printfln("%d %s, %s, %.1f Myr, at %.1f, %.1f km; region %.1f km, highest %.0f m, formed in %.2f s",
-			is.id, KINDS[is.kind].name, SETTINGS[is.setting], is.age, o.x/1000, o.y/1000, is.size/1000, tops[i], f.seconds)
+		fmt.printfln("%d %s, %s, %.1f Myr, at %.1f, %.1f km; region %.1f km, highest %.0f m, formed in %.2f s; lives on it: %s",
+			is.id, KINDS[is.kind].name, SETTINGS[is.setting], is.age, o.x/1000, o.y/1000, is.size/1000, tops[i], f.seconds, lives_words())
 	}
 	bind(home)
 
