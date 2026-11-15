@@ -108,7 +108,9 @@ rock_init :: proc() {
 	if story.drape {
 		n := int(region.size)/DRAPE + 1
 		rocks.drape = make([]f32, n*n)
-		for c in 0..<n*n do rocks.drape[c] = built(f64(c%n*DRAPE) - region.size/2, f64(c/n*DRAPE) - region.size/2)
+		shared(n, rows(n), &n, proc(n: ^int, lo, hi: int) {
+			for c in lo*n^..<hi*n^ do rocks.drape[c] = built(f64(c%n^*DRAPE) - region.size/2, f64(c/n^*DRAPE) - region.size/2)
+		})
 		fmt.printfln("rock: %s, laid over the forms the vents built; folds %.0f m high every %.1f km", story.name, rocks.fold, rocks.wave/1000)
 	} else {
 		fmt.printfln("rock: %s; beds dip %.1f° toward %.0f° (0 is north, 90 east), folds %.0f m high every %.1f km",

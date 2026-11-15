@@ -584,18 +584,25 @@ plants_init :: proc() {
 	started := time.now()
 	n := land.n
 	land.community, land.age = make([]u8, n*n), make([]f32, n*n)
+	soil := make([]u8, n*n, context.temp_allocator)   // each cell's row in SOILS
+	shared(n, rows(n), &soil, proc(soil: ^[]u8, lo, hi: int) {
+		n := land.n
+		for c in lo*n..<hi*n {
+			land.community[c] = 255
+			if land.grid.sea[c] do continue
+			p := Point{x = (f64(c%n) + 0.5)*LAND_CELL - region.size/2, z = (f64(c/n) + 0.5)*LAND_CELL - region.size/2, cell = LAND_CELL}
+			k, _, _ := race(&p)
+			land.community[c] = u8(k)
+			land.age[c] = stand_draw(p.x, p.z, c)
+			row, _ := soil_at(&p)
+			soil[c] = u8(row)
+		}
+	})
 	count, soils, ages := [Community_Kind]int{}, [len(SOILS)]int{}, [3]int{}
-	for c in 0..<n*n {
-		land.community[c] = 255
-		if land.grid.sea[c] do continue
-		p := Point{x = (f64(c%n) + 0.5)*LAND_CELL - region.size/2, z = (f64(c/n) + 0.5)*LAND_CELL - region.size/2, cell = LAND_CELL}
-		k, _, _ := race(&p)
-		land.community[c] = u8(k)
-		land.age[c] = stand_draw(p.x, p.z, c)
+	for c in 0..<n*n do if !land.grid.sea[c] {
 		ages[0 if land.age[c] < 50 else 1 if land.age[c] < 200 else 2] += 1
-		count[k] += 1
-		row, _ := soil_at(&p)
-		soils[row] += 1
+		count[Community_Kind(land.community[c])] += 1
+		soils[soil[c]] += 1
 	}
 	fmt.printf("plants in %.0f ms:", time.duration_milliseconds(time.since(started)))
 	for k, i in count do fmt.printf(" %s %.0f%%", COMMUNITIES[i].name, 100*f32(k)/f32(len(land.grid.order)))

@@ -112,13 +112,15 @@ height_in_world :: proc(x, z, cell: f64) -> f32 {
 // Islands waiting to be formed, nearest the start first, the next one to take, and whether play has begun.
 Forming :: struct { list: []int, next: int, late: bool }
 
-// Form the listed islands on up to `threads` threads of a priority, each saying one line as it is
-// done; with `wait`, return when all are formed.
-islands_form :: proc(list: []int, threads: int, priority: thread.Thread_Priority, wait: bool) {
+// Form the listed islands on up to `threads` threads of a priority. Those formed beside play
+// (`late`) work alone and each say one line when done; the rest are waited for by `islands_done`,
+// which says theirs.
+islands_form :: proc(list: []int, threads: int, priority: thread.Thread_Priority, late: bool) -> (pool: []^thread.Thread) {
 	if len(list) == 0 do return
 	q := new(Forming)
-	q.list, q.late = list, !wait
+	q.list, q.late = list, late
 	former :: proc(q: ^Forming) {
+		alone = q.late
 		for {
 			i := sync.atomic_add(&q.next, 1)
 			if i >= len(q.list) do return
@@ -126,14 +128,99 @@ islands_form :: proc(list: []int, threads: int, priority: thread.Thread_Priority
 			quiet = true
 			gen_init(f)
 			quiet = false
-			fmt.printfln("island %d: %s, its middle at %d, %d, %.1f km from the start; formed in %.2f s%s", f.island.id, f.region.kind, f.island.origin.x, f.island.origin.y,
-				math.hypot(f64(f.island.origin.x - home.island.origin.x), f64(f.island.origin.y - home.island.origin.y))/1000, f.seconds, " in the background" if q.late else "")
+			if q.late do island_say(f, " in the background")
 			free_all(context.temp_allocator)
 		}
 	}
-	pool := make([]^thread.Thread, min(threads, len(list)), context.temp_allocator)
-	for &t in pool do t = thread.create_and_start_with_poly_data(q, former, priority = priority, self_cleanup = !wait)
-	if wait do for t in pool do thread.join(t)
+	pool = make([]^thread.Thread, min(threads, len(list)))
+	for &t in pool do t = thread.create_and_start_with_poly_data(q, former, priority = priority, self_cleanup = late)
+	if late {
+		delete(pool)
+		pool = nil
+	}
+	return
+}
+
+// Wait for islands being formed, and say a line for each, in the list's order.
+islands_done :: proc(pool: []^thread.Thread, list: []int) {
+	for t in pool do thread.join(t)
+	for i in list do island_say(&formed[i], "")
+	delete(pool)
+}
+
+island_say :: proc(f: ^Formed, how: string) {
+	fmt.printfln("island %d: %s, its middle at %d, %d, %.1f km from the start; formed in %.2f s%s", f.island.id, f.region.kind, f.island.origin.x, f.island.origin.y,
+		math.hypot(f64(f.island.origin.x - home.island.origin.x), f64(f.island.origin.y - home.island.origin.y))/1000, f.seconds, how)
+}
+
+// Work inside one island, shared among threads. A loop whose every pass writes only its own cells
+// is cut into parts; the thread forming the island works through the parts, and so does every
+// helper with nothing else to do, each reading the same island. A part comes out the same
+// whichever thread works it, so an island comes out the same alone, beside others and on any
+// number of threads. An island formed beside play is worked by its own thread alone, so that play
+// keeps its cores.
+Share :: struct {
+	work:       proc(data: rawptr, lo, hi: int),
+	data:       rawptr,
+	island:     ^Formed,
+	n, part:    int,
+	next, done: int,   // parts taken and parts finished
+	users:      int,   // helpers holding it
+}
+helping: struct { mutex: sync.Mutex, wake: sync.Cond, shares: [dynamic]^Share, helpers: int }
+@(thread_local) alone: bool
+
+// Run `work` over 0..<n in parts of `part`, on this thread and any helper free.
+shared :: proc(n, part: int, data: ^$T, work: proc(data: ^T, lo, hi: int)) {
+	if alone || n <= part {
+		work(data, 0, n)
+		return
+	}
+	s := Share{work = transmute(proc(rawptr, int, int))work, data = data, island = here, n = n, part = part}
+	sync.lock(&helping.mutex)
+	if helping.helpers == 0 {
+		helping.helpers = max(os.get_processor_core_count() - 1, 1)
+		for _ in 0..<helping.helpers do thread.create_and_start(helper, self_cleanup = true)
+	}
+	append(&helping.shares, &s)
+	sync.unlock(&helping.mutex)
+	sync.cond_broadcast(&helping.wake)
+	parts_work(&s)
+	unshare(&s)
+	for sync.atomic_load(&s.done) < (n + part - 1)/part || sync.atomic_load(&s.users) > 0 do thread.yield()
+}
+
+parts_work :: proc(s: ^Share) {
+	for {
+		i := sync.atomic_add(&s.next, 1)
+		if i*s.part >= s.n do return
+		s.work(s.data, i*s.part, min(i*s.part + s.part, s.n))
+		sync.atomic_add(&s.done, 1)
+	}
+}
+
+// No more parts to take.
+unshare :: proc(s: ^Share) {
+	sync.lock(&helping.mutex)
+	for t, i in helping.shares do if t == s {
+		ordered_remove(&helping.shares, i)
+		break
+	}
+	sync.unlock(&helping.mutex)
+}
+
+helper :: proc() {
+	for {
+		sync.lock(&helping.mutex)
+		for len(helping.shares) == 0 do sync.cond_wait(&helping.wake, &helping.mutex)
+		s := helping.shares[0]
+		sync.atomic_add(&s.users, 1)
+		sync.unlock(&helping.mutex)
+		bind(s.island)
+		parts_work(s)
+		unshare(s)
+		sync.atomic_sub(&s.users, 1)
+	}
 }
 
 // A thread forming an island beside another or beside play prints none of its start-up lines:

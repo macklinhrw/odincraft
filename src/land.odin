@@ -379,6 +379,8 @@ Grid :: struct {
 	left:   f32,            // years of full uplift still to come
 	rise:   f32,            // metres the sea has still to rise
 	keep:   bool,           // the water that stands in a hollow is a lake, and the ground under it is left as it is
+	block:  []u8,           // where all the arrays above are kept
+	open:   []i32,          // the table of sea cells the coast reads, kept from step to step (sea_table)
 }
 
 // The finished land, read by the generator.
@@ -425,29 +427,46 @@ shore :: proc(x, z: f64) -> f32 {
 	return 1 - r*(1 + f32(sh.ragged)*fbm(x*k, z*k, sh.ragged_wave, 1, 4, seed + 1)) - 4*smoothstep(0.86, 1, edge)
 }
 
+// Arrays of a value for each of n × n cells, carved one after another from a block, each begun 20
+// cache lines further into a page than the one before. Arrays made alone begin a whole number of
+// pages apart, which puts a cell's values in all of them into one set of the cache, which holds
+// eight, and a step of the forming reads a dozen for each cell.
+room :: proc(n: int, $T: typeid) -> int { return (n*n*size_of(T) + 63)/64*64 + 1280 }
+carve :: proc(block: []u8, at: ^int, n: int, $T: typeid) -> []T {
+	defer at^ += room(n, T)
+	return slice.from_ptr((^T)(&block[at^]), n*n)
+}
+
+// Rows of an n × n grid to a part of the work shared among threads (`shared`, regions.odin).
+rows :: proc(n: int) -> int { return max(8192/n, 1) }
+
 // A grid over the region as it stands at the start.
 grid_make :: proc(n: int) -> ^Grid {
 	g := new(Grid)
 	g.n, g.d = n, f32(region.size)/f32(n)
-	g.z, g.fill, g.area = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
-	g.uplift, g.soft, g.base, g.cut, g.face, g.load = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
-	g.next, g.jitter, g.seen, g.sea = make([]i32, n*n), make([][2]f32, n*n), make([]bool, n*n), make([]bool, n*n)
-	k := REFERENCE/region.size
-	for c in 0..<n*n {
-		x, z := (f64(c%n) + 0.5)*f64(g.d) - region.size/2, (f64(c/n) + 0.5)*f64(g.d) - region.size/2
-		s := shore(x, z)
-		ix, iz := i32(c%n), i32(c/n)
-		g.face[c] = 1
-		g.jitter[c] = [2]f32{hash01(ix, iz, seed + 7 + u32(n)) - 0.5, hash01(ix, iz, seed + 8 + u32(n)) - 0.5}*0.9
-		// The beds decide how the rock wears; it also varies a little from one outcrop to the
-		// next, which keeps streams from running in straight lines along the grid.
-		g.soft[c] = math.exp(0.8*(hash01(ix, iz, seed + 6 + u32(n)) - 0.5))
-		g.base[c] = rock_base(x, z, LAND_CELL)
-		g.z[c] = -2 - 60*smoothstep(0, 0.2, -s) + (SEA_BED + 62)*smoothstep(0.2, 0.5, -s)   // sea bed, falling away steeply as off a real high island
-		g.sea[c] = s <= 0
-		g.uplift[c] = uplift_at(x, z, s)
-		if s > 0 do g.z[c] = 0.5 + 30*s + 25*(1 + fbm(x*k, z*k, 900, 1, 3, seed + 9))
-	}
+	g.block = make([]u8, 9*room(n, f32) + room(n, i32) + room(n, [2]f32) + 2*room(n, bool))
+	b, at := g.block, 0
+	g.z, g.fill, g.area = carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32)
+	g.uplift, g.soft, g.base, g.cut, g.face, g.load = carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32)
+	g.next, g.jitter, g.seen, g.sea = carve(b, &at, n, i32), carve(b, &at, n, [2]f32), carve(b, &at, n, bool), carve(b, &at, n, bool)
+	shared(n, rows(n), g, proc(g: ^Grid, lo, hi: int) {
+		n, k := g.n, REFERENCE/region.size
+		for c in lo*n..<hi*n {
+			x, z := (f64(c%n) + 0.5)*f64(g.d) - region.size/2, (f64(c/n) + 0.5)*f64(g.d) - region.size/2
+			s := shore(x, z)
+			ix, iz := i32(c%n), i32(c/n)
+			g.face[c] = 1
+			g.jitter[c] = [2]f32{hash01(ix, iz, seed + 7 + u32(n)) - 0.5, hash01(ix, iz, seed + 8 + u32(n)) - 0.5}*0.9
+			// The beds decide how the rock wears; it also varies a little from one outcrop to the
+			// next, which keeps streams from running in straight lines along the grid.
+			g.soft[c] = math.exp(0.8*(hash01(ix, iz, seed + 6 + u32(n)) - 0.5))
+			g.base[c] = rock_base(x, z, LAND_CELL)
+			g.z[c] = -2 - 60*smoothstep(0, 0.2, -s) + (SEA_BED + 62)*smoothstep(0.2, 0.5, -s)   // sea bed, falling away steeply as off a real high island
+			g.sea[c] = s <= 0
+			g.uplift[c] = uplift_at(x, z, s)
+			if s > 0 do g.z[c] = 0.5 + 30*s + 25*(1 + fbm(x*k, z*k, 900, 1, 3, seed + 9))
+		}
+	})
 	return g
 }
 
@@ -471,8 +490,7 @@ uplift_at :: proc(x, z: f64, s: f32) -> f32 {
 }
 
 grid_free :: proc(g: ^Grid) {
-	delete(g.z); delete(g.fill); delete(g.area); delete(g.uplift); delete(g.soft); delete(g.base); delete(g.cut); delete(g.face); delete(g.load)
-	delete(g.next); delete(g.jitter); delete(g.seen); delete(g.sea); delete(g.order); delete(g.heap)
+	delete(g.block); delete(g.open); delete(g.order); delete(g.heap)
 	free(g)
 }
 
@@ -485,35 +503,55 @@ span :: #force_inline proc(g: ^Grid, a, b: int) -> f32 {
 	return g.d*math.sqrt(dx*dx + dz*dz)
 }
 
-Heap_Item :: struct { h: f32, c: i32 }
-
-heap_push :: proc(heap: ^[dynamic]Heap_Item, item: Heap_Item) {
-	append(heap, item)
-	i := len(heap) - 1
-	for i > 0 {
-		parent := (i - 1)/2
-		if heap[parent].h <= item.h do break
-		heap[i] = heap[parent]
-		i = parent
-	}
-	heap[i] = item
+// The same to the neighbour an offset away, which the grid holds.
+step :: #force_inline proc(g: ^Grid, a: int, o: [2]int) -> f32 #no_bounds_check {
+	b := a + o.y*g.n + o.x
+	dx := f32(o.x) + g.jitter[b].x - g.jitter[a].x
+	dz := f32(o.y) + g.jitter[b].y - g.jitter[a].y
+	return g.d*math.sqrt(dx*dx + dz*dz)
 }
 
-heap_pop :: proc(heap: ^[dynamic]Heap_Item) -> Heap_Item {
+// Whether a cell off the grid's edge has the sea beside it.
+beside_sea :: #force_inline proc(sea: []bool, c, n: int) -> bool #no_bounds_check {
+	return bool(u8(sea[c - n - 1]) | u8(sea[c - n]) | u8(sea[c - n + 1]) | u8(sea[c - 1]) | u8(sea[c + 1]) | u8(sea[c + n - 1]) | u8(sea[c + n]) | u8(sea[c + n + 1]))
+}
+
+Heap_Item :: struct { h: f32, c: i32 }
+
+heap_push :: proc(heap: ^[dynamic]Heap_Item, item: Heap_Item) #no_bounds_check {
+	append(heap, item)
+	h := heap[:]
+	i := len(h) - 1
+	for i > 0 {
+		parent := (i - 1)/2
+		if h[parent].h <= item.h do break
+		h[i] = h[parent]
+		i = parent
+	}
+	h[i] = item
+}
+
+// The lowest item out. The hole it leaves is passed down the smaller child, the left on a tie, to
+// the bottom, and the last item is put back up that path past every item no lower than it: the
+// heap comes out as sifting the last item down from the top would leave it, item for item, which
+// the order of the land's cells depends on, with no branch on which child is smaller.
+heap_pop :: proc(heap: ^[dynamic]Heap_Item) -> Heap_Item #no_bounds_check {
 	top := heap[0]
 	last := pop(heap)
-	n := len(heap)
+	h := heap[:]
+	n := len(h)
 	if n == 0 do return top
 	i := 0
-	for {
-		child := 2*i + 1
-		if child >= n do break
-		if child + 1 < n && heap[child + 1].h < heap[child].h do child += 1
-		if heap[child].h >= last.h do break
-		heap[i] = heap[child]
+	for child := 1; child < n; child = 2*i + 1 {
+		child += int(h[min(child + 1, n - 1)].h < h[child].h)
+		h[i] = h[child]
 		i = child
 	}
-	heap[i] = last
+	for i > 0 && h[(i - 1)/2].h >= last.h {
+		h[i] = h[(i - 1)/2]
+		i = (i - 1)/2
+	}
+	h[i] = last
 	return top
 }
 
@@ -524,26 +562,19 @@ heap_pop :: proc(heap: ^[dynamic]Heap_Item) -> Heap_Item {
 // and the crater stays a closed, dry hollow. Then each cell drains to its steepest lower
 // neighbour, and the land above each cell is added up.
 SINK :: -2   // in `next`: the water sinks into the ground here
-route :: proc(g: ^Grid) {
+route :: proc(g: ^Grid) #no_bounds_check {
 	n := g.n
 	clear(&g.order)
 	clear(&g.heap)
-	for c in 0..<n*n {
-		g.seen[c] = g.sea[c]
-		g.next[c] = -1
-		g.fill[c] = g.z[c]
-	}
-	for c in 0..<n*n {
-		if g.sea[c] do continue
-		for o in OFFSETS {
-			x, y := c%n + o.x, c/n + o.y
-			if x < 0 || y < 0 || x >= n || y >= n || g.sea[y*n + x] {
-				g.fill[c] = max(g.z[c], 0.05)
-				g.seen[c] = true
-				heap_push(&g.heap, {g.fill[c], i32(c)})
-				break
-			}
-		}
+	copy(g.seen, g.sea)
+	slice.fill(g.next, -1)
+	copy(g.fill, g.z)
+	for y in 0..<n do for x in 0..<n {
+		c := y*n + x
+		if g.sea[c] || !(x == 0 || y == 0 || x == n - 1 || y == n - 1 || beside_sea(g.sea, c, n)) do continue
+		g.fill[c] = max(g.z[c], 0.05)
+		g.seen[c] = true
+		heap_push(&g.heap, {g.fill[c], i32(c)})
 	}
 	sinks: [dynamic]i32
 	defer delete(sinks)
@@ -561,34 +592,38 @@ route :: proc(g: ^Grid) {
 	for len(g.heap) > 0 {
 		item := heap_pop(&g.heap)
 		c := int(item.c)
+		x, y := c%n, c/n
 		append(&g.order, item.c)
 		for o in OFFSETS {
-			x, y := c%n + o.x, c/n + o.y
-			if x < 0 || y < 0 || x >= n || y >= n do continue
-			nb := y*n + x
+			if x + o.x < 0 || y + o.y < 0 || x + o.x >= n || y + o.y >= n do continue
+			nb := c + o.y*n + o.x
 			if g.seen[nb] do continue
 			g.seen[nb] = true
-			g.fill[nb] = max(g.z[nb], item.h + 0.001*span(g, c, nb))   // a filled hollow keeps a trace of slope
+			g.fill[nb] = max(g.z[nb], item.h + 0.001*step(g, c, o))   // a filled hollow keeps a trace of slope
 			g.next[nb] = item.c
 			heap_push(&g.heap, {g.fill[nb], i32(nb)})
 		}
 	}
-	for ci in g.order {
-		c := int(ci)
-		best := g.next[c]
-		steepest := g.fill[c]/g.d if best < 0 else (g.fill[c] - g.fill[best])/span(g, c, int(best))
-		for o in OFFSETS {
-			x, y := c%n + o.x, c/n + o.y
-			if x < 0 || y < 0 || x >= n || y >= n do continue
-			nb := y*n + x
-			sea := g.sea[nb]
-			s := (g.fill[c] - (0 if sea else g.fill[nb]))/span(g, c, nb)
-			if s > steepest do steepest, best = s, (-1 if sea else i32(nb))
+	// Every cell flooded is land, and each finds its own way down, whatever the order.
+	shared(n, rows(n), g, proc(g: ^Grid, lo, hi: int) {
+		n := g.n
+		#no_bounds_check for y in lo..<hi do for x in 0..<n {
+			c := y*n + x
+			if g.sea[c] do continue
+			best := g.next[c]
+			steepest := g.fill[c]/g.d if best < 0 else (g.fill[c] - g.fill[best])/span(g, c, int(best))
+			for o in OFFSETS {
+				if x + o.x < 0 || y + o.y < 0 || x + o.x >= n || y + o.y >= n do continue
+				nb := c + o.y*n + o.x
+				sea := g.sea[nb]
+				s := (g.fill[c] - (0 if sea else g.fill[nb]))/step(g, c, o)
+				if s > steepest do steepest, best = s, (-1 if sea else i32(nb))
+			}
+			g.next[c] = best
+			g.area[c] = g.d*g.d
 		}
-		g.next[c] = best
-	}
+	})
 	for c in sinks do if g.next[c] < 0 do g.next[c] = SINK
-	for c in g.order do g.area[c] = g.d*g.d
 	#reverse for c in g.order {
 		if r := g.next[c]; r >= 0 do g.area[r] += g.area[c]
 	}
@@ -607,7 +642,7 @@ wear :: #force_inline proc(g: ^Grid, c: int, z: f32) -> Rock_Law {
 // the cell below it has ended up. Solving for the new height rather than stepping toward
 // it keeps the result steady however long the step. Weak rock is cut faster and holds a
 // gentler slope.
-erode :: proc(g: ^Grid, dt: f32) {
+erode :: proc(g: ^Grid, dt: f32) #no_bounds_check {
 	for ci in g.order {
 		c := int(ci)
 		below, run: f32 = 0, g.d
@@ -631,22 +666,25 @@ erode :: proc(g: ^Grid, dt: f32) {
 }
 
 creep :: proc(g: ^Grid, dt: f32) {
-	n := g.n
+	Creep :: struct { g: ^Grid, k: f32 }
 	rounds := int(math.ceil(CREEP*dt/(0.2*g.d*g.d)))
-	k := CREEP*dt/(f32(rounds)*g.d*g.d)
-	old := g.fill   // free to use: route rebuilds it
+	cr := Creep{g, CREEP*dt/(f32(rounds)*g.d*g.d)}
 	for _ in 0..<rounds {
-		for c in 0..<n*n do old[c] = max(g.z[c], 0)
-		for y in 1..<n - 1 {
-			for x in 1..<n - 1 {
-				c := y*n + x
-				if g.sea[c] do continue
-				// A mantle of ash creeps wherever it can lie, which is not on a face.
-				rate := wear(g, c, old[c]).creep
-				if m := region.story.mantle; m > rate do rate = math.lerp(m, rate, smoothstep(0.7, 1.2, math.hypot(old[c + 1] - old[c - 1], old[c + n] - old[c - n])/(2*g.d)))
-				g.z[c] = max(old[c] + k*rate*(old[c - 1] + old[c + 1] + old[c - n] + old[c + n] - 4*old[c]), 0.02)
+		// g.fill holds the ground as it stood: free to use, since route rebuilds it.
+		shared(g.n, rows(g.n), g, proc(g: ^Grid, lo, hi: int) { for c in lo*g.n..<hi*g.n do g.fill[c] = max(g.z[c], 0) })
+		shared(g.n, rows(g.n), &cr, proc(cr: ^Creep, lo, hi: int) {
+			g, n, old := cr.g, cr.g.n, cr.g.fill
+			for y in max(lo, 1)..<min(hi, n - 1) {
+				for x in 1..<n - 1 {
+					c := y*n + x
+					if g.sea[c] do continue
+					// A mantle of ash creeps wherever it can lie, which is not on a face.
+					rate := wear(g, c, old[c]).creep
+					if m := region.story.mantle; m > rate do rate = math.lerp(m, rate, smoothstep(0.7, 1.2, math.hypot(old[c + 1] - old[c - 1], old[c + n] - old[c - n])/(2*g.d)))
+					g.z[c] = max(old[c] + cr.k*rate*(old[c - 1] + old[c + 1] + old[c - n] + old[c + n] - 4*old[c]), 0.02)
+				}
 			}
-		}
+		})
 	}
 }
 
@@ -667,9 +705,9 @@ FLAT      :: 4      // metres over the sea that floods build a flat of river sil
 
 // The sea cells above and to the left of each corner of the grid, so that the share of sea in
 // any square is four reads.
-sea_table :: proc(g: ^Grid, allocator := context.temp_allocator) -> []i32 {
+sea_table :: proc(g: ^Grid, allocator := context.temp_allocator, into: []i32 = nil) -> []i32 #no_bounds_check {
 	n := g.n
-	open := make([]i32, (n + 1)*(n + 1), allocator)
+	open := into if into != nil else make([]i32, (n + 1)*(n + 1), allocator)
 	for y in 0..<n {
 		row: i32
 		for x in 0..<n {
@@ -689,8 +727,8 @@ share :: proc(open: []i32, n, x, y, r: int) -> f32 {
 
 coast :: proc(g: ^Grid, dt: f32) {
 	n := g.n
-	open := sea_table(g, context.allocator)
-	defer delete(open)
+	if g.open == nil do g.open = make([]i32, (n + 1)*(n + 1))
+	open := sea_table(g, into = g.open)
 	for c in 0..<n*n do if g.sea[c] && g.z[c] > -WAVE_BASE do g.z[c] -= ABRADE*dt*(1 + g.z[c]/WAVE_BASE)
 	r := max(int(FETCH/g.d), 2)
 	bearing := math.to_radians(f32(region.shape.swell))
@@ -758,26 +796,30 @@ exposure :: proc(open: []i32, n, x, y, r: int, ahead: [2]int) -> f32 {
 refine :: proc(coarse: ^Grid) -> ^Grid {
 	g := grid_make(coarse.n*2)
 	g.left = coarse.left
-	n, m := g.n, coarse.n
-	for c in 0..<n*n {
-		// Read the coarse land through a gentle warp, so a valley that ran straight along the
-		// coarse grid comes out winding. The steps that follow settle it.
-		wx, _, _ := noise(f64(c%n)/9, f64(c/n)/9, seed + 11 + u32(n))
-		wz, _, _ := noise(f64(c%n)/9, f64(c/n)/9, seed + 12 + u32(n))
-		u, v := (f32(c%n) + 0.5)/2 - 0.5 + 1.6*(wx - 0.5), (f32(c/n) + 0.5)/2 - 0.5 + 1.6*(wz - 0.5)
-		x0, y0 := clamp(int(math.floor(u)), 0, m - 2), clamp(int(math.floor(v)), 0, m - 2)
-		tu, tv := clamp(u - f32(x0), 0, 1), clamp(v - f32(y0), 0, 1)
-		k := y0*m + x0
-		z := math.lerp(math.lerp(coarse.z[k], coarse.z[k + 1], tu), math.lerp(coarse.z[k + m], coarse.z[k + m + 1], tu), tv)
-		g.sea[c] = z <= 0
-		if g.sea[c] {
-			g.z[c] = z
-			continue
+	grids := [2]^Grid{g, coarse}
+	shared(g.n, rows(g.n), &grids, proc(grids: ^[2]^Grid, lo, hi: int) {
+		g, coarse := grids[0], grids[1]
+		n, m := g.n, coarse.n
+		for c in lo*n..<hi*n {
+			// Read the coarse land through a gentle warp, so a valley that ran straight along the
+			// coarse grid comes out winding. The steps that follow settle it.
+			wx, _, _ := noise(f64(c%n)/9, f64(c/n)/9, seed + 11 + u32(n))
+			wz, _, _ := noise(f64(c%n)/9, f64(c/n)/9, seed + 12 + u32(n))
+			u, v := (f32(c%n) + 0.5)/2 - 0.5 + 1.6*(wx - 0.5), (f32(c/n) + 0.5)/2 - 0.5 + 1.6*(wz - 0.5)
+			x0, y0 := clamp(int(math.floor(u)), 0, m - 2), clamp(int(math.floor(v)), 0, m - 2)
+			tu, tv := clamp(u - f32(x0), 0, 1), clamp(v - f32(y0), 0, 1)
+			k := y0*m + x0
+			z := math.lerp(math.lerp(coarse.z[k], coarse.z[k + 1], tu), math.lerp(coarse.z[k + m], coarse.z[k + m + 1], tu), tv)
+			g.sea[c] = z <= 0
+			if g.sea[c] {
+				g.z[c] = z
+				continue
+			}
+			g.face[c] = coarse.face[k]
+			// A little roughness, so the finer streams have something to start from.
+			g.z[c] = max(z, 0.3) + 0.03*g.d*(hash01(i32(c%n), i32(c/n), seed + 10) - 0.5)
 		}
-		g.face[c] = coarse.face[k]
-		// A little roughness, so the finer streams have something to start from.
-		g.z[c] = max(z, 0.3) + 0.03*g.d*(hash01(i32(c%n), i32(c/n), seed + 10) - 0.5)
-	}
+	})
 	grid_free(coarse)
 	return g
 }
@@ -812,11 +854,15 @@ land_form :: proc() {
 		if p.vents > 0 {
 			form, grow = make([]f32, n*n, context.temp_allocator), make([]f32, n*n, context.temp_allocator)
 			low, thick = slice.clone(g.z, context.temp_allocator), make([]f32, n*n, context.temp_allocator)
-			for c in 0..<n*n {
-				x, z := at(g, c)
-				form[c] = -1e6
-				for v in region.vents do if t, th := vent_top(v, x, z); v.phase == i && t > form[c] do form[c], grow[c], thick[c] = t, v.build, th
-			}
+			Forms :: struct { g: ^Grid, phase: int, form, grow, thick: []f32 }
+			forms := Forms{g, i, form, grow, thick}
+			shared(n, rows(n), &forms, proc(f: ^Forms, lo, hi: int) {
+				for c in lo*f.g.n..<hi*f.g.n {
+					x, z := at(f.g, c)
+					f.form[c] = -1e6
+					for v in region.vents do if t, th := vent_top(v, x, z); v.phase == f.phase && t > f.form[c] do f.form[c], f.grow[c], f.thick[c] = t, v.build, th
+				}
+			})
 		}
 		for s in 0..<int(p.steps) {
 			done := f32(s + 1)/p.steps
@@ -860,10 +906,13 @@ land_form :: proc() {
 	last: f32   // years on the finest cells
 	for p in history do if p.cell == history[len(history) - 1].cell do last += p.steps*p.years
 
+	delete(g.open)
+	g.open = nil
 	land.n, land.grid, land.z[0] = n, g, g.z
 	land.slid, land.lake = make([]f32, n*n), make([]u8, n*n)
+	land_finish(g, false)   // what the slide's place is found by
+	slide_make(g)
 	highest := land_finish(g)
-	if slide_make(g) do highest = land_finish(g)
 	fmt.printfln("land formed in %.2f s: %d land cells, highest point %.0f m", time.duration_seconds(time.since(started)), len(g.order), highest)
 	fmt.printfln("a step cut at the coast climbs to the farthest stream head in %.0f kyr; the land has had %.0f kyr on its finest cells, %.2f of that", response/1000, last/1000, last/response)
 	land_stats(g)
@@ -871,7 +920,7 @@ land_form :: proc() {
 
 // What the generator reads off the formed land: coarser grids, slope, wetness, livable ground
 // and the local fields.
-land_finish :: proc(g: ^Grid) -> (highest: f32) {
+land_finish :: proc(g: ^Grid, all := true) -> (highest: f32) {
 	n := g.n
 	for level in 1..<len(land.z) {
 		m := n >> uint(level)
@@ -894,6 +943,10 @@ land_finish :: proc(g: ^Grid) -> (highest: f32) {
 			if !g.sea[c] do land.wet[c] = clamp((math.log10(g.area[c]) - 2.6)/2.4, 0, 1)
 			highest = max(highest, g.z[c])
 		}
+	}
+	if !all {
+		land_drained(g)
+		return
 	}
 	// Spread wetness out from the channels into the ground beside them.
 	scratch := make([]f32, n*n)
@@ -922,9 +975,9 @@ land_finish :: proc(g: ^Grid) -> (highest: f32) {
 HUMP :: 6   // cells either side of the square a cell's height is set against, 208 m across
 land_local :: proc(g: ^Grid) {
 	n := g.n
-	for f in ([?][]f32{land.facing, land.hump, land.inland, land.sun, land.exposed, land.above, land.soil, land.valley, land.swell, land.lifted, land.surf, land.supply}) do delete(f)
-	land.facing, land.hump, land.inland, land.valley, land.lifted = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
-	land.sun, land.exposed, land.above, land.soil, land.swell = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+	for f in ([?][]f32{land.facing, land.hump, land.inland, land.sun, land.exposed, land.soil, land.swell, land.lifted, land.surf, land.supply}) do delete(f)
+	land.facing, land.hump, land.inland, land.lifted = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
+	land.sun, land.exposed, land.soil, land.swell = make([]f32, n*n), make([]f32, n*n), make([]f32, n*n), make([]f32, n*n)
 	land.surf, land.supply = make([]f32, n*n), make([]f32, n*n)
 
 	// Distance to the sea, nearest first: each cell takes the sea cell nearest a neighbour
@@ -976,69 +1029,88 @@ land_local :: proc(g: ^Grid) {
 		}
 	}
 	// The wind blows from the swell's bearing, which it raised.
-	open, fetch := sea_table(g), max(int(FETCH/g.d), 2)
+	Local :: struct { g: ^Grid, sky: [][3]f32, flat: f32, sums: []f64, open: []i32, fetch: int, wind: [2]f32, ahead: [2]int }
+	l := Local{g = g, sky = sky[:], flat = flat, sums = sums, open = sea_table(g), fetch = max(int(FETCH/g.d), 2)}
 	bearing := math.to_radians(f32(region.shape.swell))
-	wind := [2]f32{math.sin(bearing), -math.cos(bearing)}   // toward where it comes from
-	ahead := [2]int{int(math.round(wind.x*f32(fetch))), int(math.round(wind.y*f32(fetch)))}
+	l.wind = {math.sin(bearing), -math.cos(bearing)}   // toward where it comes from
+	l.ahead = {int(math.round(l.wind.x*f32(l.fetch))), int(math.round(l.wind.y*f32(l.fetch)))}
 	// How high the wind has been lifted when it reaches each place, sea or land: the highest ground
 	// it crossed in the last 400 m, less a metre for each four it has run on since, sinking and
 	// drying in the lee. Cloud caps the ground where this passes the cloud base (`cloud_top`).
-	for c in 0..<n*n do for d := f32(0); d <= 400; d += g.d {
-		i, j := clamp(int(f32(c%n) + 0.5 + wind.x*d/g.d), 0, n - 1), clamp(int(f32(c/n) + 0.5 + wind.y*d/g.d), 0, n - 1)
-		land.lifted[c] = max(land.lifted[c], g.z[j*n + i] - d/4)
-	}
-	for ci in g.order {
-		c := int(ci)
-		x, y := c%n, c/n
-		dx, dz := (g.z[c + 1] - g.z[c - 1])/(2*g.d), (g.z[c + n] - g.z[c - n])/(2*g.d)
-		land.facing[c] = math.mod(math.to_degrees(math.atan2(-dx, dz)) + 360, 360)
-		up := [3]f32{-dx, 1, -dz}/math.sqrt(dx*dx + dz*dz + 1)
-		for s in sky do land.sun[c] += max(up.x*s.x + up.y*s.y + up.z*s.z, 0)/flat
-		x0, y0, x1, y1 := max(x - HUMP, 0), max(y - HUMP, 0), min(x + HUMP + 1, n), min(y + HUMP + 1, n)
-		land.hump[c] = g.z[c] - f32((sums[y1*w + x1] - sums[y0*w + x1] - sums[y1*w + x0] + sums[y0*w + x0])/f64((x1 - x0)*(y1 - y0)))
-		// Exposure: the steepest rise of the ground toward the wind within 300 m (Winstral's index),
-		// lower on a hump and higher in a hollow, and the salt off the first sea toward the wind, by
-		// the share of open sea in the kilometre beyond it, fading over a kilometre inland.
-		rise, salt, hit := f32(-1), f32(0), false
-		for d := g.d; d < 3000 && !(hit && d > 300); d += g.d if d < 300 else 2*g.d {
-			i, j := clamp(int(f32(x) + 0.5 + wind.x*d/g.d), 0, n - 1), clamp(int(f32(y) + 0.5 + wind.y*d/g.d), 0, n - 1)
-			if d <= 300 do rise = max(rise, (max(g.z[j*n + i], 0) - g.z[c])/d)
-			if g.sea[j*n + i] && !hit do salt, hit = share(open, n, i + ahead.x, j + ahead.y, fetch)*math.exp(-d/1000), true
+	shared(n, rows(n), &l, proc(l: ^Local, lo, hi: int) {
+		g, n, wind := l.g, l.g.n, l.wind
+		for c in lo*n..<hi*n do for d := f32(0); d <= 400; d += g.d {
+			i, j := clamp(int(f32(c%n) + 0.5 + wind.x*d/g.d), 0, n - 1), clamp(int(f32(c/n) + 0.5 + wind.y*d/g.d), 0, n - 1)
+			land.lifted[c] = max(land.lifted[c], g.z[j*n + i] - d/4)
 		}
-		land.exposed[c] = 1 - (1 - clamp(0.5 - 2*rise + land.hump[c]/40, 0, 1))*(1 - salt)
-		for o in OFFSETS do if g.sea[c + o.y*n + o.x] do land.swell[c] = exposure(open, n, x, y, fetch, ahead)
-		// Where cold air pools: the height over the stream a cell drains to, or over the sea.
-		r := g.next[c]
-		land.above[c] = 0 if g.area[c] >= CHANNEL_AREA || r == SINK else g.z[c] if r < 0 else g.z[c] - g.z[r] + land.above[r]
-		land.valley[c] = g.area[c] if g.area[c] >= CHANNEL_AREA || r < 0 else land.valley[r]
-		// Soil gathers in hollows and where water collects, thins on humps and as the ground
-		// steepens toward what it holds, and lies deeper over weak rock, which weathers faster.
-		// Within a few metres of a stream the floods lay silt as well.
-		steep := min(land.slope[c]/SOIL_HOLDS, 1)
-		weak := 1.3 - 0.6*MATERIALS[rock_in(g.z[c] - 0.5, g.base[c], ROCK_SIM)].strength
-		land.soil[c] = min((clamp(1 - land.hump[c]/12, 0.3, 2.5) + 1.5*land.wet[c])*(1 - 0.7*steep*steep)*weak + 2*max(1 - land.above[c]/4, 0), 4)
-		// A slide's scar is bare rock and its debris rubble; soil weathers back on both with the years.
-		if s := land.slid[c]; abs(s) > 0.5 do land.soil[c] = min(land.soil[c], (0.3 if s > 0 else 0) + SOIL_GROWS*region.features[landslide.feature].age)
-	}
+	})
+	land_drained(g)
+	shared(len(g.order), 2048, &l, proc(l: ^Local, lo, hi: int) {
+		g, n, wind, w, open, fetch, ahead := l.g, l.g.n, l.wind, l.g.n + 1, l.open, l.fetch, l.ahead
+		for ci in g.order[lo:hi] {
+			c := int(ci)
+			x, y := c%n, c/n
+			dx, dz := (g.z[c + 1] - g.z[c - 1])/(2*g.d), (g.z[c + n] - g.z[c - n])/(2*g.d)
+			land.facing[c] = math.mod(math.to_degrees(math.atan2(-dx, dz)) + 360, 360)
+			up := [3]f32{-dx, 1, -dz}/math.sqrt(dx*dx + dz*dz + 1)
+			for s in l.sky do land.sun[c] += max(up.x*s.x + up.y*s.y + up.z*s.z, 0)/l.flat
+			x0, y0, x1, y1 := max(x - HUMP, 0), max(y - HUMP, 0), min(x + HUMP + 1, n), min(y + HUMP + 1, n)
+			land.hump[c] = g.z[c] - f32((l.sums[y1*w + x1] - l.sums[y0*w + x1] - l.sums[y1*w + x0] + l.sums[y0*w + x0])/f64((x1 - x0)*(y1 - y0)))
+			// Exposure: the steepest rise of the ground toward the wind within 300 m (Winstral's index),
+			// lower on a hump and higher in a hollow, and the salt off the first sea toward the wind, by
+			// the share of open sea in the kilometre beyond it, fading over a kilometre inland.
+			rise, salt, hit := f32(-1), f32(0), false
+			for d := g.d; d < 3000 && !(hit && d > 300); d += g.d if d < 300 else 2*g.d {
+				i, j := clamp(int(f32(x) + 0.5 + wind.x*d/g.d), 0, n - 1), clamp(int(f32(y) + 0.5 + wind.y*d/g.d), 0, n - 1)
+				if d <= 300 do rise = max(rise, (max(g.z[j*n + i], 0) - g.z[c])/d)
+				if g.sea[j*n + i] && !hit do salt, hit = share(open, n, i + ahead.x, j + ahead.y, fetch)*math.exp(-d/1000), true
+			}
+			land.exposed[c] = 1 - (1 - clamp(0.5 - 2*rise + land.hump[c]/40, 0, 1))*(1 - salt)
+			for o in OFFSETS do if g.sea[c + o.y*n + o.x] do land.swell[c] = exposure(open, n, x, y, fetch, ahead)
+			// Soil gathers in hollows and where water collects, thins on humps and as the ground
+			// steepens toward what it holds, and lies deeper over weak rock, which weathers faster.
+			// Within a few metres of a stream the floods lay silt as well.
+			steep := min(land.slope[c]/SOIL_HOLDS, 1)
+			weak := 1.3 - 0.6*MATERIALS[rock_in(g.z[c] - 0.5, g.base[c], ROCK_SIM)].strength
+			land.soil[c] = min((clamp(1 - land.hump[c]/12, 0.3, 2.5) + 1.5*land.wet[c])*(1 - 0.7*steep*steep)*weak + 2*max(1 - land.above[c]/4, 0), 4)
+			// A slide's scar is bare rock and its debris rubble; soil weathers back on both with the years.
+			if s := land.slid[c]; abs(s) > 0.5 do land.soil[c] = min(land.soil[c], (0.3 if s > 0 else 0) + SOIL_GROWS*region.features[landslide.feature].age)
+		}
+	})
 	// The shore the waves work (step 15): each place within 48 m of it, on land or at sea, takes the
 	// swell of the shore round it, the nearest the most; and each river's mouth gives the shore sand
 	// for 320 m along it, as much as the square root of the km² it drains, up to 1.
-	for y in 3..<n - 3 do for x in 3..<n - 3 {
-		c := y*n + x
-		if !g.sea[c] && land.inland[c] > 48 do continue
-		sum, weight: f32
-		for j in -3..=3 do for i in -3..=3 do if s := land.swell[c + j*n + i]; s > 0 {
-			w := 1/(1 + math.hypot(f32(i), f32(j)))
-			sum, weight = sum + w*s, weight + w
+	shared(n, rows(n), g, proc(g: ^Grid, lo, hi: int) {
+		n := g.n
+		for y in max(lo, 3)..<min(hi, n - 3) do for x in 3..<n - 3 {
+			c := y*n + x
+			if !g.sea[c] && land.inland[c] > 48 do continue
+			sum, weight: f32
+			for j in -3..=3 do for i in -3..=3 do if s := land.swell[c + j*n + i]; s > 0 {
+				w := 1/(1 + math.hypot(f32(i), f32(j)))
+				sum, weight = sum + w*s, weight + w
+			}
+			if weight > 0 do land.surf[c] = sum/weight
 		}
-		if weight > 0 do land.surf[c] = sum/weight
-	}
+	})
 	for ci in g.order do if g.next[ci] == -1 && g.area[ci] >= CHANNEL_AREA {
 		x, y, r := int(ci)%n, int(ci)/n, 20
 		for j in max(y - r, 0)..=min(y + r, n - 1) do for i in max(x - r, 0)..=min(x + r, n - 1) {
 			k := j*n + i
 			if land.surf[k] > 0 do land.supply[k] = max(land.supply[k], min(math.sqrt(g.area[ci]/1e6), 1)*(1 - math.hypot(f32(i - x), f32(j - y))/f32(r)))
 		}
+	}
+}
+
+// Where cold air pools: the height over the stream a cell drains to, or over the sea; and the
+// land the stream drains.
+land_drained :: proc(g: ^Grid) {
+	delete(land.above); delete(land.valley)
+	land.above, land.valley = make([]f32, g.n*g.n), make([]f32, g.n*g.n)
+	for ci in g.order {
+		c, r := int(ci), g.next[ci]
+		land.above[c] = 0 if g.area[c] >= CHANNEL_AREA || r == SINK else g.z[c] if r < 0 else g.z[c] - g.z[r] + land.above[r]
+		land.valley[c] = g.area[c] if g.area[c] >= CHANNEL_AREA || r < 0 else land.valley[r]
 	}
 }
 
@@ -1064,10 +1136,9 @@ land_stats :: proc(g: ^Grid) {
 		}
 		if drop > face do face, top, foot = drop, c, at
 	}
-	slice.sort(slopes[:])
 	at :: proc(g: ^Grid, c: int) -> [3]f32 { return {(f32(c%g.n) + 0.5)*g.d - f32(region.size/2), g.z[c], (f32(c/g.n) + 0.5)*g.d - f32(region.size/2)} }
 	fmt.printfln("steeper than 45°: %.1f%% of land; median slope %.0f°; tallest face %.0f m, from %.0f to %.0f",
-		100*f32(steep)/f32(len(slopes)), math.to_degrees(math.atan(slopes[len(slopes)/2])), face, at(g, top), at(g, foot))
+		100*f32(steep)/f32(len(slopes)), math.to_degrees(math.atan(middle(slopes[:]))), face, at(g, top), at(g, foot))
 	fmt.print("rock at the surface:")
 	for k, m in kinds do if k > 0 do fmt.printf(" %v %.0f%%", m, 100*f32(k)/f32(len(g.order)))
 	fmt.println()
@@ -1116,7 +1187,7 @@ land_figures :: proc(g: ^Grid) {
 		if coast[c] do append(&lists[1], land.slope[c])
 		if g.area[c] <= g.d*g.d*1.01 && land.slope[c] > math.tan(math.to_radians(f32(5))) do append(&lists[2], g.z[c] - (g.z[c - 1] + g.z[c + 1] + g.z[c - n] + g.z[c + n])/4)
 	}
-	median :: proc(l: [dynamic]f32) -> f32 { slice.sort(l[:]); return l[len(l)/2] if len(l) > 0 else 0 }
+	median :: proc(l: [dynamic]f32) -> f32 { return middle(l[:]) }
 	rising := 0
 	for h in lists[4] do if h > 30 do rising += 1
 	fmt.print("against")
@@ -1151,14 +1222,44 @@ land_figures :: proc(g: ^Grid) {
 
 	// The deepest closed hollow, as the real islands were measured: how deep water would stand
 	// in it if none sank into a crater's floor.
+	// The grid was routed last on the land as it stands, so with no crater whose water sinks its
+	// hollows are filled already; with one, they are filled again for this and the routing put back.
 	hollow: f32
-	for &v in region.vents do v.fallen = false
-	route(g)
-	for c in g.order do hollow = max(hollow, g.fill[c] - g.z[c])
-	for &v in region.vents do v.fallen = v.crater > 0
-	route(g)
+	sinks := false
+	for v in region.vents do sinks ||= v.fallen
+	if !sinks do for c in g.order do hollow = max(hollow, g.fill[c] - g.z[c])
+	else {
+		fill, next, area, order := slice.clone(g.fill, context.temp_allocator), slice.clone(g.next, context.temp_allocator), slice.clone(g.area, context.temp_allocator), slice.clone(g.order[:], context.temp_allocator)
+		for &v in region.vents do v.fallen = false
+		route(g)
+		for c in g.order do hollow = max(hollow, g.fill[c] - g.z[c])
+		for &v in region.vents do v.fallen = v.crater > 0
+		copy(g.fill, fill); copy(g.next, next); copy(g.area, area); copy(g.order[:], order)
+	}
 	fmt.printfln("  livable %.0f%% of land, the largest patch %.0f ha (15-46, 63-417); sheltered landings %d, %.1f in 10 km of shore (0 on the cones, 7-14 and 1.3-1.9, 80 and 3.6 on Tsushima); deepest closed hollow %s m",
 		100*f32(livable)/f32(len(g.order)), f32(slice.max(patch[:]) if len(patch) > 0 else 0)*g.d*g.d/10_000, len(landings), f32(len(landings))*10_000/(f32(len(lists[0]))*g.d), against(7, hollow, "%.0f", 8))
+}
+
+// The value in the middle of a list once sorted, 0 for none, found without sorting it all (Hoare's
+// selection): the list is left in another order.
+middle :: proc(v: []f32) -> f32 {
+	if len(v) == 0 do return 0
+	k, lo, hi := len(v)/2, 0, len(v) - 1
+	for lo < hi {
+		p, i, j := v[(lo + hi)/2], lo, hi
+		for i <= j {
+			for v[i] < p do i += 1
+			for v[j] > p do j -= 1
+			if i <= j {
+				v[i], v[j] = v[j], v[i]
+				i, j = i + 1, j - 1
+			}
+		}
+		if k <= j do hi = j
+		else if k >= i do lo = i
+		else do break
+	}
+	return v[k]
 }
 
 // Group marked cells lying within `reach` cells of each other: each cell's group, or -1, and

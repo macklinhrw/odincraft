@@ -98,3 +98,8 @@ Added 2026-11-11, after rock beds, cliffs in blocks and four island kinds were b
 - The paced bench cannot show headroom: it floors at 8.33 ms, and the GPU slows its clock when it idles between frames, so a frame that costs 5.6 ms flat out shows as 8.3 to 8.6 ms. Compare two builds by trace, run one after the other.
 - SDL's `cycle` on a target drawn whole on the GPU every frame keeps spare copies, and a copy that has stood idle is wired again by the driver when it comes back: at full screen that held the scene back 10 to 30 ms about once a second. Cycle only what the CPU writes.
 - The faces were the cost, not their shading: two million instanced quads a frame plus the shadows'. Faces turned from the eye or the sun are dropped by facing before they are drawn (`by_face`, `mesh.odin`), which took out two fifths of them without changing a pixel.
+
+**Forming's speed** (2026-11-15, step 31)
+- A timing that is fast in some runs and twice as slow in others, the same build at the same time, can be the cache's sets. Large arrays made alone begin at the same place in a page, so the same cell of a dozen of them fell into one set of a cache that holds eight; `erode` took 100 or 205 ms by chance, and 65 every run once the grid's arrays were staggered in one block.
+- Sharing a pass among cores pays less than the cores suggest when the next pass runs in order on one thread: the lines the helpers wrote are read back from their caches. Share what costs arithmetic (noise, rays, races), not passes that only move memory.
+- Where the result depends on the order of ties, as the flood's on its binary heap, a faster structure changes the land; keep the structure and make its steps cheaper, and check a hash of everything forming leaves, not only the maps.

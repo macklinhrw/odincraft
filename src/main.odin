@@ -31,8 +31,8 @@ import sdl "vendor:sdl3"
 //   probe=x0,z0,x1,z1       on exit, print the ground and water in these columns
 //   seed=N          which world: every random choice is keyed from it (default 7)
 //   island=N        which island near the start the start, map, why, survey and place act on (default 0,
-//                   the start island at the origin); it is formed first, with all its start-up lines
-//   near=km         the islands within this many km of that one are formed before entering (default 24, the nearest neighbours);
+//                   the start island at the origin); it says all its start-up lines
+//   near=km         the islands within this many km of that one are formed beside it before entering (default 64);
 //                   the rest form in the background, nearest first, and the world waits for each
 //   kind=name       which kind of island that one is, whatever the seed would pick (names in KINDS, land.odin)
 //   origin=x,z      where island 0's middle lies in the world, in whole metres (default 0,0); the
@@ -79,7 +79,7 @@ Options :: struct {
 }
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 24}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -204,6 +204,16 @@ main :: proc() {
 		archipelago_map(opt.archipelago)
 		return
 	}
+	// The other islands, nearest the start first: those within `near` km formed side by side beside
+	// the start island, before entering, and the rest on three threads of low priority once play has
+	// begun. A run that exits once the start island is formed forms only that.
+	others := make([dynamic]int)
+	apart :: proc(i: int) -> f64 { return math.hypot(f64(formed[i].island.origin.x - home.island.origin.x), f64(formed[i].island.origin.y - home.island.origin.y)) }
+	if !opt.survey && opt.map_path == "" && !opt.has_why do for _, i in formed do if &formed[i] != home do append(&others, i)
+	slice.sort_by(others[:], proc(a, b: int) -> bool { return apart(a) < apart(b) })
+	soon := 0
+	for soon < len(others) && apart(others[soon]) <= opt.near*1000 do soon += 1
+	early := islands_form(others[:soon], max(os.get_processor_core_count() - 1, 1), .Normal, false)
 	gen_init(home)
 	bind(home)   // the frame thread reads the start island unless it binds another
 	if opt.place != 0 {
@@ -229,15 +239,7 @@ main :: proc() {
 		why_at(opt.why.x, opt.why.y)
 		return
 	}
-	// The other islands, nearest the start first: those within `near` km formed side by side before
-	// entering, the rest on three threads of low priority once play has begun.
-	others := make([dynamic]int)
-	for _, i in formed do if &formed[i] != home do append(&others, i)
-	apart :: proc(i: int) -> f64 { return math.hypot(f64(formed[i].island.origin.x - home.island.origin.x), f64(formed[i].island.origin.y - home.island.origin.y)) }
-	slice.sort_by(others[:], proc(a, b: int) -> bool { return apart(a) < apart(b) })
-	soon := 0
-	for soon < len(others) && apart(others[soon]) <= opt.near*1000 do soon += 1
-	islands_form(others[:soon], max(os.get_processor_core_count()/2, 1), .Normal, true)
+	islands_done(early, others[:soon])
 	if opt.above && opt.place == 0 do opt.pos.y += f64(height_in_world(opt.pos.x, opt.pos.z, 1))
 	// With no day named, the first fair day from the March equinox on: a person looking at the
 	// land sees it in sunlight, and pictures taken on different days of work can be compared.
