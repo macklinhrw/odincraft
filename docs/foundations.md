@@ -756,6 +756,7 @@ Started 2026-11-14 at the owner's word, in this order (Claude's proposal; the ow
 | 28 | Who reached which island: animals by whether they fly, swim or walk, from the straits to their neighbours | 18 | `--why` on two islands |
 | 29 | People: one people in two eras, the ruins of the first among the farms of the second, names from that history | 18, 25, 26 | A ruin and a farm |
 | 30 | The fantastic: an older sea level and its drowned coasts, landmarks on every island, the first marvel (one elder wood) | 26, 29 | The marvel, and how it is found |
+| 31 | Forming speed: every stage of forming an island measured and made faster with the land unchanged bit for bit, so the islands within 64 km can be formed before entering again, and continents and the plate story start from a faster loop (started 2026-11-15, beside steps 21 and 22) | 18 | The same islands, sooner: entering the world, and the time per km² |
 
 Steps 17 to 20 started together; step 21 followed the seam test's failure, and step 22 the owner's goal of 2026-11-15 that every island and continent comes out of one history of moving plates. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 25; people (item 9) before step 29; the fantastic (item 10) before step 30.
 
