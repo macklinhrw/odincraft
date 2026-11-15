@@ -22,6 +22,8 @@ PLANTS     :: #load("../assets/plants.png")   // the ground plants' pictures, by
 TILE       :: 16
 SHADOW_RES :: 2048
 LEAF_FAR   :: 72     // metres within which leaves are seen through
+EARTH      :: 7.4e6  // metres: the world is drawn round (drawn, shaders.metal), on the Earth's radius lengthened for refraction
+SEA_GRID   :: 64     // the sea is drawn as this many quads squared, as in shaders.metal
 BOX_MAX    :: 8192   // creatures' boxes drawn a frame at most
 FOV        :: 70.0   // vertical, degrees
 NEAR       :: 0.1
@@ -559,8 +561,10 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 				if child == nil || !child.ready do it.mask |= 1 << uint(q)
 			}
 		}
-		append(&items, it)
 		lowest = min(lowest, it.lo.y)
+		// It is drawn lower the farther it is (drawn, shaders.metal): its box takes in how low.
+		it.lo.y -= (max(it.lo.x*it.lo.x, it.hi.x*it.hi.x) + max(it.lo.z*it.lo.z, it.hi.z*it.hi.z))/(2*EARTH)
+		append(&items, it)
 	}
 
 	// Sun shadows.
@@ -736,7 +740,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 
 	sdl.BindGPUGraphicsPipeline(pass, g.water)
 	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 3)
-	sdl.DrawGPUPrimitives(pass, 4, 1, 0, 0)
+	sdl.DrawGPUPrimitives(pass, 4, SEA_GRID*SEA_GRID, 0, 0)
 	sdl.EndGPURenderPass(pass)
 	g.quads_drawn -= shadow_quads
 

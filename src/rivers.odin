@@ -479,10 +479,10 @@ river_near :: proc(x, z: f32) -> (r: River_Near, ok: bool) {
 // lip that holds the pool back. `gravel` is true where the ground is river bed or bar,
 // and `water` is the river's level within the channel. At a coarse cell size the cut is
 // widened by the cell, so a far-off column that a stream crosses is always lowered
-// beneath the water drawn over it.
+// beneath the water drawn over it; past COARSE a stream is under a pixel wide and cuts nothing.
 river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool, water: f32) {
 	r, ok := river_near(f32(x), f32(z))
-	if !ok do return h, false, NO_WATER
+	if !ok || cell > COARSE do return h, false, NO_WATER
 	d := r.d
 	if cell > 1 {
 		d = max(d - 0.71*f32(cell), 0)

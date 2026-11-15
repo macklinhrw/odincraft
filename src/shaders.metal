@@ -23,6 +23,15 @@ struct Draw { float4 origin; };   // xyz: chunk origin, w: cell size in metres
 
 constant float SHADOW_RES = 2048.0;
 constant float LEAF_FAR = 72.0;   // as in render.odin
+constant float EARTH = 7.4e6;     // metres: the Earth's radius lengthened for ordinary refraction, the surveyors' figure; as in render.odin
+
+// Where a point at `rel` from the eye is drawn on a round world: lower by the square of its distance
+// over twice the radius, 15 m at 15 km and 280 m at 64 km, so the sea has a horizon and far land sinks
+// under it. Only where things are drawn changes: every shader lights, shades, textures and hazes
+// them where they stand on the flat world, so the shadow maps are drawn flat and nothing near moves.
+static float4 drawn(float3 rel, constant Frame &f) {
+    return f.view_proj * float4(rel.x, rel.y - dot(rel.xz, rel.xz) / (2.0 * EARTH), rel.z, 1.0);
+}
 
 constant float3 FACE_N[6] = { float3(1,0,0), float3(-1,0,0), float3(0,1,0), float3(0,-1,0), float3(0,0,1), float3(0,0,-1) };
 constant float3 FACE_U[6] = { float3(0,1,0), float3(0,0,1), float3(0,0,1), float3(1,0,0), float3(1,0,0), float3(0,1,0) };
@@ -72,13 +81,16 @@ static float3 sky_ambient(float3 N, float3 sun, float cover) {
 }
 
 // Haze that thins with altitude, integrated along the view ray: how much of the sky's colour
-// there is in what lies at `rel`.
+// there is in what lies at `rel`. Past a few kilometres it thickens more slowly than near by, as
+// if the air out over the sea were clearer than the island's own (CLEAR), so land 30 to 60 km off
+// still shows its skyline on a clear day; within 2 km it is as it was.
+constant float CLEAR = 10000.0;
 static float haze(float3 rel, constant Frame &f) {
     float dist = length(rel);
     float falloff = 0.0011;
     float t = falloff * rel.y;
     float through = abs(t) < 1e-3 ? 1.0 : (1.0 - exp(-t)) / t;
-    return 1.0 - exp(-0.00006 * exp(-falloff * max(f.cam.y - f.cam.w, 0.0)) * dist * through);
+    return 1.0 - exp(-0.00006 * exp(-falloff * max(f.cam.y - f.cam.w, 0.0)) * CLEAR * log(1.0 + dist / CLEAR) * through);
 }
 
 // ---- clouds -------------------------------------------------------------------------------
@@ -112,11 +124,24 @@ static float cloud_shade(float3 rel, constant Frame &f, texture2d<float> lifted,
 }
 
 // Where a ray from the camera enters and leaves the layer the clouds can fill, 0 and 0 if it never does.
+// The layer is round as the world is (drawn): a ray's height over the eye's level is a t² + b t, the
+// bend lifting it off the layer as it goes, so a ray along the horizon meets the cloud base at last.
 static float2 cloud_span(float3 rd, constant Frame &f) {
     float lo = f.weather.y - f.cam.y, hi = lo + 300.0;
-    if (abs(rd.y) < 1e-5) return lo > 0.0 || hi < 0.0 ? float2(0.0) : float2(0.0, 20000.0);
-    float t0 = max(min(lo / rd.y, hi / rd.y), 0.0);
-    return t0 > 60000.0 ? float2(0.0) : float2(t0, min(max(lo / rd.y, hi / rd.y), t0 + 20000.0));
+    float a = max(dot(rd.xz, rd.xz), 1e-6) / (2.0 * EARTH), b = rd.y;
+    float dlo = b * b + 4.0 * a * lo, dhi = b * b + 4.0 * a * hi;   // under 0 where the ray never comes down to that height
+    float t0 = 0.0, t1;
+    if (lo > 0.0) {   // from under the layer, rising into it
+        t0 = 2.0 * lo / (b + sqrt(dlo));
+        t1 = 2.0 * hi / (b + sqrt(dhi));
+    } else {
+        if (hi < 0.0) {   // from over it, coming down into it
+            if (b >= 0.0 || dhi < 0.0) return float2(0.0);
+            t0 = 2.0 * hi / (b - sqrt(dhi));
+        }
+        t1 = b < 0.0 && dlo >= 0.0 ? 2.0 * lo / (b - sqrt(dlo)) : hi >= 0.0 ? 2.0 * hi / (b + sqrt(dhi)) : (sqrt(dhi) - b) / (2.0 * a);   // out through the base, or the top
+    }
+    return t0 > 60000.0 ? float2(0.0) : float2(t0, min(t1, t0 + 20000.0));
 }
 
 // The cloud along a ray from the camera out to `far`, a few steps through the layer it can fill:
@@ -128,10 +153,11 @@ static float4 clouds(float3 rd, float far, int steps, float start, constant Fram
     if (t1 <= t0) return float4(0, 0, 0, 1);
     float3 lit = sun_light(f.sun.xyz), sky = sky_ambient(float3(0, 1, 0), f.sun.xyz, f.weather.x);
     float dt = (t1 - t0) / float(steps), trans = 1.0, first = -1.0, t = t0 + dt * start;
+    float bend = dot(rd.xz, rd.xz) / (2.0 * EARTH);   // the layer is round (cloud_span)
     float3 col = float3(0.0);
     for (int i = 0; i < steps && trans > 0.03; i++, t += dt) {
-        float h = rd.y * t - lo, top = cloud_top(rd.xz * t, f, lifted, smp, saturate(2.0 - t / 4000.0));
-        float a = 1.0 - exp(-saturate((top - h) / max(abs(rd.y) * dt, 20.0) + 0.5) * min(dt, 80.0) * 0.02);   // the share of the step inside; a long step is not let make the cloud opaque alone, or far cloud sparkles
+        float h = (rd.y + bend * t) * t - lo, top = cloud_top(rd.xz * t, f, lifted, smp, saturate(2.0 - t / 4000.0));
+        float a = 1.0 - exp(-saturate((top - h) / max(abs(rd.y + 2.0 * bend * t) * dt, 20.0) + 0.5) * min(dt, 80.0) * 0.02);   // the share of the step inside; a long step is not let make the cloud opaque alone, or far cloud sparkles
         if (a <= 0.0 || top <= 0.0) continue;
         float3 light = lit * exp(-0.012 * (top - h)) * mix(0.55, 1.0, saturate(top / 250.0)) + sky * (0.45 + 0.35 * saturate(h / max(top, 1.0)));   // the sun dims through the cloud above, and the low tops lie in the high ones' shade
         col += trans * a * light;
@@ -207,7 +233,7 @@ vertex TerrainV vs_terrain(QuadIn q [[stage_in]], uint vid [[vertex_id]],
     Corner c = quad_corner(q, vid);
     TerrainV o;
     o.rel = d.origin.xyz + c.pos;
-    o.position = f.view_proj * float4(o.rel, 1.0);
+    o.position = drawn(o.rel, f);
     o.ao = c.ao;
     o.cell = d.origin.w;
     o.info = q.b.z;
@@ -222,6 +248,7 @@ vertex TerrainV vs_terrain(QuadIn q [[stage_in]], uint vid [[vertex_id]],
 
 struct ShadowU { float4x4 vp; };
 
+// Drawn flat, not lowered as the view is (drawn): every shader looks shadows up where a thing stands on the flat world.
 vertex float4 vs_shadow(QuadIn q [[stage_in]], uint vid [[vertex_id]],
                         constant ShadowU &s [[buffer(0)]], constant Draw &d [[buffer(1)]]) {
     return s.vp * float4(d.origin.xyz + quad_corner(q, vid).pos, 1.0);
@@ -342,7 +369,7 @@ vertex PlantV vs_plant(QuadIn q [[stage_in]], uint vid [[vertex_id]],
     p.xz += rise * 0.03 * sin(f.sun.w * 1.6 + world.x * 0.35 + world.z * 0.27) * float2(0.8, 0.6);   // the wind stirs the tops
     PlantV o;
     o.rel = p;
-    o.position = f.view_proj * float4(p, 1.0);
+    o.position = drawn(p, f);
     o.uv = float2(float(c & 1u), float(c >> 1u) * pictures);
     o.up = rise;
     o.ao = float(q.b.z & 15u) / 15.0;
@@ -409,7 +436,7 @@ vertex BoxV vs_box(BoxIn b [[stage_in]], uint vid [[vertex_id]], constant Frame 
     float3 s = float3((0x287au >> vid) & 1u, (0x02afu >> vid) & 1u, (0x31e3u >> vid) & 1u) * 2.0 - 1.0;
     BoxV o;
     o.rel = b.c.xyz + b.x.xyz * s.x + b.y.xyz * s.y + b.z.xyz * s.z;
-    o.position = f.view_proj * float4(o.rel, 1.0);
+    o.position = drawn(o.rel, f);
     o.local = s;
     o.upper = unpack_rgb(b.c.w);
     o.under = unpack_rgb(b.x.w);
@@ -478,16 +505,21 @@ struct WaterV {
     float roof;     // the share of it under a roof of rock
 };
 
-// The sea beyond the simulated water: one sheet at sea level.
-vertex WaterV vs_water(uint vid [[vertex_id]], constant Frame &f [[buffer(0)]]) {
-    float2 c = float2(vid & 1u, vid >> 1u) * 2.0 - 1.0;
+// The sea beyond the simulated water: a sheet at sea level round the eye, as a grid of SEA_GRID
+// squared quads (one an instance) that widen with distance, so it bends with the world out to past
+// the horizon.
+constant uint SEA_GRID = 64;   // as in render.odin
+vertex WaterV vs_water(uint vid [[vertex_id]], uint cell [[instance_id]], constant Frame &f [[buffer(0)]]) {
+    float reach = max(80000.0, 1.3 * sqrt(2.0 * EARTH * max(f.cam.y - f.cam.w, 1.0)));
+    float2 u = float2(cell % SEA_GRID + (vid & 1u), cell / SEA_GRID + (vid >> 1u)) / float(SEA_GRID) * 2.0 - 1.0;
+    float2 c = sign(u) * u * u * reach;
     WaterV o;
-    o.rel = float3(c.x * 60000.0, f.cam.w - f.cam.y, c.y * 60000.0);
+    o.rel = float3(c.x, f.cam.w - f.cam.y, c.y);
     o.river = float2(0.0);
     o.flow = float2(0.0);
     o.kind = float3(0.0, 0.0, 10.0);
     o.roof = 0.0;
-    o.position = f.view_proj * float4(o.rel, 1.0);
+    o.position = drawn(o.rel, f);
     return o;
 }
 
@@ -503,7 +535,7 @@ vertex WaterV vs_river(RiverIn in [[stage_in]], constant Frame &f [[buffer(0)]],
     o.flow = float2(0.0);
     o.kind = float3(0.0, 0.0, lake ? 10.0 : 1.5);
     o.roof = 0.0;
-    o.position = f.view_proj * float4(o.rel, 1.0);
+    o.position = drawn(o.rel, f);
     return o;
 }
 
@@ -530,7 +562,7 @@ vertex WaterV vs_pool(PoolIn in [[stage_in]], uint vid [[vertex_id]], constant F
     if (m.w < 0.0) m.w = -m.w;   // a fall's own water (falls_make, rivers.odin) is under no roof, and says what it is below zero
     o.kind = float3(1.0, m.w - 2.0 * quarters, m.z);
     o.roof = quarters * 0.25;
-    o.position = f.view_proj * float4(o.rel, 1.0);
+    o.position = drawn(o.rel, f);
     return o;
 }
 
@@ -580,10 +612,13 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
 
     float3 sun = f.sun.xyz;
     float3 r = reflect(rd, N);
-    float fresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(-rd, N)), 5.0);
+    // Far out the ripples are flattened, but the sea is not a mirror there: the faces of its waves turned
+    // to the eye show less sky, and sky from higher up, so it stays darker than the sky over its horizon.
+    float rough = 0.08 * smoothstep(2000.0, 8000.0, dist) * (1.0 - in.river.y);
+    float fresnel = 0.02 + 0.98 * pow(1.0 - max(saturate(dot(-rd, N)), rough), 5.0);
     // A river is shallower and clearer than the sea, and thins to nothing at its edges.
     float3 body = mix(float3(0.010, 0.045, 0.060), float3(0.022, 0.070, 0.058), in.river.y);
-    float3 mirrored = sky_color(float3(r.x, abs(r.y), r.z), sun, f.weather.x) * (1.0 - 0.35 * in.river.y);   // banks and trees dim a river's sky
+    float3 mirrored = sky_color(float3(r.x, max(abs(r.y), 2.0 * rough), r.z), sun, f.weather.x) * (1.0 - 0.35 * in.river.y);   // banks and trees dim a river's sky
     float above = (f.weather.y - f.cam.y - in.rel.y) / max(abs(r.y), 0.02);   // the cloud base over the reflected ray
     if (above > 0.0) mirrored = mix(mirrored, sky_ambient(float3(0, 1, 0), sun, f.weather.x) * 0.9 + sun_light(sun) * 0.3,
                                     0.7 * smoothstep(0.0, 200.0, cloud_top(in.rel.xz + r.xz * above, f, lifted, smp, 0.0)) * (1.0 - haze(r * above, f)));
@@ -591,7 +626,7 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
     float shade = cloud_shade(in.rel, f, lifted, smp);
     float3 col = mix(body * (0.15 + 0.85 * daylight(sun)) * (0.5 + 0.5 * shade) * (1.0 - 0.7 * in.roof), mirrored, fresnel);
     col += sun_light(sun) * 2.5 * shade * pow(saturate(dot(r, sun)), 600.0) * (1.0 - in.roof);
-    float alpha = mix(mix(0.80, 0.62, in.river.y), 1.0, fresnel);
+    float alpha = mix(mix(0.80, 0.62, in.river.y), 1.0, max(fresnel, smoothstep(8000.0, 16000.0, dist) * (1.0 - in.river.y)));   // nothing shows through the sea past 16 km, where the rings coarser than COARSE draw no sea floor
     alpha = mix(alpha, 0.96, in.river.y * smoothstep(1.5, 7.0, in.kind.z));   // deep fresh water is dark: a lake hides its bed, a stream shows it
     alpha *= 1.0 - 0.8 * in.river.y * smoothstep(0.35, 0.85, abs(in.river.x));
     alpha *= 0.25 + 0.75 * smoothstep(0.0, 0.35, in.kind.z);

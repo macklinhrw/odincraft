@@ -225,12 +225,22 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 		x0, z0 := i32(q & 1)*HALF, i32(q >> 1)*HALF
 		start := u32(len(out))
 		for j in z0..<z0 + HALF {
+			last := -1   // the top before this one in the row
 			for i in x0..<x0 + HALF {
 				t := top(c, i, j)
 				m := c.mat[(j + 1)*P + i + 1]
 				slope := c.slope[(j + 1)*P + i + 1]
+				if s > COARSE && t < SEA_LEVEL do continue   // that far off nothing shows through the sea (fs_water), so open sea is no faces at all
 
-				append(out, quad(i*s, t - y_base, j*s, s, s, 2, m, corners(c, i, j, t, s, false), slope))
+				// A top level with the one before it, of the same stuff, slope and full light, lengthens that
+				// one, which draws the same: open sea floor and flat ground cost a face a row, not one a cell.
+				q := quad(i*s, t - y_base, j*s, s, s, 2, m, corners(c, i, j, t, s, false), slope)
+				if l := last; l >= 0 && q.ao == 0xFFFF && out[l].ao == q.ao && out[l].y == q.y && out[l].info == q.info && out[l].slope == q.slope {
+					out[l].b += u16(s)
+				} else {
+					last = len(out)
+					append(out, q)
+				}
 
 				// Risers down to each lower neighbour. On the edge of a quarter the riser runs
 				// to two cells below the ground, because what lies beyond may be drawn at another
