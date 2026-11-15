@@ -4,7 +4,7 @@ You are one of nine designers. Each of you designs ONE system of a game's world;
 
 ## The game
 
-OdinCraft v5 lives at `this repository`. It is a first-person block game (one block is one metre) written in Odin, about 2,800 lines in `src/`. Read these before anything else:
+OdinCraft v5 lives in this repository. It is a first-person block game (one block is one metre) written in Odin, about 2,800 lines in `src/`. Read these before anything else:
 
 - `CLAUDE.md`, `docs/ideas.md` (the destination), `docs/lessons.md` (why eight earlier attempts stalled), `docs/open-decisions.md`, `docs/adr/` (four short records).
 - `docs/interesting-world.md`: research finished today on why the current world is dull and what the pieces of an interesting one are. Its notes in `docs/interesting-world/notes/` carry the sources.

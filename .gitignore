@@ -1,3 +1,18 @@
+# macOS
 .DS_Store
-build/
-screenshots/
+
+# build output and run artefacts
+/build/
+/screenshots/
+/out/
+/*.png
+/*.jpg
+
+# tools/
+__pycache__/
+*.pyc
+/.venv/
+
+# agent workspaces
+/.claude/
+/.t3/

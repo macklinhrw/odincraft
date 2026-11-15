@@ -19,13 +19,13 @@ The first note (2024-10-17) names the ingredients: Dwarf Fortress, Minecraft-sty
 
 ## What the owner has asked for, in their words or as recorded
 
-- "I like the real images, as well as the reterraforged ones by far the most ... goal is ultra realism." (2026-07-08, on the reference board in `reference/visual/`)
+- "I like the real images, as well as the reterraforged ones by far the most ... goal is ultra realism." (2026-07-08, on the reference board described in `reference/README.md`)
 - Rivers "looked completely terrible and unrealistic" (Zigcraft Neo), and later "blue ribbons that sit on the terrain" (Neo v3 review).
 - "Incrementally add features (never multiple at once!)"
 - "The benchmarks stopped being able to test actual gameplay."
 - Reported failures to fix (v4 foundation plan, 2026-09-05): performance; generation and loading of new terrain; near/far transitions; horizontal and vertical world limits; terrible UI; terrain that looks insufficiently real and is boring.
 - A place worth hiking through, with Jūniko in Japan as the reference for connected landscape experience: lakes in forest, waterfalls, distinctive rock, cliffs and valleys (2026-09-06).
-- Forest with overlapping crowns, branching and leaning trunks, small trees under mature ones, dense waterside vegetation, irregular openings (`reference/visual/owner-woodland-lake.png`).
+- Forest with overlapping crowns, branching and leaning trunks, small trees under mature ones, dense waterside vegetation, irregular openings (the woodland-lake photograph on the reference board, `reference/README.md`).
 - On 2026-09-11 the owner reported that nothing generated looked like a real mountain. On 2026-09-27 the owner called the v4 world uninteresting at walking scale.
 
 Targets the owner accepted for v4, recorded here as the long-term scale: a world about 1,000 km wide, about 10 km of visible terrain, 120 FPS at 2560 × 1440 on an M3 Max, world creation within four minutes, deep underground and high mountains with no fixed height ceiling.
@@ -76,4 +76,4 @@ Grouped by how far they are from a first playable. The note after each says how 
 
 ## Visual targets
 
-`reference/visual/README.md` ranks them: real terrain first, then ReTerraForged, then Tectonic, with vanilla Minecraft as the floor. The single primary reference is `reterraforged-ridge-vista.jpg`. The woodland-lake photograph is the forest reference.
+The board (described in `reference/README.md`, not redistributed) ranked them: real terrain first, then ReTerraForged, then Tectonic, with vanilla Minecraft as the floor. The single primary reference is `reterraforged-ridge-vista.jpg`. The woodland-lake photograph is the forest reference.

@@ -18,7 +18,6 @@ Paths, file names and code mentioned inside these documents belong to the old pr
 | `neo-v3-vision.md` | The fullest statement of the vision and the "hard demo" | `zigcraft-neo-v3/docs/vision.md` |
 | `neo-v1-v2-post-mortem.md` | Why Neo v1 and v2 failed, with nine lessons | vault |
 | `voxel-engine-foundation-synthesis.md` | Diagnosis of the noise-taxonomy terrain model and the reconciled engine model | vault |
-| `neo-v3-river-roadmap-2026-07-13.md` | State of the river work when Neo v3 stopped | `zigcraft-neo-v3/docs/reports/` |
 | `dwarf-fortress-worldgen-research.md` | How Dwarf Fortress generates worlds, ecology and resources | `zigcraft-neo-v3/docs/` |
 | `future-phases-research.md` | Research for the living-world phases: climate, soils, ecology, settlements, history | `zigcraft-neo-v3/docs/` |
 
@@ -26,20 +25,22 @@ Paths, file names and code mentioned inside these documents belong to the old pr
 
 | File | What it is | Copied from |
 |---|---|---|
-| `PRODUCT.md`, `DESIGN.md` | Product brief and interface design system | `odincraft-v4/` |
-| `foundation-plan-2026-09-05.html` | The owner's answers to twelve scoping questions, and the review of earlier projects | `plans/odincraft-v4-foundation/` |
 | `natural-world-diversity.md` | The owner's requirements for a place worth hiking, forest structure, and the fantasy direction | `plans/` |
 | `landscape-crafting.md`, `exploration-diversity-research.md` | Research on what makes terrain worth exploring | `plans/terrain-reconstruction/` |
 | `explorable-places-design.md` | Three families of connected places, read from the owner's reference photographs | `reports/terrain/EXPLORABLE-PLACES-DESIGN.md` |
 | `relief-compare-findings.md` | Generated relief measured against real California, Japan and Alps terrain | `reports/terrain/relief-compare/README.md` |
-| `session-note-*.md` | Claude's working notes from the last v4 sessions, including the change of direction on 2026-09-27 | Claude project memory for v4 |
 
-## visual/
+## Visual references (not redistributed)
 
-The reference board the owner approved on 2026-07-08, with its own `README.md` ranking the images, plus `owner-woodland-lake.png`, the forest reference the owner supplied on 2026-09-06.
+From 2026-07 the look was judged against a board of third-party images, which are not in this
+repository because they belong to others: ReTerraForged screenshots (9minecraft.net gallery),
+Tectonic mod screenshots (Modrinth), vanilla Minecraft biome screenshots (minecraft.wiki),
+Wikimedia Commons photographs and SRTM relief renders (Tierra del Fuego valley, Eagle River,
+Suðurnesjabær coast, Mont Blanc, Weisshorn), and one forest-pond photograph. The ranking was:
+real terrain first, then ReTerraForged, then Tectonic, with vanilla as the floor.
 
 The three photographs behind `explorable-places-design.md` (a waterfall amphitheatre and two views of a columnar gorge) were supplied in conversation and are not in any project folder.
 
 ## Not copied
 
-Phase reports, gate documents, toolchain notes, implementation plans and v4's 5.3 GB of evidence. They remain in the old folders beside this one.
+Phase reports, gate documents, toolchain notes, implementation plans, v4's interface brief and session notes, v4's foundation-plan answers, the Neo v3 river roadmap, and v4's 5.3 GB of evidence. They remain in the old folders beside this one.
