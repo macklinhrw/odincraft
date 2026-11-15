@@ -102,7 +102,7 @@ creatures_make :: proc() {
 	lives :: proc(k: int, x, z: f64) -> bool {   // whether a fish of row k lives in the stream or lake at a point
 		row, c := CREATURES[k], land_cell(x, z)
 		p := Point{x = x, z = z, cell = LAND_CELL}
-		return host(row.host, &p) > 0 && (fauna.barrier[c] <= row.climb || fauna.over[c] >= 0 && fauna.barrier[c] < 1e4 && hash01(fauna.over[c], i32(k), seed + 801) < row.reached)
+		return came(row.name).reached && host(row.host, &p) > 0 && (fauna.barrier[c] <= row.climb || fauna.over[c] >= 0 && fauna.barrier[c] < 1e4 && hash01(fauna.over[c], i32(k), seed + 801) < row.reached)
 	}
 	fauna.fish = make([]u8, len(rivers.segments))
 	metres: [len(CREATURES)]f32
@@ -119,6 +119,10 @@ creatures_make :: proc() {
 	fmt.printf("creatures in %.0f ms on the %s island:", time.duration_milliseconds(time.since(started)), region.kind)
 	for row, k in CREATURES {
 		first := len(fauna.haunts)
+		if !came(row.name).reached {
+			fmt.printf("\n  no %s: it did not reach the island: %s", row.name, arrival_words(row.name))
+			continue
+		}
 		switch row.home {
 		case .Face, .Stack:   // the best homes the host holds at, `apart` metres apart
 			Spot :: struct { s: f32, at: [2]f64, top: f32, cause: int }
@@ -410,7 +414,8 @@ creature_words :: proc(x, z: f64) {
 	else do bits, what = fauna.lakes[lake] or_else 0, "lake" if region.features[lake].kind == .Lake else "pond"
 	fmt.printf("in the %s here, the tallest fall between it and the sea is %.0f m (barrier)", what, fauna.barrier[c])
 	for row, k in CREATURES do if row.home == .Water {
-		if bits >> uint(k) & 1 != 0 do fmt.printf("; %s live in it%s: %s", row.name, fmt.tprintf(" from day %.0f to %.0f", row.season[0], row.season[1]) if row.season[0] > 0 else "", row.why)
+		if !came(row.name).reached do fmt.printf("; no %s: it did not reach the island", row.name)
+		else if bits >> uint(k) & 1 != 0 do fmt.printf("; %s live in it%s: %s", row.name, fmt.tprintf(" from day %.0f to %.0f", row.season[0], row.season[1]) if row.season[0] > 0 else "", row.why)
 		else if what == "pond" do fmt.printf("; no %s: no stream joins the pond to the sea", row.name)
 		else if what == "lake" && !row.lakes do fmt.printf("; no %s: it lives in running water", row.name)
 		else if fauna.barrier[c] > row.climb do fmt.printf("; no %s: it gets past no fall over %.1f m%s", row.name, row.climb, ", and did not get up this stream first" if row.reached > 0 else "")

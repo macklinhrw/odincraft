@@ -295,6 +295,15 @@ built :: proc(x, z: f64, upto := max(int)) -> f32 {
 	return h
 }
 
+// A phase of a kind's history as a seed draws it: its steps, uplift, sea and how many vents open,
+// but not where. Its own procedure, so that the world can read an island's sea before forming it
+// (arrivals.odin).
+phase_draw :: proc(p: Phase([2]f32), i: int, key: i32, s: u32) -> Phase(f32) {
+	draw :: proc(r: [2]f32, i, key: i32, s: u32) -> f32 { return r[0] + (r[1] - r[0])*hash01(i, key, s + 521) }
+	k := i32(3*i)
+	return {cell = p.cell, years = p.years, steps = math.round(draw(p.steps, k, key, s)), uplift = draw(p.uplift, k + 1, key, s), sea = draw(p.sea, k + 2, key, s), vents = math.round(draw(p.vents, k, key + 1, s))}
+}
+
 // Draw the region's record from the seed, of the named kind or, with none named, of the kind
 // the seed picks: each row draws a number keyed by its name, raised to one over its weight, and
 // the highest wins, so a row wins in proportion to its weight and a new row changes only the
@@ -311,16 +320,13 @@ region_init :: proc(name: string, size: f64 = REFERENCE) -> bool {
 	N :: size_of(Shape(f64))/size_of(f64)
 	ranges, drawn := transmute([N][2]f64)kind.shape, [N]f64{}
 	for r, i in ranges do drawn[i] = r[0] + (r[1] - r[0])*f64(hash01(i32(i), key, seed + 520))
-	draw :: proc(r: [2]f32, i, key: i32) -> f32 { return r[0] + (r[1] - r[0])*hash01(i, key, seed + 521) }
 	region.kind, region.size, region.shape = kind.name, size, transmute(Shape(f64))drawn   // its origin is its island's (gen_init)
 	region.latitude = 30   // as the islands the plants come from (27 to 34° N); the world frame will set it
 	for &s in STORIES do if s.name == kind.story do region.story = &s
 	region.history = make([]Phase(f32), len(kind.history))
 	from := [2]f64{}   // the middle of the last vents to open
 	for p, i in kind.history {
-		k := i32(3*i)
-		region.history[i] = {cell = p.cell, years = p.years, steps = math.round(draw(p.steps, k, key)), uplift = draw(p.uplift, k + 1, key), sea = draw(p.sea, k + 2, key)}
-		region.history[i].vents = math.round(draw(p.vents, k, key + 1))
+		region.history[i] = phase_draw(p, i, key, seed)
 		// Each vent draws its own place, size and form within the phase's ranges.
 		middle, first := [2]f64{}, len(region.vents)   // the vents of a phase erupt together, each onto the ground as it stood
 		for _ in 0..<int(region.history[i].vents) {
