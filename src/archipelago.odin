@@ -116,7 +116,8 @@ world_at :: proc(x, z: f64) -> (w: World_Point) {
 	// one to two of its cells apart, stand.
 	w.age = math.lerp(f32(0.5), age_at(at, k.age), smoothstep(6, 14, w.front))
 	high := outer_high(k)
-	w.rising = k.rising + world_frame.rise*smoothstep(-0.4, 0.4, fbm(x, z, f64(OUTER_HIGH.stretch), 1000, 2, world_seed + 1731))*high
+	stretch := smoothstep(-0.4, 0.4, fbm(f64(at.x)*1000, f64(at.y)*1000, f64(OUTER_HIGH.stretch), 1000, 2, world_seed + 1731))   // keyed by the known world, which does not move with the start
+	w.rising = k.rising + world_frame.rise*stretch*high
 	w.depth, w.inland = max(-k.h - OUTER_HIGH.relief*high, 0), inland
 	w.setting = .Continent if inland > 0 else .Arc if w.front < 10 else .Hotspot if w.track < 10 else .Forearc if over && k.front < 0 else .Back_Arc if over && k.front < 400 && !k.cont else .Shelf if k.cont else .Open_Sea
 	return

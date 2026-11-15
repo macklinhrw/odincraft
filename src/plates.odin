@@ -936,16 +936,18 @@ plates_split :: proc() {
 			e1 := linalg.normalize(linalg.cross(c, [3]f32{0.3, 0.5, 0.8}))
 			e2 := linalg.cross(c, e1)
 			best: f32 = 2
+			wander := make([]f32, GLOBE_CELLS, context.temp_allocator)   // the rift's wandering, the same for every way tried
+			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i do wander[k] = 0.12*noise3(g.centre[k], 900, 3, world_seed + 602 + u32(step))
 			for try in 0..<6 {
 				a := 2*math.PI*hash01(i32(p.serial), step*8 + i32(try), world_seed + 601)
 				n := math.cos(a)*e1 + math.sin(a)*e2
 				left: f32
-				for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i && g.crust[k].cont && linalg.dot(g.centre[k], n) + 0.12*noise3(g.centre[k], 900, 3, world_seed + 602 + u32(step)) > 0 do left += g.area[k]
+				for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i && g.crust[k].cont && linalg.dot(g.centre[k], n) + wander[k] > 0 do left += g.area[k]
 				if balance := abs(left/p.cont - 0.5); balance < best do best, toward = balance, n
 			}
 			if best > 0.3 do continue
 			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i {
-				across := linalg.dot(g.centre[k], toward) + 0.12*noise3(g.centre[k], 900, 3, world_seed + 602 + u32(step))
+				across := linalg.dot(g.centre[k], toward) + wander[k]
 				side[k] = across > 0
 				// The continent is stretched thin either side of the rift: its margins sink to shelves.
 				if d := abs(across)*PLANET; g.crust[k].cont && d < STRETCH do g.crust[k].thick = 7 + (g.crust[k].thick - 7)*(0.45 + 0.55*d/STRETCH)
