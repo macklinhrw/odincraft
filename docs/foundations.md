@@ -721,7 +721,7 @@ Weak points: every island has the same birds, so they add no difference between 
 
 Each is a scratch copy, folded in or deleted, as the rock experiment was.
 
-- **The land seam** (section 7). Any time after step 1. It decides whether Phase 3 is possible as designed.
+- **The land seam** (section 7). Any time after step 1. It decides whether Phase 3 is possible as designed. Run on 2026-11-15 as step 20 (below; `interesting-world/notes/seam-test.md`), and it failed: the 32 m and 16 m phases move the land on a divide a median 54 to 97 m from its 64 m heights, so a divide pinned there stands as a fin or lies as a trench beside the land formed against it, with steps of up to 179 m in one 16 m cell, and the seam can be found on the map of both islands tested.
 - **Reading rock in the finished frame** (decision 6). Inside step 1: do the scarps and ridges of the first experiment survive?
 - **How unfinished to leave the land** (decision 8). Inside step 3: maps at three lengths of the last phase.
 - **Background forming against frame pacing.** Before Phase 2: three threads forming regions while the flight bench runs. Run on 2026-11-14 as three processes forming one island after another at `nice 10` while the forest flight ran, which loads the cores as threads would but shares no memory with the game: frames over 12.5 ms 1 and 2 against 4 alone, the 99th percentile 9.38 and 9.50 ms against 9.31, the game's own work 0.97 and 1.00 ms against 1.03 (12 performance cores, load 6 to 9 from other work). Forming beside play costs nothing measurable. Forming on threads inside the game is checked again in step 18.
@@ -757,6 +757,29 @@ Started 2026-11-14 at the owner's word, in this order (Claude's proposal; the ow
 | 28 | The fantastic: an older sea level and its drowned coasts, landmarks on every island, the first marvel (one elder wood) | 24, 27 | The marvel, and how it is found |
 
 Steps 17 to 20 start together. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 23; people (item 9) before step 27; the fantastic (item 10) before step 28.
+
+### Step 20, as built
+
+Run 2026-11-15 by Claude as an experiment in a scratch copy; nothing of it is merged. The owner has not yet looked at it. The method, every number and the pictures are in `interesting-world/notes/seam-test.md`.
+
+![The default island's map in detail, formed whole (left) and as two pieces joined (right): in the east-north-east a serrated line stepping along the 64 m cells where a stream was; in the west, right-angled notches on the upland](interesting-world/real/seam-raised-crops.jpg)
+
+- **What was done.** The default island (raised, seed 7) and the ridge on seed 3 were each formed whole. Each was then cut on its 64 m solution along the highest divide splitting the land within 2% of evenly (49.9% and 50.3%), found among runs of basins ordered round the coast. Each piece ran the 32 m and 16 m phases alone. No water crossed the cut; the cells beyond it, and the piece's own cells along it, were held to the 64 m heights interpolated; the coast counted only its own sea. The game then played on the two joined.
+- **The step across the cut is small**: at most 28 m and 14 m (median 1.7 and 1.9 m), under the island's own steps, because both sides are held to the same surface.
+- **The seam is one cell in.** On the whole island, the finer phases leave the land on the divide a median 54 m and 97 m from its 64 m heights (up to 170 and 177 m).
+  - On the default island the held line stands as a fin over the land formed beside it (68% of its length; steps up to 179 m in one cell).
+  - On the ridge it lies as a trench (73%). 19 stream channels cross the joined seam and one runs along it.
+  - Closed hollows up to 68 m deep lie on the seam; the whole islands have none.
+  - Stream heads within 300 m of it moved a median 66 m and 260 m.
+- **It can be seen.** On the map: a serrated ridge stepping along the 64 m cells and right-angled notches on the default island, and a straight trench along the ridge's crest, which I found half blind. From 300 m: the trench, and a line of crags. On the ground the default island's seam is a spine of bare rock over the forest; in forest elsewhere it does not show.
+- **Premises.**
+  - That pinning to the 64 m solution suffices: false.
+  - That the 64 m divide is where the 16 m land puts it: a median of half a 64 m cell off, up to four cells.
+  - That the forming's rules behave the same in a piece: creep, the coast's exposure and cliff height, silt and the refine's warp all read beyond a cell, and each needed a choice.
+- **Variants.** Holding nothing on the piece's side is worse (cliffs of 136 to 142 m across the cut). Pinning to a 64 m run of the whole history is still off a median 30 to 36 m. A margin of 2 km past the cut, formed freely and discarded, made 90% of a 16 km island's seam match the whole within 5 m, but left cliffs of 100 to 160 m on 1%. On the 8 km islands a margin covers most of the other piece and says nothing.
+- **What it means** *(inference)*: the last two stages reshape the land rather than refine it, so the mainland as designed is not supported, and the ocean of islands is. A mainland would need a seam method that has not yet passed, or each landmass formed whole at 16 m.
+
+Weak points: two islands of layered rock, one seed each; the cut ran along the highest divide, where the finer forming changes most; one cell held each side; one margin run at 16 km; the judge of the maps was Claude, not the owner.
 
 ### Phase 3: the mainland and the known lands
 
@@ -811,7 +834,7 @@ Each has the plan's recommendation. Section 8 of each design holds the rest.
 
 ## 10. Not verified, and the largest risks
 
-- **The land seam** is untested. It is the largest risk to the end shape.
+- **The land seam** was tested in step 20 (2026-11-15) and failed: on two islands a divide pinned to the 64 m solution leaves a seam the map shows, because the finer phases move the land on a divide a median 54 to 97 m, not the tens of metres guessed. Forming each piece 2 km past the cut made 90% of a 16 km island's seam match the whole within 5 m but left cliffs of 100 to 160 m on 1% of it. It remains the largest risk to the end shape.
 - **Reading rock in the finished frame** was run in step 1 (2026-11-11) and the landforms survive: on seeds 7, 1 and 2, 3.1%, 3.4% and 5.3% of land is steeper than 45°, with faces of 136, 129 and 235 m. The strength mapping in `geology.md` D4 lowered the island to 202 m, so `rock.odin` uses erosion (0.4/strength)² and slope limits from 35° to 55°.
 - **How unfinished to leave the land** was run in step 3 (2026-11-11) on the ridge island, seed 7. A last phase of 30, 90 (today) or 450 thousand years changes mostly how finely the slopes are cut, and the longest takes 3.2 s to form; the last phase is also the only one on 16 m cells, so its length mixes "how finished" with "how resolved". A sea that falls 20 m and rises 8 gives a raised apron under the old coast but no gorges far inland. The same run showed the erosion wears land faster than the designs assumed: an island at rest for two million years is gone, so the worn kind rests for about 0.4.
 - **Every cost and line count** is a designer's guess, apart from the forming times, the build time, the walking speed, the hollow counts and the facts read from the code that I checked: the four-bit material mask, the fixed sun, the 20 uses of the seed constant.
