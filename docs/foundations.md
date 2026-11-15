@@ -1048,6 +1048,58 @@ Not done: the places' sort of the cells by height (17 of their 30 ms), whose lib
 
 Weak points: the flood is now half of forming and cannot be shared or reordered while the land is to stay bit for bit, so the next large gain changes the land; the start island's "land formed in" line now reads its time beside the near islands (0.68 s on the default island against 0.53 alone); the near islands' lines come once all are done, in order of distance, not each as it is done; fifteen helper threads are made at the first shared loop and never end (they sleep when idle), some of them on efficiency cores, where a part runs slower and the forming thread waits for it at the loop's end, spinning with a yield; sharing gains 1.25 times inside one island beyond the one-core gains, not the cores' twelve; a median exactly at zero could come out as −0 by selection where sorting gave +0 (no island measured has one); there is no 16 km island to measure; and every time was taken under load from other agents' work, while the benches cannot show headroom, only that frames are no worse.
 
+### Step 28, as built
+
+Built 2026-11-15 by Claude: which animals reached which island, by whether they walk, swim, fly or drift. The owner has not yet looked at it. Nothing new is drawn; what changes is who lives where, which `--why`, the start-up lines and `--archipelago` say.
+
+- **Decided once, from the records** (`arrivals.odin`). Every kind of animal the islands have lives on the continent, a guess while it is not formed. At world creation, after the archipelago is made and before any island forms, `arrivals_make` decides for each island and kind whether it got there. It reads the islands' records (place, region size, kind, seed), the continent's coast and the world's field `depth`, and takes 2 to 7 ms. So an island has the same animals formed alone, beside others or on any thread.
+- **Whether the island keeps what reached it is still the region's**, as before: the deer's herd (`trails_make`), a bird's face or stack and a fish's stream (`creatures_make`). A kind that did not reach the island has no trail, home or fish, and its line says why.
+- **The straits, as they stood when the sea was lowest over the island.**
+  - No record holds an island's outline, so its shore is taken a quarter of its region's side from its middle (`ASHORE`; measured on 79 formed islands, 0.14 to 0.17 on cones and craters and 0.23 to 0.39 on the rest).
+  - Its strait to the continent's nearest coast and to every other island is sounded every 500 m on `depth`, along the straight line between the shores.
+  - How far the sea fell is the island's own history's: the field `risen`, read before forming by `risen_on`, which draws the same phases `region_init` does (`phase_draw`, split out of it with the same draws, so every island's land is unchanged bit for bit).
+  - If no sounding is deeper than the sea fell, the strait was land, and a walker crossed it. Otherwise the stretch deeper than that is the open sea a swimmer, flier or drifter had to cross.
+- **The ways across are columns of a row** (`DISPERSAL`, one row for each animal the game draws):
+  - whether it walks over bared land;
+  - how it crosses open sea: swimming, flying or drifting as larvae;
+  - `sure`, the km it crosses in time, and `most`, the most it crosses by any chance.
+
+  Between `sure` and `most` the chance falls evenly, and one draw from the world's seed, keyed by the island and the row's name, decides. Sika deer walk, and swim 4 km in time (Awaji's deer are 4 km from Okinoshima's) and 12 at most (the farthest reported). Black kites fly 100 and 1,000 km, ospreys 1,000 and 3,000. Ayu larvae drift 10 and 50, yoshinobori larvae 100 and 1,000. The figures and their sources are in `interesting-world/notes/real-animals.md`.
+- **In rounds.** First every island takes what the continent can give it, then what islands reached in earlier rounds can, each island taking the source with the best chance and then the least open sea. A later round never gives a source to an island in the same round, so the outcome does not depend on the order.
+- **Said.**
+  - Start-up prints one line for the world (each kind's islands, and for deer how each was reached) and one for the island in hand ("who reached it, over the straits as they stood when the sea was lowest").
+  - The deer's and creatures' lines say why a kind did not reach the island, with the source, the strait's width and depth, the sea's fall, and the chance and draw.
+  - `--why=` ends with a paragraph on the island: each kind, how it came or why not, whether the island keeps it, and where its figures come from.
+  - `--archipelago=` adds what lives on each island to its line, with a kind that reached it but is not kept in brackets.
+
+What the premises had right and wrong:
+
+- **That the inlets kind stands for islands once joined to land.** Wrong since step 17, which puts it wherever the crust is still or sinking: in the forearc and on the hotspot's track as well as on the shelf. On seeds 1 to 8 deer lived on 19 inlets islands, and only 7 of those stood on the shelf. Now they live on 22 of the 31 islands on the shelf and on none of the other 125:
+  - 9 walked over shelf the sea had bared;
+  - 13 swam a strait narrower than 12 km, from the continent or a neighbour;
+  - the worn and ridge kinds on the shelf have them too where the coast is near.
+
+  This matches the real islands: Tsushima, on the shelf, has deer; the Izu islands (arc), Chichijima and Hahajima (forearc) and Kikaijima have none.
+- **That swimming would decide most islands.** It does so only on the shelf. Off the shelf, straits are 8 to 30 km of sea from 700 to 7,000 m deep, wider than a deer swims; the stand-in's islands, at most 25 to 31 km apart middle to middle, are too far apart for swimmers.
+- **That chance matters.** It does for the ayu: on each seed 0 to 5 islands drew no ayu. Many cones and craters it reached have no stream for it, so it lives on fewer. The Izu islands have none, which is matched in outcome but not in cause.
+
+Not done:
+
+- Animals people carried, which waits for people (step 29).
+- Boar, skinks and bats, which the real islands' notes name but nothing draws.
+- An island's age in the chance: a 0.1 Myr dome has the same chance as a 3 Myr ridge.
+- The shallowest path between two islands rather than the straight line.
+
+Weak points:
+
+- **An island a kind reached but cannot keep still passes it on**: a crater with no stream for ayu is a source for its neighbours. Keeping is known only once an island is formed.
+- **Shores are guessed** from the region's size, about a kilometre either way on most islands.
+- **Each island's sea is its own kind's** (2026-11-14), so a strait between two islands is judged with a different sea from each side, until step 22 gives the world one sea.
+- **The record's strait differs from the land drawn**: the formed region's floor falls to 200 m at its rim, so a strait 50 m deep by the record is drawn 200 m deep.
+- **The figures are guesses**: every kind is taken to live on the continent, and the kite's, ayu's and goby's figures are guesses.
+
+**Cost.** `arrivals_make` takes 2 to 7 ms at start-up. An island that now has deer forms longer by its trails, 50 to 170 ms: the worn islands on the shelf, which had none before. The forming of islands without deer is unchanged.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.

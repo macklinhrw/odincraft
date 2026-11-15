@@ -31,7 +31,7 @@ Dispersal :: struct {
 	why:        string, // where the figures come from
 }
 DISPERSAL := [?]Dispersal{
-	{"sika deer", true, .Swam, 4, 12, "deer move between the Tomogashima islets and the Kii peninsula and are 4 km from Awaji's; 12 km is the farthest a sika deer is reported to swim (Feldhamer 1980, cited in a study of Okinoshima's deer)"},
+	{"sika deer", true, .Swam, 4, 12, "deer move between the Tomogashima islets and the Kii peninsula, 4 km from Awaji's; 12 km is the farthest a sika deer is reported to swim, off Okinoshima and across a bay to Vladivostok (real-animals.md)"},
 	{"black kite", false, .Flew, 100, 1000, "a guess: it soars over land and coast and seldom crosses open sea; none breeds on the Ogasawara islands, 1,000 km out (from memory)"},
 	{"osprey", false, .Flew, 1000, 3000, "it migrates over the sea and breeds on the Izu islands, and on Ogasawara (from memory)"},
 	{"ayu", false, .Drifted, 10, 50, "a guess: its larvae keep to brackish and coastal water near their river for four months (Hirano 2022; Kishino and Shinomiya 2005); it lives on seven of eight islands of the Tsushima current, all joined to larger land when the sea stood low (Sawashi 1998), and on none of the Izu islands (from memory)"},
@@ -130,8 +130,13 @@ arrivals_make :: proc() {
 	fmt.printf("who reached which island, decided in %.1f ms:", time.duration_milliseconds(time.since(started)))
 	for k, kind in DISPERSAL {
 		on := strings.builder_make(context.temp_allocator)
-		for a, i in arrivals do if a[kind].reached do fmt.sbprintf(&on, "%s%d", "" if strings.builder_len(on) == 0 else " ", i)
-		fmt.printf("%s %s on %s", ";" if kind > 0 else "", k.name, "none" if strings.builder_len(on) == 0 else fmt.tprintf("all %d", n) if strings.count(strings.to_string(on), " ") == n - 1 else strings.to_string(on))
+		off := strings.builder_make(context.temp_allocator)
+		for a, i in arrivals {
+			if a[kind].reached do fmt.sbprintf(&on, "%s%d%s", "" if strings.builder_len(on) == 0 else ", ", i, fmt.tprintf(" %s", WAYS[a[kind].way]) if k.walks else "")
+			else do fmt.sbprintf(&off, "%s%d", "" if strings.builder_len(off) == 0 else ", ", i)
+		}
+		fmt.printf("%s %s on %s", ";" if kind > 0 else "", k.name, "none" if strings.builder_len(on) == 0 else fmt.tprintf("all %d", n) if strings.builder_len(off) == 0 else
+			fmt.tprintf("all but %s", strings.to_string(off)) if k.walks == false && strings.builder_len(off) < strings.builder_len(on) else strings.to_string(on))
 	}
 	fmt.println()
 }
