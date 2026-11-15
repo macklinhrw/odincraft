@@ -23,6 +23,7 @@ struct Draw { float4 origin; };   // xyz: chunk origin, w: cell size in metres
 
 constant float SHADOW_RES = 2048.0;
 constant float LEAF_FAR = 72.0;   // as in render.odin
+constant float DARK = 150.0;      // metres under the sea past which the ground is black (fs_terrain); as in render.odin
 constant float EARTH = 7.4e6;     // metres: the Earth's radius lengthened for ordinary refraction, the surveyors' figure; as in render.odin
 
 // Where a point at `rel` from the eye is drawn on a round world: lower by the square of its distance
@@ -283,6 +284,8 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     float dist = length(in.rel);
     float3 world = in.rel + f.cam.xyz;
     float3 inside = world - N * (0.5 * in.cell);   // a point safely inside the cell this face belongs to
+    // Ground this deep under the sea is black: the water takes all its light (below), so none of it is worked out.
+    if (f.cam.w - world.y > DARK) return finish(apply_fog(float3(0.0), in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, 1.0);
 
     // Colour: the material's tile, a metre to a tile, its top on a face that looks up or down
     // and its side on the rest. A top is turned a quarter, a half or three quarters by the block

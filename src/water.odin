@@ -22,6 +22,7 @@ WATER_STEP :: 1.0/30            // seconds per step
 RUN        :: 1.8               // metres a second water runs down a drop of one in one: a front a walker can watch come
 DRY_UP     :: 0.004             // metres a second a puddle with no supply sinks away
 SHOWN      :: 0.015             // water shallower than this is not drawn
+CALM       :: [4]f32{0, 0, 10, 0}   // the corners of calm sea's quads (calm_at): still, deep and level
 WALL       :: 1e6
 
 // One piece of water surface: four corners, and at each corner how the water is moving,
@@ -49,6 +50,7 @@ Water :: struct {
 	turn:           int,      // where the next round of rebuilding starts
 	behind:         f64,      // seconds of stepping owed
 	mask:           ^sdl.GPUTexture,   // which squares have simulated water drawn, for the far water to give way to
+	calm:           ^sdl.GPUBuffer,    // the surface of every calm chunk (water_calm)
 	mask_stale:     bool,
 }
 
@@ -71,6 +73,19 @@ water_init :: proc(wt: ^Water, dev: ^sdl.GPUDevice) {
 		width = WATER_SPAN, height = WATER_SPAN, layer_count_or_depth = 1, num_levels = 1,
 	})
 	wt.mask_stale = true
+
+	// One quad over a whole chunk at the sea's level: the surface of every calm chunk.
+	q := Water_Quad{{{0, SEA_SURFACE, 0}, {CHUNK, SEA_SURFACE, 0}, {0, SEA_SURFACE, CHUNK}, {CHUNK, SEA_SURFACE, CHUNK}}, {CALM, CALM, CALM, CALM}}
+	wt.calm = sdl.CreateGPUBuffer(dev, {usage = {.VERTEX}, size = size_of(Water_Quad)})
+	staging := sdl.CreateGPUTransferBuffer(dev, {usage = .UPLOAD, size = size_of(Water_Quad)})
+	(cast(^Water_Quad)sdl.MapGPUTransferBuffer(dev, staging, false))^ = q
+	sdl.UnmapGPUTransferBuffer(dev, staging)
+	cmd := sdl.AcquireGPUCommandBuffer(dev)
+	pass := sdl.BeginGPUCopyPass(cmd)
+	sdl.UploadToGPUBuffer(pass, {staging, 0}, {wt.calm, 0, size_of(Water_Quad)}, false)
+	sdl.EndGPUCopyPass(pass)
+	_ = sdl.SubmitGPUCommandBuffer(cmd)
+	sdl.ReleaseGPUTransferBuffer(dev, staging)
 }
 
 // Top of the ground in a column of a chunk's blocks: the highest block that is not part
@@ -281,15 +296,46 @@ water_corner :: proc(wt: ^Water, x, z, u, v: i32) -> (y: f32, more: [4]f32) {
 	return y, {flow.x/n, flow.y/n, depth/4, clamp((hi - lo - 0.05)/0.6, 0, 1) + 2*math.round(4*roofed/n)}   // and in whole twos, quarters of it under a roof
 }
 
+// Whether a column's water is the open sea at rest, whose quad would lie level with the sea, deep
+// and still, its corners too: the column sea, deep enough that its depth does not show (fs_water),
+// at the sea's level, unroofed and still, and each column round it the same (as shallow as it
+// likes), unloaded, or ground no lower than the sea, so no sheet falls from it. Calm columns side
+// by side along a row are drawn as one quad, and a chunk of nothing else as the one quad all such
+// chunks share (`calm`).
+calm_at :: proc(wt: ^Water, x, z: i32) -> bool {
+	i := water_cell(x, z)
+	if !wt.sea[i] || wt.depth[i] < 1.5 do return false
+	for dz in i32(-1)..=1 do for dx in i32(-1)..=1 {
+		j := water_cell(x + dx, z + dz)
+		if wt.floor[j] == WALL || wt.depth[j] <= SHOWN && wt.floor[j] >= SEA_SURFACE - 0.05 do continue
+		if wt.depth[j] <= SHOWN || wt.roof[j] || abs(wt.floor[j] + wt.depth[j] - SEA_SURFACE) > 0.001 || max(abs(wt.flow_x[j]), abs(wt.flow_z[j])) > 1e-4 do return false
+	}
+	return true
+}
+
+water_calm :: proc(wt: ^Water, c: ^Chunk) -> bool {
+	for z in c.key.z*CHUNK..<(c.key.z + 1)*CHUNK do for x in c.key.x*CHUNK..<(c.key.x + 1)*CHUNK do if !calm_at(wt, x, z) do return false
+	return true
+}
+
 // The water surface of a chunk: a top for each wet column, and a sheet down each side
 // where the water next to it is lower.
 water_surface :: proc(wt: ^Water, c: ^Chunk, out: ^[dynamic]Water_Quad) {
 	for lz in i32(0)..<CHUNK {
-		for lx in i32(0)..<CHUNK {
+		run := i32(-1)   // where a row of calm columns began
+		for lx in i32(0)..=CHUNK {
 			x, z := c.key.x*CHUNK + lx, c.key.z*CHUNK + lz
+			at_rest := lx < CHUNK && calm_at(wt, x, z)
+			if at_rest && run < 0 do run = lx
+			if !at_rest && run >= 0 {
+				a, b, fz := f32(run), f32(lx), f32(lz)
+				append(out, Water_Quad{{{a, SEA_SURFACE, fz}, {b, SEA_SURFACE, fz}, {a, SEA_SURFACE, fz + 1}, {b, SEA_SURFACE, fz + 1}}, {CALM, CALM, CALM, CALM}})
+				run = -1
+			}
+			if lx == CHUNK do break
 			i := water_cell(x, z)
 			wt.shown[i] = wt.depth[i]
-			if wt.depth[i] <= SHOWN do continue
+			if at_rest || wt.depth[i] <= SHOWN do continue
 			y: [4]f32
 			more: [4][4]f32
 			for k in i32(0)..<4 do y[k], more[k] = water_corner(wt, x, z, k & 1, k >> 1)
@@ -359,17 +405,29 @@ water_update :: proc(wt: ^Water, dev: ^sdl.GPUDevice, dt: f64) {
 	Piece :: struct { chunk: ^Chunk, first, count: int }
 	quads := make([dynamic]Water_Quad, context.temp_allocator)
 	pieces := make([dynamic]Piece, context.temp_allocator)
+	built, looked := 0, 0
 	for k in 0..<len(wt.chunks) {
 		s := (wt.turn + k)%len(wt.chunks)
 		c := wt.chunks[s]
 		if c == nil || !wt.stale[s] do continue
+		c.calm = water_calm(wt, c)
 		wt.mask_stale ||= wt.unbuilt[s]
 		wt.stale[s], wt.unbuilt[s] = false, false
+		looked += 1
 		first := len(quads)
-		water_surface(wt, c, &quads)
-		append(&pieces, Piece{c, first, len(quads) - first})
-		if plants_drowned(wt, c) != c.drowned do c.drowned = plants_upload(dev, c, wt)   // the water has risen over a plant, or left it
-		if len(pieces) == 12 {
+		if c.calm {
+			for z in c.key.z*CHUNK..<(c.key.z + 1)*CHUNK do for x in c.key.x*CHUNK..<(c.key.x + 1)*CHUNK do wt.shown[water_cell(x, z)] = wt.depth[water_cell(x, z)]
+		} else {
+			water_surface(wt, c, &quads)
+			built += 1
+			// A calm chunk beside it was judged calm beside what this was: it looks again.
+			for dz in i32(-1)..=1 do for dx in i32(-1)..=1 do if n := wt.chunks[water_slot(c.key.x + dx, c.key.z + dz)]; n != nil && n.calm do wt.stale[water_slot(n.key.x, n.key.z)] = true
+		}
+		if !c.calm || c.water != nil {   // a calm chunk's empty piece takes down what was drawn of it
+			append(&pieces, Piece{c, first, len(quads) - first})
+			if plants_drowned(wt, c) != c.drowned do c.drowned = plants_upload(dev, c, wt)   // the water has risen over a plant, or left it
+		}
+		if built == 12 || looked == 64 {
 			wt.turn = s + 1
 			break
 		}

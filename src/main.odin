@@ -303,7 +303,7 @@ main :: proc() {
 	start := p.pos
 	intervals: [dynamic]f32   // seconds between frames
 	work: [dynamic]f32        // seconds of our own work per frame: everything but the wait for the display
-	drawn: [dynamic][3]int    // faces, ground plants and creatures' boxes drawn each frame
+	drawn: [dynamic][4]int    // faces, ground plants, creatures' boxes and quads of water drawn each frame
 	idle_frames, title_from := 0, 0
 
 	running := true
@@ -412,7 +412,7 @@ main :: proc() {
 		}
 		render(&g, w, view, shot)
 		append(&work, f32(f64(sdl.GetPerformanceCounter() - now)/frequency - g.waited))
-		append(&drawn, [3]int{g.quads_drawn, g.plants_drawn, g.boxes_drawn})
+		append(&drawn, [4]int{g.quads_drawn, g.plants_drawn, g.boxes_drawn, g.water_drawn})
 
 		if seconds - title_at > 0.5 {
 			recent := intervals[title_from:]
@@ -431,6 +431,16 @@ main :: proc() {
 		free_all(context.temp_allocator)
 	}
 
+	if opt.bench == 0 && opt.shot == "" && len(intervals) > 1 {
+		// What the session was like to play, from the first frame after entering.
+		total, late, worst := f32(0), 0, f32(0)
+		for s in intervals[1:] {
+			total += s
+			late += int(s > 0.0125)
+			worst = max(worst, s)
+		}
+		fmt.printfln("played %.0f s: average %.1f fps, %d frames over 12.5 ms, the worst %.1f ms", total, f32(len(intervals) - 1)/total, late, worst*1000)
+	}
 	if opt.bench > 0 {
 		// Skip the first two seconds, while the world around the start is still loading.
 		skip, t := 0, f32(0)
@@ -446,16 +456,21 @@ main :: proc() {
 			for s in samples do if s > 0.0125 do late += 1   // more than one and a half refreshes at 120 Hz
 			fmt.printfln("%s  frames %d  median %.2f ms  99%% %.2f ms  worst %.2f ms  over 12.5 ms: %d", name, n, samples[n/2]*1000, samples[n*99/100]*1000, samples[n - 1]*1000, late)
 		}
+		total := f32(0)
+		for s in intervals[skip:] do total += s
+		if total > 0 do fmt.printfln("average %.1f fps", f32(len(intervals) - skip)/total)
 		report("frame interval", intervals[skip:])
 		report("our work      ", work[skip:])
 		if skip < len(drawn) {
 			mid := skip + (len(drawn) - skip)/2
-			slice.sort_by(drawn[skip:], proc(a, b: [3]int) -> bool { return a.x < b.x })
+			slice.sort_by(drawn[skip:], proc(a, b: [4]int) -> bool { return a.x < b.x })
 			faces := drawn[mid].x
-			slice.sort_by(drawn[skip:], proc(a, b: [3]int) -> bool { return a.z < b.z })
+			slice.sort_by(drawn[skip:], proc(a, b: [4]int) -> bool { return a.z < b.z })
 			boxes, most := drawn[mid].z, drawn[len(drawn) - 1].z
-			slice.sort_by(drawn[skip:], proc(a, b: [3]int) -> bool { return a.y < b.y })
-			fmt.printfln("drawn a frame (median): %d k faces, %d k ground plants, %d creatures' boxes (at most %d)", faces/1000, drawn[mid].y/1000, boxes, most)
+			slice.sort_by(drawn[skip:], proc(a, b: [4]int) -> bool { return a.w < b.w })
+			water := drawn[mid].w
+			slice.sort_by(drawn[skip:], proc(a, b: [4]int) -> bool { return a.y < b.y })
+			fmt.printfln("drawn a frame (median): %d k faces, %d k ground plants, %d k quads of water, %d creatures' boxes (at most %d)", faces/1000, drawn[mid].y/1000, water/1000, boxes, most)
 		}
 		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(p.pos.x - start.x, p.pos.z - start.z), p.pos.x, p.pos.y, p.pos.z, height_in_world(p.pos.x, p.pos.z, 1))
 	}

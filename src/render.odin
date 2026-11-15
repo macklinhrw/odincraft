@@ -27,6 +27,7 @@ SEA_GRID   :: 64     // the sea is drawn as this many quads squared, as in shade
 BOX_MAX    :: 8192   // creatures' boxes drawn a frame at most
 FOV        :: 70.0   // vertical, degrees
 NEAR       :: 0.1
+DARK       :: 150    // metres under the sea past which the ground is drawn black, so casts no shadow worth drawing; as in shaders.metal
 
 // Shadow cascades: how far each reaches from the camera, the finest level of detail drawn
 // into it, and how many frames pass between redraws. A far cascade cannot resolve single
@@ -60,12 +61,14 @@ Gpu :: struct {
 	boxes_drawn:    int,
 	quads_drawn:    int,
 	plants_drawn:   int,
+	water_drawn:    int,   // quads of the simulated water
 	frame:          int,
 	cascade_vp:     [4]matrix[4, 4]f32,   // each shadow map's view as it was last drawn
 	cascade_eye:    [4][3]f64,            // and the eye it was drawn round
 	waited:         f64,   // seconds the last frame spent waiting for the display
 	unseen:         bool,  // no window is shown: frames are drawn in full and paced as a 120 Hz display would
-	shown_at:       u64,   // when the last unseen frame was done
+	shown_at:       u64,   // the refresh the last unseen frame was shown at
+	drawing:        ^sdl.GPUFence,   // the unseen frame the GPU may still be drawing
 }
 
 // What to draw.
@@ -464,7 +467,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		sw, sh = u32(pw), u32(ph)
 	}
 	resize(g, sw, sh)
-	g.quads_drawn, g.plants_drawn = 0, 0
+	g.quads_drawn, g.plants_drawn, g.water_drawn = 0, 0, 0
 	g.boxes_drawn = min(len(v.boxes), BOX_MAX)
 	if g.boxes_drawn > 0 {
 		copy((cast([^]Box)sdl.MapGPUTransferBuffer(g.dev, g.box_staging, true))[:g.boxes_drawn], v.boxes[:g.boxes_drawn])
@@ -592,7 +595,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 			sdl.PushGPUVertexUniformData(cmd, 0, &f.shadow_vp[i], size_of(f.shadow_vp[i]))
 			cascade := Caster{r = r, offset = offset[i], l_right = l_right, l_up = l_up, light = light, lowest = lowest, wide = wide}
 			for &it in items {
-				if it.level < min_level[i] || !shades(cascade, it.lo, it.hi) do continue
+				if it.level < min_level[i] || f64(it.hi.y) + v.eye.y < SEA_SURFACE - DARK || !shades(cascade, it.lo, it.hi) do continue   // light falls downward, so what lies wholly in the dark shades only the dark
 				faces: [4]u8
 				if it.level == 0 {
 					faces = {lit_faces, lit_faces, 0, 0}   // the blocks and their leaves, which cast shadows whole
@@ -710,12 +713,15 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.BindGPUGraphicsPipeline(pass, g.pool)
 	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 3)
 	for &it in items {
-		if !it.seen || it.chunk.water == nil do continue
+		water, count := it.chunk.water, it.chunk.water_count
+		if it.chunk.calm do water, count = w.water.calm, 1
+		if !it.seen || water == nil do continue
 		origin := [4]f32{it.origin.x, f32(-v.eye.y), it.origin.z, 1}
 		sdl.PushGPUVertexUniformData(cmd, 1, &origin, size_of(origin))
-		binding := sdl.GPUBufferBinding{buffer = it.chunk.water}
+		binding := sdl.GPUBufferBinding{buffer = water}
 		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
-		sdl.DrawGPUPrimitives(pass, 4, it.chunk.water_count, 0, 0)
+		sdl.DrawGPUPrimitives(pass, 4, count, 0, 0)
+		g.water_drawn += int(count)
 	}
 
 	for &island in formed do if island.ribbon != nil {
@@ -755,18 +761,23 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	}
 
 	if shot == "" && g.unseen {
-		// Wait for the frame to be drawn, then for the next refresh of a 120 Hz display, so a
-		// frame that takes too long is late here as it would be on screen.
+		// As on a 120 Hz display. Two frames are in flight, as SDL keeps them, so the frame before this
+		// one must be drawn before the next is begun, and the GPU draws this one while the next is made.
+		// A frame goes up at the first refresh after that, and the refreshes come every 1/120 s whether
+		// or not a frame is ready, so one that misses a refresh waits for the next, as on screen.
 		wait_from = sdl.GetPerformanceCounter()
 		fence := sdl.SubmitGPUCommandBufferAndAcquireFence(cmd)
-		_ = sdl.WaitForGPUFences(g.dev, true, &fence, 1)
-		sdl.ReleaseGPUFence(g.dev, fence)
-		refresh := sdl.GetPerformanceFrequency()/120
-		for now := sdl.GetPerformanceCounter(); now < g.shown_at + refresh; now = sdl.GetPerformanceCounter() {
-			sdl.DelayPrecise((g.shown_at + refresh - now)*1_000_000_000/sdl.GetPerformanceFrequency())
+		if g.drawing != nil {
+			_ = sdl.WaitForGPUFences(g.dev, true, &g.drawing, 1)
+			sdl.ReleaseGPUFence(g.dev, g.drawing)
 		}
-		g.shown_at = sdl.GetPerformanceCounter()
-		g.waited += f64(g.shown_at - wait_from)/f64(sdl.GetPerformanceFrequency())
+		g.drawing = fence
+		refresh := sdl.GetPerformanceFrequency()/120
+		now := sdl.GetPerformanceCounter()
+		if g.shown_at == 0 do g.shown_at = now
+		for g.shown_at < now do g.shown_at += refresh
+		for ; now < g.shown_at; now = sdl.GetPerformanceCounter() do sdl.DelayPrecise((g.shown_at - now)*1_000_000_000/sdl.GetPerformanceFrequency())
+		g.waited += f64(now - wait_from)/f64(sdl.GetPerformanceFrequency())
 		return
 	}
 	if shot == "" {

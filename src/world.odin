@@ -31,6 +31,7 @@ Chunk :: struct {
 	h:                  i32,           // layers in blocks
 	water:              ^sdl.GPUBuffer, // level 0 only: the water surface, built in water.odin
 	water_count:        u32,
+	calm:               bool,          // level 0 only: its water is calm open sea, drawn as one quad (water_calm)
 	plants:             []Quad,        // level 0 only: the ground plants (plants.odin), all of them
 	plant_buf:          ^sdl.GPUBuffer, // and those drawn: all but any the water has drowned
 	plant_count:        u32,
@@ -59,8 +60,13 @@ World :: struct {
 	sited:   [3]f64,                  // where the camera was when that was last worked out
 	started: bool,
 	islands: int,                     // islands formed when the rings were last filled: a chunk over one not yet formed waits for it
+	behind:  bool,                    // the rings moved while a worker held the queue: they are filled next frame
+	backlog: int,                     // work queued, building or waiting for upload, when last counted
 	water:   Water,
 
+	// The frame thread only tries this lock: a worker holds it for moments, but a worker that other
+	// programs' threads hold off the processor while it has it must not hold up a frame. What finds
+	// it held waits for the next frame.
 	mutex:   sync.Mutex,              // guards everything below
 	wake:    sync.Cond,
 	pending: [dynamic]Job,
@@ -200,7 +206,7 @@ clearance :: proc(p: [3]f64) -> (clear: f64) {
 }
 
 world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
-	moved := !w.started
+	moved := !w.started || w.behind
 	// A level's ring reaches RADIUS chunks from the camera, and beyond that the next level is fine
 	// enough. From high in the air no ground is that near, so the level is not built or drawn at all;
 	// it comes back a fifth of its reach sooner than it went, so hovering at the height costs nothing.
@@ -241,29 +247,31 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 			delete_key(&w.chunks, key)
 		}
 
-		sync.lock(&w.mutex)
-		w.focus = w.center
-		for i := len(w.pending) - 1; i >= 0; i -= 1 {
-			if !in_ring(w, w.pending[i].key, RADIUS + 1) || w.pending[i].key.level < w.finest {
-				delete(w.pending[i].edits)
-				unordered_remove(&w.pending, i)
-			}
-		}
-		for l in w.finest..<i32(LEVELS) {
-			for dz in -i32(RADIUS)..=RADIUS {
-				for dx in -i32(RADIUS)..=RADIUS {
-					key := Key{l, w.center[l].x + dx, w.center[l].y + dz}
-					if key in w.chunks || waits(key) do continue
-					c := new(Chunk)
-					c.key = key
-					c.building = true
-					w.chunks[key] = c
-					append(&w.pending, Job{key = key, edits = edits_near(w, key)})
+		// The queue: what has left the rings leaves it, and what has come into them joins it.
+		if w.behind = !sync.try_lock(&w.mutex); !w.behind {
+			w.focus = w.center
+			for i := len(w.pending) - 1; i >= 0; i -= 1 {
+				if !in_ring(w, w.pending[i].key, RADIUS + 1) || w.pending[i].key.level < w.finest {
+					delete(w.pending[i].edits)
+					unordered_remove(&w.pending, i)
 				}
 			}
+			for l in w.finest..<i32(LEVELS) {
+				for dz in -i32(RADIUS)..=RADIUS {
+					for dx in -i32(RADIUS)..=RADIUS {
+						key := Key{l, w.center[l].x + dx, w.center[l].y + dz}
+						if key in w.chunks || waits(key) do continue
+						c := new(Chunk)
+						c.key = key
+						c.building = true
+						w.chunks[key] = c
+						append(&w.pending, Job{key = key, edits = edits_near(w, key)})
+					}
+				}
+			}
+			sync.unlock(&w.mutex)
+			sync.cond_broadcast(&w.wake)
 		}
-		sync.unlock(&w.mutex)
-		sync.cond_broadcast(&w.wake)
 	}
 
 	// Rebuild chunks the player has changed. The old mesh stays up until the new one lands.
@@ -271,8 +279,8 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		c := w.chunks[w.dirty[i]] or_else nil
 		if c != nil && c.building do continue
 		if c != nil {
+			if !sync.try_lock(&w.mutex) do continue
 			c.building, c.dirty = true, false
-			sync.lock(&w.mutex)
 			append(&w.pending, Job{key = c.key, edits = edits_near(w, c.key), urgent = true})
 			sync.unlock(&w.mutex)
 			sync.cond_signal(&w.wake)
@@ -284,7 +292,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 	UPLOAD_BUDGET :: 3 << 20
 	batch := make([dynamic]Built, context.temp_allocator)
 	bytes := 0
-	sync.lock(&w.mutex)
+	if !sync.try_lock(&w.mutex) do return
 	for len(w.done) > 0 && bytes < UPLOAD_BUDGET {
 		b := w.done[0]
 		ordered_remove(&w.done, 0)
@@ -369,11 +377,12 @@ waits :: proc(key: Key) -> bool {
 	return false
 }
 
-// Work still queued, building or waiting for upload.
+// Work still queued, building or waiting for upload; at least one while a worker holds the queue.
 world_backlog :: proc(w: ^World) -> int {
-	sync.lock(&w.mutex)
-	defer sync.unlock(&w.mutex)
-	return len(w.pending) + w.active + len(w.done)
+	if !sync.try_lock(&w.mutex) do return max(w.backlog, 1)
+	w.backlog = len(w.pending) + w.active + len(w.done)
+	sync.unlock(&w.mutex)
+	return w.backlog
 }
 
 // ---- blocks ---------------------------------------------------------------------------------
