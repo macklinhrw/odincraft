@@ -88,10 +88,19 @@ static float haze(float3 rel, constant Frame &f) {
 // is where the wind off the sea has been lifted past the cloud base by the ground it crossed.
 static float cloud_top(float2 rel, constant Frame &f, texture2d<float> lifted, sampler smp, float fine) {
     float2 q = (rel + f.cloud.xy) / 1200.0;
-    float n = 0.5 * vnoise(q) + 0.25 * vnoise(q * 2.03 + 7.1) + (fine > 0.0 ? fine * (0.15 * vnoise(q * 4.1 + 3.7) + 0.1 * vnoise(q * 8.3 + 1.3) - 0.125) : 0.0) + 0.125;   // the fine octaves fade out with distance, where steps would alias them
     float c = f.weather.x - 0.5;   // the noise passes this level over a share `cover` of the sky
     float level = 0.5 - 0.36 * c - 0.5 * c * c * c - 0.3 * smoothstep(0.9, 1.0, f.weather.x) + 0.5 * (1.0 - smoothstep(0.0, 0.03, f.weather.x));
     float rise = lifted.sample(smp, (rel + f.cloud.zw) / f.weather.w).r - f.weather.y;
+    // Where no cap can stand, the deck is all there is, and where the noise stays under its level
+    // even if every octave still to come added all it could, there is none: those octaves are not
+    // worked out. Most of the steps through a fair sky end here.
+    float more = fine > 0.0 ? 0.125 * fine : 0.0;   // the most the fine octaves can add
+    bool deck_only = rise <= -30.0;
+    float n = 0.5 * vnoise(q);
+    if (deck_only && n + 0.25 + 0.125 + more <= level) return 0.0;
+    n += 0.25 * vnoise(q * 2.03 + 7.1);
+    if (deck_only && n + 0.125 + more <= level) return 0.0;
+    n += (fine > 0.0 ? fine * (0.15 * vnoise(q * 4.1 + 3.7) + 0.1 * vnoise(q * 8.3 + 1.3) - 0.125) : 0.0) + 0.125;   // the fine octaves fade out with distance, where steps would alias them
     return max(f.weather.z * smoothstep(0.0, 0.35, n - level), saturate((rise + 30.0) / 60.0) * (rise + 150.0) * (0.5 + n));
 }
 

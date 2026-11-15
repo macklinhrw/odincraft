@@ -31,6 +31,29 @@ quad :: proc(x, y, z, a, b: i32, face: int, m: Mat, corners: [4]u16, slope: [2]u
 	return {i16(x), i16(y), i16(z), i16(a), u16(b), ao, u16(face) | u16(flip) << 3 | u16(m) << 8, slope}
 }
 
+// A chunk's quads are stored by the way they face, +X to -Z, and within that by part: the quarters
+// of a far chunk, or at the nearest level the solid faces, the crowns' outer faces and the faces
+// within them. A draw can then leave out every face turned from the eye, or from the sun, before
+// any is shaded. `parts` is where each part lies in `quads` as meshed; the result says where each
+// part of each facing lies once sorted, in place.
+by_face :: proc(quads: []Quad, parts: [4][2]u32) -> (ranges: [6][4][2]u32) {
+	at := u32(0)
+	for p in 0..<4 do for q in quads[parts[p][0]:][:parts[p][1]] do ranges[q.info & 7][p][1] += 1
+	for f in 0..<6 do for p in 0..<4 {
+		ranges[f][p][0] = at
+		at += ranges[f][p][1]
+	}
+	meshed := make([]Quad, len(quads), context.temp_allocator)
+	copy(meshed, quads)
+	next := ranges
+	for p in 0..<4 do for q in meshed[parts[p][0]:][:parts[p][1]] {
+		f := q.info & 7
+		quads[next[f][p][0]] = q
+		next[f][p][0] += 1
+	}
+	return
+}
+
 // ---- near: a true block volume ------------------------------------------------------------
 
 // Blocks are stored for the chunk and its border, in layers from the bottom up. Below the

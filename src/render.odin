@@ -372,23 +372,77 @@ sun_dir :: proc(hour, day: f32) -> [3]f32 {
 	return {-math.cos(dec)*math.sin(h), math.sin(dec)*math.sin(lat) + math.cos(dec)*math.cos(lat)*math.cos(h), math.cos(dec)*math.sin(lat)*math.cos(h) - math.sin(dec)*math.cos(lat)}
 }
 
-draw_item :: proc(g: ^Gpu, cmd: ^sdl.GPUCommandBuffer, pass: ^sdl.GPURenderPass, it: ^Item, mask: u8) {
-	sdl.PushGPUVertexUniformData(cmd, 1, &it.origin, size_of(it.origin))
-	binding := sdl.GPUBufferBinding{buffer = it.chunk.buffer}
-	sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
-	// Quarters are stored one after another, so neighbouring quarters draw as one run.
-	for q := 0; q < 4; {
-		if mask & (1 << uint(q)) == 0 {
-			q += 1
-			continue
-		}
-		first, count := it.chunk.ranges[q][0], u32(0)
-		for ; q < 4 && mask & (1 << uint(q)) != 0; q += 1 do count += it.chunk.ranges[q][1]
-		if count > 0 {
+// Draw each part of a chunk facing the ways its bits in `faces` say (+X to -Z; none leaves the part
+// out). The quads are stored by facing and then by part (by_face, mesh.odin), so neighbouring runs,
+// and runs with only empty ones between, draw as one.
+draw_item :: proc(g: ^Gpu, cmd: ^sdl.GPUCommandBuffer, pass: ^sdl.GPURenderPass, it: ^Item, faces: [4]u8) {
+	bound := false
+	first, count := u32(0), u32(0)
+	for f in 0..<7 do for p in 0..<4 {
+		r := it.chunk.ranges[f][p] if f < 6 else {}
+		if r[1] > 0 && faces[p] & (1 << uint(f)) != 0 {
+			if count == 0 do first = r[0]
+			count += r[1]
+		} else if count > 0 && (r[1] > 0 || f == 6) {
+			if !bound {
+				sdl.PushGPUVertexUniformData(cmd, 1, &it.origin, size_of(it.origin))
+				binding := sdl.GPUBufferBinding{buffer = it.chunk.buffer}
+				sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
+				bound = true
+			}
 			sdl.DrawGPUPrimitives(pass, 4, count, 0, first)
 			g.quads_drawn += int(count)
+			count = 0
 		}
 	}
+}
+
+// The facings of the faces in a box that can be seen from the eye: a face looking +X can be seen only
+// from beyond it in X, so where the whole box lies on the far side the culling would throw all of
+// them away after shading their corners.
+facing_eye :: proc(lo, hi: [3]f32) -> (faces: u8) {
+	for a in 0..<3 {
+		if lo[a] < 0 do faces |= 1 << uint(2*a)
+		if hi[a] > 0 do faces |= 2 << uint(2*a)
+	}
+	return
+}
+
+// A quarter of a far chunk's box, as mesh_columns orders them.
+quarter_box :: proc(it: ^Item, q: int) -> (lo, hi: [3]f32) {
+	half := (it.hi.x - it.lo.x)/2
+	lo = it.lo + {f32(q & 1)*half, 0, f32(q >> 1)*half}
+	return lo, {lo.x + half, it.hi.y, lo.z + half}
+}
+
+// What a shadow cascade can draw: what lies in its square and can shade ground in view.
+Caster :: struct {
+	r:                     f32,
+	offset:                [3]f32,
+	l_right, l_up, light:  [3]f32,
+	lowest:                f32,      // the lowest ground there is, from the eye
+	wide:                  [4][3]f32,   // the view's planes, widened by what a turn of the head can bring in
+}
+
+// Whether a box can shade ground in view: it lies in the cascade's square, and drawn out down the
+// sunlight as far as its shadow can fall, it is not wholly outside the widened view.
+shades :: proc(c: Caster, lo, hi: [3]f32) -> bool {
+	centre := (lo + hi)/2
+	reach := c.r + linalg.length(hi - lo)/2
+	if abs(linalg.dot(centre, c.l_right) + c.offset.x) > reach || abs(linalg.dot(centre, c.l_up) + c.offset.y) > reach do return false
+	fall := min((hi.y - c.lowest)/max(-c.light.y, 0.05), 2*c.r)
+	down: [4]f32
+	for p, i in c.wide do down[i] = fall*max(linalg.dot(p, c.light), 0)
+	return !outside(c.wide, lo, hi, down)
+}
+
+// Whether a box lies wholly outside one of the planes through the eye.
+outside :: proc(planes: [4][3]f32, lo, hi: [3]f32, reach := [4]f32{}) -> bool {
+	for p, i in planes {
+		far := [3]f32{hi.x if p.x > 0 else lo.x, hi.y if p.y > 0 else lo.y, hi.z if p.z > 0 else lo.z}
+		if linalg.dot(p, far) + reach[i] < 0 do return true
+	}
+	return false
 }
 
 // Draw one frame. With `shot` set, also write the frame to that PNG file.
@@ -517,6 +571,12 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		// can bring in before the map is next drawn.
 		WIDE :: 1.4
 		wide := [4][3]f32{fwd*tan_x*WIDE + right, fwd*tan_x*WIDE - right, fwd*tan_y*WIDE + up, fwd*tan_y*WIDE - up}
+		// Only faces turned to the sun cast: the culling throws the others away, in every chunk alike.
+		lit_faces: u8
+		for a in 0..<3 {
+			if sun[a] > 0 do lit_faces |= 1 << uint(2*a)
+			if sun[a] < 0 do lit_faces |= 2 << uint(2*a)
+		}
 		for r, i in radius {
 			if !redraw[i] do continue
 			target := sdl.GPUDepthStencilTargetInfo {
@@ -526,19 +586,20 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 			pass := sdl.BeginGPURenderPass(cmd, nil, 0, &target)
 			sdl.BindGPUGraphicsPipeline(pass, g.shadow_pipe)
 			sdl.PushGPUVertexUniformData(cmd, 0, &f.shadow_vp[i], size_of(f.shadow_vp[i]))
-			casts: for &it in items {
-				if it.level < min_level[i] do continue
-				centre := (it.lo + it.hi)/2
-				reach := r + linalg.length(it.hi - it.lo)/2
-				if abs(linalg.dot(centre, l_right) + offset[i].x) > reach || abs(linalg.dot(centre, l_up) + offset[i].y) > reach do continue
-				fall := min((it.hi.y - lowest)/max(-light.y, 0.05), 2*r)
-				for p in wide {
-					far := [3]f32{it.hi.x if p.x > 0 else it.lo.x, it.hi.y if p.y > 0 else it.lo.y, it.hi.z if p.z > 0 else it.lo.z}
-					if linalg.dot(p, far) + fall*max(linalg.dot(p, light), 0) < 0 do continue casts
+			cascade := Caster{r = r, offset = offset[i], l_right = l_right, l_up = l_up, light = light, lowest = lowest, wide = wide}
+			for &it in items {
+				if it.level < min_level[i] || !shades(cascade, it.lo, it.hi) do continue
+				faces: [4]u8
+				if it.level == 0 {
+					faces = {lit_faces, lit_faces, 0, 0}   // the blocks and their leaves, which cast shadows whole
+				} else {
+					// Each quarter that can shade, of those not drawn finer, or of all at the finest level drawn here.
+					for q in 0..<4 {
+						lo, hi := quarter_box(&it, q)
+						if (it.level == min_level[i] || it.mask & (1 << uint(q)) != 0) && shades(cascade, lo, hi) do faces[q] = lit_faces
+					}
 				}
-				mask := it.mask
-				if it.level == min_level[i] do mask = 3 if it.level == 0 else 0xF   // the blocks and their leaves, which cast shadows whole
-				draw_item(g, cmd, pass, &it, mask)
+				draw_item(g, cmd, pass, &it, faces)
 			}
 			sdl.EndGPURenderPass(pass)
 		}
@@ -550,7 +611,10 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	lifted := sdl.GPUTextureSamplerBinding{g.lifted, g.linear}
 	seen := sdl.GPUTextureSamplerBinding{g.clouds, g.linear}
 	sdl.PushGPUFragmentUniformData(cmd, 0, &f, size_of(f))
-	to_clouds := sdl.GPUColorTargetInfo{texture = g.clouds, load_op = .DONT_CARE, store_op = .STORE, cycle = true}
+	// This target and the scene's are drawn whole on the GPU every frame, so none is cycled: SDL would
+	// keep spare copies, and a copy that has stood idle is wired again by the driver when it comes back,
+	// which at full screen held the scene back for 10 to 30 ms about once a second.
+	to_clouds := sdl.GPUColorTargetInfo{texture = g.clouds, load_op = .DONT_CARE, store_op = .STORE}
 	pass := sdl.BeginGPURenderPass(cmd, &to_clouds, 1, nil)
 	sdl.BindGPUGraphicsPipeline(pass, g.cloud_pipe)
 	sdl.BindGPUFragmentSamplers(pass, 0, &lifted, 1)
@@ -560,11 +624,10 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	// The scene.
 	color := sdl.GPUColorTargetInfo {
 		texture = g.color, load_op = .DONT_CARE, store_op = .RESOLVE, resolve_texture = g.scene,
-		cycle = true, cycle_resolve_texture = true,
 	}
 	depth := sdl.GPUDepthStencilTargetInfo {
 		texture = g.depth, clear_depth = 0, load_op = .CLEAR, store_op = .DONT_CARE,
-		stencil_load_op = .DONT_CARE, stencil_store_op = .DONT_CARE, cycle = true,
+		stencil_load_op = .DONT_CARE, stencil_store_op = .DONT_CARE,
 	}
 	pass = sdl.BeginGPURenderPass(cmd, &color, 1, &depth)
 	sdl.PushGPUVertexUniformData(cmd, 0, &f, size_of(f))
@@ -573,20 +636,28 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.BindGPUGraphicsPipeline(pass, g.terrain)
 	terrain_bindings := [4]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.blocks, g.block_sampler}, lifted, seen}
 	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 4)
-	// The view volume as four planes through the eye; a chunk wholly outside one is skipped.
+	// The view volume as four planes through the eye; a chunk, or a quarter of a far one, wholly
+	// outside one is skipped, and so are the faces in it turned from the eye.
 	planes := [4][3]f32{fwd*tan_x + right, fwd*tan_x - right, fwd*tan_y + up, fwd*tan_y - up}
 	lacy := make([dynamic]^Item, context.temp_allocator)
-	each: for &it in items {
-		for p in planes {
-			far := [3]f32{it.hi.x if p.x > 0 else it.lo.x, it.hi.y if p.y > 0 else it.lo.y, it.hi.z if p.z > 0 else it.lo.z}
-			if linalg.dot(p, far) < 0 do continue each
-		}
+	for &it in items {
+		if outside(planes, it.lo, it.hi) do continue
 		it.seen = true
 		// Leaves are seen through only near by (LEAF_FAR, as in shaders.metal, where they have closed by
 		// then): each layer of them is shaded in full, and a wood is many layers deep.
 		it.near = linalg.length(linalg.clamp([2]f32{0, 0}, it.lo.xz, it.hi.xz))
-		if it.level == 0 && it.near < LEAF_FAR do append(&lacy, &it)
-		draw_item(g, cmd, pass, &it, it.mask if it.level > 0 else 1 if it.near < LEAF_FAR else 3)
+		faces: [4]u8
+		if it.level == 0 {
+			toward := facing_eye(it.lo, it.hi)
+			faces = {toward, 0 if it.near < LEAF_FAR else toward, 0, 0}
+			if it.near < LEAF_FAR do append(&lacy, &it)
+		} else {
+			for q in 0..<4 {
+				lo, hi := quarter_box(&it, q)
+				if it.mask & (1 << uint(q)) != 0 && !outside(planes, lo, hi) do faces[q] = facing_eye(lo, hi)
+			}
+		}
+		draw_item(g, cmd, pass, &it, faces)
 	}
 
 	// The leaves of the nearest chunks, seen through and from both sides.
@@ -594,7 +665,11 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 4)
 	// Nearest first, and a crown's outer faces before those within it, so most of what is hidden is never shaded.
 	slice.sort_by(lacy[:], proc(a, b: ^Item) -> bool { return a.near < b.near })
-	for it in lacy do draw_item(g, cmd, pass, it, 6)
+	for it in lacy do for part in 1..=2 {
+		faces: [4]u8
+		faces[part] = 0x3F   // seen from both sides, so every facing
+		draw_item(g, cmd, pass, it, faces)
+	}
 
 	// The ground plants in the nearest chunks, two pictures crossed in a strip of ten vertices.
 	sdl.BindGPUGraphicsPipeline(pass, g.plant)

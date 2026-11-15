@@ -23,7 +23,7 @@ Chunk :: struct {
 	ready:              bool,          // has a mesh, possibly empty
 	building, dirty:    bool,
 	buffer:             ^sdl.GPUBuffer,
-	ranges:             [4][2]u32,     // first quad and count for each quarter; at the nearest level, for the solid faces, the crowns' outer faces and the faces within them
+	ranges:             [6][4][2]u32,  // first quad and count for each facing (+X to -Z) and part (by_face, mesh.odin)
 	y_base, y_lo, y_hi: i32,           // mesh origin and vertical extent, metres
 	blocks:             []u8,          // level 0 only: the block volume, for collision and edits
 	h:                  i32,           // layers in blocks
@@ -40,7 +40,7 @@ Job :: struct { key: Key, edits: []Edit, urgent: bool }
 Built :: struct {
 	key:                Key,
 	quads, plants:      []Quad,
-	ranges:             [4][2]u32,
+	ranges:             [6][4][2]u32,
 	y_base, y_lo, y_hi: i32,
 	blocks:             []u8,
 	h:                  i32,
@@ -124,12 +124,13 @@ build :: proc(job: Job) -> (b: Built) {
 
 	quads := make([dynamic]Quad, 0, 4096)
 	plants: [dynamic]Quad
+	parts: [4][2]u32
 	b.key = job.key
 	if job.key.level == 0 {
 		b.blocks, b.y_base, b.h = build_volume(job.key, c, job.edits)
 		outer, inner := mesh_volume(b.blocks, b.h, c, &quads, &plants, {job.key.x*CHUNK - region.origin.x, b.y_base, job.key.z*CHUNK - region.origin.y})
 		all := u32(len(quads))
-		b.ranges[0], b.ranges[1], b.ranges[2] = {0, all - outer - inner}, {all - outer - inner, outer}, {all - inner, inner}   // at this level: the solid faces, the crowns' outer faces, the faces within them
+		parts[0], parts[1], parts[2] = {0, all - outer - inner}, {all - outer - inner, outer}, {all - inner, inner}   // at this level: the solid faces, the crowns' outer faces, the faces within them
 		b.y_lo, b.y_hi = b.y_base, b.y_base + b.h
 		// What the water needs to know about each column.
 		b.floor, b.hold, b.sea, b.still, b.roof = make([]f32, CHUNK*CHUNK), make([]f32, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK), make([]bool, CHUNK*CHUNK)
@@ -148,9 +149,10 @@ build :: proc(job: Job) -> (b: Built) {
 	} else {
 		s := i32(1) << u32(job.key.level)
 		b.y_base = c.lo - 2*s - 1
-		mesh_columns(c, s, b.y_base, &quads, &b.ranges)
+		mesh_columns(c, s, b.y_base, &quads, &parts)
 		b.y_lo, b.y_hi = b.y_base, c.hi
 	}
+	b.ranges = by_face(quads[:], parts)
 	b.quads, b.plants = quads[:], plants[:]
 	return
 }
