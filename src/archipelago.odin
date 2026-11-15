@@ -3,26 +3,23 @@ package main
 import "core:fmt"
 import fnv "core:hash"
 import "core:math"
+import "core:math/linalg"
 import "core:os"
+import "core:slice"
 import "core:strings"
 import "core:time"
 
-// The islands near the start, and the continent they lie off (foundations/world-frame.md, D4). The
-// world's land is to come from one story of how its plates have moved (step 22 in foundations.md);
-// until that exists, a fixed stand-in for the plates near the start says where the crust is
-// continental and where oceanic, and where islands form. One plate goes down under another along a
-// trench, curved as an arc of a circle. Set back from it on the plate riding over it is the arc's
-// volcanic front, where young volcanoes stand; between the two the forearc, rising fastest along its
-// outer ridge; behind the front a trough, then the shelf, the drowned margin of a continent, and the
-// continent's coast. On the plate going down, a hotspot stays put while the plate carries what it
-// built toward the trench, so its islands age along the plate's motion and sink as they cool.
-//
-// The stand-in makes the world's fields (`world_at`, read as `setting`, `front`, `trench`, `track`,
-// `age`, `rising` and `depth` in FIELDS); each kind of island has a host on them (`hosts` in KINDS),
-// and an island is the kind whose host it holds best. A plate history that replaces it must give
-// the same: the fields the hosts read (`front` in km, `rising` in mm/yr, `age` in Myr, `depth` in m)
-// and `setting` for the names; each island's place, size and age; the continent's coast and range;
-// and the wind. Nothing here is formed: --archipelago= forms each island in turn to draw the group.
+// The islands near the start, and the continent they lie off, read from the world's history
+// (plates.odin, docs/foundations/plates.md). The history moves plates over a whole planet for 350
+// million years; the known world, 1,000 km across, is what it left at one place (known.odin): the
+// height of the ground, how far each place lies from a trench and its volcanic front, how old its
+// crust is, how fast it rises or sinks, and its volcanoes. The world's fields are read from that
+// (`world_at`, read as `setting`, `front`, `trench`, `track`, `age`, `rising` and `depth` in
+// FIELDS). Islands stand where the rows of SITES say the history makes them, on the volcanic front,
+// across the forearc, on its old volcanoes and where its ground stands over the sea, each the kind
+// whose host it holds best (`hosts` in KINDS), so a kind is the name of a kind of history. Land
+// larger than a region is the continent's, a record not yet formed (step 21). Nothing here is
+// formed: --archipelago= forms every island to draw the group.
 
 // One island of the archipelago: what the world knows of it before it is formed.
 Island :: struct {
@@ -36,102 +33,96 @@ Island :: struct {
 }
 archipelago: [dynamic]Island   // made by archipelago_make(), from the world's seed
 
-// The continent the islands lie off: what the world knows of it before any of it can be formed
-// (step 21 looks for how). Its coast near the start comes from the stand-in, as the islands' settings
-// do; its range is a guess, there being nothing yet to form it.
+// The land larger than a region that the islands lie off: what the world knows of it before any of
+// it can be formed (step 21 looks for how).
 Continent :: struct {
-	coast:  [dynamic][2]f64,   // its coastline for 300 km round the start, in the world, metres, then the middle of the trench's circle far inland, which closes the outline
-	crest:  [dynamic][2]f64,   // the line of the range behind the coast, as far along
-	height: f32,               // metres, the range's crest
+	coast:  [dynamic][2]f64,   // the coast nearest the start, in the world, metres: a closed loop, along the known world's edge where the land runs past it
+	crest:  [dynamic][2]f64,   // the line of the range behind it: the highest ground within 60 km of each stretch of coast
+	height: f32,               // metres, the range's crest, its median
 }
 continent: Continent   // made by archipelago_make()
 
 Setting :: enum u8 { Open_Sea, Hotspot, Forearc, Arc, Back_Arc, Shelf, Continent }
 SETTINGS := [Setting]string{.Open_Sea = "open sea", .Hotspot = "hotspot", .Forearc = "forearc", .Arc = "arc", .Back_Arc = "back-arc", .Shelf = "shelf", .Continent = "continent"}
 
-// The stand-in's numbers, drawn from the seed within the ranges of PLATES.
-Plates :: struct($T: typeid) {
-	radius:  T,   // km, of the circle the trench is an arc of; its middle lies on the plate riding over it
-	facing:  T,   // degrees from north: the way the trench faces, out from the arc
-	middle:  T,   // km from the trench back to the middle of the square round the start
-	setback: T,   // km from the trench back to the volcanic front: 100 to 250 on real arcs, squeezed in here
-	margin:  T,   // km of shelf from its edge to the continent's coast
-	crest:   T,   // km from the coast to the crest of the range behind it,
-	height:  T,   // and its height in metres: a guess, after the coastal ranges behind the arcs of Japan and China
-	rise:    T,   // mm/yr the forearc rises along its outer ridge, two fifths of the way back to the front
-	shake:   T,   // mm/yr the crust's rise varies by, from one block about 40 km across to the next
-	beyond:  T,   // km beyond the trench the hotspot lies,
-	along:   T,   // and along it from the square's middle, to one side or the other
-	side:    T,   // which side: under 0.5 the one, else the other
-	oblique: T,   // degrees the plate's motion lies off straight at the trench, back toward the square's middle
-	speed:   T,   // km/Myr the plate carries what the hotspot built
-	sink:    T,   // mm/yr an island sinks as the plate carries it off the hotspot, less by e every `cools` Myr
-	cools:   T,
-	front, forearc, track: T,   // km between islands along the front, across the forearc and along the hotspot's track
-	shelf:   T,   // how many islands stand on the shelf
+World_Point :: struct {
+	setting: Setting,
+	front, trench, track, age, rising, depth, inland: f32,   // km, km, km, Myr, mm/yr, m, km behind the coast of land larger than a region
 }
-PLATES := Plates([2]f64){
-	radius = {200, 360}, facing = {0, 360}, middle = {12, 20}, setback = {38, 46}, margin = {15, 35}, crest = {20, 40}, height = {1000, 2200},
-	rise = {1.3, 2}, shake = {0.15, 0.25}, beyond = {34, 48}, along = {20, 40}, side = {0, 1}, oblique = {38, 56}, speed = {9, 13}, sink = {0.4, 0.6},
-	cools = {1.5, 2.5}, front = {14, 24}, forearc = {18, 28}, track = {12, 17}, shelf = {3, 6},
+
+// Where the start stands in the known world, and what is drawn for the whole world from its seed.
+World_Frame :: struct {
+	start:  [2]f32,   // km east and south of the known world's middle: the start island's middle,
+	origin: [2]f64,   // which lies here in the game's world, metres
+	rise:   f32,      // mm/yr the forearc's outer high rises at its crest
+	wind:   f64,      // the bearing every island's swell and wind come from, degrees from north
 }
-NEAR_SIDE   :: 150_000   // metres, the side of the square round the start the islands are placed in
-SHELF  :: 1.4       // where the shelf's edge stands, in setbacks from the trench
-// The sea's floor across the arc: setbacks from the trench (under 0 on the plate going down), and metres
-// deep. Past the shelf's edge the floor rises to the coast.
-DEPTHS :: [?][2]f64{{-3, 5000}, {-0.2, 5300}, {0, 7000}, {0.12, 4000}, {0.4, 900}, {0.65, 2000}, {1, 700}, {1.2, 1800}, {SHELF, 200}}
+world_frame: World_Frame
+
+// The forearc's outer high, which the history does not raise (plates.md, section 9): a ridge two
+// fifths of the way back from the trench to the volcanic front, standing `relief` metres over the
+// forearc's floor (a guess, after the Bonin ridge's). Its crest rises at up to 1.5 to 2.3 mm/yr, the
+// most drawn for the world, as Kikaijima's does (Nakata et al. 1978, Inagaki & Omura 2006); how much
+// of that a stretch of it about 150 km long takes is drawn too, from none, where the high has stopped
+// rising and the sea drowns what stood on it, as on the Bonin ridge, to all.
+OUTER_HIGH :: struct { rise: [2]f32, stretch, at, width, relief: f32 }{rise = {1.5, 2.3}, stretch = 150_000, at = 0.4, width = 0.2, relief = 2500}
+
+// How much of the outer high's crest a point of the known world lies on, from 0 to 1.
+outer_high :: proc(k: Known_Sample) -> f32 {
+	if k.front >= 0 || k.front > 1e3 do return 0
+	return math.exp(-math.pow(((k.front + k.setback)/k.setback - OUTER_HIGH.at)/OUTER_HIGH.width, 2))
+}
+
+NEAR_SIDE :: 200_000   // metres, the side of the square round the start the islands are placed in: an arc's front and much of its forearc, which lie 170 to 260 km apart on real arcs
+
+// Where islands stand, as rows: what in the history makes them, and how far apart they stand, km.
+// Every site takes the kind whose host it holds best; a site no kind holds is left out.
+Site_Line :: enum u8 {
+	Front,     // on the volcanic front
+	Forearc,   // on the forearc's outer high (OUTER_HIGH), within a half of its width of its crest
+	Shelf,     // on continental crust the sea stands less than 300 m over: a continent's stretched margin or a piece rifted off it
+	Vent,      // on one of the history's volcanoes off the front, whose top stands within 200 m of the sea
+	Land,      // on one of the history's own islands, where its ground stands over the sea in a mass smaller than LARGE
+}
+Site_Row :: struct { name: string, line: Site_Line, apart: [2]f32 }
+SITES := [?]Site_Row{
+	{"on the volcanic front", .Front, {20, 45}},   // the Izu arc's volcanic islands stand 10 to 75 km apart; real arcs have a centre every 40 km (Syracuse & Abers 2006)
+	{"on the forearc's outer high", .Forearc, {30, 60}},   // the Bonin islands' groups, 50 to 70 km apart; Kikaijima stands alone
+	{"on a shelf", .Shelf, {30, 60}},   // Tsushima, Iki and the Gotō islands, 30 to 70 km apart on theirs
+	{"on an old volcano", .Vent, {20, 20}},
+	{"on the history's own land", .Land, {12, 12}},
+}
+
 // Island sizes follow Korčák's law: the number with more than an area A falls as A to the -0.65, half
 // the fractal dimension of a coast (a guess, not measured on real groups). Only regions 8 to 16 km
 // across form islands that read as their kind, so the law is cut there.
 KORCAK :: 0.65
 SIDES  :: [2]f64{8192, 16384}
 
-Drawn_Plates :: struct {
-	using drawn: Plates(f64),
-	mid, centre, hotspot, motion: [2]f64,   // the square's middle, the trench's circle's, the hotspot, in the world, metres; the plate's motion, a unit
-	reach: f64,   // metres from the hotspot along the motion to the trench
-	wind:  f64,   // the bearing every island's swell and wind come from, degrees from north
-}
-plates: Drawn_Plates   // the stand-in as archipelago_make drew it
-
-World_Point :: struct {
-	setting: Setting,
-	front, trench, track, age, rising, depth, inland: f32,   // km, km, km, Myr, mm/yr, m, km behind the coast
-}
-
-// How far behind the trench the continent's coast runs at a bearing from the trench's circle's
-// middle, in km: a shelf's width behind the shelf's edge, wandering in bays and headlands.
-coast_at :: proc(a: f64) -> f64 {
-	r := (plates.radius - SHELF*plates.setback - plates.margin)*1000
-	return SHELF*plates.setback + plates.margin + 16*f64(fbm(plates.centre.x + r*math.cos(a), plates.centre.y + r*math.sin(a), 50_000, 1000, 5, world_seed + 1733))
+// A point in the game's world as km in the known world.
+known_point :: proc(x, z: f64) -> [2]f32 {
+	return world_frame.start + [2]f32{f32(x - world_frame.origin.x), f32(z - world_frame.origin.y)}/1000
 }
 
 // The world's fields at a point in the world.
 world_at :: proc(x, z: f64) -> (w: World_Point) {
-	trench := plates.radius - math.hypot(x - plates.centre.x, z - plates.centre.y)/1000
-	t := clamp((x - plates.hotspot.x)*plates.motion.x + (z - plates.hotspot.y)*plates.motion.y, 0, plates.reach)
-	on := plates.hotspot + plates.motion*t
-	s, track, myr := trench/plates.setback, f32(math.hypot(x - on.x, z - on.y)/1000) if trench < 0 else 1e4, f32(t/1000/plates.speed)
-	coast := coast_at(math.atan2(z - plates.centre.y, x - plates.centre.x))
-	w.trench, w.track, w.front, w.inland = f32(trench), track, f32(abs(trench - plates.setback)), f32(trench - coast)
-	depths := DEPTHS
-	w.depth = f32(math.lerp(200.0, 5, clamp((trench - SHELF*plates.setback)/(coast - SHELF*plates.setback), 0, 1)))
-	for b, i in depths[1:] do if a := depths[i]; s < b.x {
-		w.depth = f32(math.lerp(a.y, b.y, clamp((s - a.x)/(b.x - a.x), 0, 1)))
-		break
+	at := known_point(x, z)
+	k, inland := known_at(at)
+	over := k.front < 1e3   // on a plate over a sinking slab, within reach of its trench
+	w.front = abs(k.front) if over else 1e4
+	w.trench = k.front + k.setback if over else -k.slab if k.slab < 1e3 else 1e4
+	w.track = track_at(at)
+	// On the volcanic front young volcanoes stand all along it, not only where the history's vents,
+	// one to two of its cells apart, stand.
+	w.age = math.lerp(f32(0.5), age_at(at, k.age), smoothstep(6, 14, w.front))
+	high := outer_high(k)
+	w.rising = k.rising
+	if high > 1e-3 {
+		stretch := smoothstep(-0.4, 0.4, fbm(f64(at.x)*1000, f64(at.y)*1000, f64(OUTER_HIGH.stretch), 1000, 2, world_seed + 1731))   // keyed by the known world, which does not move with the start
+		w.rising += world_frame.rise*stretch*high
 	}
-	if w.inland > 0 do w.depth = 0
-	// Over the hotspot the plate swells, and its volcanoes built a ridge along the track.
-	if trench < 0 do w.depth -= 600*f32(math.exp(-math.pow(math.hypot(x - plates.hotspot.x, z - plates.hotspot.y)/40_000, 2))) + 1200*math.exp(-math.pow(track/8, 2))
-	// Young volcanoes on the front; on the track, as old as the plate's carrying; else the crust's age,
-	// the ocean's, the arc's or the continent's.
-	w.age = 60 if trench < 0 else 40 if s < SHELF else 200
-	if trench < 0 do w.age = math.lerp(myr, w.age, smoothstep(6, 14, track))
-	w.age = math.lerp(0.1 + 0.4*(1 + fbm(x, z, 30_000, 1000, 2, world_seed + 1730)), w.age, smoothstep(5, 12, w.front))
-	// The forearc rises along its outer ridge and sinks into the trench; an island sinks as it cools off the hotspot.
-	w.rising = f32(plates.rise*math.exp(-math.pow((s - 0.4)/0.2, 2)) - 0.3*math.exp(-math.pow(s/0.1, 2)) - 0.05) + f32(plates.shake)*fbm(x, z, 40_000, 1000, 2, world_seed + 1731)
-	if trench < 0 do w.rising -= f32(plates.sink)*math.exp(-myr/f32(plates.cools))*smoothstep(14, 6, track)
-	w.setting = Setting.Arc if w.front < 10 else (Setting.Hotspot if track < 10 else Setting.Open_Sea) if trench < 0 else Setting.Forearc if s < 1 else Setting.Back_Arc if s < SHELF else Setting.Shelf if w.inland < 0 else Setting.Continent
+	w.depth, w.inland = max(-k.h - OUTER_HIGH.relief*high, 0), inland
+	w.setting = .Continent if inland > 0 else .Arc if w.front < 10 else .Hotspot if w.track < 10 else .Forearc if over && k.front < 0 else .Back_Arc if over && k.front < 400 && !k.cont else .Shelf if k.cont else .Open_Sea
 	return
 }
 
@@ -144,51 +135,48 @@ holds :: proc(k: int, at: [2]f64) -> (s: f32) {
 	return
 }
 
-// Draw the plates from the world's seed, put them so the start island's kind holds where it stands,
-// place islands along the front, across the forearc, along the hotspot's track and on the shelf, and
-// give each the kind whose host it holds best, no two nearest neighbours alike. It reads the start
-// island's record (`region`), so call it after `region_init`. With `say`, print what was left out.
-archipelago_make :: proc(say := false) {
-	N :: size_of(Plates(f64))/size_of(f64)
-	ranges, drawn := transmute([N][2]f64)PLATES, [N]f64{}
-	for r, i in ranges do drawn[i] = r[0] + (r[1] - r[0])*f64(hash01(i32(i), 0, world_seed + 1700))
-	plates = {drawn = transmute(Plates(f64))drawn, wind = region.shape.swell}   // the start island's own swell, so it forms as it always has
-	turn :: proc(v: [2]f64, a: f64) -> [2]f64 { return {v.x*math.cos(a) - v.y*math.sin(a), v.x*math.sin(a) + v.y*math.cos(a)} }
-	face, side := [2]f64{math.sin(math.to_radians(plates.facing)), -math.cos(math.to_radians(plates.facing))}, 1.0 if plates.side < 0.5 else -1.0
-	plates.centre = -face*(plates.radius - plates.middle)*1000
-	out := turn(face, side*plates.along/plates.radius)
-	plates.hotspot = plates.centre + out*(plates.radius + plates.beyond)*1000
-	plates.hotspot = {clamp(plates.hotspot.x, 12_000 - NEAR_SIDE/2, NEAR_SIDE/2 - 12_000), clamp(plates.hotspot.y, 12_000 - NEAR_SIDE/2, NEAR_SIDE/2 - 12_000)}   // within the square round the start
-	ob := math.to_radians(plates.oblique)
-	plates.motion = -out*math.cos(ob) - side*[2]f64{-out.y, out.x}*math.sin(ob)
-	// Where the track meets the trench; one that misses its curve runs on out of the square.
-	v := plates.hotspot - plates.centre
-	b := v.x*plates.motion.x + v.y*plates.motion.y
-	c := b*b - (v.x*v.x + v.y*v.y) + plates.radius*plates.radius*1e6
-	plates.reach = -b - math.sqrt(c) if c > 0 else 2*NEAR_SIDE
+// km in the known world as a point in the game's world, metres.
+world_of :: proc(at: [2]f32) -> [2]f64 {
+	return world_frame.origin + [2]f64{f64(at.x - world_frame.start.x), f64(at.y - world_frame.start.y)}*1000
+}
 
-	// The start island's kind is the seed's, as it always was; the plates are put round it.
+// Read the islands near the start from the known world. The start island's kind is the seed's, as it
+// always was, and the start is put where the history makes that kind of island; the others stand
+// where the rows of SITES put them round it, each the kind whose host it holds best, no two nearest
+// neighbours alike. It reads the start island's record (`region`), so call it after `region_init`
+// and `known_make`. With `say`, print what was left out.
+archipelago_make :: proc(say := false) {
+	world_frame = {origin = {f64(region.origin.x), f64(region.origin.y)}, rise = math.lerp(OUTER_HIGH.rise[0], OUTER_HIGH.rise[1], hash01(0, 0, world_seed + 1700)), wind = region.shape.swell}   // the start island's own swell, so it forms as it always has
 	start := 0
 	for k, i in KINDS do if k.name == region.kind do start = i
-	best, at := f32(-1), [2]f64{}
-	for j in -24..=24 do for i in -24..=24 {
-		p := [2]f64{f64(i), f64(j)}*2000
-		if s := holds(start, p) + 0.01*hash01(i32(i), i32(j), world_seed + 1701); s > best && world_at(p.x, p.y).inland < -6 do best, at = s, p   // its square off the continent
+	o := world_frame.origin
+	// The start: where its kind's host holds best in the known world, 6 km or more off land larger
+	// than a region; where it holds as well, where most islands would stand round it, on the forearc
+	// 60 km from the volcanic front, 30 km or more off land larger than a region, nearer the middle
+	// of the known world, which was chosen for its islands.
+	best, chosen := f32(-1), [2]f32{}
+	for j in -80..=80 do for i in -80..=80 {
+		c := [2]f32{f32(i), f32(j)}*5
+		p := world_of(c)
+		w := world_at(p.x, p.y)
+		if w.inland > -6 do continue
+		k, _ := known_at(c)
+		rich := math.exp(-math.pow((k.front + 60)/70, 2)) + 0.5*smoothstep(10, 30, -w.inland) - linalg.length(c)/800
+		if s := 100*math.floor(holds(start, p)*50)/50 + 0.2*rich + 0.01*hash01(i32(i), i32(j), world_seed + 1701); s > best do best, chosen = s, c   // the host first, to 0.02
 	}
-	o := [2]f64{f64(region.origin.x), f64(region.origin.y)}
-	plates.mid, plates.centre, plates.hotspot = o - at, plates.centre + o - at, plates.hotspot + o - at
+	world_frame.start = chosen
 
 	Site :: struct { at: [2]f64, size: f64 }
 	sites := make([dynamic]Site, context.temp_allocator)
 	append(&sites, Site{o, REFERENCE})
 	// A site takes a size drawn by Korčák's law, as large as fits beside those already placed, within the
-	// square round the start and off the continent. One no kind's host holds is left out.
-	place :: proc(sites: ^[dynamic]Site, at: [2]f64, key: i32, say: bool) -> bool {
+	// square round the start and off land larger than a region. One no kind's host holds is left out.
+	place :: proc(sites: ^[dynamic]Site, at: [2]f64, key: i32, say: bool, why: string) -> bool {
 		some := false
 		for _, k in KINDS do some ||= holds(k, at) > 0
 		if w := world_at(at.x, at.y); !some {
-			if say do fmt.printfln("  left out at %.1f, %.1f km (%s, %.1f Myr): %s", at.x/1000, at.y/1000, SETTINGS[w.setting], w.age,
-				"a young hotspot shield would stand here, and no kind makes one" if w.setting == .Hotspot && w.age < 1 else "no kind's host holds here")
+			if say do fmt.printfln("  left out %s at %.1f, %.1f km (%s, %.1f Myr, rising %.2f mm/yr, %.0f m deep): %s", why, at.x/1000, at.y/1000, SETTINGS[w.setting], w.age, w.rising, w.depth,
+				"a young hotspot shield would stand here, and no kind makes one" if w.track < 10 && w.age < 1 else "no kind's host holds here")
 			return false
 		}
 		u := f64(hash01(key, 1, world_seed + 1702))
@@ -200,32 +188,53 @@ archipelago_make :: proc(say := false) {
 			for c in ([8][2]f64{{-1, -1}, {0, -1}, {1, -1}, {1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}}) do ashore ||= world_at(at.x + c.x*size/2, at.y + c.y*size/2).inland > 0
 			if !ashore do break
 		}
-		if size < SIDES[0] || max(abs(at.x - plates.mid.x), abs(at.y - plates.mid.y)) + size/2 > NEAR_SIDE/2 do return false
+		o := world_frame.origin
+		if size < SIDES[0] || max(abs(at.x - o.x), abs(at.y - o.y)) + size/2 > NEAR_SIDE/2 do return false
 		append(sites, Site{at, size})
 		return true
 	}
-	// Along the front and across the forearc, both ways round the trench's circle from the start island.
-	from := math.atan2(o.y - plates.centre.y, o.x - plates.centre.x)
-	for line, l in ([2][3]f64{{plates.setback, plates.front, 0}, {0.45*plates.setback, plates.forearc, 0.25*plates.setback}}) do for way in ([2]f64{1, -1}) {
-		a := from
-		for n in i32(1)..<40 {
-			key := i32(l*1000) + i32(way)*n
-			ring := (plates.radius - line[0] + line[2]*(2*f64(hash01(key, 2, world_seed + 1703)) - 1))*1000
-			a += way*line[1]*(0.7 + 0.6*f64(hash01(key, 3, world_seed + 1703)))*1000/ring
-			p := plates.centre + [2]f64{math.cos(a), math.sin(a)}*ring
-			if max(abs(p.x - plates.mid.x), abs(p.y - plates.mid.y)) > NEAR_SIDE/2 do break
-			place(&sites, p, key, say)
+	// Where each row of SITES says the history makes an island, within the square round the start,
+	// taken nearest the start first, each at least its row's distance from those already taken.
+	Candidate :: struct { at: [2]f32, row: int, key: i32, d: f32 }
+	cands := make([dynamic]Candidate, context.temp_allocator)
+	in_square :: proc(at: [2]f32) -> bool { d := at - world_frame.start; return max(abs(d.x), abs(d.y)) < NEAR_SIDE/2000 }
+	for s, i in known.samples {
+		at := [2]f32{f32(i%KNOWN_N) + 0.5, f32(i/KNOWN_N) + 0.5}*KNOWN_STEP - WINDOW/2
+		if !in_square(at) do continue
+		share := (s.front + s.setback)/s.setback if s.front < 1e3 else -1   // of the way back from the trench to the volcanic front
+		jitter := ([2]f32{hash01(i32(i), 1, world_seed + 1703), hash01(i32(i), 2, world_seed + 1703)} - 0.5)*KNOWN_STEP
+		for row, r in SITES {
+			on: bool
+			switch row.line {
+			case .Front:   on = abs(s.front) < 0.5*KNOWN_STEP
+			case .Forearc: on = abs(share - OUTER_HIGH.at) < 0.5*OUTER_HIGH.width
+			case .Shelf:   on = s.cont && s.h < 0 && s.h > -300 && known.inland[i] < -10
+			case .Vent, .Land:
+			}
+			if on do append(&cands, Candidate{at + jitter, r, i32(i), 0})
 		}
 	}
-	// Over the hotspot, then along its track to the trench.
-	for t, n := 0.0, i32(3000); t < min(plates.reach - 10_000, 1.5*NEAR_SIDE); t, n = t + plates.track*(0.8 + 0.4*f64(hash01(n, 3, world_seed + 1703)))*1000, n + 1 {
-		place(&sites, plates.hotspot + plates.motion*t + [2]f64{-plates.motion.y, plates.motion.x}*3000*(2*f64(hash01(n, 2, world_seed + 1703)) - 1), n, say)
+	for v, i in known.vents do if in_square(v.at) && !(v.arc && v.last < 2) && v.top > -200 {
+		for row, r in SITES do if row.line == .Vent do append(&cands, Candidate{v.at, r, i32(i) + 1_000_000, 0})
 	}
-	// On the shelf, anywhere a site fits.
-	for n, placed := i32(0), 0; n < 400 && f64(placed) < math.round(plates.shelf); n += 1 {
-		p := plates.mid + NEAR_SIDE*([2]f64{f64(hash01(n, 4, world_seed + 1703)), f64(hash01(n, 5, world_seed + 1703))} - 0.5)
-		if world_at(p.x, p.y).setting == .Shelf do placed += int(place(&sites, p, 4000 + n, say))
+	for m, i in known.masses do if !m.large {
+		at := [2]f32{f32(m.top%KNOWN_N) + 0.5, f32(m.top/KNOWN_N) + 0.5}*KNOWN_STEP - WINDOW/2
+		if in_square(at) do for row, r in SITES do if row.line == .Land do append(&cands, Candidate{at, r, i32(i) + 2_000_000, 0})
 	}
+	for &c in cands do c.d = linalg.length(c.at - world_frame.start)
+	slice.sort_by(cands[:], proc(a, b: Candidate) -> bool { return a.d < b.d })
+	taken := make([dynamic][2]f32, context.temp_allocator)
+	append(&taken, world_frame.start)
+	counts: [len(SITES)][2]int
+	for c in cands {
+		apart := math.lerp(SITES[c.row].apart[0], SITES[c.row].apart[1], hash01(c.key, i32(c.row), world_seed + 1706))
+		near := false
+		for t in taken do near ||= linalg.length(t - c.at) < apart
+		if near do continue
+		append(&taken, c.at)
+		counts[c.row] += {1, int(place(&sites, world_of(c.at), c.key, say, SITES[c.row].name))}
+	}
+	if say do for row, r in SITES do fmt.printfln("  %s: %d sites, %d islands", row.name, counts[r][0], counts[r][1])
 
 	// Each site takes the kind whose host it holds best, ties broken by a draw keyed by the kind's
 	// name and weighted as the race's are; a kind its nearest neighbour has, or that has it as
@@ -265,22 +274,103 @@ archipelago_make :: proc(say := false) {
 		append(&archipelago, Island{id = id, origin = {i32(math.round(s.at.x)), i32(math.round(s.at.y))}, size = s.size, kind = kind[i],
 			seed = world_seed if id == 0 else hash(i32(id), 0, world_seed + 1705), setting = w.setting, age = w.age})
 	}
-	// The continent: its coast for 300 km round the start, closed far inland, and its range.
-	clear(&continent.coast)
-	clear(&continent.crest)
-	mid := math.atan2(plates.mid.y - plates.centre.y, plates.mid.x - plates.centre.x)
-	for k in -150..=150 {
-		a := mid + f64(k)/(plates.radius - SHELF*plates.setback - plates.margin)
-		d := [2]f64{math.cos(a), math.sin(a)}*1000
-		append(&continent.coast, plates.centre + d*(plates.radius - coast_at(a)))
-		append(&continent.crest, plates.centre + d*(plates.radius - coast_at(a) - plates.crest))
-	}
-	append(&continent.coast, plates.centre)
-	continent.height = f32(plates.height)
+	continent_make()
 	ashore := f64(1e12)
 	for c in continent.coast do ashore = min(ashore, math.hypot(c.x - o.x, c.y - o.y))
-	fmt.printfln("near the start: %d islands, off a continent whose coast is %.0f km away; this one stands on the %s, %.0f km from the volcanic front, where its kind's host holds %.2f; the wind from %.0f°",
-		len(archipelago), ashore/1000, SETTINGS[archipelago[0].setting], world_at(o.x, o.y).front, holds(start, o), plates.wind)
+	w := world_at(o.x, o.y)
+	fmt.printfln("near the start: %d islands, off land whose coast is %.0f km away; this one stands on the %s, %s, where its kind's host holds %.2f; the wind from %.0f°",
+		len(archipelago), ashore/1000, SETTINGS[archipelago[0].setting], fmt.tprintf("%.0f km from the volcanic front", w.front) if w.front < 1e3 else "with no volcanic front within reach", holds(start, o), world_frame.wind)
+	lat := math.to_degrees(math.asin(linalg.normalize(known.centre + (world_frame.start.x*known.east - world_frame.start.y*known.north)/PLANET).z))
+	fmt.printfln("the known world: 1,000 km at %.1f° N, read from the plates' history%s; the start %.0f km east and %.0f km south of its middle, at %.1f° N",
+		math.to_degrees(math.asin(known.centre.z)), fmt.tprintf(", which ran in %.2f s", known.took) if known.took > 0 else ", kept from an earlier run", world_frame.start.x, world_frame.start.y, lat)
+}
+
+// What the plates' history says of the island in hand, as --why prints it: where it stands, what
+// its crust is, how it moves, and why it is its kind.
+plates_words :: proc() {
+	o := [2]f64{f64(region.origin.x), f64(region.origin.y)}
+	w := world_at(o.x, o.y)
+	k, _ := known_at(known_point(o.x, o.y))
+	fmt.printf("the plates: the island's middle stands on the %s (%s in the history)", SETTINGS[w.setting], PLATE_SETTINGS[k.row].name)
+	if w.front < 1e3 do fmt.printf(", %.0f km %s the volcanic front and %.0f km from the trench", w.front, "before" if k.front < 0 else "behind", w.trench)
+	else if w.trench < 0 do fmt.printf(", on the plate going down, %.0f km before the trench", -w.trench)
+	fmt.printf("; on %s crust %.0f km thick, its land %.1f Myr old; the sea %.0f m deep round it; it rises %.2f mm/yr (the history's own %.2f", "continental" if k.cont else "oceanic", k.thick, w.age, w.depth, w.rising, k.rising)
+	if high := outer_high(k); high > 0.01 do fmt.printf(", the forearc's outer high %.2f", w.rising - k.rising)
+	fmt.printf(")")
+	if w.track < 1e3 do fmt.printf("; %.0f km from a hotspot's track", w.track)
+	start := -1
+	for r, i in KINDS do if r.name == region.kind do start = i
+	fmt.printf(". It is the %s kind", region.kind)
+	if here.island.id == 0 do fmt.printf(", the seed's, and the start was put where that kind's host holds best")
+	if start >= 0 && len(KINDS[start].hosts) > 0 {
+		fmt.printf(": its host holds %.2f here, on", holds(start, o))
+		p := Point{cell = 2000}
+		for win, i in KINDS[start].hosts[0] {
+			f := FIELDS[win.field]
+			fmt.printf("%s %s %.4g%s (%s)", "," if i > 0 else "", f.name, f.at(&p), f.unit, fmt.tprintf("over %.4g", win.lo) if win.hi >= ANY else fmt.tprintf("up to %.4g", win.hi) if win.lo <= -ANY else fmt.tprintf("%.4g to %.4g", win.lo, win.hi))
+		}
+	}
+	fmt.printfln(". --plates-why=%.0f,%.0f follows its crust back through the history.", o.x, o.y)
+}
+
+// The land larger than a region nearest the start: its coast traced round its samples, and the
+// highest ground within 60 km of each stretch of it.
+continent_make :: proc() {
+	N :: KNOWN_N
+	clear(&continent.coast)
+	clear(&continent.crest)
+	continent.height = 0
+	from, by := -1, f32(1e9)
+	for _, i in known.samples do if m := known.mass[i]; m > 0 && known.masses[m - 1].large {
+		at := [2]f32{f32(i%N) + 0.5, f32(i/N) + 0.5}*KNOWN_STEP - WINDOW/2
+		if d := linalg.length(at - world_frame.start); d < by do from, by = i, d
+	}
+	if from < 0 {   // none in the known world: a coast beyond it, 2,000 km off, which nothing reaches
+		far := world_of(world_frame.start + {2000, 0})
+		append(&continent.coast, far, far)
+		return
+	}
+	id := known.mass[from]
+	inside :: proc(p: [2]int, id: i32) -> bool { return p.x >= 0 && p.y >= 0 && p.x < N && p.y < N && known.mass[p.y*N + p.x] == id }
+	point :: proc(p: [2]int) -> [2]f64 { return world_of([2]f32{f32(p.x) + 0.5, f32(p.y) + 0.5}*KNOWN_STEP - WINDOW/2) }
+	// Round the mass's edge by its neighbours, turning the same way at each sample, until it makes its
+	// first move again: it may pass the sample it began at more than once, from different sides.
+	dirs := [8][2]int{{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}}
+	cur, back := [2]int{from%N, from/N}, 0
+	for d, k in dirs do if !inside(cur + d, id) { back = k; break }
+	edge := make([dynamic][2]int, context.temp_allocator)
+	for len(edge) < 32*N {   // 32,000 km of coast at most
+		append(&edge, cur)
+		moved := false
+		for t in 1..=8 {
+			k := (back + t)%8
+			if n := cur + dirs[k]; inside(n, id) {
+				before := cur + dirs[(back + t - 1)%8]
+				cur, moved = n, true
+				for d, j in dirs do if cur + d == before do back = j
+				break
+			}
+		}
+		if !moved || len(edge) > 1 && edge[len(edge) - 1] == edge[0] && cur == edge[1] {
+			if len(edge) > 1 do pop(&edge)
+			break
+		}
+	}
+	for p, i in edge do if i%2 == 0 do append(&continent.coast, point(p))
+	append(&continent.coast, continent.coast[0])
+	heights := make([dynamic]f32, context.temp_allocator)
+	last := -1
+	for p, i in edge do if i%5 == 0 {
+		top := -1
+		for dy in -30..=30 do for dx in -30..=30 do if q := p + {dx, dy}; inside(q, id) && (top < 0 || known.samples[q.y*N + q.x].h > known.samples[top].h) do top = q.y*N + q.x
+		if top >= 0 && top != last {
+			append(&continent.crest, point({top%N, top/N}))
+			append(&heights, known.samples[top].h)
+			last = top
+		}
+	}
+	slice.sort(heights[:])
+	if len(heights) > 0 do continent.height = heights[len(heights)/2]
 }
 
 GLYPHS     :: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.-:/"
@@ -306,11 +396,11 @@ write :: proc(pixels: []u8, size, x, y: int, s: string, scale: int, ink: [3]u8) 
 	}
 }
 
-// --archipelago=: form each island in turn with the one region's code, sample its heights into a
-// picture 200 km across, then draw the plates and the continent's coast and name each island. False
-// if no kind has the name given.
+// --archipelago=: form every island side by side with the one region's code, sample its heights into a
+// picture 200 km across round the start, then draw what the history left there (its trench, volcanic
+// front and volcanoes, the hotspots' tracks, the land larger than a region) and name each island.
 archipelago_map :: proc(path: string) {
-	MAP, VIEW :: 3000, 200_000   // pixels, and the metres they cover: the square the islands are placed in and the continent's coast beyond it
+	MAP, VIEW :: 3000, NEAR_SIDE + 40_000   // pixels, and the metres they cover: the square the islands are placed in and a margin
 	started := time.now()
 	all := make([]int, len(formed))
 	defer delete(all)
@@ -318,7 +408,7 @@ archipelago_map :: proc(path: string) {
 	islands_done(islands_form(all, max(os.get_processor_core_count() - 1, 1), .Normal, false), all)   // side by side, each saying its line
 	heights := make([]f32, MAP*MAP)
 	defer delete(heights)
-	pixel :: proc(px, py: int) -> [2]f64 { return plates.mid - VIEW/2 + ([2]f64{f64(px), f64(py)} + 0.5)*VIEW/MAP }
+	pixel :: proc(px, py: int) -> [2]f64 { return world_frame.origin - VIEW/2 + ([2]f64{f64(px), f64(py)} + 0.5)*VIEW/MAP }
 	tops := make([]f32, len(archipelago))
 	defer delete(tops)
 	for &f, i in formed {
@@ -326,7 +416,7 @@ archipelago_map :: proc(path: string) {
 		is := f.island
 		for h in land.z[0] do tops[i] = max(tops[i], h)
 		o := [2]f64{f64(is.origin.x), f64(is.origin.y)}
-		lo, hi := (o - is.size/2 - plates.mid + VIEW/2)*MAP/VIEW, (o + is.size/2 - plates.mid + VIEW/2)*MAP/VIEW
+		lo, hi := (o - is.size/2 - world_frame.origin + VIEW/2)*MAP/VIEW, (o + is.size/2 - world_frame.origin + VIEW/2)*MAP/VIEW
 		for py in max(int(lo.y), 0)..<min(int(hi.y) + 1, MAP) do for px in max(int(lo.x), 0)..<min(int(hi.x) + 1, MAP) {
 			if p := pixel(px, py) - o; max(abs(p.x), abs(p.y)) < is.size/2 do heights[py*MAP + px] = max(land_at(land.z[2], land.n/4, p.x, p.y), 0)
 		}
@@ -354,72 +444,108 @@ archipelago_map :: proc(path: string) {
 		ashore, crest = {min(ashore[0], a), max(ashore[1], a)}, {min(crest[0], c), max(crest[1], c)}
 		if math.sqrt(f64(2*7.4e6*2)) + math.sqrt(2*7.4e6*f64(continent.height)) >= c do seen += 1
 	}
-	fmt.printfln("the continent's coast lies %.0f to %.0f km from the islands' middles; the crest of its range, %.0f m (a guess), %.0f to %.0f km, shows over the curve from the shore of %d of %d",
+	fmt.printfln("the coast of the land larger than a region lies %.0f to %.0f km from the islands' middles; the crest of its range, %.0f m, %.0f to %.0f km, shows over the curve from the shore of %d of %d",
 		ashore[0]/1000, ashore[1]/1000, continent.height, crest[0]/1000, crest[1]/1000, seen, len(archipelago))
 
+	// The hotspots' tracks within reach of the picture, to measure each pixel against.
+	tracks := make([dynamic][2][2]f32, context.temp_allocator)
+	for t in known.chains do if linalg.length(0.5*(t[0] + t[1]) - world_frame.start) < VIEW/1000 + linalg.length(t[1] - t[0]) do append(&tracks, t)
 	pixels := make([]u8, MAP*MAP*4)
 	defer delete(pixels)
+	// Each line is drawn where its field changes sign between a pixel and the one left of it or above
+	// it: the coast of land larger than a region, the trench, the volcanic front, the forearc's outer
+	// high. A field is had only where its plate has it (NaN elsewhere), so no line is drawn across a gap.
+	LINES :: 4
+	inks := [LINES][3]f32{{0.92, 0.90, 0.84}, {0.55, 0.12, 0.10}, {0.95, 0.30, 0.20}, {0.30, 0.75, 0.80}}
+	rows := make([][LINES]f32, 2*MAP)
+	defer delete(rows)
 	for py in 0..<MAP do for px in 0..<MAP {
 		h, p := heights[py*MAP + px], pixel(px, py)
-		w := world_at(p.x, p.y)
+		at := known_point(p.x, p.y)
+		k, inland := known_at(at)
 		grey: f32
 		if h > 0 {
 			gx := heights[py*MAP + min(px + 1, MAP - 1)] - heights[py*MAP + max(px - 1, 0)]
 			gz := heights[min(py + 1, MAP - 1)*MAP + px] - heights[max(py - 1, 0)*MAP + px]
 			grey = (0.62 + 0.33*math.sqrt(min(h/1000, 1)))*clamp(0.85 + (-gx - gz)/120, 0.35, 1.25)
-		} else if w.inland > 0 {
-			grey = 0.50 if (px + py)%16 > 1 else 0.40   // the continent, hatched: a record, not yet formed
+		} else if k.h > 0 {
+			grey = (0.50 if inland > 0 else 0.46) if (px + py)%16 > 1 else 0.40   // the history's land, hatched: not formed
 		} else {
-			grey = 0.40 - 0.27*clamp(math.ln(max(w.depth, 5)/50)/math.ln(f32(7000.0/50)), 0, 1)
+			grey = 0.40 - 0.27*clamp(math.ln(max(-k.h - OUTER_HIGH.relief*outer_high(k), 5)/50)/math.ln(f32(7000.0/50)), 0, 1)
 		}
 		col := [3]f32{grey, grey, grey}
-		// The trench, the volcanic front, the shelf's edge, the hotspot's track, the continent's coast and the crest of its range.
+		over := k.front < 1e3
+		nan := math.nan_f32()
+		row := &rows[(py%2)*MAP + px]
+		row^ = {k.h if inland > -4 else nan, k.front + k.setback if over else -k.slab if k.slab < 1e3 else nan, k.front if over else nan, k.front + (1 - OUTER_HIGH.at)*k.setback if over && k.front < 0 else nan}
 		if h <= 0 {
-			if abs(w.inland) < 0.07 do col = {0.92, 0.90, 0.84}
-			if abs(w.inland - f32(plates.crest)) < 0.07 do col = {0.80, 0.55, 0.30}
-			if abs(w.trench) < 0.07 do col = {0.55, 0.12, 0.10}
-			if abs(w.front) < 0.07 do col = {0.95, 0.30, 0.20}
-			if abs(w.trench - f32(SHELF*plates.setback)) < 0.07 do col = {0.30, 0.75, 0.80}
-			if w.track < 0.07 do col = {1.00, 0.60, 0.10}
+			for f in 0..<LINES {
+				left, up := rows[(py%2)*MAP + max(px - 1, 0)][f], rows[((py + 1)%2)*MAP + px][f]
+				if row[f] < 0 && (left >= 0 || py > 0 && up >= 0) || row[f] >= 0 && (left < 0 || py > 0 && up < 0) do col = inks[f]
+			}
+			for t in tracks {
+				u := clamp(linalg.dot(at - t[0], t[1] - t[0])/max(linalg.dot(t[1] - t[0], t[1] - t[0]), 1e-6), 0, 1)
+				if linalg.length(at - linalg.lerp(t[0], t[1], u)) < 0.07 do col = {1.00, 0.60, 0.10}
+			}
 		}
 		for k in 0..<3 do pixels[(py*MAP + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
 	}
-	at :: proc(p: [2]f64) -> [2]int { return {int((p.x - plates.mid.x + VIEW/2)*MAP/VIEW), int((p.y - plates.mid.y + VIEW/2)*MAP/VIEW)} }
+	at :: proc(p: [2]f64) -> [2]int { return {int((p.x - world_frame.origin.x + VIEW/2)*MAP/VIEW), int((p.y - world_frame.origin.y + VIEW/2)*MAP/VIEW)} }
+	dot :: proc(pixels: []u8, q: [2]int, r0, r1: int, ink: [3]u8) {
+		for dy in -r1..=r1 do for dx in -r1..=r1 do if r := dx*dx + dy*dy; r >= r0*r0 && r <= r1*r1 && q.x + dx >= 0 && q.y + dy >= 0 && q.x + dx < MAP && q.y + dy < MAP {
+			for k, j in ink do pixels[((q.y + dy)*MAP + q.x + dx)*4 + j] = k
+		}
+	}
+	// The crest of the range behind the coast.
+	for c, i in continent.crest[1:] {
+		a, b := at(continent.crest[i]), at(c)
+		if abs(a.x - b.x) + abs(a.y - b.y) > 400 do continue
+		for t in 0..=40 do dot(pixels, a + (b - a)*t/40, 0, 1, {205, 140, 75})
+	}
 	// What a label must not cover: each island's land, the key, then each label written.
 	boxes := make([dynamic][4]int, context.temp_allocator)
 	for is in archipelago {
 		q, r := at({f64(is.origin.x), f64(is.origin.y)}), int(0.4*is.size*MAP/VIEW)
 		append(&boxes, [4]int{q.x - r, q.y - r, q.x + r, q.y + r})
 	}
-	append(&boxes, [4]int{0, 0, 1100, 210})
-	c := at(continent.crest[len(continent.crest)/2])
-	note := fmt.tprintf("THE CONTINENT, NOT YET FORMED: A RANGE ABOUT %.0f M HIGH, A GUESS", continent.height)
-	c = {clamp(c.x - 6*len(note), 20, MAP - 20 - 12*len(note)), clamp(c.y + 12, 230, MAP - 60)}
-	write(pixels, MAP, c.x, c.y, note, 3, {230, 225, 215})
-	append(&boxes, [4]int{c.x, c.y, c.x + 12*len(note), c.y + 16})
+	append(&boxes, [4]int{0, 0, 1300, 236})
 	clear_of :: proc(boxes: [][4]int, b: [4]int, skip := -1) -> bool {
 		if b.x < 0 || b.y < 0 || b.z > MAP || b.w > MAP do return false
 		for o, j in boxes do if j != skip && !(o.z < b.x || o.x > b.z || o.w < b.y || o.y > b.w) do return false
 		return true
 	}
-	// A tick each Myr along the track, and the hotspot ringed where it stands now.
-	ring :: proc(pixels: []u8, q: [2]int, r0, r1: int) {
-		for dy in -r1..=r1 do for dx in -r1..=r1 do if r := dx*dx + dy*dy; r >= r0*r0 && r <= r1*r1 && q.x + dx >= 0 && q.y + dy >= 0 && q.x + dx < MAP && q.y + dy < MAP {
-			for k, j in ([3]u8{255, 160, 30}) do pixels[((q.y + dy)*MAP + q.x + dx)*4 + j] = k
+	if len(continent.crest) > 0 {
+		c := at(continent.crest[len(continent.crest)/2])
+		note := fmt.tprintf("LAND LARGER THAN A REGION, NOT YET FORMED: ITS RANGE ABOUT %.0f M HIGH", continent.height)
+		c = {clamp(c.x - 6*len(note), 20, MAP - 20 - 12*len(note)), clamp(c.y + 12, 250, MAP - 60)}
+		if clear_of(boxes[:], {c.x, c.y, c.x + 12*len(note), c.y + 16}) {
+			write(pixels, MAP, c.x, c.y, note, 3, {230, 225, 215})
+			append(&boxes, [4]int{c.x, c.y, c.x + 12*len(note), c.y + 16})
 		}
 	}
-	for m := 1.0; m*plates.speed*1000 < min(plates.reach, 1.5*VIEW); m += 1 {
-		q := at(plates.hotspot + plates.motion*m*plates.speed*1000)
-		ring(pixels, q, 0, 4)
-		if b := ([4]int{q.x + 8, q.y + 6, q.x + 80, q.y + 21}); clear_of(boxes[:], b) {
-			write(pixels, MAP, b.x, b.y, fmt.tprintf("%.0f MYR", m), 3, {255, 160, 30})
+	// The history's volcanoes: the arc's live vents red, its dead ones dark red, the hotspots'
+	// with their ages, each hotspot ringed where it stands now.
+	for v in known.vents {
+		q := at(world_of(v.at))
+		if q.x < 0 || q.y < 0 || q.x >= MAP || q.y >= MAP do continue
+		if v.arc {
+			dot(pixels, q, 0, 5, {255, 60, 40} if v.last < 2 else {140, 30, 20})
+			continue
+		}
+		dot(pixels, q, 0, 5, {255, 160, 30})
+		if b := ([4]int{q.x + 8, q.y + 6, q.x + 92, q.y + 21}); clear_of(boxes[:], b) {
+			write(pixels, MAP, b.x, b.y, fmt.tprintf("%.0f MYR", v.born), 3, {255, 160, 30})
 			append(&boxes, b)
 		}
 	}
-	h := at(plates.hotspot)
-	ring(pixels, h, 22, 26)
-	write(pixels, MAP, h.x + 32, h.y - 7, "HOTSPOT, NOW", 3, {255, 160, 30})
-	append(&boxes, [4]int{h.x + 30, h.y - 9, h.x + 32 + 12*12, h.y + 10})
+	for hs in known.hotspots {
+		q := at(world_of(hs.at))
+		dot(pixels, q, 22, 26, {255, 160, 30})
+		if b := ([4]int{q.x + 30, q.y - 9, q.x + 32 + 12*12, q.y + 10}); clear_of(boxes[:], b) {
+			write(pixels, MAP, q.x + 32, q.y - 7, "HOTSPOT, NOW", 3, {255, 160, 30})
+			append(&boxes, b)
+		}
+	}
 	// Each island named on whichever side of it is clear: right, left, below, above.
 	for is, i in archipelago {
 		label := fmt.tprintf("%d %s, %s", is.id, KINDS[is.kind].name, SETTINGS[is.setting])
@@ -435,10 +561,10 @@ archipelago_map :: proc(path: string) {
 		write(pixels, MAP, spot.x, spot.y, label, 3, {255, 255, 255})
 	}
 	// The key to the lines.
-	for line, n in ([6]struct { name: string, ink: [3]u8 }{{"TRENCH", {200, 60, 50}}, {"VOLCANIC FRONT", {255, 90, 60}}, {"SHELF EDGE", {90, 200, 210}}, {"HOTSPOT TRACK, A TICK EACH MYR", {255, 160, 30}}, {"COAST OF THE CONTINENT", {235, 230, 215}}, {"CREST OF ITS RANGE", {205, 140, 75}}}) {
+	for line, n in ([7]struct { name: string, ink: [3]u8 }{{"TRENCH", {200, 60, 50}}, {"VOLCANIC FRONT, ITS LIVE VENTS AND DEAD ONES", {255, 90, 60}}, {"OUTER HIGH OF THE FOREARC", {90, 200, 210}}, {"HOTSPOT TRACK, THE AGES OF ITS VOLCANOES", {255, 160, 30}}, {"COAST OF LAND LARGER THAN A REGION", {235, 230, 215}}, {"CREST OF ITS RANGE", {205, 140, 75}}, {"HATCHED: LAND THE HISTORY MADE, NOT FORMED", {200, 200, 200}}}) {
 		write(pixels, MAP, 20, 56 + 26*n, line.name, 3, line.ink)
 	}
-	write(pixels, MAP, 20, 20, fmt.tprintf("SEED %d: THE %d ISLANDS NEAR THE START AND THE CONTINENT THEY LIE OFF, 200 KM ACROSS, NORTH UP. WIND AND SWELL FROM %.0f DEGREES", world_seed, len(archipelago), plates.wind), 3, {255, 255, 255})
+	write(pixels, MAP, 20, 20, fmt.tprintf("SEED %d: THE %d ISLANDS NEAR THE START, READ FROM THE HISTORY OF THE PLATES, %.0f KM ACROSS, NORTH UP. WIND AND SWELL FROM %.0f DEGREES", world_seed, len(archipelago), VIEW/1000.0, world_frame.wind), 3, {255, 255, 255})
 	for y in MAP - 40..<MAP - 34 do for x in 20..<20 + 10_000*MAP/VIEW do for k in 0..<3 do pixels[(y*MAP + x)*4 + k] = 255
 	write(pixels, MAP, 20, MAP - 30, "10 KM", 3, {255, 255, 255})
 	write_png(path, pixels, MAP, MAP, false)

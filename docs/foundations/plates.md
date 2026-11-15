@@ -1,6 +1,6 @@
 # The plates: the world's history
 
-How the world's continents and islands come out of one history of moving plates, and how each region's record is read from it. Written 2026-11-15 for step 22 (`foundations.md` section 8) after the owner's goal of the same day (`open-decisions.md`): no island formed on its own; every region's outline, uplift and sinking, vents, rock and sea read from the history at its place; a kind the name of a kind of history; the islands at least as varied and as close to the real ones as today's kinds; forming within its time budget; and the history measured against the real Earth's through time. The research is `interesting-world/notes/real-plates.md`. Numbers are marked (measured), (sourced) or (guess). The first half (the history, its frames, `--plates-why` and the comparison) is built; the second half (reading the regions) is the plan in section 6.
+How the world's continents and islands come out of one history of moving plates, and how each region's record is read from it. Written 2026-11-15 for step 22 (`foundations.md` section 8) after the owner's goal of the same day (`open-decisions.md`): no island formed on its own; every region's outline, uplift and sinking, vents, rock and sea read from the history at its place; a kind the name of a kind of history; the islands at least as varied and as close to the real ones as today's kinds; forming within its time budget; and the history measured against the real Earth's through time. The research is `interesting-world/notes/real-plates.md`. Numbers are marked (measured), (sourced) or (guess). The first half (the history, its frames, `--plates-why` and the comparison) is built; the second half (reading the regions) is built in part, as section 6 says.
 
 ## 1. What it gives the player
 
@@ -64,7 +64,7 @@ Continents are the first continent's pieces: rifts break it, the seed choosing w
 
 ## 6. Reading a region's record (the second half)
 
-Not built. The plan, to be tested against today's kinds and the real islands' figures on many seeds:
+Built 2026-11-15 in part (`foundations.md`, "Step 22, second half, as built"): items 1, 7 and 8 as planned; item 2 as each kind's own outline; items 3 to 6 not yet, each island's record within its kind's ranges still drawn from its seed. The plan as written, to be tested against today's kinds and the real islands' figures on many seeds:
 
 1. **Where the regions are.** The known world's islands are found in the window at 1 km (`world_draw` does this coarsely today), each a candidate region with its middle and outline. Step 17's `Island` records are filled from them: middle, size, setting, age, seed.
 2. **The outline** is where the window's ground at 1 km stands over the sea; for a volcanic island it is none, and the vents build it from the sea floor, as the cone and crater kinds do now.

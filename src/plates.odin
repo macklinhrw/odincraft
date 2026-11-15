@@ -187,6 +187,9 @@ Globe :: struct {
 	crust, next: []Crust,
 	h:       []f32,          // m over the datum, the level the sea would have with today's Earth's water and hypsometry
 	sank:    []u8,           // the plate whose crust sank under a cell this step, or 255
+	src:     []i32,          // the cell whose crust moved onto a cell this step, or -1 for new ocean floor
+	before:  []f32,          // each cell's height over the sea before the last step, which tells how fast it rises (known_read)
+	setback: []f32,          // km from a trench at this cell back to its volcanic front (arc_front)
 	bound:   []u8,           // 0, or the boundary a cell lies on: 1 converging, 2 spreading, 3 sliding
 	collide: []bool,
 	dist:    [Globe_Field][]f32,
@@ -214,7 +217,12 @@ Globe :: struct {
 }
 
 // A place followed through the history, for --plates-why: from when its crust formed, where it is.
-tracing: bool
+// It runs the history twice: first keeping, for every step, the cell each cell's crust came from
+// (`recording`), from which the cells the crust now at the place lay in are walked back
+// (`trace_path`, one a step, -1 before it formed); then following it along them (`tracing`).
+recording, tracing: bool
+trace_steps: [dynamic][]i32
+trace_path: []i32
 followed: [3]f32
 trace_from: f32
 
@@ -365,7 +373,7 @@ globe_init :: proc() {
 	g^ = {}
 	g.centre, g.area, g.nbr, g.block = make([][3]f32, GLOBE_CELLS), make([]f32, GLOBE_CELLS), make([][8]i32, GLOBE_CELLS), make([]i32, GLOBE_CELLS)
 	g.crust, g.next, g.h = make([]Crust, GLOBE_CELLS), make([]Crust, GLOBE_CELLS), make([]f32, GLOBE_CELLS)
-	g.sank, g.bound, g.collide, g.fresh, g.worn = make([]u8, GLOBE_CELLS), make([]u8, GLOBE_CELLS), make([]bool, GLOBE_CELLS), make([]u8, GLOBE_CELLS), make([]f32, GLOBE_CELLS)
+	g.sank, g.bound, g.collide, g.fresh, g.worn, g.src = make([]u8, GLOBE_CELLS), make([]u8, GLOBE_CELLS), make([]bool, GLOBE_CELLS), make([]u8, GLOBE_CELLS), make([]f32, GLOBE_CELLS), make([]i32, GLOBE_CELLS)
 	for f in Globe_Field do g.dist[f], g.from[f] = make([]f32, GLOBE_CELLS), make([]i32, GLOBE_CELLS)
 	g.near, g.masks = make([][9]i32, 6*GLOBE_BN*GLOBE_BN), make([][2]u64, 6*GLOBE_BN*GLOBE_BN)
 	at :: proc(f, i, j: int) -> [3]f32 { return face_point(f, unwarp(2*(f32(i) + 0.5)/GLOBE_N - 1), unwarp(2*(f32(j) + 0.5)/GLOBE_N - 1)) }
@@ -380,6 +388,8 @@ globe_init :: proc() {
 		g.block[c] = i32((f*GLOBE_BN + j/GLOBE_B)*GLOBE_BN + i/GLOBE_B)
 	}
 	for &a in g.area do a *= f32(4*math.PI*PLANET*PLANET)/total
+	g.setback = make([]f32, GLOBE_CELLS)
+	for c in 0..<GLOBE_CELLS do g.setback[c] = math.lerp(ARC_FRONT[0], ARC_FRONT[1], clamp(0.5 + 0.8*noise3(g.centre[c], 1200, 2, world_seed + 77), 0, 1))
 	// Neighbours, found by stepping from a cell's middle along its face's grid, which carries across a face's edge.
 	for f in 0..<6 do for j in 0..<GLOBE_N do for i in 0..<GLOBE_N {
 		c := (f*GLOBE_N + j)*GLOBE_N + i
@@ -505,7 +515,6 @@ globe_step :: proc() {
 	}
 	// Volcanoes, hotspot tracks and the followed place ride the plate of the ground under them.
 	for &v in g.volcanoes do if !v.gone do v.at = g.plates[g.crust[cell_of(v.at)].plate].turn*v.at
-	if tracing && t > trace_from do followed = g.plates[g.crust[cell_of(followed)].plate].turn*followed
 
 	// Which plates can reach each block, from where their cells move to.
 	for &m in g.masks do m = {}
@@ -528,7 +537,7 @@ globe_step :: proc() {
 		for c in lo..<hi {
 			reach: [2]u64
 			for b in g.near[g.block[c]] do if b >= 0 do reach |= g.masks[b]
-			won, has := Crust{}, false
+			won, has, from := Crust{}, false, i32(-1)
 			// Crust stacks only where the boundary was converging: elsewhere two claims are the grid's noise.
 			closing := g.bound[c] == 1
 			for n in g.nbr[c][:4] do closing ||= g.bound[n] == 1
@@ -540,17 +549,17 @@ globe_step :: proc() {
 				cr := g.crust[k]
 				cr.q = g.plates[p].quat*cr.q
 				if !has {
-					won, has = cr, true
+					won, has, from = cr, true, i32(k)
 				} else if overrides(cr, won) {
 					if floats(won) { g.collide[c] = true } else { g.sank[c] = won.plate }
 					if floats(won) do cr.thick = min(cr.thick + stack*won.thick, 75)
-					won = cr
+					won, from = cr, i32(k)
 				} else {
 					if floats(cr) { g.collide[c] = true } else { g.sank[c] = cr.plate }
 					if floats(cr) do won.thick = min(won.thick + stack*cr.thick, 75)
 				}
 			}
-			g.next[c] = won
+			g.next[c], g.src[c] = won, from
 			g.fresh[c] = 0
 			if !has {
 				g.next[c].plate, g.fresh[c] = 255, 255
@@ -583,7 +592,7 @@ globe_step :: proc() {
 			spreading := pass > 1 || g.bound[c] == 2
 			for n in g.nbr[c] do spreading ||= g.bound[n] == 2
 			if !spreading do for k in g.nbr[c][:4] do if g.fresh[k] == 0 && g.next[k].plate == votes[best] {
-				g.next[c] = g.next[k]
+				g.next[c], g.src[c] = g.next[k], g.src[k]
 				break
 			}
 		}
@@ -608,6 +617,12 @@ globe_step :: proc() {
 	for c in 0..<GLOBE_CELLS do g.next[c].plate = g.fresh[c]
 	g.crust, g.next = g.next, g.crust
 	g.t = t
+	// --plates-why: keep where each cell's crust came from, or follow the crust along what was kept.
+	if recording do append(&trace_steps, slice.clone(g.src))
+	if tracing {
+		append(&trace_steps, nil)
+		if c := trace_path[len(trace_steps)]; c >= 0 do followed = g.centre[c]
+	}
 	for &v in g.volcanoes do if !v.gone {
 		c := cell_of(v.at)
 		if g.sank[c] == v.plate { v.gone = true } else { v.plate = g.crust[c].plate }
@@ -872,7 +887,9 @@ spread :: proc(f: Globe_Field, seeds: []i32, reach: f32) {
 	}
 }
 
-arc_front :: proc(c: i32) -> f32 { return math.lerp(ARC_FRONT[0], ARC_FRONT[1], hash01(c/97, 0, world_seed + 77)) }
+// How far behind a trench cell its volcanic front lies, varying smoothly along the trench over a
+// few hundred kilometres, as it does between real arcs (Syracuse et al. 2010).
+arc_front :: proc(c: i32) -> f32 { return globe.setback[c] }
 
 plate_merge :: proc(small, big: int, why: string) {
 	g := &globe
@@ -919,16 +936,18 @@ plates_split :: proc() {
 			e1 := linalg.normalize(linalg.cross(c, [3]f32{0.3, 0.5, 0.8}))
 			e2 := linalg.cross(c, e1)
 			best: f32 = 2
+			wander := make([]f32, GLOBE_CELLS, context.temp_allocator)   // the rift's wandering, the same for every way tried
+			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i do wander[k] = 0.12*noise3(g.centre[k], 900, 3, world_seed + 602 + u32(step))
 			for try in 0..<6 {
 				a := 2*math.PI*hash01(i32(p.serial), step*8 + i32(try), world_seed + 601)
 				n := math.cos(a)*e1 + math.sin(a)*e2
 				left: f32
-				for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i && g.crust[k].cont && linalg.dot(g.centre[k], n) + 0.12*noise3(g.centre[k], 900, 3, world_seed + 602 + u32(step)) > 0 do left += g.area[k]
+				for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i && g.crust[k].cont && linalg.dot(g.centre[k], n) + wander[k] > 0 do left += g.area[k]
 				if balance := abs(left/p.cont - 0.5); balance < best do best, toward = balance, n
 			}
 			if best > 0.3 do continue
 			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i {
-				across := linalg.dot(g.centre[k], toward) + 0.12*noise3(g.centre[k], 900, 3, world_seed + 602 + u32(step))
+				across := linalg.dot(g.centre[k], toward) + wander[k]
 				side[k] = across > 0
 				// The continent is stretched thin either side of the rift: its margins sink to shelves.
 				if d := abs(across)*PLANET; g.crust[k].cont && d < STRETCH do g.crust[k].thick = 7 + (g.crust[k].thick - 7)*(0.45 + 0.55*d/STRETCH)
@@ -977,15 +996,16 @@ plates_split :: proc() {
 }
 
 // The setting of a cell: the first row of PLATE_SETTINGS whose range holds.
-setting_of :: proc(c: int) -> string {
+setting_of :: proc(c: int) -> string { return PLATE_SETTINGS[setting_row(c)].name }
+setting_row :: proc(c: int) -> int {
 	g := &globe
-	for s in PLATE_SETTINGS {
+	for s, i in PLATE_SETTINGS {
 		if s.crust == 1 && !g.crust[c].cont || s.crust == -1 && g.crust[c].cont do continue
 		v := g.dist[s.field][c] if s.field != .Height else g.h[c]
 		if s.field == .Front && g.dist[.Front][c] > 1e8 do continue
-		if v >= s.lo && v < s.hi do return s.name
+		if v >= s.lo && v < s.hi do return i
 	}
-	return "ocean basin"
+	return len(PLATE_SETTINGS) - 1
 }
 
 // What is kept of each frame through the history, to draw once the known world is chosen.
@@ -1114,25 +1134,30 @@ window_point :: proc(east, south: f32) -> [3]f32 {
 Cone :: struct { at: [3]f32, built, radius: f32 }
 fine_height :: proc(p: [3]f32, cones: []Cone) -> f32 {
 	g := &globe
-	// The cells are read at a point moved up to 40 km, so coasts and ranges do not follow their edges,
-	// and blended smoothly, so their slopes do not change at the edges either.
-	warped := linalg.normalize(p + 40/PLANET*[3]f32{noise3(p, 300, 3, world_seed + 32), noise3(p, 300, 3, world_seed + 33), noise3(p, 300, 3, world_seed + 34)})
-	c, gi, gj := globe_at(warped)
-	dx, dy := gi - math.floor(gi) - 0.5, gj - math.floor(gj) - 0.5
 	// Each of the four cells round the point gives its height and its relief, read where its crust
-	// formed so the relief moves with it, and the four are blended. Neighbours carry across a face's edge.
-	at :: proc(k: i32, p: [3]f32) -> f32 {
-		cr := globe.crust[k]
+	// formed so the relief moves with it, and the four are blended.
+	cells, share := corners(warped(p))
+	h := -g.sea
+	for k, i in cells {
+		cr := g.crust[k]
 		amp: f32 = 350 if cr.cont else 260 if cr.thick > 12 else 150
-		return globe.h[k] + amp*noise3(linalg.quaternion_mul_vector3(conj(cr.q), p), 160, 6, world_seed + 31)
+		h += share[i]*(g.h[k] + amp*noise3(linalg.quaternion_mul_vector3(conj(cr.q), p), 160, 6, world_seed + 31))
 	}
-	n := g.nbr[c]
-	across, up := n[0] if dx > 0 else n[1], n[2] if dy > 0 else n[3]
-	corner := n[4 + int(dx <= 0) + 2*int(dy <= 0)]
-	fx, fy := smoothstep(0, 1, abs(dx)), smoothstep(0, 1, abs(dy))
-	h := math.lerp(math.lerp(at(i32(c), p), at(across, p), fx), math.lerp(at(up, p), at(corner, p), fx), fy) - g.sea
 	for v in cones do if r := km(p, v.at); r < v.radius do h += v.built*math.pow(1 - r/v.radius, 1.4)
 	return h
+}
+// A point moved up to 40 km, so coasts and ranges read at it do not follow the cells' edges.
+warped :: proc(p: [3]f32) -> [3]f32 {
+	return linalg.normalize(p + 40/PLANET*[3]f32{noise3(p, 300, 3, world_seed + 32), noise3(p, 300, 3, world_seed + 33), noise3(p, 300, 3, world_seed + 34)})
+}
+// The four cells round a point and their shares, blended smoothly so that slopes do not change at
+// the cells' edges. Neighbours carry across a face's edge.
+corners :: proc(p: [3]f32) -> (cells: [4]i32, share: [4]f32) {
+	c, gi, gj := globe_at(p)
+	dx, dy := gi - math.floor(gi) - 0.5, gj - math.floor(gj) - 0.5
+	n := globe.nbr[c]
+	fx, fy := smoothstep(0, 1, abs(dx)), smoothstep(0, 1, abs(dy))
+	return {i32(c), n[0] if dx > 0 else n[1], n[2] if dy > 0 else n[3], n[4 + int(dx <= 0) + 2*int(dy <= 0)]}, {(1 - fx)*(1 - fy), fx*(1 - fy), (1 - fx)*fy, fx*fy}
 }
 
 // Choose the known world: a window 1,000 km across between 20° and 40° north, where land is
@@ -1266,13 +1291,15 @@ raw_write :: proc(path: string) {
 // of figures for each in history.csv.
 plates_history :: proc(snaps: ^[dynamic]Snap, raw_dir: string) -> f64 {
 	started := time.now()
-	crew_init()
-	defer crew_end()
 	globe_init()
 	table := strings.builder_make()
 	defer strings.builder_destroy(&table)
 	strings.write_string(&table, "myr_ago,plates,continental_crust,land,sea_m,splits,joins,volcanoes\n")
 	for globe.t < -0.01 {
+		if globe.t > -DT - 0.01 {
+			globe.before = make([]f32, GLOBE_CELLS)
+			for c in 0..<GLOBE_CELLS do globe.before[c] = globe.h[c] - globe.sea
+		}
 		globe_step()
 		free_all(context.temp_allocator)
 		if snaps != nil && globe.t >= -SPAN - 0.01 && int(math.round(-globe.t))%FRAME_EVERY == 0 {
@@ -1296,6 +1323,8 @@ plates_history :: proc(snaps: ^[dynamic]Snap, raw_dir: string) -> f64 {
 plates_main :: proc(dir: string) {
 	os.make_directory(dir)
 	snaps: [dynamic]Snap
+	crew_init()
+	defer crew_end()
 	took := plates_history(&snaps, dir)
 	g := &globe
 	window_choose()
@@ -1360,21 +1389,32 @@ plates_main :: proc(dir: string) {
 trace_last: string
 plates_why :: proc(x, z: f64) {
 	g := &globe
+	crew_init()
+	defer crew_end()
+	recording = true
 	plates_history(nil, "")
+	recording = false
 	window_choose()
 	here := window_point(f32(x/1000), f32(z/1000))
 	c := cell_of(here)
 	cr := g.crust[c]
 	window, east, north := g.window, g.east, g.north
+	// Walk back from today's cell through where each step's crust came from, to where it formed.
+	trace_path = make([]i32, len(trace_steps) + 1)
+	defer delete(trace_path)
+	trace_path[len(trace_steps)] = i32(c)
+	for n := len(trace_steps); n > 0; n -= 1 do trace_path[n - 1] = trace_steps[n - 1][trace_path[n]] if trace_path[n] >= 0 else -1
+	for t in trace_steps do delete(t)
+	clear(&trace_steps)
 	start := max(cr.born, -(SPAN + SPIN_UP))
 	fmt.printfln("%.0f km east and %.0f km south of the known world's middle, at %.1f° N %.1f° E of the planet; %s crust %.0f km thick, formed %s", x/1000, z/1000, math.to_degrees(math.asin(here.z)), math.to_degrees(math.atan2(here.y, here.x)), "continental" if cr.cont else "oceanic", cr.thick, fmt.tprintf("%.0f Myr ago", -cr.born) if cr.born > -(SPAN + SPIN_UP) else "before the history began")
-	origin := linalg.quaternion_mul_vector3(conj(cr.q), here)
 	fmt.println("  Myr ago  plate  crust                          ground      setting")
-	tracing, followed, trace_from = true, origin, start
+	tracing, trace_from = true, start
 	trace_last = ""
 	plates_history(nil, "")
+	tracing = false
+	clear(&trace_steps)
 	g.window, g.east, g.north = window, east, north
-	fmt.printfln("  the crust followed through the history ends %.0f km from the place asked about", km(followed, here))
 	for e in g.events do if km(e.at, here) < 1500 && e.t >= start do fmt.printfln("  %.0f Myr ago, %.0f km off: %s (plate %d, %d)", -e.t, km(e.at, here), e.what, e.a, e.b)
 	vents := 0
 	for v in g.volcanoes do if !v.gone && km(v.at, here) < 60 {
@@ -1386,7 +1426,7 @@ plates_why :: proc(x, z: f64) {
 
 trace_note :: proc() {
 	g := &globe
-	if g.t < trace_from do return
+	if g.t < trace_from || trace_path[len(trace_steps)] < 0 do return
 	c := cell_of(followed)
 	cr := g.crust[c]
 	set := setting_of(c)
