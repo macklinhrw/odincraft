@@ -217,7 +217,12 @@ Globe :: struct {
 }
 
 // A place followed through the history, for --plates-why: from when its crust formed, where it is.
-tracing: bool
+// It runs the history twice: first keeping, for every step, the cell each cell's crust came from
+// (`recording`), from which the cells the crust now at the place lay in are walked back
+// (`trace_path`, one a step, -1 before it formed); then following it along them (`tracing`).
+recording, tracing: bool
+trace_steps: [dynamic][]i32
+trace_path: []i32
 followed: [3]f32
 trace_from: f32
 
@@ -510,7 +515,6 @@ globe_step :: proc() {
 	}
 	// Volcanoes, hotspot tracks and the followed place ride the plate of the ground under them.
 	for &v in g.volcanoes do if !v.gone do v.at = g.plates[g.crust[cell_of(v.at)].plate].turn*v.at
-	if tracing && t > trace_from do followed = g.plates[g.crust[cell_of(followed)].plate].turn*followed
 
 	// Which plates can reach each block, from where their cells move to.
 	for &m in g.masks do m = {}
@@ -588,7 +592,7 @@ globe_step :: proc() {
 			spreading := pass > 1 || g.bound[c] == 2
 			for n in g.nbr[c] do spreading ||= g.bound[n] == 2
 			if !spreading do for k in g.nbr[c][:4] do if g.fresh[k] == 0 && g.next[k].plate == votes[best] {
-				g.next[c] = g.next[k]
+				g.next[c], g.src[c] = g.next[k], g.src[k]
 				break
 			}
 		}
@@ -613,6 +617,12 @@ globe_step :: proc() {
 	for c in 0..<GLOBE_CELLS do g.next[c].plate = g.fresh[c]
 	g.crust, g.next = g.next, g.crust
 	g.t = t
+	// --plates-why: keep where each cell's crust came from, or follow the crust along what was kept.
+	if recording do append(&trace_steps, slice.clone(g.src))
+	if tracing {
+		append(&trace_steps, nil)
+		if c := trace_path[len(trace_steps)]; c >= 0 do followed = g.centre[c]
+	}
 	for &v in g.volcanoes do if !v.gone {
 		c := cell_of(v.at)
 		if g.sank[c] == v.plate { v.gone = true } else { v.plate = g.crust[c].plate }
@@ -1379,21 +1389,30 @@ plates_why :: proc(x, z: f64) {
 	g := &globe
 	crew_init()
 	defer crew_end()
+	recording = true
 	plates_history(nil, "")
+	recording = false
 	window_choose()
 	here := window_point(f32(x/1000), f32(z/1000))
 	c := cell_of(here)
 	cr := g.crust[c]
 	window, east, north := g.window, g.east, g.north
+	// Walk back from today's cell through where each step's crust came from, to where it formed.
+	trace_path = make([]i32, len(trace_steps) + 1)
+	defer delete(trace_path)
+	trace_path[len(trace_steps)] = i32(c)
+	for n := len(trace_steps); n > 0; n -= 1 do trace_path[n - 1] = trace_steps[n - 1][trace_path[n]] if trace_path[n] >= 0 else -1
+	for t in trace_steps do delete(t)
+	clear(&trace_steps)
 	start := max(cr.born, -(SPAN + SPIN_UP))
 	fmt.printfln("%.0f km east and %.0f km south of the known world's middle, at %.1f° N %.1f° E of the planet; %s crust %.0f km thick, formed %s", x/1000, z/1000, math.to_degrees(math.asin(here.z)), math.to_degrees(math.atan2(here.y, here.x)), "continental" if cr.cont else "oceanic", cr.thick, fmt.tprintf("%.0f Myr ago", -cr.born) if cr.born > -(SPAN + SPIN_UP) else "before the history began")
-	origin := linalg.quaternion_mul_vector3(conj(cr.q), here)
 	fmt.println("  Myr ago  plate  crust                          ground      setting")
-	tracing, followed, trace_from = true, origin, start
+	tracing, trace_from = true, start
 	trace_last = ""
 	plates_history(nil, "")
+	tracing = false
+	clear(&trace_steps)
 	g.window, g.east, g.north = window, east, north
-	fmt.printfln("  the crust followed through the history ends %.0f km from the place asked about", km(followed, here))
 	for e in g.events do if km(e.at, here) < 1500 && e.t >= start do fmt.printfln("  %.0f Myr ago, %.0f km off: %s (plate %d, %d)", -e.t, km(e.at, here), e.what, e.a, e.b)
 	vents := 0
 	for v in g.volcanoes do if !v.gone && km(v.at, here) < 60 {
@@ -1405,7 +1424,7 @@ plates_why :: proc(x, z: f64) {
 
 trace_note :: proc() {
 	g := &globe
-	if g.t < trace_from do return
+	if g.t < trace_from || trace_path[len(trace_steps)] < 0 do return
 	c := cell_of(followed)
 	cr := g.crust[c]
 	set := setting_of(c)

@@ -281,6 +281,34 @@ archipelago_make :: proc(say := false) {
 		math.to_degrees(math.asin(known.centre.z)), fmt.tprintf(", which ran in %.2f s", known.took) if known.took > 0 else ", kept from an earlier run", world_frame.start.x, world_frame.start.y, lat)
 }
 
+// What the plates' history says of the island in hand, as --why prints it: where it stands, what
+// its crust is, how it moves, and why it is its kind.
+plates_words :: proc() {
+	o := [2]f64{f64(region.origin.x), f64(region.origin.y)}
+	w := world_at(o.x, o.y)
+	k, _ := known_at(known_point(o.x, o.y))
+	fmt.printf("the plates: the island's middle stands on the %s (%s in the history)", SETTINGS[w.setting], PLATE_SETTINGS[k.row].name)
+	if w.front < 1e3 do fmt.printf(", %.0f km %s the volcanic front and %.0f km from the trench", w.front, "before" if k.front < 0 else "behind", w.trench)
+	else if w.trench < 0 do fmt.printf(", on the plate going down, %.0f km before the trench", -w.trench)
+	fmt.printf("; on %s crust %.0f km thick, its land %.1f Myr old; the sea %.0f m deep round it; it rises %.2f mm/yr (the history's own %.2f", "continental" if k.cont else "oceanic", k.thick, w.age, w.depth, w.rising, k.rising)
+	if high := outer_high(k); high > 0.01 do fmt.printf(", the forearc's outer high %.2f", w.rising - k.rising)
+	fmt.printf(")")
+	if w.track < 1e3 do fmt.printf("; %.0f km from a hotspot's track", w.track)
+	start := -1
+	for r, i in KINDS do if r.name == region.kind do start = i
+	fmt.printf(". It is the %s kind", region.kind)
+	if here.island.id == 0 do fmt.printf(", the seed's, and the start was put where that kind's host holds best")
+	if start >= 0 && len(KINDS[start].hosts) > 0 {
+		fmt.printf(": its host holds %.2f here, on", holds(start, o))
+		p := Point{cell = 2000}
+		for win, i in KINDS[start].hosts[0] {
+			f := FIELDS[win.field]
+			fmt.printf("%s %s %.4g%s (%s)", "," if i > 0 else "", f.name, f.at(&p), f.unit, fmt.tprintf("over %.4g", win.lo) if win.hi >= ANY else fmt.tprintf("up to %.4g", win.hi) if win.lo <= -ANY else fmt.tprintf("%.4g to %.4g", win.lo, win.hi))
+		}
+	}
+	fmt.printfln(". --plates-why=%.0f,%.0f follows its crust back through the history.", o.x, o.y)
+}
+
 // The land larger than a region nearest the start: its coast traced round its samples, and the
 // highest ground within 60 km of each stretch of it.
 continent_make :: proc() {

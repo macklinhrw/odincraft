@@ -283,6 +283,6 @@ globe_free :: proc() {
 	delete(g.bound); delete(g.collide); delete(g.fresh); delete(g.worn)
 	for f in Globe_Field { delete(g.dist[f]); delete(g.from[f]) }
 	delete(g.volcanoes); delete(g.hotspots); delete(g.events)
-	for &f in spread_buckets do for &b in f do delete(b)
+	for &f in spread_buckets do for &b in f { delete(b); b = nil }
 	g^ = {}
 }
