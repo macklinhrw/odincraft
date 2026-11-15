@@ -247,5 +247,6 @@ why_at :: proc(wx, wz: f64) {
 	trail_words(x, z)
 	named_words(x, z)
 	creature_words(x, z)
+	arrivals_why()
 	plates_words()
 }

@@ -42,10 +42,18 @@ Known :: struct {
 	masses:              [dynamic]Known_Mass,
 	inland:              []f32,                 // km behind the coast of land larger than a region; under 0, out to sea from it
 	chains:              [dynamic][2][2]f32,    // the hotspots' tracks, as segments from each volcano to the next older
+	feet:                [VENT_N*VENT_N][dynamic]i32,   // the volcanoes whose foot reaches each square of the known world,
+	tracks:              [VENT_N*VENT_N][dynamic]i32,   // and the tracks within a square of it
 	took:                f64,                   // seconds the history and its reading took, when not read back
 }
 Known_Mass :: struct { area: f32, top: int, large: bool }   // km²; its highest sample; larger than a region could hold, or cut by the known world's edge
 known: Known
+
+VENT_N :: 50   // squares along a side of the known world that its volcanoes and tracks are filed in, 20 km each
+
+// km a volcano's foot reaches from its top, as the known world's map draws it.
+foot :: proc(v: Known_Vent) -> f32 { return v.built/(1000*(0.2 if v.arc else 0.09)) }
+vent_square :: proc(at: [2]f32) -> [2]int { return {int((at.x + WINDOW/2)/(WINDOW/VENT_N)), int((at.y + WINDOW/2)/(WINDOW/VENT_N))} }
 
 // A land mass of more than this many km² is land larger than an island a region forms: it is not
 // formed yet (step 21), and stands in the record as the continent's.
@@ -153,6 +161,11 @@ known_finish :: proc() {
 		}
 	}
 	for c in 0..<N*N do if !on(k, c) do k.inland[c] = -k.inland[c]
+	// Each volcano filed in every square its foot reaches.
+	for v, i in k.vents {
+		lo, hi := vent_square(v.at - foot(v)), vent_square(v.at + foot(v))
+		for y in max(lo.y, 0)..=min(hi.y, VENT_N - 1) do for x in max(lo.x, 0)..=min(hi.x, VENT_N - 1) do append(&k.feet[y*VENT_N + x], i32(i))
+	}
 	// Each hotspot's volcanoes, youngest first from the hotspot itself, joined where they lie close
 	// enough to be one track.
 	for spot in i16(0)..<i16(64) {
@@ -161,6 +174,10 @@ known_finish :: proc() {
 		for v in k.vents do if !v.arc && v.spot == spot do append(&chain, v)
 		for i in 1..<len(chain) do for j := i; j > 0 && chain[j].born < chain[j - 1].born; j -= 1 do chain[j], chain[j - 1] = chain[j - 1], chain[j]
 		for i in 1..<len(chain) do if linalg.length(chain[i].at - chain[i - 1].at) < 150 do append(&k.chains, [2][2]f32{chain[i - 1].at, chain[i].at})
+	}
+	for c, i in k.chains {
+		lo, hi := vent_square(linalg.min(c[0], c[1])) - 2, vent_square(linalg.max(c[0], c[1])) + 2
+		for y in max(lo.y, 0)..=min(hi.y, VENT_N - 1) do for x in max(lo.x, 0)..=min(hi.x, VENT_N - 1) do append(&k.tracks[y*VENT_N + x], i32(i))
 	}
 }
 
@@ -192,11 +209,13 @@ known_at :: proc(at: [2]f32) -> (o: Known_Sample, inland: f32) {
 	return
 }
 
-// km from the nearest hotspot's track; 1e4 with none within reach.
+// km from the nearest hotspot's track, exact within 40 km; 1e4 with none within reach.
 track_at :: proc(at: [2]f32) -> f32 {
 	d := f32(1e4)
-	for s in known.chains {
-		a, b := s[0], s[1]
+	q := vent_square(at)
+	if q.x < 0 || q.y < 0 || q.x >= VENT_N || q.y >= VENT_N do return d
+	for i in known.tracks[q.y*VENT_N + q.x] {
+		a, b := known.chains[i][0], known.chains[i][1]
 		t := clamp(linalg.dot(at - a, b - a)/max(linalg.dot(b - a, b - a), 1e-6), 0, 1)
 		d = min(d, linalg.length(at - linalg.lerp(a, b, t)))
 	}
@@ -208,9 +227,9 @@ track_at :: proc(at: [2]f32) -> f32 {
 // own, which the history's steps of 2 Myr cannot tell; elsewhere the crust's age.
 age_at :: proc(at: [2]f32, crust: f32) -> f32 {
 	best, age := f32(1), crust
-	for v in known.vents {
-		foot := v.built/(1000*(0.2 if v.arc else 0.09))   // km, as the known world's map draws it
-		if d := linalg.length(v.at - at)/foot; d < best do best, age = d, v.last + 0.5 if v.arc else v.born
+	if q := vent_square(at); q.x >= 0 && q.y >= 0 && q.x < VENT_N && q.y < VENT_N do for i in known.feet[q.y*VENT_N + q.x] {
+		v := known.vents[i]
+		if d := linalg.length(v.at - at)/foot(v); d < best do best, age = d, v.last + 0.5 if v.arc else v.born
 	}
 	return age
 }

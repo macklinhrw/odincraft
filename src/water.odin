@@ -91,12 +91,12 @@ water_init :: proc(wt: ^Water, dev: ^sdl.GPUDevice) {
 // Top of the ground in a column of a chunk's blocks: the highest block that is not part
 // of a tree, or where the sea's level runs in under a roof, the floor beneath it. Water lies on
 // this, and under any crown.
-column_floor :: proc(blocks: []u8, h, y_base, x, z: i32) -> (floor: f32, roofed: bool) {
-	at :: proc(blocks: []u8, x, y, z: i32) -> Mat { return Mat(blocks[int(x + 1) + int(z + 1)*P + int(y)*P*P]) }
+column_floor :: proc(blocks: []Mat, h, y_base, x, z: i32) -> (floor: f32, roofed: bool) {
+	at :: proc(blocks: []Mat, x, y, z: i32) -> Mat { return blocks[int(x + 1) + int(z + 1)*P + int(y)*P*P] }
 	sea := SEA_LEVEL - 1 - y_base
 	for y := h - 1; y >= 0; y -= 1 {
 		m := at(blocks, x, y, z)
-		if m == .Air || m in PLANT_BLOCKS do continue
+		if m == .Air || is(m, PLANT_BLOCKS) do continue
 		if y > sea && sea >= 0 && at(blocks, x, sea, z) == .Air do for f := sea; f >= 0; f -= 1 do if at(blocks, x, f, z) != .Air do return f32(y_base + f + 1), true
 		return f32(y_base + y + 1), false
 	}

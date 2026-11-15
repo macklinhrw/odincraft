@@ -116,8 +116,11 @@ world_at :: proc(x, z: f64) -> (w: World_Point) {
 	// one to two of its cells apart, stand.
 	w.age = math.lerp(f32(0.5), age_at(at, k.age), smoothstep(6, 14, w.front))
 	high := outer_high(k)
-	stretch := smoothstep(-0.4, 0.4, fbm(f64(at.x)*1000, f64(at.y)*1000, f64(OUTER_HIGH.stretch), 1000, 2, world_seed + 1731))   // keyed by the known world, which does not move with the start
-	w.rising = k.rising + world_frame.rise*stretch*high
+	w.rising = k.rising
+	if high > 1e-3 {
+		stretch := smoothstep(-0.4, 0.4, fbm(f64(at.x)*1000, f64(at.y)*1000, f64(OUTER_HIGH.stretch), 1000, 2, world_seed + 1731))   // keyed by the known world, which does not move with the start
+		w.rising += world_frame.rise*stretch*high
+	}
 	w.depth, w.inland = max(-k.h - OUTER_HIGH.relief*high, 0), inland
 	w.setting = .Continent if inland > 0 else .Arc if w.front < 10 else .Hotspot if w.track < 10 else .Forearc if over && k.front < 0 else .Back_Arc if over && k.front < 400 && !k.cont else .Shelf if k.cont else .Open_Sea
 	return
@@ -322,17 +325,21 @@ continent_make :: proc() {
 		at := [2]f32{f32(i%N) + 0.5, f32(i/N) + 0.5}*KNOWN_STEP - WINDOW/2
 		if d := linalg.length(at - world_frame.start); d < by do from, by = i, d
 	}
-	if from < 0 do return
+	if from < 0 {   // none in the known world: a coast beyond it, 2,000 km off, which nothing reaches
+		far := world_of(world_frame.start + {2000, 0})
+		append(&continent.coast, far, far)
+		return
+	}
 	id := known.mass[from]
 	inside :: proc(p: [2]int, id: i32) -> bool { return p.x >= 0 && p.y >= 0 && p.x < N && p.y < N && known.mass[p.y*N + p.x] == id }
 	point :: proc(p: [2]int) -> [2]f64 { return world_of([2]f32{f32(p.x) + 0.5, f32(p.y) + 0.5}*KNOWN_STEP - WINDOW/2) }
-	// Round the mass's edge by its neighbours, turning the same way at each sample, until back where it began.
+	// Round the mass's edge by its neighbours, turning the same way at each sample, until it makes its
+	// first move again: it may pass the sample it began at more than once, from different sides.
 	dirs := [8][2]int{{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}}
 	cur, back := [2]int{from%N, from/N}, 0
 	for d, k in dirs do if !inside(cur + d, id) { back = k; break }
-	first, first_back := cur, back
 	edge := make([dynamic][2]int, context.temp_allocator)
-	for _ in 0..<4*N*N {
+	for len(edge) < 32*N {   // 32,000 km of coast at most
 		append(&edge, cur)
 		moved := false
 		for t in 1..=8 {
@@ -344,7 +351,10 @@ continent_make :: proc() {
 				break
 			}
 		}
-		if !moved || cur == first && back == first_back do break
+		if !moved || len(edge) > 1 && edge[len(edge) - 1] == edge[0] && cur == edge[1] {
+			if len(edge) > 1 do pop(&edge)
+			break
+		}
 	}
 	for p, i in edge do if i%2 == 0 do append(&continent.coast, point(p))
 	append(&continent.coast, continent.coast[0])
@@ -410,8 +420,8 @@ archipelago_map :: proc(path: string) {
 		for py in max(int(lo.y), 0)..<min(int(hi.y) + 1, MAP) do for px in max(int(lo.x), 0)..<min(int(hi.x) + 1, MAP) {
 			if p := pixel(px, py) - o; max(abs(p.x), abs(p.y)) < is.size/2 do heights[py*MAP + px] = max(land_at(land.z[2], land.n/4, p.x, p.y), 0)
 		}
-		fmt.printfln("%d %s, %s, %.1f Myr, at %.1f, %.1f km; region %.1f km, highest %.0f m, formed in %.2f s",
-			is.id, KINDS[is.kind].name, SETTINGS[is.setting], is.age, o.x/1000, o.y/1000, is.size/1000, tops[i], f.seconds)
+		fmt.printfln("%d %s, %s, %.1f Myr, at %.1f, %.1f km; region %.1f km, highest %.0f m, formed in %.2f s; lives on it: %s",
+			is.id, KINDS[is.kind].name, SETTINGS[is.setting], is.age, o.x/1000, o.y/1000, is.size/1000, tops[i], f.seconds, lives_words())
 	}
 	bind(home)
 

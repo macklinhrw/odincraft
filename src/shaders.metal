@@ -202,7 +202,8 @@ static float4 finish(float3 c, float2 pixel, float alpha) {
 
 struct QuadIn {
     short4  a [[attribute(0)]];   // origin x, y, z and extent along U
-    ushort4 b [[attribute(1)]];   // extent along V, corner occlusion, face | flip | material, ground slope
+    ushort4 b [[attribute(1)]];   // extent along V, corner occlusion, face | flip | sky, ground slope
+    ushort2 m [[attribute(2)]];   // material, and a spare
 };
 
 struct Corner { float3 pos; float ao; };
@@ -225,7 +226,7 @@ struct TerrainV {
     float3 rel;
     float ao;
     float cell [[flat]];
-    uint info [[flat]];
+    uint info [[flat]];     // face | flip | sky in the low byte (QuadIn), the material over it
     float3 soft [[flat]];   // direction the light treats this face as pointing
 };
 
@@ -237,7 +238,7 @@ vertex TerrainV vs_terrain(QuadIn q [[stage_in]], uint vid [[vertex_id]],
     o.position = drawn(o.rel, f);
     o.ao = c.ao;
     o.cell = d.origin.w;
-    o.info = q.b.z;
+    o.info = (uint(q.b.z) & 255u) | uint(q.m.x) << 8u;
     // Light a face partly by the slope of the hill it is cut from: half its own direction,
     // half the smooth ground's. Faces with no ground slope (trees) keep their own.
     float3 N = FACE_N[q.b.z & 7u];
@@ -279,7 +280,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
                            texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]], texture2d<float> seen [[texture(3)]],
                            bool outside [[front_facing]]) {
     uint face = in.info & 7u;
-    uint mat = (in.info >> 8u) & 255u;
+    uint mat = in.info >> 8u;
     float3 N = FACE_N[face];
     float dist = length(in.rel);
     float3 world = in.rel + f.cam.xyz;

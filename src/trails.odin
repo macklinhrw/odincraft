@@ -15,14 +15,14 @@ import "core:time"
 // The animal (interesting-world/notes/real-animals.md). Of the reference islands only Tsushima,
 // once joined to larger land while the sea stood low, has a large wild animal of its own, the sika
 // deer; the oceanic ones have only what people brought. Whether an island has the animal is never
-// a preference (the owner, 2026-11-12): it must have been able to reach the island, which is the
-// row's host on the island's story, and the island must be able to keep it, which is `herd`, the
-// fewest squares with ground to lie up on that hold a herd (Okinoshima of Tomogashima, 1.5 km²,
-// keeps one), with fresh water and ground to feed on. It lies up on dry, gentle, sheltered,
+// a preference (the owner, 2026-11-12): it must have reached the island, by walking over land the
+// sea bared or swimming a strait (its row in DISPERSAL, arrivals.odin), and the island must be able
+// to keep it, which is `herd`, the fewest squares with ground to lie up on that hold a herd
+// (Okinoshima of Tomogashima, 1.5 km², keeps one), with fresh water and ground to feed on. It lies up on dry, gentle, sheltered,
 // wooded ground, a bed in each square `across` metres wide, and walks to water, to open ground to
 // feed and to the next bed, at most `limit` seconds of a person's walking away.
-Animal :: struct { name: string, host, bed, feed: []Window, across: f64, limit: f32, herd: int }
-DEER := Animal{"sika deer", {{.Risen, 100, ANY, 0}},
+Animal :: struct { name: string, bed, feed: []Window, across: f64, limit: f32, herd: int }
+DEER := Animal{"sika deer",
 	{{.Slope, -ANY, 0.36, 0.15}, {.Wetness, -ANY, 0.5, 0.2}, {.Exposure, -ANY, 0.6, 0.2}, {.Woods, 0.7, ANY, 0.2}, {.Humped, 0, ANY, 6}},
 	{{.Woods, -ANY, 0.5, 0}}, 500, 2400, 6}
 
@@ -120,8 +120,8 @@ trails_make :: proc() {
 		if deep < 0.2 do lips[c] = p
 		if w := 2*half*(1 + 100*deep*deep) + 4; !g.sea[c] do trails.wade[c] = w if trails.wade[c] == 0 else min(trails.wade[c], w)
 	}
-	if q := (Point{cell = LAND_CELL}); host(DEER.host, &q) == 0 {
-		fmt.printfln("no large animal: the sea has risen only %.0f m over the island since it stood lowest, so it was never joined to the land deer could walk from", risen())
+	if !came(DEER.name).reached {
+		fmt.printfln("no large animal: the %s did not reach the island: %s", DEER.name, arrival_words(DEER.name))
 		return
 	}
 
@@ -145,7 +145,7 @@ trails_make :: proc() {
 		water += int(trails.wade[ci] > 0 || land.lake[ci] > 0)
 	}
 	if lie < DEER.herd || feed == 0 || water == 0 {
-		fmt.printfln("no large animal: %s could walk here when the sea stood low, but the island cannot keep a herd: %s", DEER.name,
+		fmt.printfln("no large animal: %s, but the island cannot keep a herd: %s", arrival_words(DEER.name),
 			"it has no fresh water" if water == 0 else "it has no open ground to feed on" if feed == 0 else fmt.tprintf("it has sheltered wood to lie up in in only %d squares of %.0f m, and a herd needs %d", lie, DEER.across, DEER.herd))
 		return
 	}

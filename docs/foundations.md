@@ -1048,6 +1048,83 @@ Not done: the places' sort of the cells by height (17 of their 30 ms), whose lib
 
 Weak points: the flood is now half of forming and cannot be shared or reordered while the land is to stay bit for bit, so the next large gain changes the land; the start island's "land formed in" line now reads its time beside the near islands (0.68 s on the default island against 0.53 alone); the near islands' lines come once all are done, in order of distance, not each as it is done; fifteen helper threads are made at the first shared loop and never end (they sleep when idle), some of them on efficiency cores, where a part runs slower and the forming thread waits for it at the loop's end, spinning with a yield; sharing gains 1.25 times inside one island beyond the one-core gains, not the cores' twelve; a median exactly at zero could come out as −0 by selection where sorting gave +0 (no island measured has one); there is no 16 km island to measure; and every time was taken under load from other agents' work, while the benches cannot show headroom, only that frames are no worse.
 
+### Step 28, as built
+
+Built 2026-11-15 by Claude: which animals reached which island, by whether they walk, swim, fly or drift. The owner has not yet looked at it. Nothing new is drawn; what changes is who lives where, which `--why`, the start-up lines and `--archipelago` say.
+
+- **Decided once, from the records** (`arrivals.odin`). Every kind of animal the islands have lives on the continent, a guess while it is not formed. At world creation, after the archipelago is made and before any island forms, `arrivals_make` decides for each island and kind whether it got there. It reads the islands' records (place, region size, kind, seed), the continent's coast and the world's field `depth`, and takes 2 to 7 ms. So an island has the same animals formed alone, beside others or on any thread.
+- **Whether the island keeps what reached it is still the region's**, as before: the deer's herd (`trails_make`), a bird's face or stack and a fish's stream (`creatures_make`). A kind that did not reach the island has no trail, home or fish, and its line says why.
+- **The straits, as they stood when the sea was lowest over the island.**
+  - No record holds an island's outline, so its shore is taken a quarter of its region's side from its middle (`ASHORE`; measured on 79 formed islands, 0.14 to 0.17 on cones and craters and 0.23 to 0.39 on the rest).
+  - Its strait to the continent's nearest coast and to every other island is sounded every 500 m on `depth`, along the straight line between the shores.
+  - How far the sea fell is the island's own history's: the field `risen`, read before forming by `risen_on`, which draws the same phases `region_init` does (`phase_draw`, split out of it with the same draws, so every island's land is unchanged bit for bit).
+  - If no sounding is deeper than the sea fell, the strait was land, and a walker crossed it. Otherwise the stretch deeper than that is the open sea a swimmer, flier or drifter had to cross.
+- **The ways across are columns of a row** (`DISPERSAL`, one row for each animal the game draws):
+  - whether it walks over bared land;
+  - how it crosses open sea: swimming, flying or drifting as larvae;
+  - `sure`, the km it crosses in time, and `most`, the most it crosses by any chance.
+
+  Between `sure` and `most` the chance falls evenly, and one draw from the world's seed, keyed by the island and the row's name, decides. Sika deer walk, and swim 4 km in time (Awaji's deer are 4 km from Okinoshima's) and 12 at most (the farthest reported). Black kites fly 100 and 1,000 km, ospreys 1,000 and 3,000. Ayu larvae drift 10 and 50, yoshinobori larvae 100 and 1,000. The figures and their sources are in `interesting-world/notes/real-animals.md`.
+- **In rounds.** First every island takes what the continent can give it, then what islands reached in earlier rounds can, each island taking the source with the best chance and then the least open sea. A later round never gives a source to an island in the same round, so the outcome does not depend on the order.
+- **Said.**
+  - Start-up prints one line for the world (each kind's islands, and for deer how each was reached) and one for the island in hand ("who reached it, over the straits as they stood when the sea was lowest").
+  - The deer's and creatures' lines say why a kind did not reach the island, with the source, the strait's width and depth, the sea's fall, and the chance and draw.
+  - `--why=` ends with a paragraph on the island: each kind, how it came or why not, whether the island keeps it, and where its figures come from.
+  - `--archipelago=` adds what lives on each island to its line, with a kind that reached it but is not kept in brackets.
+
+What the premises had right and wrong:
+
+- **That the inlets kind stands for islands once joined to land.** Wrong since step 17, which puts it wherever the crust is still or sinking: in the forearc and on the hotspot's track as well as on the shelf. On seeds 1 to 8 deer lived on 19 inlets islands, and only 7 of those stood on the shelf. Now they live on 22 of the 31 islands on the shelf and on none of the other 125:
+  - 9 walked over shelf the sea had bared;
+  - 13 swam a strait narrower than 12 km, from the continent or a neighbour;
+  - the worn and ridge kinds on the shelf have them too where the coast is near.
+
+  This matches the real islands: Tsushima, on the shelf, has deer; the Izu islands (arc), Chichijima and Hahajima (forearc) and Kikaijima have none.
+- **That swimming would decide most islands.** It does so only on the shelf. Off the shelf, straits are 8 to 30 km of sea from 700 to 7,000 m deep, wider than a deer swims; the stand-in's islands, at most 25 to 31 km apart middle to middle, are too far apart for swimmers.
+- **That chance matters.** It does for the ayu: on each seed 0 to 5 islands drew no ayu. Many cones and craters it reached have no stream for it, so it lives on fewer. The Izu islands have none, which is matched in outcome but not in cause.
+
+Not done:
+
+- Animals people carried, which waits for people (step 29).
+- Boar, skinks and bats, which the real islands' notes name but nothing draws.
+- An island's age in the chance: a 0.1 Myr dome has the same chance as a 3 Myr ridge.
+- The shallowest path between two islands rather than the straight line.
+
+Weak points:
+
+- **An island a kind reached but cannot keep still passes it on**: a crater with no stream for ayu is a source for its neighbours. Keeping is known only once an island is formed.
+- **Shores are guessed** from the region's size, about a kilometre either way on most islands.
+- **Each island's sea is its own kind's** (2026-11-14), so a strait between two islands is judged with a different sea from each side, until step 22 gives the world one sea.
+- **The record's strait differs from the land drawn**: the formed region's floor falls to 200 m at its rim, so a strait 50 m deep by the record is drawn 200 m deep.
+- **The figures are guesses**: every kind is taken to live on the continent, and the kite's, ayu's and goby's figures are guesses.
+
+**Cost.** `arrivals_make` takes 2 to 7 ms at start-up, and `src/` grew by 222 lines (208 in `arrivals.odin`).
+
+- **Forming.** An island that now has deer forms longer by its trails, 50 to 330 ms: the worn and ridge islands on the shelf, which had none before. Islands without deer form as before, and every island's land is unchanged bit for bit (maps compared on four islands).
+- **Entering.** On seed 7, island 16 (worn, on the shelf, 57 km from the start) is formed before entering and now lays trails. It formed at 0.90 to 0.97 of island 6's time against 0.82 to 0.89 before, and island 6 still holds entering. Start-up to the end of a one-second bench took 3.15, 3.20 and 2.94 s on the parent and 3.43, 2.89 and 3.14 s on this build.
+- **Benches.** Run against the parent alternately, under a load of 20 to 36 from three other agents' work, thermal pressure 0 to 1. Each gives the frame interval median, then the frames over 12.5 ms, then our work's median.
+  - The start: 8.33 ms, 10 and 22 frames, 1.25 and 1.11 ms on the parent; 8.33 ms, 2 and 0 frames, 1.11 and 1.06 ms on this build. Both travelled 43 m.
+  - The forest flight: 8.33 ms, 31 and 51 frames, 1.15 and 1.10 ms on the parent; 8.33 ms, 13 and 35 frames, 1.05 and 1.12 ms on this build. Faces drawn are 1,038 to 1,049 thousand on both.
+
+### Step 23, as built
+
+Built 2026-11-15 by Claude: a block can name one of 65,536 materials instead of 256. The owner has not looked at it; there is nothing new to see, and nothing should look different.
+
+- **A material is 16 bits wherever it is kept** (`Mat :: enum u16`, `gen.odin`), and a block volume is a list of materials, `[]Mat`, not of bytes: the generator's (`gen_volume`, `grow`), a chunk's (`Chunk.blocks`, `Built.blocks`, `build_volume`, `world_block`, `world_set`), the mesher's (`solid`, `sky_seen`, `grain`, `mesh_volume`) and the water's (`column_floor`). The player's collision and aim already read materials through `world_block`. The width is said once, by `Mat`, and the casts between a byte and a material are gone.
+- **A quad carries its material in a field of its own**, `Quad.mat`, so a face is 20 bytes, not 16. Its 16 bytes had no 8 bits to spare: positions, extents, corner light, the sky and the slope fill them, and freeing 8 would have meant packing positions into odd widths and unpacking them in every vertex shader. The shader reads the material as a third attribute (`QuadIn.m`) and hands it to the fragment over the face, turn and sky in one flat word, so `fs_terrain` finds it in `in.info >> 8u` as before, now all 16 bits of it. The far rows that merge level tops into one face compare the material as well as the info word, which used to hold it.
+- **What the rules ask of a material is a trait** in one table, `TRAITS` (`gen.odin`), asked by `is(m, set)`: seen through (`LEAVES`), a plant's (`PLANT_BLOCKS`), a cover over soil (`COVERS`), a rock that passes water (`PASSES`), and the grounds a ground plant grows on (Grass, Litter, Susuki, Dune, Silt, Sand and Rubble; `SOIL_COVERS`, `RUBBLE`). These were `bit_set`s of materials, and Odin's `bit_set` holds 128 kinds at most, so while one stood the table could not pass 128 materials; steps 24 and 26 between them bring more. The rows read as before: a ground plant's `on` is still `{.Litter, .Grass}` or `SOIL_COVERS + RUBBLE`, now naming grounds.
+- **The atlas is unchanged**: one texture array, a layer for each tile, two tiles a material. Metal holds 2,048 layers, so the atlas holds 1,024 materials and the build stops with a message past that (`render.odin`); the plan's wide world counts about 500. `tools/blocks.py` reads `Mat` at any width and makes the committed atlas again pixel for pixel.
+
+Adding a material is as before: its name in `Mat`, its row in `MATERIALS`, its tile in `tools/blocks.py`, and where a rule should know it (a leaf, a bark, a scree, a rock that passes water) its traits in `TRAITS` instead of a set.
+
+**Found on the way.** A column with no crown keeps `{0, 0}` for one, and a chunk's highest point counted it, so every chunk reached up to the sea's level at least. Over the sea a near chunk held 205 layers, nearly all air over a floor 200 m down, which 16-bit blocks doubled (153 MB of blocks at the end of the flight across the sea), and no chunk was ever wholly deeper than 150 m, so the shadow maps never left one out as `DARK` says they do. The highest point now counts a crown only where one hangs (`gen_columns`): a near chunk at sea holds 5 layers and is built 3.7 times faster, and the flight across the sea draws 119 thousand faces a frame against 130, the deep sea floor gone from the shadow maps.
+
+**Identical.** Pictures were compared pixel by pixel against the parent, from 23 cameras: the start, walking and flying, with and without weather; a forest, the canopy bench's, the old wood's gap, a sandy shore, a rocky one, the shelter under grit, Three Falls, the river with fish, the slide's lakes, the island from 20 km at sea and from its summit, the flight from 700 m, a pit dug with `--dig` that cuts a tree's trunk, the cone's stack, the crater's black sand, open sea, deep water from 40 m, island 1 across 3.5 km of sea, the young slide on `--kind=ridge --seed=2`. Plants sway and water ripples by the clock, water moves by the frames that loading took, and the walking start settles by them too, so two runs of the parent differ there (by up to 236,000 pixels); both builds were given the same test-only change, the shaders' clock at 0 and the water not stepped. Then every picture is the parent's but for 1 to 5 lone pixels in seven of them, as two runs of the parent differ by up to 27; the walking start, which two runs of the parent move by 28,000 to 48,000 pixels, was compared flying from the same place and differs by none. The default island's map, its rock overlay, the crater's map, two `--survey`s, three `--why`s and every start-up line but the times are the parent's byte for byte.
+
+**Cost.** Memory, at the end of the start bench: the near volume's 306 chunks, 31 layers each on average, hold 22.1 MB of blocks against 11.0 (72 KB a chunk against 36), and the 8.1 million quads of all 2,669 chunks 162 MB of the GPU's memory against 130. The process holds 1,262 to 1,276 MB against 1,225 to 1,229 (`ps -o rss`, MiB), and at most 1,349 to 1,373 MB against 1,283 to 1,328 (`time -l`). At the end of the flight across the sea it holds less than the parent: 1,299 to 1,325 MB against 1,338 to 1,383, its near blocks 3.7 MB against 76.5. Building chunks on one thread, 289 round a camera, best of five: 693 to 713 ms against 711 to 717 in the forest at the nearest level and 580 to 590 against 581 to 588 over the north cliff, the same at 4 m and 16 m cells; at sea 32 to 35 against 124 to 126. The default island forms in 0.55 to 0.75 s against 0.54 to 0.82, six runs each alternating. Benches against the parent, alternately, four rounds (two before the fix and two after) under a load of 15 to 43 from other agents' work and thermal pressure 0 to 2. Rounds three and four, frame interval median, 99th percentile and frames over 12.5 ms, parent first, then our work median: the start 8.33, 8.89, 0 and 8.33, 8.91, 0 against 8.33, 8.88, 2 and 8.33, 8.90, 0, our work 1.01 and 1.05 against 0.91 and 0.93, 43 m on all; the forest flight 8.33, 9.33, 12 and 8.33, 9.23, 10 against 8.33, 8.95, 4 and 8.33, 9.02, 2, our work 1.33 and 1.22 against 1.04 and 1.21; the flight from 700 m 8.33, 9.10, 2 and 8.33, 9.03, 1 against 8.33, 9.00, 4 and 8.33, 8.95, 0; across the sea 8.33, 9.58, 39 and 8.33, 8.92, 9 against 8.33, 9.38, 22 and 8.33, 8.94, 6; the forest with `--near=0` 8.33, 9.09, 5 and 8.33, 16.53, 20 against 8.33, 9.02, 2 and 8.33, 9.06, 4; the canopy bench 8.33, 8.94, 0 twice against 8.33, 8.90, 2 and 8.33, 13.82, 14; the full-screen flight over the sea 8.33, 9.24, 9 and 8.33, 15.64, 13 against 8.33, 12.56, 12 and 8.33, 16.66, 22. North to south over the old sea cliff, which had looked worse in the first rounds, was flown 14 times on each: frames over 12.5 ms 4 to 162 on the parent, median 38, and 4 to 194 on this, median 26; a scratch build of this with 16-byte quads, 5 to 36, median 19. No difference holds from one round to the next, and none of it is measured on a quiet machine. `src/` grew by 26 lines (99 added, 73 removed): Odin by 25, to 10,282, and Metal by 1.
+
+Weak points: a face is a quarter larger, 32 MB more of the GPU's memory at the start, and the upload's 3 MB a frame now carries a fifth fewer faces, so in fast flight chunks arrive a little more slowly (not measured); the near volume's blocks take twice the memory on land; the atlas holds 1,024 materials, and past that tiles must be shared between materials and tinted by the shader, which changes how every tile is coloured; the traits for the grounds a plant grows on carry the names of the materials they came from; a ground plant's quad carries a material it does not use; the pictures are identical only with the clock frozen, since what moves with the clock differs between any two runs; and every bench ran beside other agents' work, so the benches show only that frames are no worse, not what headroom is left.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.

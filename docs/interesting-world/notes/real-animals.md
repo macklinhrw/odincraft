@@ -23,3 +23,25 @@ No measured length of deer trail a km² was found. The nearest figures: lidar ma
 | Trails of a few metres a km² (no figure) | 2.3 to 2.7 km a km² of land where deer live | About twice the streams; a walker crossing the land meets one every 400 m or so. No real figure to hold it to |
 
 Not done: goats, which would make the steep trails of the ridge kind's cliffs if people came; boar, which root the ground rather than tread lines. The rule that the drowned kind was joined to land is an inference: the depth of the strait between an island and its neighbour is not in the region record.
+
+## Step 28: who reached which island
+
+Added 2026-11-15, when the islands gained neighbours and a continent. Read from search summaries; no paper was opened.
+
+- **How far deer swim.** By a search summary of a study of the deer of Okinoshima (Tomogashima), not opened, sika deer can swim up to 12 km (citing Feldhamer 1980), have been seen swimming round the island, and Awaji's deer are 4 km from it; the study of deer moving between the Tomogashima islets and the Kii peninsula is [Mammal Study 45(2)](https://bioone.org/journals/mammal-study/volume-45/issue-2/ms2019-0048/Bi-Directional-Movement-of-Deer-between-Tomogashima-Islands-and-the/10.3106/ms2019-0048.full). A sika deer met at sea off Vladivostok in 2015 had most likely swum about 12 km across the bay ([Moscow Times](https://themoscowtimes.com/2015/07/06/russian-fishermen-come-across-swimming-deer-at-sea-video-a47916)). Kinkazan's deer are seen swimming its 0.6 km strait (search summary).
+- **Ayu on islands.** Ayu were found on seven of eight islands in four groups of the Tsushima current (Cheju, Gotō, Tsushima, Oki), their differences put down to drift on small islands over several thousand years ([Japanese Journal of Ichthyology 45(2)](https://www.jstage.jst.go.jp/article/jji1950/45/2/45_2_87/_article/-char/en)). On Amami Ōshima the young of the Ryukyu ayu grow up in brackish water rather than at sea (Kishino and Shinomiya 2005, search summary); on Yakushima they spend about four months in estuary and sea (Hirano et al. 2022). That the Tsushima current's islands were joined to larger land when the sea stood 120 m lower, and that no Izu island has ayu, is from memory.
+- **Skinks reached the Izu islands across the sea**: Okada's five-lined skink crossed from the mainland to the proto-islands some 3 to 7.6 million years ago, perhaps more than once ([Dryad, Brandley et al.](https://datadryad.org/dataset/doi:10.5061/dryad.v47s1)). Not built: nothing draws a skink.
+
+What it decided (`DISPERSAL`, `arrivals.odin`; `foundations.md`, step 28 as built):
+
+| Kind | Walks over bared land | Crosses open sea | In time, km | At most, km | From |
+|---|---|---|---|---|---|
+| Sika deer | yes | swimming | 4 | 12 | Awaji's deer 4 km from Okinoshima; the farthest swim reported |
+| Black kite | | flying | 100 | 1,000 | A guess: a soarer over land and coast; none on the Ogasawara islands (from memory) |
+| Osprey | | flying | 1,000 | 3,000 | It migrates over the sea and breeds on the Izu islands |
+| Ayu | | drifting as larvae | 10 | 50 | A guess: larvae near their river's mouth; on the joined islands of the Tsushima current, none on the Izu islands |
+| Yoshinobori | | drifting as larvae | 100 | 1,000 | A guess: gobies of its kind on every high island's streams, the Ogasawara islands' among them |
+
+On seeds 1 to 8 deer reached 22 of the 31 islands on the shelf (9 walked over shelf the sea had bared, 13 swam a strait narrower than 12 km) and none of the other 125: none on the arc (the Izu islands), in the forearc (Chichijima and Hahajima) or on the hotspot's track. Before, deer lived on every island of the inlets kind, which step 17 had put in the forearc and on the hotspot's track as well, 19 islands of which 12 were never joined to anything. Kites, ospreys and gobies reached every island. Ayu reached all but 0 to 5 islands of each seed by chance, and live on fewer, since many cones and craters have no stream for them; the Izu islands have none, which is matched in outcome but not in cause.
+
+Not done: boar, which swims and would have reached more islands than deer; skinks and snakes, which raft; bats. Each is a row in `DISPERSAL` once something draws it or its signs.
