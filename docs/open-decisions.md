@@ -72,6 +72,17 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Leaves should have transparency, and still layer on each other, not join as one block.** The second was said on seeing the first built as a hollow shell.
 - **The creatures of step 16 are models built of blocks**: a bird or a fish is a few small boxes, as a Minecraft animal is, and not a flat picture or a smooth model. Said when asked before step 16.
 
+**2026-11-14, by the owner**
+
+- **Start Phase 2, the archipelago, with subagents wherever steps can run in parallel.** Said after Claude set out what accepting step 5 would mean (a walk from river to ridge, `--why=` at three spots, forest held on slopes of 35 to 45°) and compared the communities with the real islands. Step 5 was not accepted in so many words, and the gate in `foundations.md` section 8 is taken as passed by this. Left open from that comparison: the low ridge wood takes every dry crest down to 88 m, where real low ridges carry the same tall evergreen forest as their slopes with evergreen oaks and isunoki in it; susuki may take too much of a wild island; a deep-soiled flat may be tabu's rather than shii's.
+
+**2026-11-14, Claude's call**
+
+- **Phase 2 runs on a branch of its own, `phase-2`, from `phase-1`**, and its first commit is the frame-rate work of the same day, which was finished and measured but left uncommitted, so that the steps' checkouts start from it.
+- **The order of Phase 2's steps** is the table in `foundations.md` section 8, steps 17 to 28, the world frame first. Steps 17 to 20 start together.
+- **The start island stays today's island at the origin**, its kind drawn by the seed as now, and the archipelago is built round it, so the coordinates, places and benches in `CLAUDE.md` keep their meaning.
+- **Defaults taken from the world-frame design's questions to the owner** (`foundations/world-frame.md`, section 8), each the owner's to overturn: the archipelago lies at today's latitude, 30° N, with the warm-island plants already chosen, rather than at 36 to 45° N; the world is drawn round; the islands within 64 km are formed before entering and the rest in the background; each kind keeps its own history of the sea for now, rather than one shared rise of 120 m.
+
 **2026-11-12, Claude's call**
 
 - **Leaves are seen through within 72 m, block behind block.** The gaps the artist left in each leaf tile are clear, and through them show the next block of leaves, the limbs, and at a crown's thin edges the sky. Built first as a hollow shell of the crown's outer faces, which the owner rejected: the blocks joined into one. Now one face is drawn wherever two leaf blocks meet, seen from both sides and dim, as the inside of a crown is. Seen through at every distance, a wood cost 2 ms a frame, because each layer of cut-out leaves can be shaded in full; within 72 m, closing smoothly from 43 m and drawn nearest first, the benches read the same as before on a quiet machine. Farther off a tile is a pixel or two and a leaf is drawn whole as it was. A chunk of wood holds about half as many faces again. Leaves still cast whole shadows.

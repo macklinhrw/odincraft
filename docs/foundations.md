@@ -724,7 +724,7 @@ Each is a scratch copy, folded in or deleted, as the rock experiment was.
 - **The land seam** (section 7). Any time after step 1. It decides whether Phase 3 is possible as designed.
 - **Reading rock in the finished frame** (decision 6). Inside step 1: do the scarps and ridges of the first experiment survive?
 - **How unfinished to leave the land** (decision 8). Inside step 3: maps at three lengths of the last phase.
-- **Background forming against frame pacing.** Before Phase 2: three threads forming regions while the flight bench runs.
+- **Background forming against frame pacing.** Before Phase 2: three threads forming regions while the flight bench runs. Run on 2026-11-14 as three processes forming one island after another at `nice 10` while the forest flight ran, which loads the cores as threads would but shares no memory with the game: frames over 12.5 ms 1 and 2 against 4 alone, the 99th percentile 9.38 and 9.50 ms against 9.31, the game's own work 0.97 and 1.00 ms against 1.03 (12 performance cores, load 6 to 9 from other work). Forming beside play costs nothing measurable. Forming on threads inside the game is checked again in step 18.
 
 ### Phase 2: the archipelago
 
@@ -738,6 +738,25 @@ Starts when the owner has accepted at least steps 1, 2 and 5 on one island; an a
 - Ground: caves by host (limestone on one island, lava tubes on another), still water in caves.
 - Living world: which animals reached which island, decided by whether they fly, swim or walk; one people in two eras, the ruins of the first among the farms of the second; names from that history.
 - Fantasy: landmarks on every island; an older sea level and drowned coasts; and, at the earliest here, the first marvel. The design proposes one elder wood, because it only lifts the ceiling on age and size in a community that already exists.
+
+Started 2026-11-14 at the owner's word, in this order (Claude's proposal; the owner can reorder it). As in Phase 1, each step is one change the owner can look at, and steps nothing blocks run in parallel, each in its own checkout. The world frame comes first, because every later step is about what differs between islands, and that needs more than one island. The start island stays today's island at the origin, its kind drawn by the seed as now, and the archipelago is built round it, so the places and benches in `CLAUDE.md` keep their meaning.
+
+| # | Change | Needs | The owner looks at |
+|---|---|---|---|
+| 17 | The archipelago as records: a stand-in for plates (one arc, one hotspot chain, one platform) places 10 to 30 islands in a sea about 150 km square, each a record (middle, size, setting, age, kind chosen by rules from its setting, seed), no two neighbours of a kind; `--archipelago=out.png` forms each in turn and draws the group | | One grey map of the group, each island named by its kind and setting |
+| 18 | Many islands in one world: everything formed for an island kept in one record per region; the generator finds the region under a point and answers open sea between; the islands within 64 km formed before entering, the rest on three low-priority threads; `--island=N` for the map, `--why` and the survey | 17 (a stub of three islands until it lands) | From a summit, the next island; flying to it, its kind differs; the benches while islands form |
+| 19 | Far sight: levels at 128 and 256 m, the world drawn round (a drop of d²/2R, R ≈ 7,400 km), haze that lets land 30 to 60 km off show | | Today's island from 20 and 40 km out at sea, sinking under the curve |
+| 20 | The seam test (an experiment, section 7): today's island formed whole, and as two basin pieces cut on its 64 m solution with the divide pinned | | Both maps with the seam drawn, and the largest step along it |
+| 21 | Blocks widen to 16 bits | 18, 19 | Identical pictures; the benches |
+| 22 | Rock stories: eight of the twelve rows in use, faults, intrusions and lava packages, about 20 rock kinds; each island's story from its setting | 17, 21 | Islands of different rock side by side; a cut face on each |
+| 23 | Climate per island: base climate across the sea, rain carried on the wind so a high island has a wet side and a dry one, three to six zones | 18 | The rain on the map; the windward and lee sides on foot |
+| 24 | Floras: three or four, about twenty species in ten silhouettes, chosen by climate, in the same site slots | 21, 23 | A warm island and a cooler one; a high island's belts |
+| 25 | Ground and water by kind: deposition on islands over 10 km, wetlands, river mouths by kind, lava tubes on a young volcanic island, solution caves on limestone | 22 | A river mouth, a marsh and a cave on three islands |
+| 26 | Who reached which island: animals by whether they fly, swim or walk, from the straits to their neighbours | 18 | `--why` on two islands |
+| 27 | People: one people in two eras, the ruins of the first among the farms of the second, names from that history | 18, 23, 24 | A ruin and a farm |
+| 28 | The fantastic: an older sea level and its drowned coasts, landmarks on every island, the first marvel (one elder wood) | 24, 27 | The marvel, and how it is found |
+
+Steps 17 to 20 start together. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 23; people (item 9) before step 27; the fantastic (item 10) before step 28.
 
 ### Phase 3: the mainland and the known lands
 
