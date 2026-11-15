@@ -62,8 +62,6 @@ Candidate :: struct {
 	place:       int,      // the place that took it in, or -1
 }
 Place :: struct { name: string, c, feature: int }
-candidates: [dynamic]Candidate
-places:     [dynamic]Place
 
 Survey :: struct {
 	land:       f32,   // km²
@@ -78,13 +76,12 @@ Survey :: struct {
 	middle:     [2]f64,
 }
 Tally :: struct { cells: int, squares: u64 }
-survey: Survey
 
 places_make :: proc() {
 	started := time.now()
 	g, n := land.grid, land.n
 	add :: proc(k: Place_Kind, at: [2]f64, top, m, size: f32, f: int, rock: Mat, why: string) {
-		append(&candidates, Candidate{kind = k, at = at, top = top, m = m, size = size, feature = f, rock = rock, why = why, place = -1})
+		append(candidates, Candidate{kind = k, at = at, top = top, m = m, size = size, feature = f, rock = rock, why = why, place = -1})
 	}
 	rock_at :: proc(c: int, y: f32) -> Mat { return rock_in(y, land.grid.base[c], ROCK_SIM) }
 
@@ -231,7 +228,7 @@ places_make :: proc() {
 		c.score = math.log2(1 + c.m/PLACE_ROWS[c.kind].worth)/math.sqrt(f32(alike))
 	}
 	slice.sort_by(candidates[:], proc(a, b: Candidate) -> bool { return a.score > b.score })
-	builtin.resize(&candidates, min(len(candidates), 48))
+	builtin.resize(candidates, min(len(candidates), 48))
 	screen :: proc(x, z: f64) -> f32 {
 		c := land_cell(x, z)
 		if land.lake[c] > 0 do return region.features[land.lake[c] - 1].level
@@ -285,7 +282,7 @@ places_make :: proc() {
 		kinds[c.kind] += 1
 		append(&region.features, Feature{kind = .Place, at = c.at, reach = GATHER, size = c.score, level = c.top, cause = c.feature,
 			measured = {{"how extreme it is, against what earns a name", c.m/PLACE_ROWS[c.kind].worth}, {"the share of viewpoints 1 to 2 km off that see it", c.seen}, {}}})
-		append(&places, Place{c = i, feature = len(region.features) - 1})
+		append(places, Place{c = i, feature = len(region.features) - 1})
 	}
 	for &p, i in places do p.name = place_name(i)
 	fmt.printfln("places in %.0f ms: %d named from %d candidates", time.duration_milliseconds(time.since(started)), len(places), len(candidates))

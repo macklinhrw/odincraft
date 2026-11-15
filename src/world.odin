@@ -56,6 +56,7 @@ World :: struct {
 	finest:  i32,                     // the finest level any ground is near enough to need
 	sited:   [3]f64,                  // where the camera was when that was last worked out
 	started: bool,
+	islands: int,                     // islands formed when the rings were last filled: a chunk over one not yet formed waits for it
 	water:   Water,
 
 	mutex:   sync.Mutex,              // guards everything below
@@ -86,6 +87,7 @@ world_destroy :: proc(w: ^World) {
 // ---- building, on worker threads ----------------------------------------------------------
 
 worker :: proc(w: ^World) {
+	bind(home)   // so a chunk at the open sea has an island to ask, which answers nothing there
 	for {
 		sync.lock(&w.mutex)
 		for len(w.pending) == 0 && !w.quit do sync.cond_wait(&w.wake, &w.mutex)
@@ -187,7 +189,7 @@ clearance :: proc(p: [3]f64) -> (clear: f64) {
 		step := f64(i32(CHUNK*2) << u32(l))
 		for j in -4..=4 do for i in -4..=4 {
 			d := [2]f64{f64(i), f64(j)}*step
-			top := f64(max(height_at(p.x + d.x - f64(region.origin.x), p.z + d.y - f64(region.origin.y), step), SEA_SURFACE)) + 30 + step/4
+			top := f64(max(height_in_world(p.x + d.x, p.z + d.y, step), SEA_SURFACE)) + 30 + step/4
 			clear = min(clear, math.sqrt(d.x*d.x + d.y*d.y + math.pow(max(p.y - top, 0), 2)))
 		}
 	}
@@ -214,6 +216,10 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		if c != w.center[l] do moved = true
 		w.center[l] = c
 	}
+	islands := 0
+	for &f in formed do islands += int(is_formed(&f))
+	if islands != w.islands do moved = true
+	w.islands = islands
 
 	if moved {
 		w.started = true
@@ -244,7 +250,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 			for dz in -i32(RADIUS)..=RADIUS {
 				for dx in -i32(RADIUS)..=RADIUS {
 					key := Key{l, w.center[l].x + dx, w.center[l].y + dz}
-					if key in w.chunks do continue
+					if key in w.chunks || waits(key) do continue
 					c := new(Chunk)
 					c.key = key
 					c.building = true
@@ -346,6 +352,18 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 	sdl.EndGPUCopyPass(pass)
 	_ = sdl.SubmitGPUCommandBuffer(cmd)
 	if staging != nil do sdl.ReleaseGPUTransferBuffer(dev, staging)
+}
+
+// Whether a chunk, with its border and the trees reaching into it, lies over an island not yet
+// formed. It is not built until the island is, and nothing is drawn there meanwhile.
+waits :: proc(key: Key) -> bool {
+	s := f64(i32(CHUNK) << u32(key.level))
+	lo, hi := [2]f64{f64(key.x), f64(key.z)}*s - s/CHUNK - TREE_REACH, [2]f64{f64(key.x + 1), f64(key.z + 1)}*s + s/CHUNK + TREE_REACH
+	for &f in formed {
+		o, h := [2]f64{f64(f.island.origin.x), f64(f.island.origin.y)}, f.island.size/2
+		if !is_formed(&f) && lo.x < o.x + h && hi.x > o.x - h && lo.y < o.y + h && hi.y > o.y - h do return true
+	}
+	return false
 }
 
 // Work still queued, building or waiting for upload.

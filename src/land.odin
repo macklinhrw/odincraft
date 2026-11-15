@@ -249,7 +249,6 @@ Vent :: struct {
 	fallen:        bool,     // its top has fallen in, and the water reaching its floor sinks there
 }
 
-region: Region
 
 SEA_BED :: -200   // metres, the floor of the open sea round a high island
 
@@ -305,7 +304,7 @@ region_init :: proc(name: string) -> bool {
 	ranges, drawn := transmute([N][2]f64)kind.shape, [N]f64{}
 	for r, i in ranges do drawn[i] = r[0] + (r[1] - r[0])*f64(hash01(i32(i), key, seed + 520))
 	draw :: proc(r: [2]f32, i, key: i32) -> f32 { return r[0] + (r[1] - r[0])*hash01(i, key, seed + 521) }
-	region.kind, region.size, region.shape = kind.name, REFERENCE, transmute(Shape(f64))drawn
+	region.kind, region.shape = kind.name, transmute(Shape(f64))drawn   // its size and origin are its island's (gen_init)
 	region.latitude = 30   // as the islands the plants come from (27 to 34° N); the world frame will set it
 	for &s in STORIES do if s.name == kind.story do region.story = &s
 	region.history = make([]Phase(f32), len(kind.history))
@@ -408,7 +407,6 @@ Land :: struct {
 // from it and distance from a stream told the villages from the rest of the land not at all.
 LIVABLE :: 0.364   // tan 20°
 
-land: Land
 
 // Positive inland, negative at sea, at a point relative to the region's middle.
 shore :: proc(x, z: f64) -> f32 {

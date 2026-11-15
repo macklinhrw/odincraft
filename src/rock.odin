@@ -96,7 +96,6 @@ Rocks :: struct {
 	drape: []f32,              // the ground the vents built, on a grid of DRAPE m, where the story lays its beds over it
 }
 
-rocks: Rocks
 
 DRAPE :: 32
 

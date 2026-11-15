@@ -34,7 +34,6 @@ Slide :: struct {
 	law:     Rock_Law,
 	box:     [4]f64,   // x0, z0, x1, z1 relative to the region's middle; empty with no slide
 }
-landslide := Slide{box = {1e9, 1e9, -1e9, -1e9}}
 
 // A landslide happens where its host holds best (landforms.md, "Choosing events"): a slope near
 // the steepest its rock holds, with a stronger bed over a weaker within the depth a slide reaches,
@@ -336,7 +335,6 @@ Hollow :: struct {
 	x0, z0, w: i32,       // its square: corner and side, metres relative to the region's middle
 	span:      [][3]i16,  // for each metre in it: the floor and roof of what is carved, and the top of the ground over it
 }
-hollows: [dynamic]Hollow
 
 // The strongest step up from a weaker bed to a stronger one on the hillside within a cell, the
 // foot of a face, and where it lies.
@@ -391,7 +389,6 @@ Pillar :: struct {
 	long:    f32,      // its length over its breadth
 	feature: int,
 }
-pillars: [dynamic]Pillar
 
 // Stand a stack off the cliff at a headland, out from where the ground first lies under the sea,
 // as high as a share of the cliff, with up to three lower skerries seaward of it. False if the
@@ -413,11 +410,11 @@ stack_make :: proc(c: int, at: [2]f64) -> bool {
 	if ground(middle.x, middle.y, 1).h > -1 do return false
 	top := cliff*draw(row.high, i, 2)
 	along, long := rock_strike(middle.x, middle.y), draw({1, 1.8}, i, 4)
-	append(&pillars, Pillar{middle, along, r, top, long, len(region.features)})
+	append(pillars, Pillar{middle, along, r, top, long, len(region.features)})
 	for k in 0..<i32(draw({0, 3.99}, i, 3)) {
 		a, d := f64(draw({-1.4, 1.4}, i, 10 + k)), f64(draw({12, 40}, i, 20 + k))
 		p := middle + d*[2]f64{out.x*math.cos(a) - out.y*math.sin(a), out.x*math.sin(a) + out.y*math.cos(a)}
-		if ground(p.x, p.y, 1).h < -0.5 do append(&pillars, Pillar{p, along, draw({2, 4.5}, i, 30 + k), draw({1.5, max(0.35*top, 2)}, i, 40 + k), long, len(region.features)})
+		if ground(p.x, p.y, 1).h < -0.5 do append(pillars, Pillar{p, along, draw({2, 4.5}, i, 30 + k), draw({1.5, max(0.35*top, 2)}, i, 40 + k), long, len(region.features)})
 	}
 	append(&region.features, Feature{kind = .Stack, at = middle, reach = f32(math.hypot(middle.x - foot.x, middle.y - foot.y)) - r, size = math.PI*r*r*top, level = top,
 		age = region.history[len(region.history) - 1].years*region.history[len(region.history) - 1].steps, cause = -1,
@@ -547,7 +544,7 @@ hollow_carve :: proc(kind: Feature_Kind, c: int, at: [2]f64) -> bool {
 		.Cave = {{"the share of sea within 48 m of the headland", headland(c)}, {"how open its shore is to the swell", land.swell[c]}, {"metres between the cracks of its rock", MATERIALS[rock_in(0, g.base[c], 0)].crack}},
 	}
 	append(&region.features, Feature{kind = kind, at = middle if kind == .Cave else at, reach = reach, size = carved, level = f32(row.floor) if kind != .Shelter else contact, age = region.history[len(region.history) - 1].years*region.history[len(region.history) - 1].steps if kind != .Shelter else 0, cause = -1, measured = measured[kind]})
-	append(&hollows, h)
+	append(hollows, h)
 	return true
 }
 

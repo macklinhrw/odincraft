@@ -50,14 +50,9 @@ Gpu :: struct {
 	blocks:         ^sdl.GPUTexture,   // one layer per tile of the atlas
 	plant_pics:     ^sdl.GPUTexture,   // the same for the ground plants
 	plant_sampler:  ^sdl.GPUSampler,
-	lifted:         ^sdl.GPUTexture,   // the field `lifted`, for the cloud cap
 	block_sampler:  ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
 	terrain, leaf, shadow_pipe, sky, water, river, pool, present, plant, cloud_pipe, box: ^sdl.GPUGraphicsPipeline,
-	ribbon:         ^sdl.GPUBuffer,    // the rivers' water surface
-	ribbon_count:   u32,
-	falls:          ^sdl.GPUBuffer,    // the falling water, as quads of simulated water
-	falls_count:    u32,
 	boxes:          ^sdl.GPUBuffer,    // the creatures' boxes, written each frame
 	box_staging:    ^sdl.GPUTransferBuffer,
 	boxes_drawn:    int,
@@ -111,8 +106,8 @@ weather_at :: proc(day, hour: f32) -> (cover, base: f32) {
 	k, w := i32(math.floor(t)), smoothstep(0, 1, t - math.floor(t))
 	for i in i32(0)..=1 {
 		mean := SKY.cover[int((f32(k + i) + 0.5)*SKY.spell/365*12) %% 12]
-		c := math.pow(hash01(k + i, 0, seed + 700), 1/mean - 1)   // a draw whose mean is `mean`
-		b := SKY.base[0] + (SKY.base[1] - SKY.base[0])*hash01(k + i, 1, seed + 700)*(1 - 0.5*c)   // lower under a heavier cover
+		c := math.pow(hash01(k + i, 0, world_seed + 700), 1/mean - 1)   // a draw whose mean is `mean`
+		b := SKY.base[0] + (SKY.base[1] - SKY.base[0])*hash01(k + i, 1, world_seed + 700)*(1 - 0.5*c)   // lower under a heavier cover
 		cover, base = cover + c*(w if i == 1 else 1 - w), base + b*(w if i == 1 else 1 - w)
 	}
 	return
@@ -273,19 +268,6 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		max_anisotropy = 4, enable_anisotropy = true,
 	})
 
-	// The field `lifted`, one texel to a cell of the land, read by the cloud cap.
-	n := u32(land.n)
-	g.lifted = sdl.CreateGPUTexture(g.dev, {type = .D2, format = .R16_FLOAT, usage = {.SAMPLER}, width = n, height = n, layer_count_or_depth = 1, num_levels = 1})
-	staging := sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = n*n*2})
-	for &v, i in (cast([^]f16)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:n*n] do v = f16(land.lifted[i])
-	sdl.UnmapGPUTransferBuffer(g.dev, staging)
-	cmd := sdl.AcquireGPUCommandBuffer(g.dev)
-	pass := sdl.BeginGPUCopyPass(cmd)
-	sdl.UploadToGPUTexture(pass, {transfer_buffer = staging}, {texture = g.lifted, w = n, h = n, d = 1}, false)
-	sdl.EndGPUCopyPass(pass)
-	_ = sdl.SubmitGPUCommandBuffer(cmd)
-	sdl.ReleaseGPUTransferBuffer(g.dev, staging)
-
 	// Depth runs from 1 at the near plane to 0 at infinity, which keeps precision at long range.
 	g.terrain = make_pipeline(g, {
 		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 4, quads = true,
@@ -329,23 +311,38 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		vs = "vs_river", fs = "fs_water", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 3, ribbon = true,
 		color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, blend = true,
 	})
+}
 
-	upload :: proc(g: ^Gpu, data: rawptr, bytes: int) -> ^sdl.GPUBuffer {
+// Each island's rivers and the field `lifted`, put on the GPU once it is formed: the ribbon and the
+// falls as they are stored, relative to the region's middle, and `lifted` one texel to a cell of
+// the land, for the cloud cap.
+islands_upload :: proc(g: ^Gpu) {
+	upload :: proc(g: ^Gpu, data: rawptr, bytes: int, texture: ^sdl.GPUTexture = nil, n: u32 = 0) -> (buffer: ^sdl.GPUBuffer) {
 		if bytes == 0 do return nil
-		buffer := sdl.CreateGPUBuffer(g.dev, {usage = {.VERTEX}, size = u32(bytes)})
 		staging := sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = u32(bytes)})
 		copy((cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:bytes], (cast([^]u8)data)[:bytes])
 		sdl.UnmapGPUTransferBuffer(g.dev, staging)
 		cmd := sdl.AcquireGPUCommandBuffer(g.dev)
 		pass := sdl.BeginGPUCopyPass(cmd)
-		sdl.UploadToGPUBuffer(pass, {staging, 0}, {buffer, 0, u32(bytes)}, false)
+		if texture != nil do sdl.UploadToGPUTexture(pass, {transfer_buffer = staging}, {texture = texture, w = n, h = n, d = 1}, false)
+		else {
+			buffer = sdl.CreateGPUBuffer(g.dev, {usage = {.VERTEX}, size = u32(bytes)})
+			sdl.UploadToGPUBuffer(pass, {staging, 0}, {buffer, 0, u32(bytes)}, false)
+		}
 		sdl.EndGPUCopyPass(pass)
 		_ = sdl.SubmitGPUCommandBuffer(cmd)
 		sdl.ReleaseGPUTransferBuffer(g.dev, staging)
-		return buffer
+		return
 	}
-	g.ribbon, g.ribbon_count = upload(g, raw_data(rivers.ribbon), len(rivers.ribbon)*size_of([4]f32)), u32(len(rivers.ribbon))
-	g.falls, g.falls_count = upload(g, raw_data(rivers.falls), len(rivers.falls)*size_of(Water_Quad)), u32(len(rivers.falls))
+	for &f in formed do if f.lifted == nil && is_formed(&f) {
+		r, n := &f.rivers, u32(f.land.n)
+		f.ribbon, f.ribbon_count = upload(g, raw_data(r.ribbon), len(r.ribbon)*size_of([4]f32)), u32(len(r.ribbon))
+		f.falls, f.falls_count = upload(g, raw_data(r.falls), len(r.falls)*size_of(Water_Quad)), u32(len(r.falls))
+		f.lifted = sdl.CreateGPUTexture(g.dev, {type = .D2, format = .R16_FLOAT, usage = {.SAMPLER}, width = n, height = n, layer_count_or_depth = 1, num_levels = 1})
+		lifted := make([]f16, n*n, context.temp_allocator)
+		for &v, i in lifted do v = f16(f.land.lifted[i])
+		upload(g, raw_data(lifted), len(lifted)*2, f.lifted, n)
+	}
 }
 
 resize :: proc(g: ^Gpu, w, h: u32) {
@@ -447,6 +444,7 @@ outside :: proc(planes: [4][3]f32, lo, hi: [3]f32, reach := [4]f32{}) -> bool {
 
 // Draw one frame. With `shot` set, also write the frame to that PNG file.
 render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
+	islands_upload(g)
 	cmd := sdl.AcquireGPUCommandBuffer(g.dev)
 	swap: ^sdl.GPUTexture
 	sw, sh: u32
@@ -496,13 +494,15 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	f.cam_u = {up.x*tan_y, up.y*tan_y, up.z*tan_y, 0}
 	f.cam_f = {fwd.x, fwd.y, fwd.z, 0}
 	f.screen = {f32(sw), f32(sh), 1 if v.crosshair else 0, 0}
-	// The camera in the cloud field, which drifts downwind, and on the land's grid.
+	// The camera in the cloud field, which drifts downwind from the start island's swell, and on the
+	// land's grid of the island nearest, whose `lifted` alone raises a cap.
 	cover, base := weather_at(v.day, v.hour)
 	if v.weather.x >= 0 do cover, base = v.weather.x, v.weather.y
-	from := math.to_radians(region.shape.swell)
+	from := math.to_radians(home.region.shape.swell)
 	drift := f64(SKY.wind)*((f64(v.day)*24 + f64(v.hour))*3600 + f64(v.seconds))
-	f.cloud = {f32(math.mod(v.eye.x + math.sin(from)*drift, 65536)), f32(math.mod(v.eye.z - math.cos(from)*drift, 65536)), f32(v.eye.x - f64(region.origin.x) + region.size/2), f32(v.eye.z - f64(region.origin.y) + region.size/2)}
-	f.weather = {cover, base, SKY.deck, f32(region.size)}
+	near := island_near(v.eye.x, v.eye.z)
+	f.cloud = {f32(math.mod(v.eye.x + math.sin(from)*drift, 65536)), f32(math.mod(v.eye.z - math.cos(from)*drift, 65536)), f32(v.eye.x - f64(near.region.origin.x) + near.region.size/2), f32(v.eye.z - f64(near.region.origin.y) + near.region.size/2)}
+	f.weather = {cover, base, SKY.deck, f32(near.region.size)}
 	if v.has_target {
 		f.target = {f32(f64(v.target.x) - v.eye.x), f32(f64(v.target.y) - v.eye.y), f32(f64(v.target.z) - v.eye.z), 1}
 	}
@@ -608,7 +608,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 
 	// The cloud layer along each line of sight, once for the frame at half size: the sky reads it,
 	// and so does whatever is seen through the layer (fs_clouds, shaders.metal).
-	lifted := sdl.GPUTextureSamplerBinding{g.lifted, g.linear}
+	lifted := sdl.GPUTextureSamplerBinding{near.lifted, g.linear}
 	seen := sdl.GPUTextureSamplerBinding{g.clouds, g.linear}
 	sdl.PushGPUFragmentUniformData(cmd, 0, &f, size_of(f))
 	// This target and the scene's are drawn whole on the GPU every frame, so none is cycled: SDL would
@@ -714,23 +714,23 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		sdl.DrawGPUPrimitives(pass, 4, it.chunk.water_count, 0, 0)
 	}
 
-	if g.ribbon != nil {
+	for &island in formed do if island.ribbon != nil {
 		sdl.BindGPUGraphicsPipeline(pass, g.river)
 		sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 3)
-		from_eye := [4]f32{f32(f64(region.origin.x) - v.eye.x), f32(-v.eye.y), f32(f64(region.origin.y) - v.eye.z), 0}   // the strip is stored relative to the region
+		from_eye := [4]f32{f32(f64(island.region.origin.x) - v.eye.x), f32(-v.eye.y), f32(f64(island.region.origin.y) - v.eye.z), 0}   // each island's strip is stored relative to its region
 		sdl.PushGPUVertexUniformData(cmd, 1, &from_eye, size_of(from_eye))
-		binding := sdl.GPUBufferBinding{buffer = g.ribbon}
+		binding := sdl.GPUBufferBinding{buffer = island.ribbon}
 		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
-		sdl.DrawGPUPrimitives(pass, g.ribbon_count, 1, 0, 0)
+		sdl.DrawGPUPrimitives(pass, island.ribbon_count, 1, 0, 0)
 		// Falling water is drawn the same near and far, so the simulated water and the strip
 		// both leave the drop to it.
-		if g.falls != nil {
+		if island.falls != nil {
 			sdl.BindGPUGraphicsPipeline(pass, g.pool)
 			sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 3)
 			sdl.PushGPUVertexUniformData(cmd, 1, &from_eye, size_of(from_eye))
-			binding = {buffer = g.falls}
+			binding = {buffer = island.falls}
 			sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
-			sdl.DrawGPUPrimitives(pass, 4, g.falls_count, 0, 0)
+			sdl.DrawGPUPrimitives(pass, 4, island.falls_count, 0, 0)
 		}
 	}
 
