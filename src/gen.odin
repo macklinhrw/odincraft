@@ -1109,7 +1109,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 	c.lo, c.hi = max(i32), min(i32)
 	for k in 0..<P*P {
 		c.lo = min(c.lo, c.ground[k], c.hollow[k][0] if c.hollow[k][1] > c.hollow[k][0] else max(i32))
-		c.hi = max(c.hi, c.top[k], c.crown[k][1])
+		c.hi = max(c.hi, c.top[k], c.crown[k][1] if c.crown[k][1] > c.crown[k][0] else c.top[k])   // a column with no crown has {0, 0}, which over the sea is no top
 	}
 }
 
