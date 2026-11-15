@@ -1,0 +1,74 @@
+# Runs on macos-15 (Apple Silicon): the game targets macOS on Apple Silicon only, since SDL3 GPU
+# drives Metal and build.sh links SDL3 from Homebrew. A Linux runner could typecheck but not link the
+# same way, and a green check on a platform the game doesn't run on would mean little.
+#
+# Two Odin releases: dev-2026-07a, which the code was written with, and dev-2026-11a, which
+# `brew install odin` gives a newcomer today. Odin comes from the release tarball (self-contained,
+# with its own libLLVM) so each version is pinned. No step opens a window or needs a GPU.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: check, build, test (Odin ${{ matrix.odin }})
+    runs-on: macos-15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        odin: [dev-2026-07a, dev-2026-11a]
+    env:
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_ENV_HINTS: 1
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install SDL3
+        run: brew install sdl3
+
+      - name: Install Odin ${{ matrix.odin }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/odin.tar.gz" \
+            "https://github.com/odin-lang/Odin/releases/download/${{ matrix.odin }}/odin-macos-arm64-${{ matrix.odin }}.tar.gz"
+          mkdir -p "$RUNNER_TEMP/odin"
+          tar -xzf "$RUNNER_TEMP/odin.tar.gz" -C "$RUNNER_TEMP/odin" --strip-components=1
+          echo "$RUNNER_TEMP/odin" >> "$GITHUB_PATH"
+
+      - name: Odin version
+        run: odin version
+
+      - name: Typecheck and vet
+        run: odin check src -vet-unused
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Test (forming is deterministic)
+        run: ./build.sh test
+
+      - name: Smoke-run the offline tools
+        run: |
+          mkdir -p out
+          build/odincraft --map=out/island.png
+          test -s out/island.png
+          build/odincraft --why=300,-200 > out/why.txt
+          test -s out/why.txt
+
+      - name: Keep the map
+        uses: actions/upload-artifact@v7
+        with:
+          name: island-map-${{ matrix.odin }}
+          path: out/island.png
+          retention-days: 7
