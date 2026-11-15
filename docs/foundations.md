@@ -1098,7 +1098,13 @@ Weak points:
 - **The record's strait differs from the land drawn**: the formed region's floor falls to 200 m at its rim, so a strait 50 m deep by the record is drawn 200 m deep.
 - **The figures are guesses**: every kind is taken to live on the continent, and the kite's, ayu's and goby's figures are guesses.
 
-**Cost.** `arrivals_make` takes 2 to 7 ms at start-up. An island that now has deer forms longer by its trails, 50 to 170 ms: the worn islands on the shelf, which had none before. The forming of islands without deer is unchanged.
+**Cost.** `arrivals_make` takes 2 to 7 ms at start-up, and `src/` grew by 222 lines (208 in `arrivals.odin`).
+
+- **Forming.** An island that now has deer forms longer by its trails, 50 to 330 ms: the worn and ridge islands on the shelf, which had none before. Islands without deer form as before, and every island's land is unchanged bit for bit (maps compared on four islands).
+- **Entering.** On seed 7, island 16 (worn, on the shelf, 57 km from the start) is formed before entering and now lays trails. It formed at 0.90 to 0.97 of island 6's time against 0.82 to 0.89 before, and island 6 still holds entering. Start-up to the end of a one-second bench took 3.15, 3.20 and 2.94 s on the parent and 3.43, 2.89 and 3.14 s on this build.
+- **Benches.** Run against the parent alternately, under a load of 20 to 36 from three other agents' work, thermal pressure 0 to 1. Each gives the frame interval median, then the frames over 12.5 ms, then our work's median.
+  - The start: 8.33 ms, 10 and 22 frames, 1.25 and 1.11 ms on the parent; 8.33 ms, 2 and 0 frames, 1.11 and 1.06 ms on this build. Both travelled 43 m.
+  - The forest flight: 8.33 ms, 31 and 51 frames, 1.15 and 1.10 ms on the parent; 8.33 ms, 13 and 35 frames, 1.05 and 1.12 ms on this build. Faces drawn are 1,038 to 1,049 thousand on both.
 
 ### Phase 3: the mainland and the known lands
 
