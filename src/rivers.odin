@@ -29,7 +29,7 @@ SPRING_AREA :: 30_000   // m² of land above a contact that feeds a spring (a gu
 // in Freeze and Cherry, Groundwater, 1979, from memory): sandstone and grit, jointed limestone,
 // lava flows broken by their joints and the cinders and pumice between them. Mudstone and
 // siltstone hold it, as does stiff lava.
-PASSES :: bit_set[Mat]{.Sandstone, .Grit, .Limestone, .Basalt, .Scoria, .Tuff}
+PASSES :: bit_set[Mat]{.Sandstone, .Grit, .Limestone, .Basalt, .Scoria, .Tuff, .Reef}
 FALL_MIN    :: 2.5   // metres: a drop taller than this is a fall with water of its own; a step pool's steps of a block or two are not
 
 River_Point :: struct {

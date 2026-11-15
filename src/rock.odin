@@ -64,7 +64,21 @@ STORIES := [?]Story{
 		kinds = {0 = {.Rhyolite, 1, ANYWHERE}, 1 = {.Tuff, 1, ANYWHERE}},
 		thick = {10, 50}, hard = 0.5, gap = 60, fold = {15, 40}, wave = {600, 1500}, drape = true, mantle = 0.35,
 	},
+	{
+		// Reef: coral and the sand and rubble of its breaking, grown on a sunken bank as the island
+		// rose (`reef` in the kind's shape, land.odin), over the soft grey mudstone of the bank, which
+		// lies too deep to show above the sea. After the Ryukyu limestone of Kikaijima on its
+		// Shimajiri mudstone. The beds are thin so the contact lies within 30 m of where it is put.
+		name = "reef on mudstone",
+		kinds = {0 = {.Mudstone, 1, {-1e5, -100}}, 1 = {.Reef, 1, {-100, 1e5}}},
+		thick = {10, 30}, tilt = {0, 1}, fold = {5, 15}, wave = {3000, 5000},
+	},
 }
+
+// The rocks the rain sinks into rather than running off them, and the share of it that does: the
+// reef, full of holes, which the water widens as it dissolves it (karst), so that few streams cut it.
+SINKS :: bit_set[Mat]{.Reef}
+SOAKS :: 0.95
 
 STACK_LO    :: -2048   // the table covers this far below the base
 STACK_LEN   :: 8192    // and this far up: enough for the uplift still to come when the forming starts
@@ -80,6 +94,7 @@ Rock_Law :: struct {
 	erodes: f32,   // how fast running water cuts it, around 1
 	limit:  f32,   // the steepest slope it holds, rise over run
 	creep:  f32,   // how fast its hillsides creep, at most 1
+	runs:   f32,   // the share of the rain on it that runs off rather than sinking in
 }
 
 Bed :: struct { kind: Mat, thick: f32 }
@@ -94,6 +109,7 @@ Rocks :: struct {
 	bed:   [STACK_LEN]u16,     // which of them each metre lies in
 	floor: [dynamic]f32,       // where each begins, metres from the table's start
 	drape: []f32,              // the ground the vents built, on a grid of DRAPE m, where the story lays its beds over it
+	sinks: bool,               // the rain sinks into some rock of the story (SINKS)
 }
 
 
@@ -119,8 +135,10 @@ rock_init :: proc() {
 	for m in Mat {
 		s := MATERIALS[m].strength
 		if s == 0 do continue
-		rocks.law[m] = {clamp(0.16/(s*s), 0.2, 5), math.tan(math.to_radians(35 + 25*math.pow((s - 0.2)/0.6, 1.5))), (1 - s)*(1 - s)/0.5625}
+		rocks.law[m] = {clamp(0.16/(s*s), 0.2, 5), math.tan(math.to_radians(35 + 25*math.pow((s - 0.2)/0.6, 1.5))), (1 - s)*(1 - s)/0.5625, 1 - SOAKS if m in SINKS else 1}
 	}
+	rocks.sinks = false
+	for k in story.kinds do rocks.sinks ||= k.weight > 0 && k.kind in SINKS
 
 	// The beds, from the bottom of the stack up.
 	beds: [dynamic]Bed

@@ -27,8 +27,8 @@ Mat :: enum u8 {
 	Black_Sand,                       // a beach ground from dark lava
 	Shingle, Black_Shingle,           // the stones the waves round and throw up where they leave no sand
 	Loam, Silt, Red_Clay, Ash,        // the soils under it (SOILS)
-	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff,
-	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree,
+	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff, Reef,
+	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree, Reef_Scree,
 }
 
 Material :: struct {
@@ -83,6 +83,7 @@ MATERIALS := [Mat]Material{
 	.Scoria    = {{0.085, 0.043, 0.033}, 0.25, 0.1, .Scoria_Scree},     // red-brown cinders and ash between the flows; crumbles
 	.Rhyolite  = {{0.200, 0.186, 0.172}, 0.7, 2, .Rhyolite_Scree},      // pale grey-pink stiff lava, in sheeted crags
 	.Tuff      = {{0.215, 0.200, 0.160}, 0.3, 0.1, .Tuff_Scree},        // cream pumice and ash
+	.Reef      = {{0.235, 0.225, 0.190}, 0.8, 2, .Reef_Scree},          // coral, shells and their sand, raised from the sea: pale cream, rough and full of holes
 	.Mudstone_Scree  = {{0.066, 0.068, 0.079}, 0, 0, .Air},   // fresh broken rock is a little paler than the weathered face
 	.Siltstone_Scree = {{0.105, 0.088, 0.066}, 0, 0, .Air},
 	.Sandstone_Scree = {{0.146, 0.116, 0.079}, 0, 0, .Air},
@@ -92,6 +93,7 @@ MATERIALS := [Mat]Material{
 	.Scoria_Scree    = {{0.093, 0.047, 0.036}, 0, 0, .Air},
 	.Rhyolite_Scree  = {{0.214, 0.200, 0.185}, 0, 0, .Air},
 	.Tuff_Scree      = {{0.228, 0.212, 0.170}, 0, 0, .Air},
+	.Reef_Scree      = {{0.250, 0.240, 0.205}, 0, 0, .Air},
 }
 
 CHUNK       :: 32               // cells along a chunk side

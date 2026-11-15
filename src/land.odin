@@ -44,6 +44,9 @@ Shape :: struct($T: typeid) {
 	wander, wander_wave: T,   // wandering this far besides,
 	width:               T,   // and this wide.
 	lumps, lumps_wave:   T,   // The uplift, and the fall of a vent's form, vary by this share over this distance.
+	taper:               T,   // the uplift dies away to nothing toward the outline over this share of the way in from it; 0 for none
+	bank:                T,   // the share of the uplift the sea floor inside the outline takes; 0 where it stands still, as in the kinds made before the reef
+	reef:                T,   // m/yr coral builds up toward the sea where the water over it is shallower than REEF_DEPTH; 0 in a cold sea
 }
 
 // A stretch of the island's history: steps of so many years on cells of a size, with the
@@ -231,6 +234,43 @@ KINDS := [?]Kind{
 			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {10, 20}},
 		},
 	},
+	{
+		// Reef, after Kikaijima: a bank lies drowned in a warm sea, and rises with the island, most
+		// along a line and in lumps a few hundred metres across, nothing at its edge, while the sea
+		// falls and rises with the ice six times in 100,000 years, each time to about where it
+		// stands today. Each rise floods a band of the land the last fall left, coral fills it up
+		// to the sea as a flat in a few thousand years, and the next fall leaves that flat as a
+		// terrace over the reef's front: the island comes up a ring at a time, a flight of terraces
+		// round the oldest, highest flat, and only a few metres of each rise reach the slowly rising
+		// shore. The rain sinks into the reef, so no stream cuts it. The seed never draws it (its
+		// weight is 0): it is made with --kind=reef, or where the archipelago's hosts put it.
+		name = "reef", after = {"Kikaijima"}, weight = 0, story = "reef on mudstone",
+		hosts = {
+			{{.Rising, 1.2, ANY, 0.4}, {.Front, 12, ANY, 4}, {.Depth, -ANY, 4000, 300}},   // rising fast on the forearc, as Kikaijima on the Ryukyu forearc's outer ridge
+			{{.Setting, 4.5, 5, 0}, {.Rising, 0.1, ANY, 0.2}},                            // or a little on the shelf
+		},
+		shape = {
+			radius = {0.36, 0.39}, xx = {0.82, 0.92}, zz = {1.15, 1.35}, xz = {-0.4, 0.4}, ragged = {0.1, 0.2}, ragged_wave = {2500, 3500},
+			rate = {0.0016, 0.0019}, swell = {0, 360}, floor = {0.3, 0.4}, ridge = {0.6, 0.7},
+			axis = {-1100, 1100}, bend = {100, 300}, bend_wave = {2500, 3500}, wander = {100, 200}, wander_wave = {3000, 4000}, width = {900, 1200},
+			lumps = {0.45, 0.55}, lumps_wave = {500, 850}, taper = {0.9, 1}, bank = {1, 1}, reef = {0.010, 0.015},
+		},
+		history = {
+			{cell = 32, years = 2000, steps = {3, 4}, uplift = {1, 1}, sea = {102, 108}},   // the sea rises over the bank as the ice melts, and the reef caps its top
+			{cell = 32, years = 2000, steps = {4, 5}, uplift = {1, 1}, sea = {-28, -22}},   // then falls, and rises again, five times more
+			{cell = 32, years = 2000, steps = {3, 3}, uplift = {1, 1}, sea = {22, 28}},
+			{cell = 32, years = 2000, steps = {4, 5}, uplift = {1, 1}, sea = {-28, -22}},
+			{cell = 16, years = 2000, steps = {3, 3}, uplift = {1, 1}, sea = {22, 28}},
+			{cell = 16, years = 2000, steps = {4, 5}, uplift = {1, 1}, sea = {-28, -22}},
+			{cell = 16, years = 2000, steps = {3, 3}, uplift = {1, 1}, sea = {22, 28}},
+			{cell = 16, years = 2000, steps = {4, 5}, uplift = {1, 1}, sea = {-28, -22}},
+			{cell = 16, years = 2000, steps = {3, 3}, uplift = {1, 1}, sea = {22, 28}},
+			{cell = 16, years = 2000, steps = {4, 5}, uplift = {1, 1}, sea = {-28, -22}},
+			{cell = 16, years = 2000, steps = {3, 3}, uplift = {1, 1}, sea = {22, 28}},
+			{cell = 16, years = 2000, steps = {4, 5}, uplift = {1, 1}, sea = {-28, -22}},
+			{cell = 16, years = 1000, steps = {7, 9}, uplift = {1, 1}, sea = {30, 36}},     // the last rise, and the thousands of years since
+		},
+	},
 }
 
 Region :: struct {
@@ -344,6 +384,7 @@ region_init :: proc(name: string, size: f64 = REFERENCE) -> bool {
 		if region.history[i].vents > 0 do from = middle
 	}
 	fmt.printf("island: %s, %.1f km across, the swell from %.0f°", region.kind, region.size/1000, region.shape.swell)
+	if r := region.shape.reef; r > 0 do fmt.printf("; coral builds up to the sea %.1f mm/yr where it is shallower than %.0f m, on a bank rising with the island", r*1000, f32(REEF_DEPTH))
 	for p, i in region.history {
 		if p.sea != 0 do fmt.printf("; the sea %s %.0f m", "rises" if p.sea > 0 else "falls", abs(p.sea))
 		for v in region.vents do if v.phase == i {
@@ -480,10 +521,11 @@ uplift_at :: proc(x, z: f64, s: f32) -> f32 {
 		if r := max(f32(math.hypot(x - v.at.x, z - v.at.y)), v.crater); r < v.reach do lift += v.build/1000*(1 - math.pow(r/v.reach, v.form))
 	}
 	if s > 0 {
-		lift += f32(sh.floor)
+		t := smoothstep(0, f32(sh.taper), s) if sh.taper > 0 else 1
+		lift += f32(sh.floor)*t
 		if sh.ridge > 0 {
 			axis := sh.axis + sh.bend*math.sin(x*k/sh.bend_wave) + sh.wander*f64(fbm(x*k, 0, sh.wander_wave, 1, 2, seed + 2))
-			lift += f32(sh.ridge)*f32(math.exp(-math.pow((z*k - axis)/sh.width, 2)))
+			lift += f32(sh.ridge)*t*f32(math.exp(-math.pow((z*k - axis)/sh.width, 2)))
 		}
 	}
 	return f32(sh.rate)*lift*(1 + f32(sh.lumps)*fbm(x*k, z*k, sh.lumps_wave, 1, 3, seed + 3)) if lift > 0 else 0
@@ -620,7 +662,7 @@ route :: proc(g: ^Grid) #no_bounds_check {
 				if s > steepest do steepest, best = s, (-1 if sea else i32(nb))
 			}
 			g.next[c] = best
-			g.area[c] = g.d*g.d
+			g.area[c] = g.d*g.d*(wear(g, c, g.z[c] - 0.5).runs if rocks.sinks else 1)   // what sinks into the rock runs on under the ground, and cuts nothing
 		}
 	})
 	for c in sinks do if g.next[c] < 0 do g.next[c] = SINK
@@ -702,6 +744,8 @@ ABRADE    :: 1e-5   // and m/yr the waves wear it lower, slowing to nothing at
 WAVE_BASE :: 20     // this depth, so a platform deepens away from its cliff
 SHELTER   :: 0.07   // exposure below which the waves neither undercut a shore nor carry silt off
 FLAT      :: 4      // metres over the sea that floods build a flat of river silt to
+REEF_DEPTH :: 30    // metres: coral grows up toward the sea from water no deeper than this,
+REEF_TOP   :: 1.5   // and to this far under it: the reef's flat, which the low tides bare
 
 // The sea cells above and to the left of each corner of the grid, so that the share of sea in
 // any square is four reads.
@@ -728,6 +772,14 @@ share :: proc(open: []i32, n, x, y, r: int) -> f32 {
 coast :: proc(g: ^Grid, dt: f32) {
 	n := g.n
 	if g.open == nil do g.open = make([]i32, (n + 1)*(n + 1))
+	// Where the sea floor rises with the island, and in a warm sea coral builds a reef up from it to
+	// just under the sea wherever the water is shallow enough, which grows out as a flat at the sea's
+	// level while the sea stands, so that each stand of the sea leaves a terrace as the island rises.
+	if sh := region.shape; sh.bank > 0 || sh.reef > 0 do for c in 0..<n*n do if g.sea[c] {
+		g.z[c] += f32(sh.bank)*g.uplift[c]*g.lift*dt
+		if g.z[c] > -REEF_DEPTH && g.z[c] < -REEF_TOP do g.z[c] = min(g.z[c] + f32(sh.reef)*dt, -REEF_TOP)
+		if g.z[c] > 0 do g.sea[c], g.cut[c] = false, 0
+	}
 	open := sea_table(g, into = g.open)
 	for c in 0..<n*n do if g.sea[c] && g.z[c] > -WAVE_BASE do g.z[c] -= ABRADE*dt*(1 + g.z[c]/WAVE_BASE)
 	r := max(int(FETCH/g.d), 2)
@@ -914,7 +966,8 @@ land_form :: proc() {
 	slide_make(g)
 	highest := land_finish(g)
 	fmt.printfln("land formed in %.2f s: %d land cells, highest point %.0f m", time.duration_seconds(time.since(started)), len(g.order), highest)
-	fmt.printfln("a step cut at the coast climbs to the farthest stream head in %.0f kyr; the land has had %.0f kyr on its finest cells, %.2f of that", response/1000, last/1000, last/response)
+	if response > 0 do fmt.printfln("a step cut at the coast climbs to the farthest stream head in %.0f kyr; the land has had %.0f kyr on its finest cells, %.2f of that", response/1000, last/1000, last/response)
+	else do fmt.printfln("no stream reaches the sea, so nothing cut at the coast climbs inland; the land has had %.0f kyr on its finest cells", last/1000)
 	land_stats(g)
 }
 
@@ -1174,10 +1227,22 @@ land_figures :: proc(g: ^Grid) {
 			}
 		}
 	}
+	// Crests and the height above the nearest stream as the real islands were measured, every cell's
+	// rain counted: where some sinks into the rock, by the valleys it would run in if none did.
+	area, above := g.area, land.above
+	if rocks.sinks {
+		area, above = make([]f32, n*n, context.temp_allocator), make([]f32, n*n, context.temp_allocator)
+		for ci in g.order do area[ci] = g.d*g.d
+		#reverse for ci in g.order do if r := g.next[ci]; r >= 0 do area[r] += area[ci]
+		for ci in g.order {
+			c, r := int(ci), g.next[ci]
+			above[c] = 0 if area[c] >= CHANNEL_AREA || r == SINK else g.z[c] if r < 0 else g.z[c] - g.z[r] + above[r]
+		}
+	}
 	low, steep, inner := 0, 0, 0
 	for ci in g.order {
 		c := int(ci)
-		append(&lists[3], land.above[c])
+		append(&lists[3], above[c])
 		if g.z[c] < 50 do low += 1
 		sea := false
 		for o in OFFSETS do sea ||= g.sea[c + o.y*n + o.x]
@@ -1185,7 +1250,7 @@ land_figures :: proc(g: ^Grid) {
 		inner += 1
 		if land.slope[c] > math.tan(math.to_radians(f32(60))) do steep += 1
 		if coast[c] do append(&lists[1], land.slope[c])
-		if g.area[c] <= g.d*g.d*1.01 && land.slope[c] > math.tan(math.to_radians(f32(5))) do append(&lists[2], g.z[c] - (g.z[c - 1] + g.z[c + 1] + g.z[c - n] + g.z[c + n])/4)
+		if area[c] <= g.d*g.d*1.01 && land.slope[c] > math.tan(math.to_radians(f32(5))) do append(&lists[2], g.z[c] - (g.z[c - 1] + g.z[c + 1] + g.z[c - n] + g.z[c + n])/4)
 	}
 	median :: proc(l: [dynamic]f32) -> f32 { return middle(l[:]) }
 	rising := 0

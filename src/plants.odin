@@ -27,7 +27,7 @@ Ground_Plant :: struct {
 }
 SOIL_COVERS :: bit_set[Mat]{.Grass, .Litter, .Susuki, .Dune}
 FORESTS :: bit_set[Community_Kind]{.Valley, .Slope, .Ridge, .Young}
-RUBBLE :: bit_set[Mat]{.Mudstone_Scree, .Siltstone_Scree, .Sandstone_Scree, .Grit_Scree, .Limestone_Scree, .Basalt_Scree, .Scoria_Scree, .Rhyolite_Scree, .Tuff_Scree}
+RUBBLE :: bit_set[Mat]{.Mudstone_Scree, .Siltstone_Scree, .Sandstone_Scree, .Grit_Scree, .Limestone_Scree, .Basalt_Scree, .Scoria_Scree, .Rhyolite_Scree, .Tuff_Scree, .Reef_Scree}
 
 GROUND_PLANTS := [Plant_Kind]Ground_Plant{
 	.Reed = {"reeds", "common reed stands in a band in the shallows and on the wet margin of still or slow water, as wide as the shore is gentle", true, {1.3, 1.6}, 0.9, 5, 0.9, SOIL_COVERS + {.Silt}, {},
