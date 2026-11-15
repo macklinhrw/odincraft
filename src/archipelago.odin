@@ -162,7 +162,7 @@ archipelago_make :: proc(say := false) {
 		if w.inland > -6 do continue
 		k, _ := known_at(c)
 		rich := math.exp(-math.pow((k.front + 60)/70, 2)) + 0.5*smoothstep(10, 30, -w.inland) - linalg.length(c)/800
-		if s := holds(start, p) + 0.2*rich + 0.01*hash01(i32(i), i32(j), world_seed + 1701); s > best do best, chosen = s, c
+		if s := 100*math.floor(holds(start, p)*50)/50 + 0.2*rich + 0.01*hash01(i32(i), i32(j), world_seed + 1701); s > best do best, chosen = s, c   // the host first, to 0.02
 	}
 	world_frame.start = chosen
 

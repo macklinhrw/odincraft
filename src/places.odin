@@ -297,7 +297,7 @@ places_make :: proc() {
 // A place's name, from what made it (kinds-and-places.md, "Places"): a word drawn from its cause
 // (its rock's colour, the tree of its wood, its size, what happened there, the wind, where it lies
 // on the island) and then its own word, each drawn by the place's own key, and none used twice.
-COLOURS := #partial [Mat]string{.Mudstone = "Grey", .Siltstone = "Brown", .Sandstone = "Yellow", .Grit = "Red", .Limestone = "White", .Basalt = "Black", .Scoria = "Red", .Rhyolite = "Pale", .Tuff = "White"}
+COLOURS := #partial [Mat]string{.Mudstone = "Grey", .Siltstone = "Brown", .Sandstone = "Yellow", .Grit = "Red", .Limestone = "White", .Basalt = "Black", .Scoria = "Red", .Rhyolite = "Pale", .Tuff = "White", .Reef = "White"}
 TREE_WORDS := [Tree_Kind]string{.Tabu = "Tabu", .Shii = "Shii", .Camellia = "Camellia", .Hisakaki = "", .Pine = "Pine", .Scrub = "", .Alder = "Alder"}   // a small tree with a long name, and bushes of no one kind, name nothing
 COUNTS := [?]string{"", "", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"}
 JOINS :: " Grey White Pale Wind Slip Pine Old New High "   // words that join the one after them: Greytop, Windgap, from Windy; never Redhead or Blacktop
@@ -411,7 +411,9 @@ survey_print :: proc() {
 	}
 	at :: proc(c: int) -> [2]f64 { return middle_of(land.grid, c) + {f64(region.origin.x), f64(region.origin.y)} }
 	fmt.printfln("survey of the %s island on seed %d: %.1f km² of land, %d squares of 1 km with a quarter of it or more", region.kind, seed, survey.land, all)
-	fmt.printfln("  highest point %.0f m at %.0f, %.0f; longest river %.1f km, from its head at %.0f, %.0f", g.z[survey.top], at(survey.top).x, at(survey.top).y, survey.river/1000, at(survey.head).x, at(survey.head).y)
+	fmt.printf("  highest point %.0f m at %.0f, %.0f; ", g.z[survey.top], at(survey.top).x, at(survey.top).y)
+	if survey.river > 0 do fmt.printfln("longest river %.1f km, from its head at %.0f, %.0f", survey.river/1000, at(survey.head).x, at(survey.head).y)
+	else do fmt.println("no river")
 	fmt.print("  plants:")
 	for t, k in survey.plants do fmt.printf("%s %s %s", "" if k == .Valley else ";", COMMUNITIES[k].name, spread(t, all))
 	fmt.print("\n  rock at the surface:")

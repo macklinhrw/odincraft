@@ -28,8 +28,8 @@ Mat :: enum u16 {
 	Black_Sand,                       // a beach ground from dark lava
 	Shingle, Black_Shingle,           // the stones the waves round and throw up where they leave no sand
 	Loam, Silt, Red_Clay, Ash,        // the soils under it (SOILS)
-	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff,
-	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree,
+	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff, Reef,
+	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree, Reef_Scree,
 }
 
 Material :: struct {
@@ -84,6 +84,7 @@ MATERIALS := [Mat]Material{
 	.Scoria    = {{0.085, 0.043, 0.033}, 0.25, 0.1, .Scoria_Scree},     // red-brown cinders and ash between the flows; crumbles
 	.Rhyolite  = {{0.200, 0.186, 0.172}, 0.7, 2, .Rhyolite_Scree},      // pale grey-pink stiff lava, in sheeted crags
 	.Tuff      = {{0.215, 0.200, 0.160}, 0.3, 0.1, .Tuff_Scree},        // cream pumice and ash
+	.Reef      = {{0.235, 0.225, 0.190}, 0.8, 2, .Reef_Scree},          // coral, shells and their sand, raised from the sea: pale cream, rough and full of holes
 	.Mudstone_Scree  = {{0.066, 0.068, 0.079}, 0, 0, .Air},   // fresh broken rock is a little paler than the weathered face
 	.Siltstone_Scree = {{0.105, 0.088, 0.066}, 0, 0, .Air},
 	.Sandstone_Scree = {{0.146, 0.116, 0.079}, 0, 0, .Air},
@@ -93,6 +94,7 @@ MATERIALS := [Mat]Material{
 	.Scoria_Scree    = {{0.093, 0.047, 0.036}, 0, 0, .Air},
 	.Rhyolite_Scree  = {{0.214, 0.200, 0.185}, 0, 0, .Air},
 	.Tuff_Scree      = {{0.228, 0.212, 0.170}, 0, 0, .Air},
+	.Reef_Scree      = {{0.250, 0.240, 0.205}, 0, 0, .Air},
 }
 
 // What the rules ask of a material besides its row, a set of traits for each: a bit_set of
@@ -103,6 +105,7 @@ Trait :: enum u8 {
 	Bark,     // a stem or limb. Bark and leaf are a plant's, which the sky, the water and a column's ground see past
 	Cover,    // covers the ground over a soil (block_below)
 	Passes,   // a rock water passes through, so a spring rises where it lies on one that holds it (rivers.odin)
+	Sinks,    // a rock the rain sinks into rather than running off it, so few streams cut it (SOAKS, rock.odin)
 	Grass, Litter, Susuki, Dune, Silt, Sand, Rubble,   // the grounds a ground plant grows on (GROUND_PLANTS.on)
 }
 @(rodata) TRAITS := #partial [Mat]bit_set[Trait]{
@@ -110,9 +113,9 @@ Trait :: enum u8 {
 	.Sand = {.Sand}, .Silt = {.Silt},
 	.Wood = {.Bark}, .Shii_Bark = {.Bark}, .Grey_Bark = {.Bark}, .Pine_Bark = {.Bark},
 	.Leaves = {.Leaf}, .Shii_Leaves = {.Leaf}, .Camellia_Leaves = {.Leaf}, .Hisakaki_Leaves = {.Leaf}, .Pine_Needles = {.Leaf}, .Scrub_Leaves = {.Leaf},
-	.Sandstone = {.Passes}, .Grit = {.Passes}, .Limestone = {.Passes}, .Basalt = {.Passes}, .Scoria = {.Passes}, .Tuff = {.Passes},
+	.Sandstone = {.Passes}, .Grit = {.Passes}, .Limestone = {.Passes}, .Basalt = {.Passes}, .Scoria = {.Passes}, .Tuff = {.Passes}, .Reef = {.Passes, .Sinks},
 	.Mudstone_Scree = {.Rubble}, .Siltstone_Scree = {.Rubble}, .Sandstone_Scree = {.Rubble}, .Grit_Scree = {.Rubble}, .Limestone_Scree = {.Rubble},
-	.Basalt_Scree = {.Rubble}, .Scoria_Scree = {.Rubble}, .Rhyolite_Scree = {.Rubble}, .Tuff_Scree = {.Rubble},
+	.Basalt_Scree = {.Rubble}, .Scoria_Scree = {.Rubble}, .Rhyolite_Scree = {.Rubble}, .Tuff_Scree = {.Rubble}, .Reef_Scree = {.Rubble},
 }
 is :: #force_inline proc "contextless" (m: Mat, traits: bit_set[Trait]) -> bool { return TRAITS[m] & traits != {} }
 LEAVES       :: bit_set[Trait]{.Leaf}

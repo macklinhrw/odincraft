@@ -146,13 +146,24 @@ options :: proc() -> Options {
 // Start on the bank of the largest river, above the reach the sea floods, facing downstream,
 // with no tree within 6 m and no small one within 3, on gentle ground with nothing in the three
 // strides ahead to fill the first view if any bank has that; where every bank is wooded closer,
-// with none within 3 m and no small one within 1.5. Found relative to the region's middle, returned in the world.
+// with none within 3 m and no small one within 1.5. On an island with no river, where the rain
+// sinks into the rock, the same on ground 12 to 30 m over the sea, the nearest the shore first,
+// facing down toward it. Found relative to the region's middle, returned in the world.
 find_start :: proc() -> (pos: [3]f64, yaw: f32) {
 	ox, oz := f64(region.origin.x), f64(region.origin.y)
-	slice.sort_by(rivers.spots[:], proc(a, b: Spot) -> bool { return a.area > b.area })
+	spots := rivers.spots
+	if len(spots) == 0 {
+		spots = make([dynamic]Spot, context.temp_allocator)
+		g := land.grid
+		for ci in g.order do if c := int(ci); c%g.n%2 == 0 && c/g.n%2 == 0 && g.z[c] >= 12 && g.z[c] <= 30 {
+			at := middle_of(g, c)
+			append(&spots, Spot{{f32(at.x), g.z[c], f32(at.y)}, math.to_radians(land.facing[c]), -land.inland[c]})
+		}
+	}
+	slice.sort_by(spots[:], proc(a, b: Spot) -> bool { return a.area > b.area })
 	trees: [dynamic]Tree
 	defer delete(trees)
-	for clear_of in ([2]f32{6, 3}) do for steep in ([2]f32{0.2, 1e9}) do for s in rivers.spots {
+	for clear_of in ([2]f32{6, 3}) do for steep in ([2]f32{0.2, 1e9}) do for s in spots {
 		if s.p.y < 12 || land.slope[land_cell(f64(s.p.x), f64(s.p.z))] > steep do continue
 		clear(&trees)
 		trees_in(i32(s.p.x) - 6, i32(s.p.z) - 6, i32(s.p.x) + 6, i32(s.p.z) + 6, &trees, true)
