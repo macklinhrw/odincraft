@@ -196,6 +196,7 @@ For each gap: what the real islands have, the evidence, the scale, the real proc
 - **Process.** Reefs grow at each high stand and are lifted at about 2 mm a year. Water sinks into limestone.
 - **Cause.** One fall of the sea in the history, no reef growth, no limestone island, and routing that makes surface streams everywhere. The game traced streams across Kikaijima's plateau that the real island lacks (memory).
 - **Plan.** **Not covered.** Karst waits until "an island has limestone".
+- **Built 2026-11-15** as a kind of its own, `reef`, the raised kind left as it was: coral grows up to the sea on a bank that rises with the island while the sea falls and rises, and the rain sinks into the reef. Its figures are in "The reef kind against Kikaijima" below.
 
 ### 9. What the generator gets right
 
@@ -211,6 +212,32 @@ The real valley spacing is less even: the spread is 0.57–0.99, against 0.56–
 - **Confirmed and sharpened.** "True proportions are gentle" (mechanism 7) holds for the generated islands but not for real ones. Real islands of this size are about twice as steep at true scale (median 20–32° on the six whole islands, against 10–12° for three of the four kinds and 20° for the cone). The island needs to be truer before it needs exaggerating.
 - **Contradicted in part.** "Self-similar valleys" (mechanism 1) is not where the difference lies. Real islands are about as self-similar by scale; they differ in where the steepness sits.
 - **Added.** The coast as the single largest landform, and volcanic building as a whole class of land that erosion alone cannot make.
+
+## The reef kind against Kikaijima
+
+Added 2026-11-15, after the reef kind was built (`foundations.md` section 8, "The reef kind, as built"). The same figures, taken by the game at start-up on seeds 1 to 12 with `--kind=reef` (median and range); the last four from the formed grid on seeds 1 to 8, by the same rules as the table above. The raised kind, which this table's first comparison held against Kikaijima, is beside it on the same seeds.
+
+| | Kikaijima | reef | raised |
+|---|---|---|---|
+| Land, km² | 38.7 (window) | 13 (10.5 to 15.6) | 17.7 (13.0 to 20.7) |
+| Highest point, m | 210 | 146 (115 to 201) | 404 (320 to 562) |
+| Median slope, ° | 3 | 4 (3 to 5) | 13.5 (9 to 18) |
+| Land under 3°, % | 54.8 | 30 (20 to 47) | |
+| Height within 100 m of the shore, m | 4 | 5 (1 to 8) | 18 (8 to 35) |
+| Shore rising 30 m within 50 m, % | 0 | 0 | 17 (4 to 45) |
+| Median slope 0 to 100 m from the sea, ° | 2 | 1 (0 to 4) | 6 (2 to 13) |
+| Land under 50 m, % | 57 | 61 (55 to 70) | 37 (24 to 44) |
+| Land over 60°, % | 0.0 | 0.0 | 1.0 (0.0 to 2.8) |
+| Ridge crest: fall to the four neighbours, median, m | 0.05 | 0.13 (0.11 to 0.15) | 0.55 (0.44 to 0.63) |
+| Height above nearest stream, median, m | 10 | 17 (11 to 22) | 36 (24 to 46) |
+| Deepest closed hollow, m | 1 | 0.5 (0 to 2) | 12 (2 to 24) |
+| Relief in 250 m, median, m | 15 | 27 (20 to 32) | |
+| Relief in 1 km, median, m | 80 | 126 (102 to 146) | |
+| Mean height / highest | 0.29 | 0.30 (0.25 to 0.32) | |
+
+- **Every printed figure falls within Kikaijima's reach on every seed**, where the raised kind is marked far outside on three to eight of its eight figures on every seed (median five).
+- **On a reef island the crest and the stream are measured as here, with every cell's rain counted.** The rain sinks into the reef and the island has no stream, as Kikaijima has none (memory); the height above a stream the routing would trace if it did not sink is what was measured on Kikaijima's grid, where the game traced streams across the plateau.
+- **What is still short:** the island is about a third of Kikaijima's window, since the 8 km region holds about 2 km from the shore to the top where Kikaijima has 3 to 4, so it is twice as rough at 250 m and 1 km and has half the flat ground; on a 12.3 km region it has 31 km². Kikaijima's terraces are flatter: its uplift is a tilted block, ours a dome in lumps, so the oldest flats are tilted most.
 
 ## Livable ground
 

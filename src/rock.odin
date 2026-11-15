@@ -138,7 +138,6 @@ rock_init :: proc() {
 		if s == 0 do continue
 		rocks.law[m] = {clamp(0.16/(s*s), 0.2, 5), math.tan(math.to_radians(35 + 25*math.pow((s - 0.2)/0.6, 1.5))), (1 - s)*(1 - s)/0.5625, 1 - SOAKS if is(m, SINKS) else 1}
 	}
-	rocks.sinks = false
 	for k in story.kinds do rocks.sinks ||= k.weight > 0 && is(k.kind, SINKS)
 
 	// The beds, from the bottom of the stack up.

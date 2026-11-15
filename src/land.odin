@@ -751,7 +751,7 @@ WAVE_BASE :: 20     // this depth, so a platform deepens away from its cliff
 SHELTER   :: 0.07   // exposure below which the waves neither undercut a shore nor carry silt off
 FLAT      :: 4      // metres over the sea that floods build a flat of river silt to
 REEF_DEPTH :: 30    // metres: coral grows up toward the sea from water no deeper than this,
-REEF_TOP   :: 1.5   // and to this far under it: the reef's flat, which the low tides bare
+REEF_TOP   :: 1.5   // and to this far under it: the reef's flat, just under the lowest tides
 
 // The sea cells above and to the left of each corner of the grid, so that the share of sea in
 // any square is four reads.
