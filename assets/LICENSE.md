@@ -8,13 +8,16 @@ contributors, under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.
 noted otherwise: `mcl_mud.png` and `mcl_mud_packed_mud.png` are by TheRandomLegoBrick, CC0 1.0.
 
 The licence was read from Mineclonia's files on 2026-11-12, not from the packs' own pages. One of
-Mineclonia's module notes (`mcl_core/README.md`) still names an older pack for its textures; the
-tiles themselves are plainly Pixel Perfection's, and `LEGAL.md` is the project's statement. Check
-both before distributing this game.
+Mineclonia's module notes (`mcl_core/README.md`) still names an older pack for its textures,
+"Faithful 1.11" under the MIT licence. That note is taken to be a stale leftover from MineClone2,
+for two reasons checked on 2026-11-15: Mineclonia's top-level `LEGAL.md` says every texture not
+noted otherwise is Pixel Perfection under CC BY-SA 4.0 and that no non-free licences are used
+anywhere, and Faithful 1.11 is a 32×32 pack while every tile here is 16×16, Pixel Perfection's
+resolution.
 
 `blocks.png` is built from those tiles by `tools/blocks.py`, which recolours each to one of this
 game's materials and adds flowers to one. It is an adaptation of them and is under the same
-licence, CC BY-SA 4.0. The rest of this repository is not covered by that licence.
+licence, CC BY-SA 4.0. The rest of this repository is licensed under the AGPL-3.0-or-later; see `LICENSE`.
 
 `plants.png` is built the same way from the plant pictures in `pixel-perfection/plants/`, also taken
 from Mineclonia on 2026-11-12 and under the same `LEGAL.md` statement (Pixel Perfection, CC BY-SA
