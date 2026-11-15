@@ -30,14 +30,16 @@ import sdl "vendor:sdl3"
 //   dig=x0,y0,z0,x1,y1,z1   once the world has loaded, clear this box of blocks; may be repeated
 //   probe=x0,z0,x1,z1       on exit, print the ground and water in these columns
 //   seed=N          which world: every random choice is keyed from it (default 7)
-//   island=N        which island of the archipelago the start, map, why, survey and place act on (default 0,
+//   island=N        which island near the start the start, map, why, survey and place act on (default 0,
 //                   the start island at the origin); it is formed first, with all its start-up lines
-//   near=km         the islands within this many km of that one are formed before entering (default 64);
+//   near=km         the islands within this many km of that one are formed before entering (default 24, the nearest neighbours);
 //                   the rest form in the background, nearest first, and the world waits for each
 //   kind=name       which kind of island that one is, whatever the seed would pick (names in KINDS, land.odin)
 //   origin=x,z      where island 0's middle lies in the world, in whole metres (default 0,0); the
-//                   archipelago moves with it
+//                   islands near it and the stand-in's plates move with it
 //   map=file.png    save a map of the island's land and exit
+//   archipelago=file.png   form every island near the start side by side, save a map of them and the
+//                   continent they lie off, and exit
 //   overlay=name    with map: paint one field over the relief (names in FIELDS, fields.odin)
 //   why=x,z         print what the ground is at this point in the world and why, and exit
 //   survey          print what the island holds and the ranked candidates for named places, and exit
@@ -62,6 +64,7 @@ Options :: struct {
 	probe:         [4]i32,
 	has_probe:     bool,
 	map_path:      string,
+	archipelago:   string,
 	overlay:       string,
 	above:         bool,
 	bench, speed:  f64,
@@ -76,7 +79,7 @@ Options :: struct {
 }
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 24}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -116,6 +119,7 @@ options :: proc() -> Options {
 			ok = numbers(value, ",", box[:])
 			append(&o.digs, [6]i32{i32(box[0]), i32(box[1]), i32(box[2]), i32(box[3]), i32(box[4]), i32(box[5])})
 		case "map":   o.map_path = value
+		case "archipelago": o.archipelago = value
 		case "why":   ok = numbers(value, ",", o.why[:]); o.has_why = true
 		case "fly":   o.fly = true
 		case "survey": o.survey = true
@@ -166,12 +170,23 @@ main :: proc() {
 	opt := options()
 	quiet_init()
 	seed = world_seed   // the islands are made from the world's seed
-	archipelago_make()
-	if opt.island < 0 || opt.island >= len(archipelago) {
-		fmt.eprintfln("no island %d: the archipelago has %d, from 0", opt.island, len(archipelago))
+	// The start island's record is drawn first, at its place, and the islands near it and the
+	// continent they lie off are put round it (archipelago.odin), as step 22's plate story will do.
+	first: Formed
+	first.island, first.region.origin = {origin = opt.origin, size = REFERENCE, seed = world_seed}, opt.origin
+	bind(&first)
+	if !region_init(opt.kind if opt.island == 0 else "") {
+		fmt.eprint("no kind of island named", opt.kind, "; there are:")
+		for k in KINDS do fmt.eprint("", k.name)
+		fmt.eprintln()
 		os.exit(2)
 	}
-	if opt.kind != "" {
+	archipelago_make(opt.archipelago != "")
+	if opt.island < 0 || opt.island >= len(archipelago) {
+		fmt.eprintfln("no island %d: there are %d near the start, from 0", opt.island, len(archipelago))
+		os.exit(2)
+	}
+	if opt.kind != "" && opt.island != 0 {
 		kind := -1
 		for k, i in KINDS do if k.name == opt.kind do kind = i
 		if kind < 0 {
@@ -184,8 +199,11 @@ main :: proc() {
 	}
 	formed = make([]Formed, len(archipelago))
 	for &f, i in formed do f.island = archipelago[i]
-	for &f in formed do f.island.origin += opt.origin
 	home = &formed[opt.island]
+	if opt.archipelago != "" {
+		archipelago_map(opt.archipelago)
+		return
+	}
 	gen_init(home)
 	bind(home)   // the frame thread reads the start island unless it binds another
 	if opt.place != 0 {

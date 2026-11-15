@@ -181,7 +181,8 @@ gen_init :: proc(f: ^Formed) {
 	bound(f)
 	started := time.now()
 	f.region.origin, f.region.size, f.landslide = f.island.origin, f.island.size, {box = {1e9, 1e9, -1e9, -1e9}}
-	region_init(KINDS[f.island.kind].name)
+	region_init(KINDS[f.island.kind].name, f.island.size)
+	region.shape.swell = plates.wind   // every island's swell comes from the one wind (archipelago.odin); the start island's is the one it drew
 	rock_init()
 	land_form()
 	rivers_trace()

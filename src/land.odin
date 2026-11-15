@@ -93,6 +93,7 @@ Kind :: struct {
 	after:   []string, // the real islands it stands for (REAL); none is a guess
 	weight:  f32,      // how often the seed draws this kind, against the other rows' weights
 	story:   string,   // what the rock is (STORIES, rock.odin)
+	hosts:   [][]Window, // where the world's plates put it, on the world's fields (archipelago.odin; a stand-in until step 22): it takes the best of them
 	shape:   Shape([2]f64),
 	history: []Phase([2]f32),
 }
@@ -104,6 +105,7 @@ KINDS := [?]Kind{
 		// valleys, leaving coves between the cliffs; much more and it is the inlets kind. After
 		// Hahajima, though its shore is half as long.
 		name = "ridge", after = {"Hahajima"}, weight = 3, story = "layered, gently tilted",
+		hosts = {{{.Rising, 0.3, 1.2, 0.5}, {.Front, 12, ANY, 4}, {.Depth, -ANY, 4000, 300}}},   // rising steadily, off the volcanic front, on a raised floor: the forearc's flanks
 		shape = {
 			radius = {0.35, 0.39}, xx = {0.85, 1.0}, zz = {1.3, 1.8}, xz = {-0.4, 0.4}, ragged = {0.35, 0.45}, ragged_wave = {2500, 3500},
 			rate = {0.00055, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.25, 0.35}, ridge = {0.8, 1.1},
@@ -123,6 +125,7 @@ KINDS := [?]Kind{
 		// the 5,000 to 8,000 years since the rivers have filled the head of each with a flat.
 		// After Tsushima's Asō Bay and Chichijima.
 		name = "inlets", after = {"Tsushima", "Chichijima"}, weight = 3, story = "layered, gently tilted",
+		hosts = {{{.Rising, -ANY, 0.3, 0.3}, {.Age, 1, ANY, 0.5}, {.Front, 12, ANY, 4}, {.Depth, -ANY, 4000, 300}}},   // rising slowly or sinking, so the sea drowned its valleys once they were cut
 		shape = {
 			radius = {0.40, 0.42}, xx = {0.85, 1.0}, zz = {1.15, 1.35}, xz = {-0.4, 0.4}, ragged = {0.35, 0.45}, ragged_wave = {2500, 3500},
 			rate = {0.0004, 0.0005}, swell = {0, 360}, silt = {0.4, 0.8}, floor = {0.25, 0.35}, ridge = {0.8, 1.1},
@@ -141,6 +144,7 @@ KINDS := [?]Kind{
 		// of the sea from lava and ash in a few tens of thousands of years, and the sea and its
 		// streams then cut it for a few hundred thousand, into a wall of cliffs round radial gorges.
 		name = "cone", after = {"Toshima", "Mikurajima"}, weight = 1, story = "lava and ash",
+		hosts = {{{.Front, 0, 6, 4}}},   // on the arc's volcanic front
 		shape = {xx = {0.9, 1.1}, zz = {0.9, 1.1}, xz = {-0.2, 0.2}, rate = {0.0012, 0.0016}, swell = {0, 360}, silt = {0, 0.1}, lumps = {0.05, 0.1}, lumps_wave = {2000, 3000}},
 		history = {
 			{cell = 64, years = 2000, steps = {15, 25}, vents = {1, 1}, spread = {0, 400}, build = {700, 1000}, form = {0.7, 0.9}, flank = {0.28, 0.38}},
@@ -155,6 +159,7 @@ KINDS := [?]Kind{
 		// few hundred thousand years, whose top then falls in after a last small eruption, leaving
 		// a rim round a closed floor, in which a small cone grows with a crater of its own.
 		name = "crater", after = {"Aogashima"}, weight = 1, story = "lava and ash",
+		hosts = {{{.Front, 0, 6, 4}}},
 		shape = {xx = {0.75, 1}, zz = {1, 1.3}, xz = {-0.3, 0.3}, rate = {0.0011, 0.0015}, swell = {0, 360}, silt = {0, 0.1}, lumps = {0.04, 0.08}, lumps_wave = {1500, 2500}},
 		history = {
 			{cell = 64, years = 2000, steps = {15, 20}, vents = {1, 1}, build = {880, 980}, form = {1, 1.2}, flank = {0.55, 0.65}},
@@ -172,6 +177,7 @@ KINDS := [?]Kind{
 		// lies between them. The sea cuts the headlands, the streams fill the bays' heads, and at
 		// last a young dome grows with a shallow sunken top.
 		name = "domes", after = {"Kōzushima"}, weight = 2, story = "pale lava and pumice",
+		hosts = {{{.Front, 0, 6, 4}}},
 		shape = {xx = {0.9, 1.1}, zz = {0.9, 1.1}, xz = {-0.2, 0.2}, rate = {0.0011, 0.0016}, swell = {0, 360}, silt = {0.2, 0.5}, lumps = {0.15, 0.25}, lumps_wave = {1500, 2500}},
 		history = {
 			{cell = 64, years = 2000, steps = {3, 5}, vents = {1, 1}, spread = {0, 600}, build = {230, 290}, form = {2.5, 3.5}, flank = {0.1, 0.13}},
@@ -189,6 +195,7 @@ KINDS := [?]Kind{
 		// with flats. No real island in the set is close; the drowned ones are the inlets kind.
 		// Much longer at rest and it wears down to the sea.
 		name = "worn", after = {}, weight = 2, story = "layered, gently tilted",
+		hosts = {{{.Rising, -ANY, 0.05, 0.25}, {.Age, 2.5, ANY, 1}, {.Front, 12, ANY, 4}, {.Depth, -ANY, 4000, 300}}},   // still or sinking, and long enough for the land to wear low
 		shape = {
 			radius = {0.34, 0.38}, xx = {0.85, 1.15}, zz = {0.85, 1.2}, xz = {-0.5, 0.5}, ragged = {0.35, 0.5}, ragged_wave = {2500, 3500},
 			rate = {0.0005, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.3, 0.5}, ridge = {0.6, 0.95},
@@ -210,6 +217,7 @@ KINDS := [?]Kind{
 		// each fall waits for the sea to cut its own shore. After Kikaijima, though steeper behind
 		// its terraces.
 		name = "raised", after = {"Kikaijima"}, weight = 2, story = "layered, gently tilted",
+		hosts = {{{.Rising, 1, ANY, 0.5}, {.Front, 12, ANY, 4}, {.Depth, -ANY, 4000, 300}}},   // rising fast: the forearc's outer ridge
 		shape = {
 			radius = {0.26, 0.30}, xx = {0.8, 1.2}, zz = {0.8, 1.25}, xz = {-0.5, 0.5}, ragged = {0.3, 0.45}, ragged_wave = {2500, 3500},
 			rate = {0.0005, 0.0007}, swell = {0, 360}, silt = {0.1, 0.3}, floor = {0.3, 0.5}, ridge = {0.6, 0.95},
@@ -290,8 +298,8 @@ built :: proc(x, z: f64, upto := max(int)) -> f32 {
 // Draw the region's record from the seed, of the named kind or, with none named, of the kind
 // the seed picks: each row draws a number keyed by its name, raised to one over its weight, and
 // the highest wins, so a row wins in proportion to its weight and a new row changes only the
-// seeds it wins. False if no kind has the name.
-region_init :: proc(name: string) -> bool {
+// seeds it wins. The region is `size` metres across. False if no kind has the name.
+region_init :: proc(name: string, size: f64 = REFERENCE) -> bool {
 	kind: ^Kind
 	best: f32 = -1
 	for &k in KINDS {
@@ -304,7 +312,7 @@ region_init :: proc(name: string) -> bool {
 	ranges, drawn := transmute([N][2]f64)kind.shape, [N]f64{}
 	for r, i in ranges do drawn[i] = r[0] + (r[1] - r[0])*f64(hash01(i32(i), key, seed + 520))
 	draw :: proc(r: [2]f32, i, key: i32) -> f32 { return r[0] + (r[1] - r[0])*hash01(i, key, seed + 521) }
-	region.kind, region.shape = kind.name, transmute(Shape(f64))drawn   // its size and origin are its island's (gen_init)
+	region.kind, region.size, region.shape = kind.name, size, transmute(Shape(f64))drawn   // its origin is its island's (gen_init)
 	region.latitude = 30   // as the islands the plants come from (27 to 34° N); the world frame will set it
 	for &s in STORIES do if s.name == kind.story do region.story = &s
 	region.history = make([]Phase(f32), len(kind.history))
