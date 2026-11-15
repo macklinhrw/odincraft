@@ -43,7 +43,10 @@ import sdl "vendor:sdl3"
 //   overlay=name    with map: paint one field over the relief (names in FIELDS, fields.odin)
 //   why=x,z         print what the ground is at this point in the world and why, and exit
 //   survey          print what the island holds and the ranked candidates for named places, and exit
-//   place=N         look at the island's named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
+//   plates=dir      run the world's history of moving plates, write its frames through time, the known
+//                   world's map and the comparison grids into dir, say what it made, and exit (plates.odin)
+//   plates-why=x,z  print what happened through that history at this point of the known world, and exit
+//   place=N         look at named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground
 //   show            with shot or bench: open the window. Without it they draw unseen and take no focus
@@ -76,6 +79,9 @@ Options :: struct {
 	island:        int,
 	near:          f64,
 	origin:        [2]i32,
+	plates:        string,
+	plates_why:    [2]f64,
+	has_plates_why: bool,
 }
 
 options :: proc() -> Options {
@@ -120,6 +126,8 @@ options :: proc() -> Options {
 			append(&o.digs, [6]i32{i32(box[0]), i32(box[1]), i32(box[2]), i32(box[3]), i32(box[4]), i32(box[5])})
 		case "map":   o.map_path = value
 		case "archipelago": o.archipelago = value
+		case "plates": o.plates = value
+		case "plates-why": ok = numbers(value, ",", o.plates_why[:]); o.has_plates_why = true
 		case "why":   ok = numbers(value, ",", o.why[:]); o.has_why = true
 		case "fly":   o.fly = true
 		case "survey": o.survey = true
@@ -168,6 +176,14 @@ find_start :: proc() -> (pos: [3]f64, yaw: f32) {
 
 main :: proc() {
 	opt := options()
+	if opt.plates != "" {
+		plates_main(opt.plates)
+		return
+	}
+	if opt.has_plates_why {
+		plates_why(opt.plates_why.x, opt.plates_why.y)
+		return
+	}
 	quiet_init()
 	seed = world_seed   // the islands are made from the world's seed
 	// The start island's record is drawn first, at its place, and the islands near it and the
