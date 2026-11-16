@@ -98,7 +98,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Entering is won back by a speed step, not by forming fewer islands first**: option (a) of the question below, the same land bit for bit in less time, aimed at the flood that routes water over each island. It starts now, alongside step 32's second half.
 - **The slide's lake is a step of its own after step 32's second half**: option (a) below. The faults are not tuned to the figure.
 - **The archipelago's sites stay as they are until the regional history says where back-arc and shelf islands stand**, as recommended below.
-- **Step 32's second half starts now and takes on the boundaries' length** with the regional history, which is where islands are told apart.
+- **Step 32's second half starts now, and the boundaries' length is answered in its regional history**, where the islands read it: a finer history of the region round them that can hold the small plates the planet's 36 km cells cannot (the real Earth's 33 plates under a million km²). The planet's own boundaries stay two to three times the real length.
 - **Continents are left holding level** (37 to 38% of the planet throughout, against the real 35 to 42%).
 - **Yakushima is measured** as the real island the granite massif is judged against.
 - **The default island gets the broken rock under its soil and the gravel of the rock upstream at the switch-over to the history**, with its faults, not before.
