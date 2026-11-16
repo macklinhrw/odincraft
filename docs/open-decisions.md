@@ -92,6 +92,17 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Rerun the comparison with the real Earth** now that the arc front is smooth, with `pygplates` in an environment of its own.
 - **The plate history is not left at step 22.** On reading the rerun comparison (seed 7 ends with one plate over 55% of the planet; too little high land, too few plates, old ocean surviving, continents that hold level) and learning that no step returned to it, the owner agreed to step 32 in `foundations.md` section 8: first the history nearer the real Earth, then a regional history down to each island, so that its uplift and sea come from it. **Steps 24 (rock stories) and 32 start in parallel.**
 
+**2026-11-16, by the owner** (answered "go ahead" to Claude's report on step 32's first half with step 24's rows held on it, which recommended each of the following)
+
+- **Step 32's first half merges into `main`, with step 24's rock rows held on its history**, though it misses two of the bars Claude had set: the raised kind is further from its real islands (71.1% of figures far against 65.0, from the deepest closed hollow) and entering seed 7 takes 3.1 s against 2.8. Overall the islands are nearer the real ones (21.4% against 21.9) and the planet much nearer the real Earth. Merged as 6c8f8cc.
+- **Entering is won back by a speed step, not by forming fewer islands first**: option (a) of the question below, the same land bit for bit in less time, aimed at the flood that routes water over each island. It starts now, alongside step 32's second half.
+- **The slide's lake is a step of its own after step 32's second half**: option (a) below. The faults are not tuned to the figure.
+- **The archipelago's sites stay as they are until the regional history says where back-arc and shelf islands stand**, as recommended below.
+- **Step 32's second half starts now and takes on the boundaries' length** with the regional history, which is where islands are told apart.
+- **Continents are left holding level** (37 to 38% of the planet throughout, against the real 35 to 42%).
+- **Yakushima is measured** as the real island the granite massif is judged against.
+- **The default island gets the broken rock under its soil and the gravel of the rock upstream at the switch-over to the history**, with its faults, not before.
+
 **2026-11-16, Claude's call** (step 24 on step 32's history; `foundations.md` section 8, "Step 24 on step 32's history")
 
 - **The cause, found before any change: two of step 24's hosts read fields as signs that only the old history made true.** Thick crust stood for an arc's crust, where magma pools. An age of 250 Myr or more stood for a worn old shield. Step 32's history puts the forearcs near the start on the thinned edge of a continent: 17 to 31 km thick, 350 Myr old (the age of the history's first continent), 100 to 180 km in front of the volcanic front. So granite took 30 of 131 islands, and the shield took five forearc islands, where `main`'s one shield stood on a shelf no trench works. Island 7 of seed 7 was a shield 808 m high, 272,366 land cells and 3.1 s beside the others, which held entering. Traced by printing each island's fields at its middle on both histories. No change to the plates, the known world or the forming.
