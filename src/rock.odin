@@ -76,8 +76,8 @@ ANYWHERE :: [2]f32{-1e5, 1e5}
 NONE     :: [2]f32{}
 
 // The stories, as rows (geology.md, section 4: its twelve, with the young volcanic island's in two
-// rows, one for runny lava and one for stiff, and two after real islands the game is measured
-// against: the reef, and the old arc lavas of the Bonin islands). An island's history says what laid
+// rows, one for runny lava and one for stiff, and three after real islands the game is measured
+// against: the reef, and the Bonin islands' old volcanoes and old arc lavas). An island's history says what laid
 // its rock (`laid`); of the rows so laid, its rock tells the first whose host holds at its middle, so
 // the rows run from the most particular cause to the most common.
 STORIES := [?]Story{
@@ -97,13 +97,29 @@ STORIES := [?]Story{
 		},
 	},
 	{
-		// The arc's lavas reached it: a pile of flows over the soft beds the sea laid before, near
-		// flat, so the cap stands as a long scarp over slopes of mudstone that slip.
+		// An island standing on one of the arc's dead volcanoes is that volcano, worn: its flows and the
+		// breccia they shattered into where they met the sea, tilted, cut by the dikes that fed it and
+		// its plug, as old arc lavas are. As Hahajima and Chichijima, the Bonin arc's old volcanoes. It
+		// covers the ground it was built on, so it comes before the rows that read that ground.
+		name = "an old volcano", after = "Hahajima; Chichijima", laid = .Plates,
+		hosts = {{.Vent, -ANY, 1000, 0}, {.Track, 10, ANY, 0}},   // on the foot of one of the history's volcanoes, an arc's, not a hotspot's
+		kinds = {0 = {.Basalt, 2, ANYWHERE, NONE}, 1 = {.Breccia, 2, ANYWHERE, NONE}},
+		thick = {10, 35}, hard = 0.4, gap = 60, tilt = {8, 20}, fold = {20, 60}, wave = {1500, 3000},
+		bodies = {
+			{.Dike, .Dolerite, {10, 18}, {1, 4}, {300, 1000}, NONE, {0, 0.35}},
+			{.Plug, .Dolerite, {1, 2}, {100, 240}, NONE, NONE, {0.05, 0.3}},
+		},
+	},
+	{
+		// The arc's lavas reached it: a pile of flows and cinders, as the front's vents pour out, over
+		// the soft beds the sea laid before, near flat, so the cap stands as a scarp over slopes of
+		// mudstone that slip. A hotspot's flood lavas, near solid basalt, stood as cliffs on 3 to 11%
+		// of its land and held its islands 500 to 800 m high, where Iki stands 213 m.
 		name = "hard cap over weak rock", after = "Iki's lava over its mudstone; Trotternish on Skye", laid = .Plates,
 		hosts = {{.Front, -ANY, 40, 10}},   // within reach of the lava the volcanic front's vents pour out
 		kinds = {0 = {.Mudstone, 3, ANYWHERE, NONE}, 1 = {.Siltstone, 1.5, ANYWHERE, NONE}, 2 = {.Sandstone, 1, ANYWHERE, NONE}},
 		thick = {10, 40}, hard = 0.2, gap = 200, tilt = {2, 6}, fold = {10, 30}, wave = {2000, 4000},
-		cover = "lava plateau", over = {90, 190},
+		cover = "lava and ash", over = {90, 190},
 		bodies = {
 			{.Fault, .Air, {1, 2}, {20, 80}, {3000, 7000}, NONE, {0, 0.3}},           // older than the lava, which lies across them
 			{.Dike, .Dolerite, {4, 9}, {2, 5}, {400, 1200}, NONE, {0, 0.35}},         // the feeders of the flows

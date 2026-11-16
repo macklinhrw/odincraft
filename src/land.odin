@@ -254,9 +254,11 @@ KINDS := [?]Kind{
 		// to the sea as a flat in a few thousand years, and the next fall leaves that flat as a
 		// terrace over the reef's front: the island comes up a ring at a time, a flight of terraces
 		// round the oldest, highest flat, and only a few metres of each rise reach the slowly rising
-		// shore. The rain sinks into the reef, so no stream cuts it. The seed never draws it (its
-		// weight is 0): it is made with --kind=reef, or where the archipelago's hosts put it.
-		name = "reef", after = {"Kikaijima"}, weight = 0, story = "reef on mudstone",
+		// shore. The rain sinks into the reef, so no stream cuts it. Where its host holds as well as
+		// the raised kind's, it is as likely: no field says yet how warm or clear the sea is, which
+		// decides whether coral caps a rising bank. (At weight 0 it lost every such tie, and stood on
+		// the forearc only where a neighbour had taken the raised kind.)
+		name = "reef", after = {"Kikaijima"}, weight = 2, story = "reef on mudstone",
 		hosts = {
 			{{.Rising, 1.2, ANY, 0.4}, {.Front, 12, ANY, 4}, {.Depth, -ANY, 4000, 300}},   // rising fast on the forearc, as Kikaijima on the Ryukyu forearc's outer ridge
 			{{.Setting, 4.5, 5, 0}, {.Rising, 0.1, ANY, 0.2}},                            // or a little on the shelf
@@ -435,9 +437,14 @@ record_phases :: proc(kind: ^Kind, record: ^Record, plan: []Phase(f32), shape: ^
 		for r in record.past do mean += r/PAST
 		shape.rate = math.lerp(kind.shape.rate[0], kind.shape.rate[1], f64(clamp((mean - lo)/(hi - lo), 0, 1)))
 	}
-	if record.on && record.vent.arc && laid_by(kind) != .Plates do for &p, i in plan[1:] {   // the phases after a volcano's first: the older it is, the longer the sea has cut it
+	// The phases after a volcano's first: the older it is, against the window on a volcano's age its
+	// kind's host reads (or with none, a vent's whole life), the longer the sea has cut it.
+	age := Window{lo = 0, hi = VENT_LIFE[1]}
+	for w in (kind.hosts[0] if len(kind.hosts) > 0 else nil) do if w.field == .Vent do age = w
+	young, old := age.lo if age.lo > -ANY else max(age.hi - 1, 0), age.hi if age.hi < ANY else age.lo + 1
+	if record.on && record.vent.arc && laid_by(kind) != .Plates do for &p, i in plan[1:] {
 		r := kind.history[i + 1].steps
-		if p.vents == 0 do p.steps = math.round(math.lerp(r[0], r[1], clamp(record.vent.born/VENT_LIFE[1], 0, 1)))
+		if p.vents == 0 do p.steps = math.round(math.lerp(r[0], r[1], clamp((record.vent.born - young)/(old - young), 0, 1)))
 	}
 }
 
