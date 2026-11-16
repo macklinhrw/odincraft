@@ -95,7 +95,7 @@ Kind :: struct {
 	name:    string,
 	after:   []string, // the real islands it stands for (REAL); none is a guess
 	weight:  f32,      // how often the seed draws this kind, against the other rows' weights
-	story:   string,   // what the rock is (STORIES, rock.odin)
+	story:   string,   // what the start island's rock is, until its uplift is read from the plates too; the others' is read from their setting (story_for, rock.odin)
 	hosts:   [][]Window, // where the world's plates put it, on the world's fields (archipelago.odin; a stand-in until step 22): it takes the best of them
 	shape:   Shape([2]f64),
 	history: []Phase([2]f32),
@@ -416,7 +416,8 @@ Grid :: struct {
 	cut:    []f32,          // metres the sea has cut into a shore cell
 	load:   []f32,          // m³ of rock the water carries down through each cell in a step
 	face:   []f32,          // how many times steeper than on a hillside the ground stands, where the sea undercuts it
-	base:   []f32,          // height of the rock stack's base under each cell (rock.odin)
+	base:   []f32,          // height of the rock stack's base under each cell (rock.odin),
+	bodies: []Grid_Body,    // and any cover or body, where the island's rock has one the cells can hold; nil where not (grid_under)
 	jitter: [][2]f32,       // where each cell's node sits in its square, so flow has no favourite compass direction
 	seen:   []bool,
 	order:  [dynamic]i32,   // land cells from the shore upward
@@ -454,6 +455,7 @@ Land :: struct {
 	surf:    []f32,    // within 48 m of the shore, on land or at sea, how open the shore nearest is to the waves
 	supply:  []f32,    // sand the rivers bring the shore, from each mouth along 320 m of it
 	lifted:  []f32,    // metres the wind off the sea has been raised to by the ground it crossed, at sea too
+	pebble:  []Mat,    // the rock a stream's gravel is of (pebbles_make, rock.odin), or Air; none where the rock was not read from the island's setting
 }
 
 // Ground a person could live on, from where the villages on eight real islands stand
@@ -493,6 +495,7 @@ grid_make :: proc(n: int) -> ^Grid {
 	b, at := g.block, 0
 	g.z, g.fill, g.area = carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32)
 	g.uplift, g.soft, g.base, g.cut, g.face, g.load = carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32)
+	if rocks_held() do g.bodies = make([]Grid_Body, n*n)
 	g.next, g.jitter, g.seen, g.sea = carve(b, &at, n, i32), carve(b, &at, n, [2]f32), carve(b, &at, n, bool), carve(b, &at, n, bool)
 	shared(n, rows(n), g, proc(g: ^Grid, lo, hi: int) {
 		n, k := g.n, REFERENCE/region.size
@@ -503,9 +506,13 @@ grid_make :: proc(n: int) -> ^Grid {
 			g.face[c] = 1
 			g.jitter[c] = [2]f32{hash01(ix, iz, seed + 7 + u32(n)) - 0.5, hash01(ix, iz, seed + 8 + u32(n)) - 0.5}*0.9
 			// The beds decide how the rock wears; it also varies a little from one outcrop to the
-			// next, which keeps streams from running in straight lines along the grid.
+			// next, which keeps streams from running in straight lines along the grid, and is
+			// crushed along a fault.
 			g.soft[c] = math.exp(0.8*(hash01(ix, iz, seed + 6 + u32(n)) - 0.5))
-			g.base[c] = rock_base(x, z, LAND_CELL)
+			if len(rocks.bodies) > 0 do g.soft[c] *= rock_weak(x, z)
+			u := rock_base(x, z, LAND_CELL)
+			g.base[c] = u.base
+			if g.bodies != nil do g.bodies[c] = {u.cover, u.roof, u.body}
 			g.z[c] = -2 - 60*smoothstep(0, 0.2, -s) + (SEA_BED + 62)*smoothstep(0.2, 0.5, -s)   // sea bed, falling away steeply as off a real high island
 			g.sea[c] = s <= 0
 			g.uplift[c] = uplift_at(x, z, s)
@@ -536,7 +543,7 @@ uplift_at :: proc(x, z: f64, s: f32) -> f32 {
 }
 
 grid_free :: proc(g: ^Grid) {
-	delete(g.block); delete(g.open); delete(g.order); delete(g.heap)
+	delete(g.block); delete(g.open); delete(g.order); delete(g.heap); delete(g.bodies)
 	free(g)
 }
 
@@ -629,6 +636,7 @@ land_form :: proc() {
 	land_finish(g, false)   // what the slide's place is found by
 	slide_make(g)
 	highest := land_finish(g)
+	if rocks.full do pebbles_make(g)
 	fmt.printfln("land formed in %.2f s: %d land cells, highest point %.0f m", time.duration_seconds(time.since(started)), len(g.order), highest)
 	if response > 0 do fmt.printfln("a step cut at the coast climbs to the farthest stream head in %.0f kyr; the land has had %.0f kyr on its finest cells, %.2f of that", response/1000, last/1000, last/response)
 	else do fmt.printfln("no stream reaches the sea, so nothing cut at the coast climbs inland; the land has had %.0f kyr on its finest cells", last/1000)
@@ -788,7 +796,7 @@ land_local :: proc(g: ^Grid) {
 			// steepens toward what it holds, and lies deeper over weak rock, which weathers faster.
 			// Within a few metres of a stream the floods lay silt as well.
 			steep := min(land.slope[c]/SOIL_HOLDS, 1)
-			weak := 1.3 - 0.6*MATERIALS[rock_in(g.z[c] - 0.5, g.base[c], ROCK_SIM)].strength
+			weak := 1.3 - 0.6*MATERIALS[rock_in(g.z[c] - 0.5, grid_under(g, c), ROCK_SIM)].strength
 			land.soil[c] = min((clamp(1 - land.hump[c]/12, 0.3, 2.5) + 1.5*land.wet[c])*(1 - 0.7*steep*steep)*weak + 2*max(1 - land.above[c]/4, 0), 4)
 			// A slide's scar is bare rock and its debris rubble; soil weathers back on both with the years.
 			if s := land.slid[c]; abs(s) > 0.5 do land.soil[c] = min(land.soil[c], (0.3 if s > 0 else 0) + SOIL_GROWS*region.features[landslide.feature].age)

@@ -17,7 +17,7 @@ land_stats :: proc(g: ^Grid) {
 	kinds: [Mat]int
 	for ci in g.order {
 		c := int(ci)
-		kinds[rock_in(g.z[c] - 0.5, g.base[c], ROCK_SIM)] += 1
+		kinds[rock_in(g.z[c] - 0.5, grid_under(g, c), ROCK_SIM)] += 1
 		if c%n == 0 || c/n == 0 || c%n == n - 1 || c/n == n - 1 do continue
 		most: f32
 		for o in OFFSETS do most = max(most, (g.z[c] - max(g.z[c + o.y*n + o.x], 0))/(g.d*math.sqrt(f32(o.x*o.x + o.y*o.y))))

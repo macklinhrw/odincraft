@@ -47,8 +47,20 @@ TILES = {
     "Rhyolite": ("dripstone_block", "mcl_deepslate_tuff", 0, 1),                  # bands where it flowed
     "Tuff": ("mcl_blackstone_basalt_smooth", None, 0, 1),                         # ash set hard
     "Reef": ("dripstone_block", "mcl_end_end_stone", 1, 1),                       # pitted where the rain dissolves it, lumpy with coral heads in a face
+    "Red_Sandstone": ("mcl_core_sandstone_top", "mcl_mud_packed_mud", 0, 1),      # as the grey, in red
+    "Chalk": ("mcl_amethyst_calcite_block", None, 0, 0.7),                        # soft and white
+    "Coal": ("mcl_deepslate_top", "mcl_deepslate", 0, 0.8),                      # a black seam in thin layers
+    "Breccia": ("mcl_nether_netherrack", "mcl_end_end_stone", 0, 0.9),           # broken lava set in ash, lumpy
+    "Dolerite": ("mcl_blackstone_basalt_top", "mcl_blackstone_basalt_side", 1, 0.8),   # rough columns, turned across the wall it stands in
+    "Granite": ("mcl_core_andesite", None, 0, 1.2),                               # coarse crystals
+    "Slate": ("mcl_deepslate_top", "mcl_deepslate", 1, 1),                        # its sheets stand on edge
+    "Schist": ("mcl_deepslate_tuff", "mcl_deepslate_tuff", 1, 1),                 # wavy glittering bands, on edge
+    "Gneiss": ("mcl_deepslate_tuff", None, 0, 1.2),                               # banded
+    "Quartzite": ("default_stone", None, 0, 0.8),                                 # hard, sharp, pale
+    "Hornfels": ("default_stone", None, 0, 1),                                    # dark and splintery
+    "Marble": ("mcl_amethyst_calcite_block", None, 1, 0.5),                       # white, crystalline and smooth
 }
-BEDDED = ("Mudstone", "Siltstone", "Sandstone")   # their scree is slabs, the others' lumps
+BEDDED = ("Mudstone", "Siltstone", "Sandstone", "Red_Sandstone", "Coal", "Slate", "Schist")   # their scree is slabs, the others' lumps
 
 # plant: (lower picture, upper picture or None, colour (linear, as in MATERIALS) or None to keep the
 # artist's). The grey pictures are drawn to be tinted; those already coloured keep their colours.
@@ -122,6 +134,19 @@ def picture(name, colour):
     return out
 
 
+def form(name, row, names):
+    """A rock's other forms (src/gen.odin, Mat): its scree is broken rock, slabs for a bedded rock
+    and lumps for the others, each turned a quarter more than the one before; the rock broken in
+    place under the soil is its own face, cracked and faded; its gravel is rounded pebbles."""
+    rock, kind = name.rsplit("_", 1)
+    if kind == "Scree":
+        return ("mcl_deepslate_cobbled" if rock in BEDDED else "default_cobble", None, (row - names.index("Mudstone_Scree")) % 4, 0.9)
+    if kind == "Broken":
+        top, side, turns, keep = TILES[rock]
+        return ("mcl_deepslate_cobbled" if rock in BEDDED else "default_cobble", side or top, turns, 0.6 * keep)
+    return ("default_gravel", None, (row - names.index("Mudstone_Gravel")) % 4, 0.9)
+
+
 def main():
     source = open("src/gen.odin").read()
     body = re.sub(r"//[^\n]*", "", re.search(r"Mat :: enum u\d+ \{(.*?)\n\}", source, re.S).group(1))
@@ -131,8 +156,8 @@ def main():
     for row, name in enumerate(names):
         if name == "Air":
             continue
-        top, side, turns, keep = TILES.get(name) or ("mcl_deepslate_cobbled" if name[:-6] in BEDDED else "default_cobble", None, (row - names.index("Mudstone_Scree")) % 4, 0.9)   # anything else is broken rock: the rock's scree, each turned a quarter more than the one before
-        if name not in TILES and not name.endswith("_Scree"):
+        top, side, turns, keep = TILES.get(name) or form(name, row, names)
+        if name not in TILES and not name.endswith(("_Scree", "_Broken", "_Gravel")):
             raise SystemExit("no tile is named for " + name)
         atlas.paste(face(top, colours[name], turns, keep, name == "Camellia_Leaves"), (0, row * T))
         atlas.paste(face(side or top, colours[name], 0 if side else turns, keep, name == "Camellia_Leaves"), (T, row * T))

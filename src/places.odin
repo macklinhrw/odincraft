@@ -83,7 +83,7 @@ places_make :: proc() {
 	add :: proc(k: Place_Kind, at: [2]f64, top, m, size: f32, f: int, rock: Mat, why: string) {
 		append(candidates, Candidate{kind = k, at = at, top = top, m = m, size = size, feature = f, rock = rock, why = why, place = -1})
 	}
-	rock_at :: proc(c: int, y: f32) -> Mat { return rock_in(y, land.grid.base[c], ROCK_SIM) }
+	rock_at :: proc(c: int, y: f32) -> Mat { return rock_in(y, grid_under(land.grid, c), ROCK_SIM) }
 
 	// The survey: each community, rock and soil, its share of the land and the squares it is in.
 	for ci in g.order {
@@ -417,7 +417,12 @@ survey_print :: proc() {
 	fmt.print("  plants:")
 	for t, k in survey.plants do fmt.printf("%s %s %s", "" if k == .Valley else ";", COMMUNITIES[k].name, spread(t, all))
 	fmt.print("\n  rock at the surface:")
-	for t, m in survey.rocks do if MATERIALS[m].strength > 0 do fmt.printf(" %v %s;", m, spread(t, all))
+	for t, m in survey.rocks do if t.cells > 0 || MATERIALS[m].strength > 0 && in_story(m) do fmt.printf(" %v %s;", m, spread(t, all))   // those found, and those the story might have shown
+	in_story :: proc(m: Mat) -> bool {
+		for k in region.story.kinds do if k.kind == m && k.weight > 0 do return true
+		if rocks.cover != nil do for k in rocks.cover.kinds do if k.kind == m && k.weight > 0 do return true
+		return false
+	}
 	fmt.print("\n  soil:")
 	for t, k in survey.soils do fmt.printf(" %s %s;", SOILS[k].name, spread(t, all))
 	fmt.print("\n  features:")
@@ -429,6 +434,7 @@ survey_print :: proc() {
 	}
 	if largest >= 0 do fmt.printf(" the largest lake %.1f ha;", region.features[largest].size/1e4)
 	if tallest >= 0 do fmt.printf(" the tallest fall %.0f m", region.features[tallest].measured[0].value)
+	bodies_words()
 	fmt.println("\n  candidates, best first; 1 or more earns a name: how far past its row's worth on a log scale, over the root of how many alike, times 0.3 + 1.4 of the share seen 1 to 2 km off (at most 1) and its size over 40 m (at most 1)")
 	for c, i in candidates do fmt.printfln("  %2d %-12s %.2f  %s, at %.0f, %.0f; seen %.0f%%%s", i + 1, PLACE_ROWS[c.kind].what, c.score, c.why, c.at.x + f64(region.origin.x), c.at.y + f64(region.origin.y), 100*c.seen,
 		fmt.tprintf("; place %d, %s", c.place + 1, places[c.place].name) if c.place >= 0 else "")

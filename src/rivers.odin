@@ -110,7 +110,7 @@ rivers_trace :: proc() {
 	// down to the stream below; on dry ground nearby the same hollow carries no water.
 	springs := 0
 	for c in g.order do if r := g.next[c]; r >= 0 && !stream[c] && g.area[c] >= SPRING_AREA && land.lake[c] == 0 && land.slope[c] > 0.15 && land.hump[c] < -2 {
-		over, under := rock_in(g.z[c] + 3, g.base[c], ROCK_SIM), rock_in(g.z[c] - 2, g.base[c], ROCK_SIM)
+		over, under := rock_in(g.z[c] + 3, grid_under(g, int(c)), ROCK_SIM), rock_in(g.z[c] - 2, grid_under(g, int(c)), ROCK_SIM)
 		if !is(over, PASSES) || is(under, PASSES) do continue
 		near := false   // one spring to a stretch of the contact: the water seeps along it to the lowest point
 		for f in region.features[len(region.features) - springs:] do near ||= math.hypot(f.at.x - middle_of(g, int(c)).x, f.at.y - middle_of(g, int(c)).y) < 150
@@ -350,7 +350,8 @@ fall_rock :: proc(f: Feature) -> Mat {
 falls_make :: proc(pts: []River_Point, along, slope, half, from, to: []f32, flow: [][2]f32, gorge: []bool) {
 	last := len(pts) - 1
 	bed :: proc(q: River_Point, level: f32) -> (strong: bool, n: u16) {
-		n = rocks.bed[clamp(int(level - 1 - rock_base(f64(q.p.x), f64(q.p.y), 1) - STACK_LO), 0, STACK_LEN - 1)]
+		y := level - 1
+		n = rocks.bed[clamp(int(y - stack_base(y, rock_base(f64(q.p.x), f64(q.p.y), 1)) - STACK_LO), 0, STACK_LEN - 1)]
 		return MATERIALS[rocks.beds[n].kind].strength >= 0.5, n
 	}
 	for k := 1; k < last - 1; {
@@ -376,7 +377,7 @@ falls_make :: proc(pts: []River_Point, along, slope, half, from, to: []f32, flow
 			// of the next strong bed beneath its lip; below that the stream steps down as before.
 			under := int(n) - 1
 			for under > 0 && MATERIALS[rocks.beds[under].kind].strength < 0.5 do under -= 1
-			if floor := rocks.floor[under + 1] + rock_base(f64(pts[m].p.x), f64(pts[m].p.y), 1) + STACK_LO; !cliff {
+			if floor := rocks.floor[under + 1] + bed_base(under + 1, rock_base(f64(pts[m].p.x), f64(pts[m].p.y), 1)) + STACK_LO; !cliff {
 				for s in m + 1..<next do if from[s] <= floor {
 					next = s
 					break

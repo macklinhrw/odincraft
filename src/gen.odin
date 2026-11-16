@@ -16,8 +16,9 @@ import "core:time"
 
 // A block is an index into one table of materials, 16 bits wide wherever it is kept, meshed and
 // drawn, so the table can grow to many kinds of rock in their forms and the bark and leaf of many
-// species. The atlas of tiles is written from it (tools/blocks.py). A rock kind's loose form follows
-// the solid ones, so each kind can later gain its broken and gravel forms as rows of their own.
+// species. The atlas of tiles is written from it (tools/blocks.py). Each kind of rock has four forms
+// (geology.md, D5): the solid rock; its scree, fallen from a face; the rock broken in place under the
+// soil; and its gravel, rounded by a river. Each form's rows follow the solid ones in their order.
 Mat :: enum u16 {
 	Air, Grass, Dirt, Stone, Sand, Snow, Wood, Leaves, Gravel,
 	Shii_Bark, Shii_Leaves, Grey_Bark, Camellia_Leaves, Hisakaki_Leaves, Pine_Bark, Pine_Needles, Scrub_Leaves,   // each species' bark and leaf (SPECIES); the tabu's are Wood and Leaves
@@ -28,7 +29,13 @@ Mat :: enum u16 {
 	Shingle, Black_Shingle,           // the stones the waves round and throw up where they leave no sand
 	Loam, Silt, Red_Clay, Ash,        // the soils under it (SOILS)
 	Mudstone, Siltstone, Sandstone, Grit, Limestone, Basalt, Scoria, Rhyolite, Tuff, Reef,
+	Red_Sandstone, Chalk, Coal, Breccia, Dolerite, Granite, Slate, Schist, Gneiss, Quartzite, Hornfels, Marble,
 	Mudstone_Scree, Siltstone_Scree, Sandstone_Scree, Grit_Scree, Limestone_Scree, Basalt_Scree, Scoria_Scree, Rhyolite_Scree, Tuff_Scree, Reef_Scree,
+	Red_Sandstone_Scree, Chalk_Scree, Coal_Scree, Breccia_Scree, Dolerite_Scree, Granite_Scree, Slate_Scree, Schist_Scree, Gneiss_Scree, Quartzite_Scree, Hornfels_Scree, Marble_Scree,
+	Mudstone_Broken, Siltstone_Broken, Sandstone_Broken, Grit_Broken, Limestone_Broken, Basalt_Broken, Scoria_Broken, Rhyolite_Broken, Tuff_Broken, Reef_Broken,
+	Red_Sandstone_Broken, Chalk_Broken, Coal_Broken, Breccia_Broken, Dolerite_Broken, Granite_Broken, Slate_Broken, Schist_Broken, Gneiss_Broken, Quartzite_Broken, Hornfels_Broken, Marble_Broken,
+	Mudstone_Gravel, Siltstone_Gravel, Sandstone_Gravel, Grit_Gravel, Limestone_Gravel, Basalt_Gravel, Scoria_Gravel, Rhyolite_Gravel, Tuff_Gravel, Reef_Gravel,
+	Red_Sandstone_Gravel, Chalk_Gravel, Coal_Gravel, Breccia_Gravel, Dolerite_Gravel, Granite_Gravel, Slate_Gravel, Schist_Gravel, Gneiss_Gravel, Quartzite_Gravel, Hornfels_Gravel, Marble_Gravel,
 }
 
 Material :: struct {
@@ -84,6 +91,18 @@ MATERIALS := [Mat]Material{
 	.Rhyolite  = {{0.200, 0.186, 0.172}, 0.7, 2, .Rhyolite_Scree},      // pale grey-pink stiff lava, in sheeted crags
 	.Tuff      = {{0.215, 0.200, 0.160}, 0.3, 0.1, .Tuff_Scree},        // cream pumice and ash
 	.Reef      = {{0.235, 0.225, 0.190}, 0.8, 2, .Reef_Scree},          // coral, shells and their sand, raised from the sea: pale cream, rough and full of holes
+	.Red_Sandstone = {{0.150, 0.068, 0.045}, 0.55, 2, .Red_Sandstone_Scree},   // laid in a dry past: red faces of rectangular blocks, red gravel and sand
+	.Chalk     = {{0.330, 0.325, 0.300}, 0.35, 0.5, .Chalk_Scree},     // white and crumbly: rounded downs, cliffs that fall as they are cut
+	.Coal      = {{0.018, 0.017, 0.016}, 0.15, 0.1, .Coal_Scree},     // a black seam a metre or two thick in a cut
+	.Breccia   = {{0.062, 0.068, 0.055}, 0.35, 0.5, .Breccia_Scree},       // lava shattered as it met the sea, set in its own ash: green-grey and lumpy, between the pillow lavas of an old arc
+	.Dolerite  = {{0.042, 0.047, 0.045}, 0.9, 1, .Dolerite_Scree},      // the dark rock of dikes and plugs, in blocks and rough columns
+	.Granite   = {{0.190, 0.160, 0.150}, 0.65, 5, .Granite_Scree},        // pink-grey and coarse, its cracks wide apart: stacked blocks, domes, boulders
+	.Slate     = {{0.058, 0.064, 0.078}, 0.6, 0.3, .Slate_Scree},   // mudstone squeezed in a fold belt: blue-grey, split into sheets standing on edge
+	.Schist    = {{0.112, 0.106, 0.094}, 0.5, 0.3, .Schist_Scree},          // glittering wavy bands, slabby
+	.Gneiss    = {{0.150, 0.128, 0.118}, 0.7, 3, .Gneiss_Scree},          // banded grey and pink, in knobs
+	.Quartzite = {{0.250, 0.245, 0.230}, 0.95, 1, .Quartzite_Scree},  // sandstone baked or squeezed hard: white, sharp-edged
+	.Hornfels  = {{0.055, 0.051, 0.049}, 0.85, 1, .Hornfels_Scree},    // mudstone baked beside a pluton: dark, hard and splintery
+	.Marble    = {{0.290, 0.286, 0.272}, 0.6, 1.5, .Marble_Scree},        // limestone baked beside a pluton: white and crystalline
 	.Mudstone_Scree  = {{0.066, 0.068, 0.079}, 0, 0, .Air},   // fresh broken rock is a little paler than the weathered face
 	.Siltstone_Scree = {{0.105, 0.088, 0.066}, 0, 0, .Air},
 	.Sandstone_Scree = {{0.146, 0.116, 0.079}, 0, 0, .Air},
@@ -94,6 +113,80 @@ MATERIALS := [Mat]Material{
 	.Rhyolite_Scree  = {{0.214, 0.200, 0.185}, 0, 0, .Air},
 	.Tuff_Scree      = {{0.228, 0.212, 0.170}, 0, 0, .Air},
 	.Reef_Scree      = {{0.250, 0.240, 0.205}, 0, 0, .Air},
+	.Red_Sandstone_Scree   = {{0.161, 0.073, 0.048}, 0, 0, .Air},
+	.Chalk_Scree           = {{0.353, 0.348, 0.321}, 0, 0, .Air},
+	.Coal_Scree            = {{0.019, 0.018, 0.017}, 0, 0, .Air},
+	.Breccia_Scree         = {{0.066, 0.073, 0.059}, 0, 0, .Air},
+	.Dolerite_Scree        = {{0.045, 0.050, 0.048}, 0, 0, .Air},
+	.Granite_Scree         = {{0.203, 0.171, 0.161}, 0, 0, .Air},
+	.Slate_Scree           = {{0.062, 0.068, 0.083}, 0, 0, .Air},
+	.Schist_Scree          = {{0.120, 0.113, 0.101}, 0, 0, .Air},
+	.Gneiss_Scree          = {{0.161, 0.137, 0.126}, 0, 0, .Air},
+	.Quartzite_Scree       = {{0.268, 0.262, 0.246}, 0, 0, .Air},
+	.Hornfels_Scree        = {{0.059, 0.055, 0.052}, 0, 0, .Air},
+	.Marble_Scree          = {{0.310, 0.306, 0.291}, 0, 0, .Air},
+	// broken in place, weathered a little browner than the face
+	.Mudstone_Broken       = {{0.073, 0.071, 0.078}, 0, 0, .Air},
+	.Siltstone_Broken      = {{0.111, 0.090, 0.065}, 0, 0, .Air},
+	.Sandstone_Broken      = {{0.151, 0.117, 0.078}, 0, 0, .Air},
+	.Grit_Broken           = {{0.166, 0.145, 0.134}, 0, 0, .Air},
+	.Limestone_Broken      = {{0.195, 0.193, 0.187}, 0, 0, .Air},
+	.Basalt_Broken         = {{0.061, 0.053, 0.047}, 0, 0, .Air},
+	.Scoria_Broken         = {{0.097, 0.049, 0.035}, 0, 0, .Air},
+	.Rhyolite_Broken       = {{0.218, 0.199, 0.181}, 0, 0, .Air},
+	.Tuff_Broken           = {{0.234, 0.214, 0.168}, 0, 0, .Air},
+	.Reef_Broken           = {{0.255, 0.240, 0.200}, 0, 0, .Air},
+	.Red_Sandstone_Broken  = {{0.166, 0.075, 0.047}, 0, 0, .Air},
+	.Chalk_Broken          = {{0.355, 0.345, 0.315}, 0, 0, .Air},
+	.Coal_Broken           = {{0.027, 0.022, 0.017}, 0, 0, .Air},
+	.Breccia_Broken        = {{0.073, 0.075, 0.058}, 0, 0, .Air},
+	.Dolerite_Broken       = {{0.052, 0.053, 0.047}, 0, 0, .Air},
+	.Granite_Broken        = {{0.208, 0.172, 0.158}, 0, 0, .Air},
+	.Slate_Broken          = {{0.069, 0.071, 0.082}, 0, 0, .Air},
+	.Schist_Broken         = {{0.126, 0.115, 0.099}, 0, 0, .Air},
+	.Gneiss_Broken         = {{0.166, 0.138, 0.124}, 0, 0, .Air},
+	.Quartzite_Broken      = {{0.271, 0.261, 0.242}, 0, 0, .Air},
+	.Hornfels_Broken       = {{0.066, 0.058, 0.051}, 0, 0, .Air},
+	.Marble_Broken         = {{0.312, 0.304, 0.286}, 0, 0, .Air},
+	// river gravel, washed paler
+	.Mudstone_Gravel       = {{0.075, 0.078, 0.089}, 0, 0, .Air},
+	.Siltstone_Gravel      = {{0.117, 0.098, 0.075}, 0, 0, .Air},
+	.Sandstone_Gravel      = {{0.160, 0.128, 0.089}, 0, 0, .Air},
+	.Grit_Gravel           = {{0.176, 0.158, 0.151}, 0, 0, .Air},
+	.Limestone_Gravel      = {{0.209, 0.211, 0.209}, 0, 0, .Air},
+	.Basalt_Gravel         = {{0.061, 0.058, 0.056}, 0, 0, .Air},
+	.Scoria_Gravel         = {{0.102, 0.053, 0.042}, 0, 0, .Air},
+	.Rhyolite_Gravel       = {{0.234, 0.218, 0.202}, 0, 0, .Air},
+	.Tuff_Gravel           = {{0.251, 0.234, 0.188}, 0, 0, .Air},
+	.Reef_Gravel           = {{0.274, 0.263, 0.222}, 0, 0, .Air},
+	.Red_Sandstone_Gravel  = {{0.176, 0.082, 0.056}, 0, 0, .Air},
+	.Chalk_Gravel          = {{0.384, 0.378, 0.349}, 0, 0, .Air},
+	.Coal_Gravel           = {{0.025, 0.024, 0.022}, 0, 0, .Air},
+	.Breccia_Gravel        = {{0.075, 0.082, 0.067}, 0, 0, .Air},
+	.Dolerite_Gravel       = {{0.052, 0.058, 0.056}, 0, 0, .Air},
+	.Granite_Gravel        = {{0.222, 0.188, 0.176}, 0, 0, .Air},
+	.Slate_Gravel          = {{0.071, 0.078, 0.094}, 0, 0, .Air},
+	.Schist_Gravel         = {{0.133, 0.126, 0.112}, 0, 0, .Air},
+	.Gneiss_Gravel         = {{0.176, 0.151, 0.140}, 0, 0, .Air},
+	.Quartzite_Gravel      = {{0.291, 0.286, 0.269}, 0, 0, .Air},
+	.Hornfels_Gravel       = {{0.067, 0.063, 0.060}, 0, 0, .Air},
+	.Marble_Gravel         = {{0.337, 0.333, 0.317}, 0, 0, .Air},
+}
+
+// A rock's broken and gravel forms (its scree is its `loose` in MATERIALS), and the rock it becomes
+// where a pluton baked it (AUREOLE, rock.odin): mudstone to hornfels, sandstone to quartzite,
+// limestone to marble. A rock not baked into another keeps its own.
+Rock_Forms :: struct { broken, gravel, baked: Mat }
+FORMS := #partial [Mat]Rock_Forms{
+	.Mudstone = {.Mudstone_Broken, .Mudstone_Gravel, .Hornfels}, .Siltstone = {.Siltstone_Broken, .Siltstone_Gravel, .Hornfels},
+	.Sandstone = {.Sandstone_Broken, .Sandstone_Gravel, .Quartzite}, .Grit = {.Grit_Broken, .Grit_Gravel, .Quartzite},
+	.Limestone = {.Limestone_Broken, .Limestone_Gravel, .Marble}, .Basalt = {.Basalt_Broken, .Basalt_Gravel, .Air}, .Scoria = {.Scoria_Broken, .Scoria_Gravel, .Air},
+	.Rhyolite = {.Rhyolite_Broken, .Rhyolite_Gravel, .Air}, .Tuff = {.Tuff_Broken, .Tuff_Gravel, .Air}, .Reef = {.Reef_Broken, .Reef_Gravel, .Air},
+	.Red_Sandstone = {.Red_Sandstone_Broken, .Red_Sandstone_Gravel, .Quartzite}, .Chalk = {.Chalk_Broken, .Chalk_Gravel, .Marble},
+	.Coal = {.Coal_Broken, .Coal_Gravel, .Hornfels}, .Breccia = {.Breccia_Broken, .Breccia_Gravel, .Air}, .Dolerite = {.Dolerite_Broken, .Dolerite_Gravel, .Air},
+	.Granite = {.Granite_Broken, .Granite_Gravel, .Air}, .Slate = {.Slate_Broken, .Slate_Gravel, .Hornfels}, .Schist = {.Schist_Broken, .Schist_Gravel, .Air},
+	.Gneiss = {.Gneiss_Broken, .Gneiss_Gravel, .Air}, .Quartzite = {.Quartzite_Broken, .Quartzite_Gravel, .Air}, .Hornfels = {.Hornfels_Broken, .Hornfels_Gravel, .Air},
+	.Marble = {.Marble_Broken, .Marble_Gravel, .Air},
 }
 
 // What the rules ask of a material besides its row, a set of traits for each: a bit_set of
@@ -105,6 +198,7 @@ Trait :: enum u8 {
 	Cover,    // covers the ground over a soil (block_below)
 	Passes,   // a rock water passes through, so a spring rises where it lies on one that holds it (rivers.odin)
 	Sinks,    // a rock the rain sinks into rather than running off it, so few streams cut it (SOAKS, rock.odin)
+	Pebbles,  // a river's gravel, which lies two blocks deep on its bed (block_below)
 	Grass, Litter, Susuki, Dune, Silt, Sand, Rubble,   // the grounds a ground plant grows on (GROUND_PLANTS.on)
 }
 @(rodata) TRAITS := #partial [Mat]bit_set[Trait]{
@@ -113,13 +207,26 @@ Trait :: enum u8 {
 	.Wood = {.Bark}, .Shii_Bark = {.Bark}, .Grey_Bark = {.Bark}, .Pine_Bark = {.Bark},
 	.Leaves = {.Leaf}, .Shii_Leaves = {.Leaf}, .Camellia_Leaves = {.Leaf}, .Hisakaki_Leaves = {.Leaf}, .Pine_Needles = {.Leaf}, .Scrub_Leaves = {.Leaf},
 	.Sandstone = {.Passes}, .Grit = {.Passes}, .Limestone = {.Passes}, .Basalt = {.Passes}, .Scoria = {.Passes}, .Tuff = {.Passes}, .Reef = {.Passes, .Sinks},
+	.Red_Sandstone = {.Passes}, .Chalk = {.Passes}, .Granite = {.Passes}, .Gneiss = {.Passes}, .Quartzite = {.Passes}, .Marble = {.Passes},   // through their pores, or the cracks of the hard ones
 	.Mudstone_Scree = {.Rubble}, .Siltstone_Scree = {.Rubble}, .Sandstone_Scree = {.Rubble}, .Grit_Scree = {.Rubble}, .Limestone_Scree = {.Rubble},
 	.Basalt_Scree = {.Rubble}, .Scoria_Scree = {.Rubble}, .Rhyolite_Scree = {.Rubble}, .Tuff_Scree = {.Rubble}, .Reef_Scree = {.Rubble},
+	.Red_Sandstone_Scree = {.Rubble}, .Chalk_Scree = {.Rubble}, .Coal_Scree = {.Rubble}, .Breccia_Scree = {.Rubble}, .Dolerite_Scree = {.Rubble}, .Granite_Scree = {.Rubble},
+	.Slate_Scree = {.Rubble}, .Schist_Scree = {.Rubble}, .Gneiss_Scree = {.Rubble}, .Quartzite_Scree = {.Rubble}, .Hornfels_Scree = {.Rubble}, .Marble_Scree = {.Rubble},
+	.Mudstone_Broken = {.Rubble}, .Siltstone_Broken = {.Rubble}, .Sandstone_Broken = {.Rubble}, .Grit_Broken = {.Rubble}, .Limestone_Broken = {.Rubble}, .Basalt_Broken = {.Rubble},
+	.Scoria_Broken = {.Rubble}, .Rhyolite_Broken = {.Rubble}, .Tuff_Broken = {.Rubble}, .Reef_Broken = {.Rubble}, .Red_Sandstone_Broken = {.Rubble}, .Chalk_Broken = {.Rubble},
+	.Coal_Broken = {.Rubble}, .Breccia_Broken = {.Rubble}, .Dolerite_Broken = {.Rubble}, .Granite_Broken = {.Rubble}, .Slate_Broken = {.Rubble}, .Schist_Broken = {.Rubble},
+	.Gneiss_Broken = {.Rubble}, .Quartzite_Broken = {.Rubble}, .Hornfels_Broken = {.Rubble}, .Marble_Broken = {.Rubble},
+	.Gravel = {.Pebbles},
+	.Mudstone_Gravel = {.Pebbles}, .Siltstone_Gravel = {.Pebbles}, .Sandstone_Gravel = {.Pebbles}, .Grit_Gravel = {.Pebbles}, .Limestone_Gravel = {.Pebbles}, .Basalt_Gravel = {.Pebbles},
+	.Scoria_Gravel = {.Pebbles}, .Rhyolite_Gravel = {.Pebbles}, .Tuff_Gravel = {.Pebbles}, .Reef_Gravel = {.Pebbles}, .Red_Sandstone_Gravel = {.Pebbles}, .Chalk_Gravel = {.Pebbles},
+	.Coal_Gravel = {.Pebbles}, .Breccia_Gravel = {.Pebbles}, .Dolerite_Gravel = {.Pebbles}, .Granite_Gravel = {.Pebbles}, .Slate_Gravel = {.Pebbles}, .Schist_Gravel = {.Pebbles},
+	.Gneiss_Gravel = {.Pebbles}, .Quartzite_Gravel = {.Pebbles}, .Hornfels_Gravel = {.Pebbles}, .Marble_Gravel = {.Pebbles},
 }
 is :: #force_inline proc "contextless" (m: Mat, traits: bit_set[Trait]) -> bool { return TRAITS[m] & traits != {} }
 LEAVES       :: bit_set[Trait]{.Leaf}
 PLANT_BLOCKS :: bit_set[Trait]{.Bark, .Leaf}
 COVERS       :: bit_set[Trait]{.Cover}
+PEBBLES      :: bit_set[Trait]{.Pebbles}
 
 CHUNK       :: 32               // cells along a chunk side
 CHUNK_SHIFT :: 5
@@ -139,7 +246,7 @@ Columns :: struct {
 	kind:   [P*P]Tree_Kind, // the species of that crown and trunk
 	water:  [P*P]f32,   // level of the river or sea standing here, or NO_WATER
 	mat:    [P*P]Mat,   // what the surface is made of
-	base:   [P*P]f32,   // height of the rock stack's base, which places the beds (rock.odin)
+	under:  [P*P]Under, // what lies under the ground: the rock stack's base, which places the beds, and any cover or body (rock.odin)
 	slope:  [P*P][2]u8, // the smooth ground normal's x and z, packed; zero in the border
 	hollow: [P*P][2]i32, // the floor and roof of a hollow carved under the top here (events.odin); far off, of its mouth
 	plant:  [P*P]u8,    // at the nearest level, 1 + the ground plant standing here (plants.odin), or 0
@@ -210,7 +317,9 @@ gen_init :: proc(f: ^Formed) {
 	f.region.origin, f.region.size, f.landslide = f.island.origin, f.island.size, {box = {1e9, 1e9, -1e9, -1e9}}
 	region_init(KINDS[f.island.kind].name, f.island.size)
 	region.shape.swell = world_frame.wind   // every island's swell comes from the one wind (archipelago.odin); the start island's is the one it drew
-	rock_init()
+	story, read := story_for(f.island)
+	region.story = story
+	rock_init(read)
 	land_form()
 	rivers_trace()
 	plants_init()
@@ -225,7 +334,7 @@ gen_init :: proc(f: ^Formed) {
 
 Ground :: struct {
 	h, steep: f32,   // elevation, and how steep the ground is there, rise over run
-	base:     f32,   // height of the rock stack's base under it (rock.odin)
+	under:    Under, // what lies under it: the rock stack's base and any cover or body (rock.odin)
 	water:    f32,   // level of the river or sea standing here, or NO_WATER
 	cover:    Mat,   // river gravel, the loose rock lying under a face, or the stones of a shore; Air for none
 	fallen:   f32,   // depth of the loose rock fallen from a face, under any gravel
@@ -255,12 +364,14 @@ Ledge :: struct {
 // stay where the rock has them; only the ground between them moves, and the change fades
 // once a cell is too coarse to hold a riser. Under a riser, rock fallen from it lies at its
 // angle of rest.
-ledges :: proc(h, steep, base: f32, x, z, cell: f64) -> (l: Ledge) {
+ledges :: proc(h, steep: f32, u: Under, x, z, cell: f64) -> (l: Ledge) {
 	l.h, l.rise = h, 1
-	y := h - base - STACK_LO
+	if h < u.roof do return   // a dike, plug or pluton stands whole, with no beds to step
+	y := h - stack_base(h, u) - STACK_LO
 	n := int(rocks.bed[clamp(int(y), 0, STACK_LEN - 1)])
 	if n == 0 || n + 2 >= len(rocks.beds) do return
 	bed, floor := rocks.beds[n], rocks.floor[n]
+	below := rocks.beds[n - 1].kind if n != rocks.cover_from else rock_in(h - (y - floor) - 0.5, u, 0)   // a cover's first bed lies on whatever bed the worn surface cut
 	fade := band(2*f64(bed.thick/max(steep, 0.1)), cell)
 	// A tread on this bed's top: under a weaker bed, or on a thick hard bed standing at the
 	// steepest slope it holds, which breaks as a face whatever lies above it.
@@ -273,7 +384,7 @@ ledges :: proc(h, steep, base: f32, x, z, cell: f64) -> (l: Ledge) {
 		return smoothstep(0, 0.15, fbm(x, z, 320, cell, 2, seed + 420 + u32(n)) - 0.25 + 2*(MATERIALS[rocks.beds[n].kind].strength - 0.6))
 	}
 	top := fade*max(ledge(bed.kind, rocks.beds[n + 1].kind, steep), massive)*stands(n, x, z, cell)
-	foot := fade*ledge(rocks.beds[n - 1].kind, bed.kind, steep)*stands(n - 1, x, z, cell)   // a tread at its foot, on the bed below's top
+	foot := fade*ledge(below, bed.kind, steep)*stands(n - 1, x, z, cell)   // a tread at its foot, on the bed below's top
 	if top + foot > 1 do top, foot = top/(top + foot), foot/(top + foot)   // so the ground never folds back over itself
 	q := clamp((y - floor)/bed.thick, 0, 1)
 	p := 1 - q
@@ -297,24 +408,24 @@ ledges :: proc(h, steep, base: f32, x, z, cell: f64) -> (l: Ledge) {
 
 // The ground the land forming left at a point, shaped by its beds, read `back` metres up the
 // hillside from where it stands.
-shaped :: proc(x, z, cell: f64, back: f32 = 0) -> (l: Ledge, steep, base: f32) {
+shaped :: proc(x, z, cell: f64, back: f32 = 0) -> (l: Ledge, steep: f32, under: Under) {
 	level := clamp(int(math.log2(cell)) - 4, 0, len(land.z) - 1)   // the land's grid as coarse as the cell, or its finest
 	steep = max(land_at(land.slope, land.n, x, z), 0)
-	base = rock_base(x, z, cell)
-	l = ledges(land_at(land.z[level], land.n >> uint(level), x, z) - back*steep, steep, base, x, z, cell)
+	under = rock_base(x, z, cell)
+	l = ledges(land_at(land.z[level], land.n >> uint(level), x, z) - back*steep, steep, under, x, z, cell)
 	return
 }
 
 // The ground at a point as seen at a cell size.
 ground :: proc(x, z, cell: f64) -> (g: Ground) {
-	l, steep, base := shaped(x, z, cell)
-	g.base = base
+	l, steep, under := shaped(x, z, cell)
+	g.under = under
 	near := band(8, cell)   // cracks are gone by 4 m cells
 	// A face that breaks along its cracks: each block between two cracks stands up to a metre
 	// forward of the face or back from it, so the face breaks into prisms. One set of cracks
 	// runs along the strike of the beds and the other across it, each bed with its own.
-	n := rocks.bed[clamp(int(l.h - 0.5 - base - STACK_LO), 0, STACK_LEN - 1)]
-	kind := rocks.beds[n].kind
+	n := bed_at(l.h - 0.5, under)
+	kind := rocks.beds[n].kind if n >= 0 else under.body
 	if gap := MATERIALS[kind].crack; near > 0 && l.lift == 0 && gap >= 1 {
 		if bare := near*smoothstep(1, 1.5, steep*l.rise/rocks.law[kind].limit); bare > 0 {
 			strike := rock_strike(x, z)
@@ -353,10 +464,10 @@ ground :: proc(x, z, cell: f64) -> (g: Ground) {
 		if g.h < lake do g.h, g.water = max(g.h, lake - 1) if cell > 1 else g.h, lake   // far off, a lake's bed is drawn flat under it, so its cells do not show through
 	}
 	g.steep = steep*l.rise
-	if g.laid > 0 do g.cover = MATERIALS[rock_in(g.h - g.laid - 0.5, base, rock_level(cell))].loose
+	if g.laid > 0 do g.cover = MATERIALS[rock_in(g.h - g.laid - 0.5, under, rock_level(cell))].loose
 	if gravel do g.cover = .Gravel
-	if t, rubble := stack_at(x, z, cell, g.h, base); t > g.h {   // a stack is bare rock to its top
-		if rubble do g.laid, g.cover = g.laid + t - g.h, MATERIALS[rock_in(g.h - 0.5, base, rock_level(cell))].loose
+	if t, rubble := stack_at(x, z, cell, g.h, under); t > g.h {   // a stack is bare rock to its top
+		if rubble do g.laid, g.cover = g.laid + t - g.h, MATERIALS[rock_in(g.h - 0.5, under, rock_level(cell))].loose
 		else do g.steep = 3
 		g.h, g.water = t, NO_WATER
 	}
@@ -481,8 +592,9 @@ surface_at :: proc(x, z, cell: f64, at: ^Point = nil) -> (g: Ground, m: Mat, pla
 		k, _ := community_at(x, z, cell)
 		m, plants = COMMUNITIES[k].cover, k
 	}
-	if m == .Air do m = p.cover if p.cover != .Air else rock_in(p.h - 0.5, p.base, rock_level(cell))
-	if m == .Sand || m == .Shingle do m = shore_of(m, rock_in(p.h - p.laid - 0.5, p.base, rock_level(cell)))
+	if m == .Air do m = p.cover if p.cover != .Air else crushed(rock_in(p.h - 0.5, p.under, rock_level(cell)), p.under)
+	if m == .Sand || m == .Shingle do m = shore_of(m, rock_in(p.h - p.laid - 0.5, p.under, rock_level(cell)))
+	if m == .Gravel && len(land.pebble) > 0 do if k := land.pebble[land_cell(x, z)]; k != .Air do m = FORMS[k].gravel   // of the rock upstream
 	return p.g, m, plants
 }
 
@@ -521,7 +633,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			x, z := (f64(ix) + 0.5)*cell - f64(region.origin.x), (f64(iz) + 0.5)*cell - f64(region.origin.y)
 			p: Point
 			g, m, plants := surface_at(x, z, cell, &p)
-			heights[k], c.water[k], c.base[k], c.mat[k] = g.h, g.water, g.base, m
+			heights[k], c.water[k], c.under[k], c.mat[k] = g.h, g.water, g.under, m
 			if s == 1 do if kind, ok := plant_at(&p, m, plants); ok && g.water - g.h <= GROUND_PLANTS[kind].wet do c.plant[k] = u8(kind) + 1
 			c.top[k] = i32(math.round(heights[k]))
 			if heights[k] < SEA_SURFACE do c.top[k] = min(c.top[k], SEA_LEVEL - 1)   // what the land says is under the sea is drawn under it: a shoal is a shallow, not a raft of sand
@@ -588,20 +700,30 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 
 // The block at a depth below the surface of a column, where `bed` is the rock at that
 // height. Bare rock is rock all the way down, so a face and a hole show the same beds. Under a
-// plant cover lie `deep` blocks of the soil, counting the cover, and some may be stones.
+// plant cover lie `deep` blocks of the soil, counting the cover, and some may be stones, then,
+// where the rock was read from the island's setting, BROKEN blocks of the rock broken in place.
+BROKEN :: 2
+
+// The rock as a fault's crushed core has it at the nearest level: broken.
+crushed :: #force_inline proc(m: Mat, u: Under) -> Mat {
+	if u.crush do if b := FORMS[m].broken; b != .Air do return b
+	return m
+}
+
 block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, stone: bool) -> Mat {
 	if is(surface, COVERS) {
 		if depth == 0 do return surface
-		if depth >= deep do return bed
+		if depth >= deep + BROKEN || depth >= deep && !rocks.full do return bed
+		if depth >= deep do return FORMS[bed].broken if FORMS[bed].broken != .Air else bed
 		if stone && MATERIALS[bed].loose != .Air do return MATERIALS[bed].loose
 		return soil.top if depth == 1 else soil.foot if depth == deep - 1 && deep > 2 else soil.sub
 	}
 	#partial switch surface {
 	case .Sand, .Silt, .Black_Sand, .Shingle, .Black_Shingle: return surface if depth < 4 else bed
 	case .Snow:  return .Snow if depth < 2 else bed
-	case .Gravel: return .Gravel if depth < 2 else bed
 	}
-	if surface >= .Mudstone_Scree do return surface if depth < 5 else bed   // loose rock lies on the bed
+	if is(surface, PEBBLES) do return surface if depth < 2 else bed
+	if is(surface, RUBBLE) do return surface if depth < 5 else bed   // loose rock lies on the bed
 	return bed
 }
 
@@ -636,7 +758,7 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []Mat, y_b
 		debris := slid_at(f64(x) + 0.5, f64(z) + 0.5)   // a slide's broken rock lies over the beds
 		for y in y_base..<t {
 			stone := hash01(x + y*131, z, seed + 190) < soil.stones
-			bed := (landslide.rock if c.mat[k] == landslide.rock && t - y <= 6 else MATERIALS[landslide.rock].loose) if f32(t - y) <= debris else rock_in(f32(y) + 0.5, c.base[k], 0)   // a block of the cap is whole
+			bed := (landslide.rock if c.mat[k] == landslide.rock && t - y <= 6 else MATERIALS[landslide.rock].loose) if f32(t - y) <= debris else crushed(rock_in(f32(y) + 0.5, c.under[k], 0), c.under[k])   // a block of the cap is whole
 			b := block_below(c.mat[k], t - 1 - y, bed, soil, deep, stone)
 			blocks[k + int(y - y_base)*P*P] = shore_of(b, bed)
 		}
