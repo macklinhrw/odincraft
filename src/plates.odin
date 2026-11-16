@@ -69,22 +69,26 @@ SPLITS := [?]Split{
 	{name = "a continent rifts", line = .Across, area = 2e7, cont = {0.3, 1}, rest = 40, chance = 1.0/45, open = 30},
 	{name = "an arc rifts off the plate behind it", line = .Arc, area = 4e6, cont = {0, 1}, slab = 1500, old = 50, rest = 30, chance = 1.0/80, open = 25},
 	{name = "old ocean starts to sink under its continent", line = .Margin, area = 1.5e7, cont = {0.1, 0.75}, old = 100, rest = 40, chance = 1.0/80, open = 40},
-	{name = "old ocean floor founders under the younger", line = .Founder, area = 3e7, cont = {0, 0.1}, old = 140, rest = 40, chance = 1.0/60, open = 30},
+	{name = "old ocean floor founders under the younger", line = .Founder, area = 3e7, cont = {0, 0.1}, old = 110, rest = 40, chance = 1.0/30, open = 30},
 }
 
 // How a plate moves: force a km of sinking slab pulls with, a km of ridge pushes with, and a km of
-// colliding edge resists with at 50 mm/yr of closing; continental keels drag `KEEL` times as hard as
-// ocean floor; the turning follows the forces with a lag of `LAG` Myr.
-SLAB, RIDGE, COLLIDE, KEEL, LAG, TOP_SPEED :: f32(32), f32(30), f32(400), f32(1), f32(8), f32(160)
+// colliding edge resists with at 50 mm/yr of closing; the mantle drags on continent 1 + `KEEL` times
+// as hard as on ocean floor; the turning follows the forces with a lag of `LAG` Myr.
+SLAB, RIDGE, COLLIDE, KEEL, LAG, TOP_SPEED :: f32(32), f32(30), f32(500), f32(0.5), f32(8), f32(160)
 // The plate over a trench is drawn toward it, as the sinking slab rolls back, with SUCTION a km.
 SUCTION :: f32(15)
 // Where two floating crusts collide, the one under is stacked onto the one over, all but a tenth
 // of it; ocean floor that arcs and the sea's sediment have thickened past MATURE km is continent.
 STACK, MATURE :: f32(0.9), f32(28)
 // A rifting continent is thinned within STRETCH km of the rift, to under half at the rift itself.
-STRETCH :: f32(300)
-// Two plates that collide along MERGE_LENGTH km for MERGE_AFTER Myr are sutured into one.
-MERGE_LENGTH, MERGE_AFTER :: f32(800), f32(40)
+// The rift wanders off a great circle by RIFT_WANDER of the planet's radius (about 380 km at most)
+// over waves of RIFT_WAVE km.
+STRETCH, RIFT_WANDER, RIFT_WAVE :: f32(300), f32(0.06), f32(2000)
+// Two plates that collide along MERGE_LENGTH km, and along MERGE_SHARE or more of the boundary they
+// share, for MERGE_AFTER Myr are sutured into one: the collision has stopped the boundary, not an arc
+// or a scrap of continent come to a trench that goes on swallowing ocean along the rest of it.
+MERGE_LENGTH, MERGE_SHARE, MERGE_AFTER :: f32(800), f32(0.5), f32(40)
 // Two plates whose shared boundary has barely moved (under 4 mm/yr along 90% of 500 km or more) for STILL_AFTER Myr are one.
 STILL_AFTER :: f32(20)
 
@@ -98,6 +102,13 @@ ARC_FRONT, ARC_HALF, ARC_GROWS, ARC_BUILD, ARC_TOP :: [2]f32{170, 260}, f32(45),
 VOLCANO_WEAR, WEAR :: f32(0.3), f32(70)
 // Land wears only down toward LOWLAND m over the sea: a plain with no relief left wears very slowly.
 LOWLAND :: f32(300)
+// Continental crust thicker than its neighbour on the same plate by more than SLUMP km spreads into
+// it under its own weight, FLOW of the excess a step: a collision raises a belt and a plateau
+// hundreds of km across, not a wall one cell wide.
+SLUMP, FLOW :: f32(5), f32(0.2)
+// The first continent holds together until HOLD Myr before the history begins, so its plates are
+// already moving when it does.
+HOLD :: f32(20)
 
 Crust :: struct {
 	q:     quaternion128,   // the turning the crust has had since it formed, or since the history began: it was then at conj(q)·x
@@ -196,6 +207,7 @@ Globe :: struct {
 	from:    [Globe_Field][]i32,
 	fresh:   []u8,           // the pass in which a gap cell was filled, 0 for none
 	worn:    []f32,          // km of crust worn off a cell this step
+	flow:    []f32,          // km of crust flowing into a cell this step
 	masks:   [][2]u64,
 	plates:  [MAX_PLATES]Plate,
 	polarity: [MAX_PLATES][MAX_PLATES]i8,   // for i < j, 1 where i overrides j, -1 where j overrides i, 0 not yet met
@@ -352,6 +364,16 @@ overrides :: proc(a, b: Crust) -> bool {
 	return a.thick >= b.thick
 }
 
+// Whether floating crust that is not continent, carried on the plate that goes down where two plates
+// meet, is scraped off onto the plate over it, as arcs and plateaus are, rather than ploughing on
+// through it as a stray piece of the plate going down.
+accretes :: proc(floating, sinking: Crust) -> bool {
+	if !floats(floating) || floats(sinking) || floating.cont || floating.plate == sinking.plate do return false
+	i, j := min(floating.plate, sinking.plate), max(floating.plate, sinking.plate)
+	pol := globe.polarity[i][j]
+	return pol != 0 && (pol > 0) == (sinking.plate == i)
+}
+
 turning :: proc(spin: [3]f32, years: f32) -> quaternion128 {
 	angle := linalg.length(spin)*years
 	if angle < 1e-9 do return quaternion128(1)
@@ -388,7 +410,7 @@ globe_init :: proc() {
 		g.block[c] = i32((f*GLOBE_BN + j/GLOBE_B)*GLOBE_BN + i/GLOBE_B)
 	}
 	for &a in g.area do a *= f32(4*math.PI*PLANET*PLANET)/total
-	g.setback = make([]f32, GLOBE_CELLS)
+	g.setback, g.flow = make([]f32, GLOBE_CELLS), make([]f32, GLOBE_CELLS)
 	for c in 0..<GLOBE_CELLS do g.setback[c] = math.lerp(ARC_FRONT[0], ARC_FRONT[1], clamp(0.5 + 0.8*noise3(g.centre[c], 1200, 2, world_seed + 77), 0, 1))
 	// Neighbours, found by stepping from a cell's middle along its face's grid, which carries across a face's edge.
 	for f in 0..<6 do for j in 0..<GLOBE_N do for i in 0..<GLOBE_N {
@@ -552,10 +574,12 @@ globe_step :: proc() {
 					won, has, from = cr, true, i32(k)
 				} else if overrides(cr, won) {
 					if floats(won) { g.collide[c] = true } else { g.sank[c] = won.plate }
+					if accretes(cr, won) do cr.plate = won.plate
 					if floats(won) do cr.thick = min(cr.thick + stack*won.thick, 75)
 					won, from = cr, i32(k)
 				} else {
 					if floats(cr) { g.collide[c] = true } else { g.sank[c] = cr.plate }
+					if accretes(won, cr) do won.plate = cr.plate
 					if floats(cr) do won.thick = min(won.thick + stack*cr.thick, 75)
 				}
 			}
@@ -717,7 +741,7 @@ globe_step :: proc() {
 			g.polarity[i][j] = 0
 		}
 		g.tally[i][j] = 0
-		g.smashed[i][j] = g.smashed[i][j] + DT if g.contact[i][j] >= MERGE_LENGTH else 0
+		g.smashed[i][j] = g.smashed[i][j] + DT if g.contact[i][j] >= MERGE_LENGTH && g.contact[i][j] >= MERGE_SHARE*g.border[i][j] else 0
 		g.stilled[i][j] = g.stilled[i][j] + DT if g.border[i][j] >= 500 && g.quiet[i][j] >= 0.9*g.border[i][j] else 0
 		g.contact[i][j], g.border[i][j], g.quiet[i][j] = 0, 0, 0
 		if g.stilled[i][j] >= STILL_AFTER && g.plates[i].alive && g.plates[j].alive {
@@ -798,18 +822,25 @@ globe_step :: proc() {
 	})
 	g.sea = sea_level()
 	// Each cell over the sea loses what wears off it, high ground fast and low plains hardly at all,
-	// and each cell under the sea takes its share of what its neighbours lost.
+	// and each cell under the sea takes its share of what its neighbours lost; thickened continent
+	// spreads into its thinner neighbours.
 	crew_run(GLOBE_CELLS, proc(id, lo, hi: int) {
 		g := &globe
 		for c in lo..<hi {
 			g.worn[c] = 0
 			if over := g.h[c] - g.sea; over > 0 do g.worn[c] = min(max(over - LOWLAND, 0)/152*DT/WEAR*min(1, over/1500), g.crust[c].thick - 7)
+			g.flow[c] = 0
+			a := g.crust[c]
+			if a.cont do for n in g.nbr[c][:4] {
+				b := g.crust[n]
+				if d := b.thick - a.thick; b.plate == a.plate && b.cont && abs(d) > SLUMP do g.flow[c] += FLOW*(d - math.sign(d)*SLUMP)
+			}
 		}
 	})
 	crew_run(GLOBE_CELLS, proc(id, lo, hi: int) {
 		g := &globe
 		for c in lo..<hi {
-			g.crust[c].thick -= g.worn[c]
+			g.crust[c].thick += g.flow[c] - g.worn[c]
 			if g.h[c] >= g.sea do continue
 			for k in g.nbr[c][:4] do if g.worn[k] > 0 {
 				lows := 0
@@ -834,7 +865,7 @@ globe_step :: proc() {
 		target := linalg.inverse(p.drag)*p.torque
 		if s := linalg.length(target)*PLANET; s > TOP_SPEED do target *= TOP_SPEED/s
 		p.spin += (target - p.spin)*(1 - math.exp(-DT/LAG))
-		if t <= -SPAN && p.cont > 0.3*p.area do p.spin *= 0.5   // the first continent holds together until the history begins
+		if t <= -SPAN - HOLD && p.cont > 0.3*p.area do p.spin *= 0.5   // the first continent holds together
 		whole += p.drag
 		net += p.drag*p.spin
 	}
@@ -935,17 +966,23 @@ plates_split :: proc() {
 			c := linalg.normalize(p.cont_centre)
 			e1 := linalg.normalize(linalg.cross(c, [3]f32{0.3, 0.5, 0.8}))
 			e2 := linalg.cross(c, e1)
-			best: f32 = 2
+			best: f32 = 2e9
 			wander := make([]f32, GLOBE_CELLS, context.temp_allocator)   // the rift's wandering, the same for every way tried
-			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i do wander[k] = 0.12*noise3(g.centre[k], 900, 3, world_seed + 602 + u32(step))
+			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i do wander[k] = RIFT_WANDER*noise3(g.centre[k], RIFT_WAVE, 3, world_seed + 602 + u32(step))
+			// Of the ways tried that leave a quarter of the continent or more on each side, the one
+			// that cuts the least of it: the shortest rift is the easiest to break.
 			for try in 0..<6 {
 				a := 2*math.PI*hash01(i32(p.serial), step*8 + i32(try), world_seed + 601)
 				n := math.cos(a)*e1 + math.sin(a)*e2
-				left: f32
-				for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i && g.crust[k].cont && linalg.dot(g.centre[k], n) + wander[k] > 0 do left += g.area[k]
-				if balance := abs(left/p.cont - 0.5); balance < best do best, toward = balance, n
+				left, cut: f32
+				for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i && g.crust[k].cont {
+					across := linalg.dot(g.centre[k], n) + wander[k]
+					if across > 0 do left += g.area[k]
+					if abs(across) < 0.5*CELL_KM/PLANET do cut += g.area[k]
+				}
+				if abs(left/p.cont - 0.5) < 0.25 && cut < best do best, toward = cut, n
 			}
-			if best > 0.3 do continue
+			if best > 1e9 do continue
 			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i {
 				across := linalg.dot(g.centre[k], toward) + wander[k]
 				side[k] = across > 0
@@ -960,7 +997,15 @@ plates_split :: proc() {
 				toward += g.centre[g.from[.Front][k]] - g.centre[k]
 			}
 		case .Margin:
-			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i && !floats(g.crust[k]) {
+			// The ocean on the side of the continent where its margin is oldest, as a real margin
+			// turns active along one stretch, not round the whole continent.
+			cc := linalg.normalize(p.cont_centre)
+			oldest: f32 = -1
+			at: [3]f32
+			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i && g.crust[k].cont do for n in g.nbr[k][:4] {
+				if b := g.crust[n]; int(b.plate) == i && !b.cont && t - b.born > oldest do oldest, at = t - b.born, g.centre[n]
+			}
+			for k in 0..<GLOBE_CELLS do if int(g.crust[k].plate) == i && !floats(g.crust[k]) && linalg.dot(g.centre[k] - cc, at - cc) > 0 {
 				side[k] = true
 				mid += g.centre[k]
 			}

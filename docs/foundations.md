@@ -1254,6 +1254,67 @@ Not done:
 
 Weak points: every host's thresholds are guesses argued from a handful of real places, and a row's place in the order decides ties (an island within 40 km of the front gets the hard cap whatever its crust); `offshore` 120 km decides between sediment and old arc lavas, so a seed far from any continent (3, 9) is all old arc lavas, and one near it (7, 8) has none; heights of 650 to 900 m on islands 8 km across are higher than any real island of their kind's set but Mikurajima; dikes 1 to 3 m wide show in a cut but hardly from 100 m; the granite reads almost white in sunlight, close to the quartzite round it; the judge of every picture was Claude.
 
+### Step 32, first half, as built
+
+Built 2026-11-15 and 16 by Claude on the branch `t3/earth-plate-history`: the plates' history nearer the real Earth, measured on eleven seeds (1 to 10 and 12) against Müller et al. 2019 and the PaleoDEMs. The owner has not looked at it. The full comparison and its pictures are in `interesting-world/notes/real-plates.md`, "Through time"; the design, its costs and its weak points in `foundations/plates.md`.
+
+![Seed 7 at 150 Ma and today, before step 32 (left) and after (right): plates and their motion above, crust and land below](interesting-world/real/plates-step32-seed7.jpg)
+
+**What changed for the player.** Every seed's world is a new history, so its known world, the continent off the start and the islands round it change; the start island keeps its kind, its record and its land bit for bit (seed 7's `--map`: the same 74,907 land cells, highest point, slide, rivers, places and start). On the planet: the continent of a seed breaks into pieces of real size, no one plate holds half the world, and the continent's range behind the islands is built from collisions that last. Seed 7's start now stands on a forearc of thinned continent 25 km thick, a shallow shelf, 58 km off the continent's coast, with 21 islands in the square round it where there were 8; and, through a reading of the archipelago that this step did not touch (below), sika deer walk to the default island at the sea's low stand and lay 42.6 km of trail on it, and ayu reach its streams. Those are the only differences in its map (6,379 of 1,048,576 pixels). Entering seed 7 takes 2.64 to 2.69 s against 2.31 to 2.32 (three runs each, alternating), since 9 islands lie within 64 km of the start, not 3.
+
+**What was traced, and what was changed**, root causes first. Each change was judged on all eleven seeds, alone and together; the medians at 250 Ma, 150 Ma and today, before, after and real:
+
+| Figure | Before | After | Real |
+|---|---|---|---|
+| Largest plate, % of the planet | 41, 32, 27 (seed 7 today 55) | 17, 12, 10 (seed 7 today 10) | 36, 16, 20 |
+| Plates | 11, 15, 20 | 17, 22, 40 | 11, 32, 51 |
+| Largest land mass, million km² | 180, 147, 85 | 172, 81, 57 | 147, 78, 78 |
+| Land over 1 km, % of the planet | 1.0, 1.1, 1.6 | 1.0, 2.4, 4.3 | 1.2, 3.3, 5.7 |
+| Ocean floor older than 120 Myr, % | 37, 6, 8 (19 at 200 Ma) | 25, 7, 11 (13 at 200 Ma) | 5, 1, 13 (2 at 200 Ma) |
+| Continental plates, mm/yr | 5, 19, 19 | 15, 19, 20 | 36, 19, 27 |
+| Converging boundary, thousand km | 78, 114, 120 | 109, 123, 200 | 66, 70, 60 |
+| Continental crust, % | 38, 38, 38 | 38, 37, 37 | 35, 37, 42 |
+
+- **The giant plate grew by joins, not by spreading** (traced on seed 7 and others). At 64 Ma two plates of 160 million km² each "collided and joined" because 800 km of their boundary had collided for 40 Myr while the rest of it went on spreading and subducting; ocean plates split off as old ocean began to sink under a continent rejoined it 40 Myr later the same way (floating crust at the trench counting as a collision, an inference not traced); the first continent's halves rejoined 46 Myr after rifting. Plates now join only where the collision holds half or more of the boundary they share (`MERGE_SHARE`). This closed the giant plate on every seed and, with nothing rejoining, raised the plate count and the high land (collisions now last).
+- **Stray cells were floating crust going down.** Seed 3 had 304 stray pieces under 60,000 km² today, four fifths of their area arc-thickened crust or continent: a plate going down carried floating crust that cannot sink, and it ploughed on into the plate over it as a stray piece of the plate going down. Floating crust that is not continent is now scraped off onto the plate over it (`accretes`): 29 such pieces on seed 3.
+- **Rifts cut fingers and strips.** A rift wandered up to 700 km off its line over waves of 900 km, so its two sides interleaved, collided as they parted and rejoined, and left narrow channels of young ocean inside the continent; and of six lines through the continent's middle the most even was taken, so long continents were cut lengthwise into parallel strips. A rift now wanders up to about 380 km over 2,000 km and takes the shortest line that leaves a quarter of the continent or more on each side (the shortest rift needs the least force to break). With the joins this brought the breakup forward: the largest land mass at 150 Ma is 81 million km² against the real 78 (147 before).
+- **High land was lost at the cap.** Collision stacked the crust going under onto the one cell in front, capped at 75 km, so a collision built a wall one cell wide and lost the rest. Continental crust thicker than its neighbour on its plate by more than 5 km now spreads into it, a fifth of the excess a step (`SLUMP`, `FLOW`), into a belt hundreds of km wide. With collisions that last, land over 1 km rises through the history from 1.0 to 4.3% of the planet, where it stayed at 1.0 to 1.6.
+- **The old ocean was in plates' middles and on passive margins, not behind trenches.** At 250 Ma only 7 to 9% of the floor older than 120 Myr lay within 700 km behind a trench on the plate over it; where two ocean floors meet, the younger goes over two times in three. Old ocean now founders under the younger from 110 Myr, not 140, about every 30 Myr, not 60; a passive margin that turns active does so on the side of its continent where its ocean is oldest, not all round it (which made ring-shaped plates). This takes the excess down by a third to a half, not away.
+- **Continental plates were held still until the history began**, so they stood at 5 mm/yr at 250 Ma. They are released 20 Myr before it (`HOLD`), and the mantle drags on continent 1.5 times as hard as on ocean floor, not twice (`KEEL` 0.5 for 1). Collisions resist a little more (`COLLIDE` 500 for 400), which keeps continents from shrinking now that collisions are not ended by joins: over the history they consume 55 to 59 million km² of continent and arcs make 18 to 22 (traced on seeds 7, 3 and 1).
+- **The comparison** measures speeds in both worlds with the whole surface's net rotation taken out, as ours is made (Müller's frame has little: real speeds move by at most 6 mm/yr), and `--summary` prints the median and range over seeds, as the table above.
+
+**The islands near the start**, every island on seeds 1 to 10 formed alone and measured by the figures start-up prints (`REAL`), against the parent:
+
+| | Parent | Step 32 |
+|---|---|---|
+| Islands, all ten seeds | 108 (7 to 15 a seed, mean 10.8) | 131 (5 to 21, mean 13.1) |
+| Kinds a seed | 3 to 8 (mean 5.0) | 4 to 8 (mean 5.7) |
+| Figures marked far (!) | 23.3% | 21.3% |
+| By kind, far | cone 9.7, crater 22.2, domes 25.0, inlets 4.0, raised 68.3, reef 0, ridge 24.0, worn 0 | cone 1.1, crater 19.6, domes 21.9, inlets 2.8, raised 68.4, reef 1.6, ridge 20.8, worn 0 |
+
+Forming is unchanged, so each kind is as close to its real islands as before; what moves is the mix and the count. Seeds 1 and 2 have 5 islands each, as real groups that size hold 3 to 8; seeds 7 and 10 have 21. On seed 7 the cause is the reading's outer high: 2,500 m of relief two fifths of the way from the trench to the front (`OUTER_HIGH`, `archipelago.odin`, step 22's guess for oceanic forearcs) added to a forearc that the new history makes a continental shelf, so it stands at the sea's surface, takes 11 islands along it, and bares a way for deer from the continent at the low sea. It is in a file step 24 is changing, so it was left, and put to the owner.
+
+**Cost.** The history takes 2.1 to 3.2 s (mean 2.37) against 2.0 to 2.9 (mean 2.20) for the parent, on seeds 7, 1, 3 and 12, three rounds alternating, under a load of 6 to 7.5 from other sessions: about 0.17 s more, from twice as many splits, each scanning the planet's cells on one thread, and twice as many plates. One more array of 1.6 MB. Benches against the parent under the same load (frames over 12.5 ms, our work median): the forest flank 24 and 1.62 ms against 30 and 1.85; down through cloud 4 and 1.32 ms against 10 and 1.99. Neither build meets "none over 12.5 ms" with other sessions running. `plates.odin` grew by 45 lines to 1,159; the comparison tool by 51.
+
+**Checked.** The final code reproduces the experimental build's frames byte for byte on all eleven seeds (286 frames); `./build.sh test` passes with the start island's hash unchanged and island 1's updated (it is a new island, an inlets island where a ridge island stood); `odin check src -vet-unused` is clean.
+
+Tried and dropped:
+
+- **A younger first ocean** (0 to 50 Myr old at the start, not 40 to 100): only moved the old floor later (20% older than 120 Myr at 150 Ma against 7).
+- **Faster arcs with stronger collision** (arc crust 0.5 km a Myr, `COLLIDE` 800): continental crust grew to 47%, but the new continent stood under the sea and took up its water, and land fell to 15%.
+- **Smoothing plate boundaries over two rings of cells**: no measurable change in how ragged the plates are; the lobes are hundreds of km across.
+- **Margins turning active twice as often**: more plates and old ocean a little lower, but longer boundaries, and real passive margins are stable (the Atlantic's are 180 Myr old).
+- **Rifts only in plates of 35 or 50 million km² or more**: fewer plates, but old ocean back up and boundaries no shorter.
+
+Weak points: boundaries are still two to three times the real length, now because 39 of our plates are over a million km² against the real 18 and their outlines are lobed (2.0 to 2.2 times a circle's perimeter against 1.3 to 1.5); the first ocean floor is still too old at 250 and 200 Ma; continents hold level where the real grow (partly the real model's own mapping); the whole surface is 10 to 25% slower than the real; continents are low plains that a rise of the sea drowns at once, and they make twice the real number of small land masses; the islands near the start vary more in number from seed to seed; the judge of every picture was Claude.
+
+**What this half taught the second.**
+
+- **The history's ground under a forearc is no longer always deep ocean.** The archipelago's reading was written against a history whose forearcs stood 1.4 to 6.5 km deep; on a continental margin its outer high and its shelf sites take most of the square. A regional history must make the forearc's relief itself, from the crust it stands on, rather than add a fixed ridge to whatever the planet's cells say.
+- **A seed's known world can change completely with any change to the history**, and the start island's neighbours, animals and entering time with it, while the start island's land stays bit for bit. The regional history will be the second change of this kind; checking the default island's map and its arrivals belongs in every such step.
+- **Traces answer what the comparison cannot.** Each root cause here (joins, floating crust, the rift line, the cap, where old ocean lies) was found by printing events or tallies from a scratch build, not by reading the figures; a figure moved by one change on one seed is noise.
+- **The planet's cells are 36 km, and the real Earth's microplates are under a million km².** The real plate count today comes from 33 plates our grid barely holds; a regional history is where small plates (back-arc basins, a Philippine Sea) can be made at their size.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.

@@ -3,6 +3,12 @@
 
     build/odincraft --plates=OURS
     python tools/plates_compare.py OURS DATA OUT
+    python tools/plates_compare.py --summary OUT... [--before OUT...]
+
+The second form prints, as a Markdown table, the median and range over several seeds' OUT folders
+(each one seed's run of the first form) beside the real Earth's figures, with the median of another
+set as "ours before" when one is given: one seed's history is chaotic, and a figure from one seed is
+not a figure.
 
 OURS holds the frame-NNN.raw grids --plates writes. DATA is where the real reference is fetched on
 the first run, outside the repository: the plate model of Müller et al. 2019 (Tectonics 38, 1884-1907)
@@ -89,7 +95,7 @@ class Real:
         rigid.sort(key=lambda r: -r.get_resolved_boundary().get_area())
         ids = [r.get_feature().get_reconstruction_plate_id() for r in rigid]
         plate = self.fill([r.get_resolved_boundary() for r in rigid], range(1, len(rigid) + 1))
-        # Each plate's motion from a Myr before, in the mantle frame.
+        # Each plate's motion from a Myr before, in the mantle frame (taken out in main).
         x = np.stack([np.cos(np.radians(LAT))[:, None] * np.cos(np.radians(LON))[None, :],
                       np.cos(np.radians(LAT))[:, None] * np.sin(np.radians(LON))[None, :],
                       np.sin(np.radians(LAT))[:, None] * np.ones((1, W))], -1)
@@ -129,6 +135,21 @@ class Real:
                         hotspots.append(p.to_lat_lon())
         return dict(plate=plate, cont=cont, arc=np.zeros((H, W), bool), age=np.where(np.isnan(age), 255, age),
                     ve=(v * east).sum(-1), vn=(v * north).sum(-1), land=coast, dem=height, hotspots=hotspots)
+
+
+def without_net_rotation(g):
+    """The motion with the whole surface's net rotation taken out: the turning that best fits every
+    cell's motion, weighted by area. Ours has none by construction; the real Earth's mantle frame has
+    some, so both are measured in the same frame."""
+    lat, lon = np.radians(LAT)[:, None] * np.ones((1, W)), np.radians(LON)[None, :] * np.ones((H, 1))
+    x = np.stack([np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)], -1)
+    east = np.stack([-np.sin(lon), np.cos(lon), np.zeros_like(lon)], -1)
+    north = np.cross(x, east)
+    v = g["ve"][:, :, None] * east + g["vn"][:, :, None] * north
+    weight = CELL * (g["plate"] > 0) if "dem" in g else CELL   # the real Earth's cells outside every plate's outline move with none
+    net = np.linalg.solve((weight[:, :, None, None] * (np.eye(3) - x[:, :, :, None] * x[:, :, None, :])).sum((0, 1)), (weight[:, :, None] * np.cross(x, v)).sum((0, 1)))
+    v = v - np.cross(net, x)
+    return dict(g, ve=(v * east).sum(-1), vn=(v * north).sum(-1))
 
 
 def ocean_depth(age):   # GDH1, Stein & Stein 1992
@@ -271,7 +292,7 @@ def main():
     bold = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 17)
     rows = []
     for t in TIMES:
-        g, r = ours(ours_dir, t), real.at(t)
+        g, r = without_net_rotation(ours(ours_dir, t)), without_net_rotation(real.at(t))
         mo, mr = measure(g), measure(r, r["dem"])
         rows += [dict(myr_ago=t, world="ours", **mo), dict(myr_ago=t, world="real", **mr)]
         sheet = Image.new("RGB", (2 * W + 440, 2 * H + 40), (252, 252, 251))
@@ -329,5 +350,32 @@ def chart(rows, path):
     fig.savefig(path, dpi=110)
 
 
+SUMMARY = [("Plates", "plates", 1, "%d"), ("Largest plate, %", "largest plate %", 1, "%d"), ("Plate size slope", "plate size slope", 1, "%.2f"),
+           ("RMS speed, mm/yr", "rms speed mm/yr", 1, "%d"), ("Continent plates, mm/yr", "continent plates mm/yr", 1, "%d"),
+           ("Converging km (thousands)", "converging km", 1000, "%d"), ("Spreading km (thousands)", "spreading km", 1000, "%d"),
+           ("Ocean floor, mean age Myr", "ocean mean age Myr", 1, "%d"), ("Ocean floor older than 120 Myr, %", "ocean 120- Myr %", 1, "%d"),
+           ("Continental crust, %", "continental crust %", 1, "%d"), ("Land, %", "land %", 1, "%d"), ("Land over 1 km, % of the planet", "land over 1 km %", 1, "%.1f"),
+           ("Land masses over a million km²", "land masses over 1 Mkm²", 1, "%d"), ("Largest land mass, million km²", "largest land Mkm²", 1, "%d"),
+           ("Land masses of 10,000 km² to a million", "islands 10k-1M km²", 1, "%d")]
+
+
+def summary(args):
+    """The median and range over several seeds' measures.csv, beside the real Earth's, as Markdown."""
+    import statistics
+    now, before = (args[:args.index("--before")], args[args.index("--before") + 1:]) if "--before" in args else (args, [])
+    load = lambda d: {(int(float(r["myr_ago"])), r["world"]): r for r in csv.DictReader(open(os.path.join(d, "measures.csv")))}
+    runs, olds = [load(d) for d in now], [load(d) for d in before]
+    times = [250, 200, 150, 100, 50, 0]
+    show = lambda fmt, x: "{:,}".format(int(round(x))) if fmt == "%d" else (fmt % x).replace("-", "−")
+    print("| Figure | | 250 Ma | 200 | 150 | 100 | 50 | today |\n|---|---|---|---|---|---|---|---|")
+    for name, k, div, fmt in SUMMARY:
+        values = lambda sets, t: [float(s[(t, "ours")][k]) / div for s in sets if not math.isnan(float(s[(t, "ours")][k]))]
+        print("| %s | real | %s |" % (name, " | ".join(show(fmt, float(runs[0][(t, "real")][k]) / div) for t in times)))
+        cells = [(lambda xs: "%s (%s–%s)" % (show(fmt, statistics.median(xs)), show(fmt, min(xs)), show(fmt, max(xs))) if xs else "–")(values(runs, t)) for t in times]
+        print("| | ours | %s |" % " | ".join(cells))
+        if olds:
+            print("| | ours before | %s |" % " | ".join(show(fmt, statistics.median(values(olds, t))) for t in times))
+
+
 if __name__ == "__main__":
-    main()
+    summary(sys.argv[2:]) if sys.argv[1:2] == ["--summary"] else main()

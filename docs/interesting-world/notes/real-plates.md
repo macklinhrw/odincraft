@@ -6,10 +6,10 @@ Research notes for OdinCraft v5, 2026-11-15, written for step 22 (`foundations.m
 
 1. **There is a real reference through time, and it is open.** Müller et al. 2019's plate model (plates, their boundaries and motions from 250 Ma to today in a mantle frame) and its ocean-floor age grids at every Myr are under CC BY 4.0, as are Scotese & Wright 2018's PaleoDEMs (land and sea floor at 1° every 5 Myr back to 540 Ma) and Merdith et al. 2021's model back to 1 Ga. `pygplates` reconstructs the plates at any time in 0.1 s. Nothing of it is kept in the repository; the figures computed from it are.
 2. **Real plates are large, few and unequal**, which a 1,000 km world cannot hold. Today's 52 plates (Bird 2003) range from 18,000 km² to 100 million km²; the largest takes a fifth of the surface; 18 of them exceed a million km². Plates move 20 to 100 mm/yr, so over 250 Myr a plate travels 5,000 to 25,000 km. A plate story that makes continents needs the whole planet: the known world is a window on it (`foundations/plates.md`, D1).
-3. **Plates that pull slabs are fast; continents are slow.** Real ocean plates move a median 40 to 85 mm/yr, plates mostly of continent 22 to 30 (Müller 2019, measured here). A plate model driven by slab pull with drag on continental keels reproduces that ordering (ours: 60 to 85 and 5 to 20; the continents are too slow).
+3. **Plates that pull slabs are fast; continents are slow.** Real ocean plates move a median 40 to 85 mm/yr, plates mostly of continent 22 to 30 (Müller 2019, measured here). A plate model driven by slab pull with drag on continental keels reproduces that ordering (ours: 47 to 80 and 15 to 20 since step 32, the real 40 to 79 and 19 to 36 measured the same way; 5 to 20 for continents before it).
 4. **The ocean floor is young, and its age has a shape.** The mean age of today's ocean crust is 64.2 Myr (Seton et al. 2020); its area falls off roughly linearly with age to about 180 Myr (the "triangular" distribution, Parsons 1982, Cogné & Humler 2004). Its age sets its depth (GDH1) and so the sea's level: young ocean floor stands high and floods the continents, as in the Cretaceous.
 5. **The reference islands sit in four settings the story must produce**: a young intra-oceanic arc whose subduction began 51–52 Ma (the Izu islands; Chichijima and Hahajima on its oldest forearc, boninites 46–48 Ma), a forearc rising 1.5–2.3 mm/yr (Kikaijima on the Ryukyu arc), continental crust in a strait between a back-arc basin and an older continent (Tsushima, sediments of 17.9–15.9 Ma folded about 15 Ma as the Japan Sea opened), and hotspot chains whose volcanoes age with distance at the plate's speed (57 km/Myr along the central Hawaiian chain).
-6. **Measured the same way, our first history is close on half the figures and far on the rest.** Close: plate speeds, the largest plate's share, the slope of plate sizes, ocean depth from age, land over 1 km, the number and size of land masses today (seed 7: 84.5, 31.4, 16.5, 6.1 million km² against 85, 42, 14, 7.7), islands of 10,000 km² to a million. Far: our boundaries are twice to three times as long, our oldest ocean floor survives too long early on, continental crust shrinks where the real grows, continents move too slowly, and land runs a few points high.
+6. **Measured the same way, our first history was close on half the figures and far on the rest.** Close: plate speeds, the largest plate's share, the slope of plate sizes, ocean depth from age, the number and size of land masses today (seed 7: 84.5, 31.4, 16.5, 6.1 million km² against 85, 42, 14, 7.7), islands of 10,000 km² to a million. Far: boundaries twice to three times as long, the oldest ocean floor surviving too long early on, continental crust shrinking where the real grows, continents too slow, too little high land, and on some seeds one plate over half the planet. Step 32's first half (2026-11-16, "Through time" below) closed the giant plate, the late breakup, most of the missing high land and the slow continents, and halved the old ocean's excess; boundaries are still two to three times too long, now because our plates are many, mid-sized and lobed.
 
 ## Sizes and rates
 
@@ -64,77 +64,79 @@ The tool (`tools/plates_compare.py`) fetches these into a folder outside the rep
 
 ## Through time: the real Earth and ours, measured the same way
 
-`build/odincraft --plates=DIR` writes each frame on half-degree cells; `tools/plates_compare.py` builds the same cells for the real Earth from the references above, measures both with one function and draws them side by side. Ours here is the history as built in step 22's second half, whose arc front runs smoothly along each trench; the pictures are seed 7, the game's default, and the table eleven seeds (1 to 10 and 12), each run on its own and compared, since one seed's history is chaotic and a figure from one seed is not a figure. Run 2026-11-15.
+`build/odincraft --plates=DIR` writes each frame on half-degree cells; `tools/plates_compare.py` builds the same cells for the real Earth from the references above, measures both with one function and draws them side by side. Ours here is the history as built in step 32's first half (`foundations.md` section 8), which closed what the comparison of step 22 showed far; the pictures are seed 7, the game's default, and the table eleven seeds (1 to 10 and 12), each run on its own and compared, since one seed's history is chaotic and a figure from one seed is not a figure. Run 2026-11-16.
 
 ![Today: ours (seed 7) on the left, the real Earth on the right; plates and their boundaries above (red converging, yellow spreading, white sliding), crust and land below](../real/plates-today.jpg)
 
 ![The figures through time, the real Earth solid blue, ours (seed 7) dashed orange](../real/plates-measures.jpg)
 
-"Ours" is the median of the eleven seeds with their range; "ours before" is the median of the same seeds before the arc front was smoothed (the history of step 22's first half, which reproduces that step's figures for seed 7 exactly).
+![Seed 7 at 150 Ma and today, before step 32 (left) and after (right): plates and their motion above, crust and land below. Before, one plate holds the continent and the ocean round most of the world, and the first continent is still whole at 150 Ma](../real/plates-step32-seed7.jpg)
+
+"Ours" is the median of the eleven seeds with their range; "ours before" is the median of the same seeds with the history of step 22 as built (commit `a15e1ac`), measured again with today's script. Speeds in both worlds are now measured with the whole surface's net rotation taken out, as ours is made; this moves the real figures by a few mm/yr at most (continental plates 36, 28, 19, 30, 23, 27 against 30, 28, 22, 30, 25, 27 in the mantle frame), so Müller's frame has little net rotation.
 
 | Figure | | 250 Ma | 200 | 150 | 100 | 50 | today |
 |---|---|---|---|---|---|---|---|
 | Plates | real | 11 | 14 | 32 | 36 | 35 | 51 |
-| | ours | 11 (9–15) | 14 (7–18) | 15 (7–22) | 16 (11–23) | 15 (10–25) | 20 (10–28) |
-| | ours before | 11 | 13 | 16 | 15 | 18 | 19 |
+| | ours | 17 (15–20) | 19 (14–25) | 22 (18–28) | 27 (23–36) | 36 (26–43) | 40 (29–52) |
+| | ours before | 11 | 14 | 15 | 16 | 15 | 20 |
 | Largest plate, % | real | 36 | 16 | 16 | 12 | 23 | 20 |
-| | ours | 41 (29–60) | 26 (21–54) | 32 (16–65) | 31 (19–40) | 27 (21–52) | 27 (14–55) |
-| | ours before | 34 | 27 | 26 | 28 | 24 | 27 |
+| | ours | 17 (11–37) | 16 (12–38) | 12 (8–27) | 13 (7–22) | 12 (10–24) | 10 (7–23) |
+| | ours before | 41 | 26 | 32 | 31 | 27 | 27 |
 | Plate size slope | real | −0.37 | −0.27 | −0.43 | −0.39 | −0.43 | −0.42 |
-| | ours | −0.67 (−0.99 to −0.38) | −0.59 (−0.77 to −0.36) | −0.49 (−0.73 to −0.35) | −0.47 (−0.89 to −0.35) | −0.50 (−0.82 to −0.36) | −0.58 (−0.73 to −0.31) |
-| | ours before | −0.69 | −0.54 | −0.43 | −0.43 | −0.48 | −0.56 |
-| RMS speed, mm/yr | real | 74 | 59 | 68 | 64 | 50 | 44 |
-| | ours | 51 (36–63) | 49 (44–59) | 47 (36–64) | 50 (37–60) | 42 (37–59) | 51 (39–58) |
-| | ours before | 53 | 51 | 46 | 54 | 48 | 44 |
-| Continent plates, mm/yr | real | 30 | 28 | 22 | 30 | 25 | 27 |
-| | ours | 4 (0–9) | 13 (6–36) | 17 (2–40) | 17 (5–24) | 18 (12–22) | 18 (3–24) |
-| | ours before | 4 | 12 | 14 | 19 | 21 | 19 |
+| | ours | −0.65 (−0.98–−0.32) | −0.60 (−0.68–−0.42) | −0.66 (−0.95–−0.36) | −0.63 (−1.22–−0.51) | −0.80 (−1.00–−0.53) | −0.74 (−0.96–−0.48) |
+| | ours before | −0.67 | −0.59 | −0.49 | −0.47 | −0.50 | −0.58 |
+| RMS speed, mm/yr | real | 73 | 59 | 67 | 64 | 50 | 44 |
+| | ours | 52 (40–61) | 43 (37–60) | 46 (39–52) | 39 (32–51) | 41 (36–45) | 39 (32–46) |
+| | ours before | 51 | 49 | 47 | 50 | 42 | 51 |
+| Continent plates, mm/yr | real | 36 | 28 | 19 | 30 | 23 | 27 |
+| | ours | 15 (11–23) | 19 (17–27) | 19 (15–23) | 19 (15–25) | 19 (13–25) | 20 (16–22) |
+| | ours before | 5 | 15 | 19 | 18 | 18 | 19 |
 | Converging km (thousands) | real | 66 | 51 | 70 | 67 | 65 | 60 |
-| | ours | 78 (51–93) | 105 (72–137) | 114 (60–156) | 120 (74–189) | 145 (50–195) | 120 (85–216) |
-| | ours before | 79 | 99 | 99 | 129 | 133 | 130 |
-| Spreading km (thousands) | real | 68 | 49 | 95 | 93 | 89 | 84 |
-| | ours | 82 (64–108) | 110 (72–139) | 119 (67–155) | 124 (91–186) | 131 (48–174) | 127 (82–216) |
-| | ours before | 84 | 91 | 104 | 113 | 127 | 135 |
+| | ours | 109 (68–121) | 97 (81–188) | 123 (95–177) | 142 (129–187) | 180 (120–203) | 200 (124–217) |
+| | ours before | 78 | 105 | 114 | 120 | 145 | 120 |
+| Spreading km (thousands) | real | 68 | 49 | 96 | 93 | 89 | 84 |
+| | ours | 105 (79–125) | 100 (72–189) | 119 (102–154) | 149 (121–178) | 178 (107–211) | 194 (138–220) |
+| | ours before | 82 | 110 | 119 | 124 | 131 | 127 |
 | Ocean floor, mean age Myr | real | 50 | 49 | 49 | 33 | 45 | 62 |
-| | ours | 82 (70–95) | 65 (54–82) | 45 (40–65) | 50 (45–74) | 52 (39–78) | 44 (36–71) |
-| | ours before | 78 | 68 | 54 | 50 | 48 | 50 |
+| | ours | 66 (49–76) | 61 (40–84) | 49 (39–56) | 53 (45–71) | 53 (46–62) | 53 (45–64) |
+| | ours before | 82 | 65 | 45 | 50 | 52 | 44 |
 | Ocean floor older than 120 Myr, % | real | 5 | 2 | 1 | 1 | 1 | 13 |
-| | ours | 37 (27–43) | 19 (11–25) | 6 (4–16) | 11 (7–21) | 9 (5–28) | 8 (5–22) |
-| | ours before | 33 | 19 | 10 | 14 | 8 | 10 |
+| | ours | 25 (14–32) | 13 (7–25) | 7 (4–12) | 8 (6–19) | 11 (7–16) | 11 (8–18) |
+| | ours before | 37 | 19 | 6 | 11 | 9 | 8 |
 | Continental crust, % | real | 35 | 35 | 37 | 38 | 40 | 42 |
-| | ours | 38 (38–39) | 38 (37–39) | 38 (36–38) | 38 (35–39) | 38 (33–39) | 38 (31–39) |
-| | ours before | 38 | 38 | 38 | 38 | 37 | 37 |
+| | ours | 38 (37–38) | 38 (37–38) | 37 (36–38) | 37 (36–38) | 37 (36–38) | 37 (35–38) |
+| | ours before | 38 | 38 | 38 | 38 | 38 | 38 |
 | Land, % | real | 29 | 35 | 31 | 27 | 26 | 28 |
-| | ours | 37 (36–38) | 35 (34–36) | 34 (31–35) | 33 (31–35) | 32 (28–34) | 31 (27–33) |
+| | ours | 36 (35–37) | 35 (33–36) | 33 (32–34) | 32 (31–34) | 31 (30–33) | 31 (29–32) |
 | | ours before | 37 | 35 | 34 | 33 | 32 | 31 |
-| Land over 1 km, % | real | 1.2 | 3.2 | 3.3 | 4.8 | 3.5 | 5.7 |
-| | ours | 1.0 (0.3–1.3) | 0.9 (0.3–1.8) | 1.1 (0.7–1.9) | 1.5 (0.8–2.9) | 1.7 (0.9–3.5) | 1.6 (1.1–3.6) |
-| | ours before | 0.9 | 1.0 | 1.2 | 1.5 | 1.6 | 1.9 |
+| Land over 1 km, % of the planet | real | 1.2 | 3.2 | 3.3 | 4.8 | 3.5 | 5.7 |
+| | ours | 1.0 (0.8–1.5) | 1.9 (1.1–2.5) | 2.4 (1.2–3.2) | 3.3 (1.7–4.2) | 3.5 (2.3–4.7) | 4.3 (2.9–5.4) |
+| | ours before | 1.0 | 0.9 | 1.1 | 1.5 | 1.7 | 1.6 |
 | Land masses over a million km² | real | 1 | 1 | 4 | 8 | 7 | 6 |
-| | ours | 2 (1–5) | 3 (1–5) | 3 (1–6) | 4 (2–6) | 5 (3–8) | 6 (3–10) |
-| | ours before | 2 | 3 | 4 | 5 | 6 | 6 |
+| | ours | 3 (1–5) | 4 (2–8) | 6 (3–8) | 7 (3–9) | 9 (5–12) | 11 (5–17) |
+| | ours before | 2 | 3 | 3 | 4 | 5 | 6 |
 | Largest land mass, million km² | real | 147 | 177 | 78 | 60 | 44 | 78 |
-| | ours | 180 (158–188) | 170 (82–182) | 147 (79–173) | 89 (80–168) | 82 (44–140) | 85 (39–130) |
-| | ours before | 178 | 165 | 158 | 84 | 81 | 87 |
+| | ours | 172 (123–180) | 152 (90–173) | 81 (55–154) | 79 (32–152) | 53 (36–111) | 57 (26–80) |
+| | ours before | 180 | 170 | 147 | 89 | 82 | 85 |
 | Land masses of 10,000 km² to a million | real | 13 | 36 | 78 | 70 | 157 | 107 |
-| | ours | 30 (20–65) | 48 (41–88) | 83 (70–97) | 99 (85–125) | 132 (96–153) | 149 (130–200) |
-| | ours before | 25 | 55 | 68 | 82 | 104 | 116 |
+| | ours | 30 (19–47) | 59 (41–78) | 101 (71–129) | 136 (116–169) | 168 (154–213) | 233 (173–250) |
+| | ours before | 30 | 48 | 83 | 99 | 132 | 149 |
 
 What the comparison says, and what it does not:
 
-- **Both start as one supercontinent and break it up**, ours by rifts drawn from the seed after 30 Myr, the real one from the mid-Jurassic. The real world goes from 1 land mass over a million km² to 6–8; ours from 2 to 6. Ours breaks up later: at 150 Ma our largest land mass is still 147 million km² against 78.
-- **We have too few plates and too much boundary.** 20 plates today against 51, yet twice the converging and one and a half times the spreading boundary. Most of it is cells of one plate left inside another along converging edges, and continents stretched into stripes along rifts. A boundary length is the best single test of how clean the plates are.
-- **One plate can take half the planet.** Seed 7's largest plate today covers 55% of it (real 20%; the seeds' median 27%, range 14–55%): a single ocean plate round most of the world. Before the smoothing, seed 8's covered 79%. Whether such a plate grows by joining others or by spreading is not yet traced.
-- **Our first ocean floor survives too long.** Ours starts with old ocean round the first continent, and at 250 Ma 37% of our ocean floor is older than 120 Myr against 5%, at 200 Ma 19% against 2%. Old ocean founders only by a row's chance; on the real Earth it is all subducted by about 180 Myr.
-- **Our continents hold level; the real ones grow.** 38% throughout against 35% to 42%. Collisions stack crust and lose area, and arcs mature into continent too slowly. Part of the real growth is the model's own: more continental fragments are mapped in recent times *(inference)*.
-- **Continental plates are too slow early** (4 mm/yr at 250 Ma against 30, 18 against 27 today): ridge push and trench suction are the only forces on a plate without slabs.
-- **Too little high land.** 1.6% of the land stands over 1 km today against 5.7%, on every seed (1.1 to 3.6%).
-- **Close**: plate speeds (RMS 42 to 51 mm/yr against 44 to 74), ocean depth from age (4,510 to 4,860 m against 4,690 to 4,860), land's share (31% today against 28%), land masses over a million km² today (6 against 6), and the largest land mass today (85 million km² against 78).
-- **What smoothing the arc front changed.** It changes every seed's history, since the history is chaotic, but moves few medians beyond the spread of the seeds. The one steady change is more land masses of 10,000 km² to a million after 150 Ma (149 today against 116 before; real 107), perhaps because a front that runs on along a trench builds a chain where one that jumped every 36 km scattered its vents *(inference, not traced)*. Today's ocean floor is younger (mean 44 Myr against 50 before; real 62), and old ocean at 150 Ma rarer (6% against 10%; real 1%).
+- **One plate no longer takes half the planet.** The largest today is 7 to 23% of it over the eleven seeds (median 10%, real 20%); before, 14 to 55%, seed 7's 55%. Traced on seed 7 before: the giant grew by joins, not by spreading. Two plates of 160 million km² each "collided and joined" at 64 Ma because 800 km of their boundary had collided for 40 Myr while the rest of it went on spreading and subducting; ocean plates split off as old ocean began to sink under a continent rejoined it 40 Myr later the same way; and the first continent's two halves rejoined 46 Myr after rifting. Plates now join only where the collision holds half the boundary they share.
+- **Plates: 40 today against 51, and 22 at 150 Ma against 32.** Before, 20 and 15. But too many of ours are large: 39 of them over a million km² against the real 18, the real Earth's other 33 being microplates our 36 km cells barely hold. So boundaries are longer, not shorter: converging 200 thousand km today against 60 (120 before), spreading 194 against 84. Measured plate by plate, the excess is the plates' shapes, not stray cells: a plate's outline is 2.0 to 2.2 times a circle's of its area (stepped as the grid steps it), the real plates' 1.3 to 1.5, ours before 2.5 to 2.9. Stray pieces of one plate inside another are mostly gone (on seed 3 today, 29 pieces under 60,000 km², from 304): they were floating crust, mostly arcs, carried by a plate going down at a trench, which could not sink and ploughed on into the plate over it; it is now scraped off onto that plate. The real boundaries are a little undercounted: today 6% of the real Earth lies outside every rigid plate (its deforming zones), and filling those pixels from their neighbours raises its converging boundary from 60 to 77 thousand km; at 100 and 200 Ma by under 10%.
+- **The supercontinent breaks up in time.** Its largest land mass at 150 Ma is 81 million km² (55 to 154) against the real 78, from 147. Rifts no longer wander 700 km off their line over 900 km, which cut continents into interleaved fingers that collided and rejoined, and a continent breaks along the shortest line that halves it, not along any line through its middle, which cut long continents into parallel strips. Today it has broken further than the real one: 11 land masses over a million km² against 6, the largest 57 million km² against 78.
+- **High land, 1.0 to 4.3% of the planet over 1 km from 250 Ma to today, against 1.2 to 5.7.** Before, 1.0 to 1.6, with no rise through time. Collisions go on longer, and thickened continent now spreads under its own weight into a belt hundreds of km wide where it stood as a wall one cell wide and lost what passed 75 km. Still under the real figure at 200 and 100 Ma (1.9 and 3.3 against 3.2 and 4.8).
+- **The first ocean floor goes sooner, but not soon enough.** Older than 120 Myr: 25% at 250 Ma against 5 (37 before), 13% at 200 against 2 (19); after that 7 to 11% against 1, and 11% today against 13. Mean age at 250 Ma 66 Myr against 50 (82 before). The old floor lay in the middle of large ocean plates and on continental plates' passive margins, not behind trenches (only 7 to 9% of it at 250 Ma); which plate sinks where two ocean floors meet was right two times in three. Old ocean now founders from 110 Myr, not 140, about every 30 Myr, not 60.
+- **Continents still hold level: 37 to 38% against 35 to 42.** Over the history collisions consume 55 to 59 million km² of continent and arcs make 18 to 22 (measured on seeds 7, 3 and 1), and the grid's own filling of holes adds about 16. Stronger resistance to collision (500 for 400) keeps the continents from shrinking now that collisions are not ended by joins; making arcs faster drowned the land instead (below).
+- **Continental plates move: 15 mm/yr at 250 Ma against 36 (5 before), 19 to 20 after against 19 to 30.** The first continent's plates are released 20 Myr before the history begins, and the mantle drags on continent 1.5 times as hard as on ocean floor, not twice. The whole surface is slower: RMS speed 39 to 52 mm/yr against 44 to 73 (42 to 51 before), today 39 against 44.
+- **Too many small land masses**: 233 of 10,000 km² to a million today against 107 (149 before), as continents break further and arcs build more.
+- **Close as before**: ocean depth from age, land's share (31% today against 28%), the sea's level.
 - **Real land is the PaleoDEMs'** in another reconstruction's frame; it measures the land and its heights but is not drawn on Müller's plates. The real map's green is today's coastlines carried back, which is not the land of the time.
 - The real model's plate count rises toward today partly because recent plates are better known *(inference)*; our count is the history's own.
 
-How the table was made: for each seed, `build/odincraft --seed=N --plates=DIR` and `tools/plates_compare.py DIR DATA OUT`; the medians and ranges are taken over the eleven `measures.csv`. The history's first half was built from commit `b50f5ba` for "ours before".
+How the table was made: for each seed, `build/odincraft --seed=N --plates=DIR` and `tools/plates_compare.py DIR DATA OUT`; then `tools/plates_compare.py --summary OUT... --before OUT...` over the eleven seeds' outputs. "Ours before" is commit `a15e1ac`.
 
 ## Not verified
 
