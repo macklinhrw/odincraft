@@ -52,12 +52,18 @@ arrivals: [][len(DISPERSAL)]Arrival   // for each island of the archipelago, by 
 ASHORE :: 0.25   // an island's shore lies about this share of its region's side from its middle: 0.14 to 0.17 on cones and craters, 0.23 to 0.39 on the rest (79 islands of seeds 1, 3, 5 and 7)
 
 // Metres the sea has risen over an island since it stood lowest, from its kind's history as its
-// seed draws it: risen() of the island once formed, read before.
+// seed draws it and its record reads it: risen() of the island once formed, read before.
 risen_on :: proc(is: Island) -> f32 {
 	key := i32(fnv.fnv32a(transmute([]u8)KINDS[is.kind].name))
+	plan := make([]Phase(f32), len(KINDS[is.kind].history), context.temp_allocator)
+	for p, i in KINDS[is.kind].history do plan[i] = phase_draw(p, i, key, is.seed)
+	if is.id != 0 {   // as region_init reads it
+		record, shape := record_of(is), Shape(f64){}
+		record_phases(&KINDS[is.kind], &record, plan, &shape)
+	}
 	sea, low: f32
-	for p, i in KINDS[is.kind].history {
-		sea += phase_draw(p, i, key, is.seed).sea
+	for p in plan {
+		sea += p.sea
 		low = min(low, sea)
 	}
 	return sea - low

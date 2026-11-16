@@ -315,7 +315,8 @@ gen_init :: proc(f: ^Formed) {
 	bound(f)
 	started := time.now()
 	f.region.origin, f.region.size, f.landslide = f.island.origin, f.island.size, {box = {1e9, 1e9, -1e9, -1e9}}
-	region_init(KINDS[f.island.kind].name, f.island.size)
+	record := record_of(f.island)   // the start island keeps its seed's record (open-decisions.md, 2026-11-15)
+	region_init(KINDS[f.island.kind].name, f.island.size, &record if f.island.id != 0 else nil)
 	region.shape.swell = world_frame.wind   // every island's swell comes from the one wind (archipelago.odin); the start island's is the one it drew
 	story, read := story_for(f.island)
 	region.story = story

@@ -86,6 +86,10 @@ main :: proc() {
 		plates_why(f64(at.x), f64(at.y))
 		return
 	}
+	if opt.known != "" {
+		known_map(opt.known)
+		return
+	}
 	if opt.island < 0 || opt.island >= len(archipelago) {
 		fmt.eprintfln("no island %d: there are %d near the start, from 0", opt.island, len(archipelago))
 		os.exit(2)

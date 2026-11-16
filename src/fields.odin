@@ -13,7 +13,7 @@ Field :: enum u8 {
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
 	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge, Surf, Sand_Kept, Washed, Canopy, Lift, Barrier,
 	// from the world's plates at the point's place in the world (archipelago.odin)
-	Setting, Front, Trench, Track, Age, Rising, Depth, Crust, Offshore, Across,
+	Setting, Front, Trench, Track, Age, Rising, Depth, Crust, Offshore, Across, Vent,
 	// from the ground the generator makes at the point
 	Height, Steepness, Gravel, Fallen, Beach, Too_Steep, Under_Water, Over_Water,
 }
@@ -94,6 +94,7 @@ FIELDS := [Field]Field_Info{
 	.Crust     = {"crust", " km", "of crust under the point: the ocean floor's 6 to 10, an arc's 15 to 25, a continent's 30 and more", proc(p: ^Point) -> f32 { return world_point(p).crust }, 5, 35, .Ramp, {0.10, 0.20, 0.50}, {0.85, 0.55, 0.30}},
 	.Offshore  = {"offshore", " km", "out to sea from the coast of land larger than a region; under 0 on it", proc(p: ^Point) -> f32 { return -world_point(p).inland }, 0, 200, .Ramp, {0.85, 0.55, 0.30}, {0.10, 0.20, 0.50}},
 	.Across    = {"across", "", "the share of the way back from the trench to the volcanic front, 0 at the trench and 1 at the front, more behind it; 10,000 off a plate riding over a sinking one", proc(p: ^Point) -> f32 { return world_point(p).across }, 0, 1.2, .Ramp, {0.10, 0.20, 0.50}, {0.95, 0.30, 0.20}},
+	.Vent      = {"vent", " Myr", "since the volcano whose foot the point lies on began to build; 10,000 on none", proc(p: ^Point) -> f32 { return world_point(p).vent }, 0, 2, .Ramp, {0.85, 0.20, 0.10}, {0.95, 0.95, 0.90}},
 	.Depth     = {"depth", " m", "of the sea over the floor the plates shape: a trench, a forearc ridge, the arc's platform, a trough, a shelf rising to the continent's coast, and the swell over the hotspot; 0 on the continent", proc(p: ^Point) -> f32 { return world_point(p).depth }, 0, 7000, .Ramp, {0.60, 0.80, 0.90}, {0.05, 0.10, 0.30}},
 	.Height    = {"height", " m", "of the ground over the sea", proc(p: ^Point) -> f32 { return p.h }, 0, 400, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Steepness = {"steepness", "", "rise over run of the ground in blocks, ledges and all", proc(p: ^Point) -> f32 { return p.steep }, 0, 1.5, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
