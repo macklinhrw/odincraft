@@ -263,8 +263,8 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 					for at := bottom; at < t; {
 						wall_of, drop := m, t - at
 						if bare && at < ground {
-							wall_of, drop = rock_in(f32(at) + 0.5, c.base[(j + 1)*P + i + 1], level), 1
-							for at + drop < ground && rock_in(f32(at + drop) + 0.5, c.base[(j + 1)*P + i + 1], level) == wall_of do drop += 1
+							wall_of, drop = rock_in(f32(at) + 0.5, c.under[(j + 1)*P + i + 1], level), 1
+							for at + drop < ground && rock_in(f32(at + drop) + 0.5, c.under[(j + 1)*P + i + 1], level) == wall_of do drop += 1
 						}
 						// A hollow's mouth on the face is drawn dark from afar (events.odin).
 						mouth := c.hollow[(j + 1)*P + i + 1]

@@ -147,7 +147,7 @@ route :: proc(g: ^Grid) #no_bounds_check {
 // finished world, once the uplift still to come and the sea's rise have moved it, so the
 // beds cut here are the beds the blocks show.
 wear :: #force_inline proc(g: ^Grid, c: int, z: f32) -> Rock_Law {
-	law := rocks.law[rock_in(z + g.uplift[c]*g.left - g.rise, g.base[c], ROCK_SIM)]
+	law := rocks.law[rock_in(z + g.uplift[c]*g.left - g.rise, grid_under(g, c), ROCK_SIM)]
 	if g.keep && land.slid[c] > 0.5 do law.erodes, law.creep = landslide.law.erodes, landslide.law.creep   // the debris wears as its blocks do
 	return law
 }

@@ -59,7 +59,7 @@ cap_at :: proc(c: int) -> (contrast, depth: f32, strong, weak: Mat) {
 	g := land.grid
 	top := Mat.Air
 	for d := f32(2); d <= 50; d += 4 {
-		m := rock_in(g.z[c] - d, g.base[c], ROCK_SIM)
+		m := rock_in(g.z[c] - d, grid_under(g, c), ROCK_SIM)
 		if MATERIALS[top].strength - MATERIALS[m].strength > contrast do contrast, depth, strong, weak = MATERIALS[top].strength - MATERIALS[m].strength, d, top, m
 		if MATERIALS[m].strength > MATERIALS[top].strength do top = m
 	}
@@ -280,7 +280,7 @@ feature_words :: proc(x, z: f64, h: f32) {
 	for f in region.features do if f.kind == .Spring && math.hypot(x - f.at.x, z - f.at.y) < 30 {
 		c := land_cell(f.at.x, f.at.y)
 		fmt.printfln("by a spring %.0f m off: rain soaking down through %v comes out where it meets %v, which holds it, and %.2f km² of land above feed it %.4f m³/s; a brook starts here.",
-			math.hypot(x - f.at.x, z - f.at.y), rock_in(f.level + 3, land.grid.base[c], ROCK_SIM), rock_in(f.level - 2, land.grid.base[c], ROCK_SIM), f.measured[0].value, f.size)
+			math.hypot(x - f.at.x, z - f.at.y), rock_in(f.level + 3, grid_under(land.grid, c), ROCK_SIM), rock_in(f.level - 2, grid_under(land.grid, c), ROCK_SIM), f.measured[0].value, f.size)
 	}
 	if !in_slide(x, z) do return
 	s := region.features[landslide.feature]
@@ -338,8 +338,8 @@ Hollow :: struct {
 contact_at :: proc(c: int) -> (contrast, y: f32) {
 	g := land.grid
 	for h := g.z[c] - 8*land.slope[c]; h < g.z[c] + 8*land.slope[c]; h += 1 {
-		below := MATERIALS[rock_in(h, g.base[c], 0)].strength
-		if s := MATERIALS[rock_in(h + 1, g.base[c], 0)].strength - below; below > 0 && s > contrast do contrast, y = s, h + 1
+		below := MATERIALS[rock_in(h, grid_under(g, c), 0)].strength
+		if s := MATERIALS[rock_in(h + 1, grid_under(g, c), 0)].strength - below; below > 0 && s > contrast do contrast, y = s, h + 1
 	}
 	return
 }
@@ -412,18 +412,18 @@ stack_make :: proc(c: int, at: [2]f64) -> bool {
 	}
 	append(&region.features, Feature{kind = .Stack, at = middle, reach = f32(math.hypot(middle.x - foot.x, middle.y - foot.y)) - r, size = math.PI*r*r*top, level = top,
 		age = region.history[len(region.history) - 1].years*region.history[len(region.history) - 1].steps, cause = -1,
-		measured = {{"how open its shore is to the swell", land.swell[c]}, {"the share of sea within 48 m of the headland", headland(c)}, {"the strength of the rock at the cliff's foot", MATERIALS[rock_in(g.z[c] - 2, g.base[c], ROCK_SIM)].strength}}})
+		measured = {{"how open its shore is to the swell", land.swell[c]}, {"the share of sea within 48 m of the headland", headland(c)}, {"the strength of the rock at the cliff's foot", MATERIALS[rock_in(g.z[c] - 2, grid_under(g, c), ROCK_SIM)].strength}}})
 	return true
 }
 
-// The top of any stack or skerry at a point over ground at `under`, whose rock base is `base`,
+// The top of any stack or skerry at a point over ground at `ground`, over rock `under` (rock_base),
 // and whether it is the rubble round its foot rather than the column. Each bed of the column
 // stands out as far as it is strong, its outline ragged and shifted by its own amount, and the
 // column widens toward its foot; so its sides step at the beds as the cliff's do, and its top is
 // whatever bed the waves have left last. Far off, it is widened by a third of a cell, so that the
 // cells it touches draw it.
-stack_at :: proc(x, z, cell: f64, under, base: f32) -> (h: f32, rubble: bool) {
-	h = under
+stack_at :: proc(x, z, cell: f64, ground: f32, under: Under) -> (h: f32, rubble: bool) {
+	h = ground
 	if cell > COARSE do return
 	for p in pillars {
 		dx, dz := x - p.at.x, z - p.at.y
@@ -433,15 +433,15 @@ stack_at :: proc(x, z, cell: f64, under, base: f32) -> (h: f32, rubble: bool) {
 		u, v := f32(dx*p.along.x + dz*p.along.y)/(p.r*p.long + grow), f32(dz*p.along.x - dx*p.along.y)/(p.r/math.sqrt(p.long) + grow)
 		ragged := 0.25*fbm(x, z, f64(1.5*p.r), cell, 3, seed + 732)
 		top := p.top*(1 - 0.15*(1 + fbm(x, z, f64(p.r), cell, 2, seed + 733)))
-		for y := top; y > under; y -= 1 {   // from the top down, the first bed that reaches out to here
-			n := rocks.bed[clamp(int(y - base - STACK_LO), 0, STACK_LEN - 1)]
-			wide := (0.6 + 0.5*MATERIALS[rocks.beds[n].kind].strength + 0.3*(hash01(i32(n), 0, seed + 734) - 0.5))*(1 + 0.7*(1 - y/p.top)*(1 - y/p.top))
+		for y := top; y > ground; y -= 1 {   // from the top down, the first bed that reaches out to here
+			n := rocks.bed[clamp(int(y - stack_base(y, under) - STACK_LO), 0, STACK_LEN - 1)]
+			wide := (0.6 + 0.5*MATERIALS[rocks.beds[n].kind if y >= under.roof else under.body].strength + 0.3*(hash01(i32(n), 0, seed + 734) - 0.5))*(1 + 0.7*(1 - y/p.top)*(1 - y/p.top))
 			if du, dv := u - 0.3*(hash01(i32(n), 1, seed + 734) - 0.5), v - 0.3*(hash01(i32(n), 2, seed + 734) - 0.5); math.sqrt(du*du + dv*dv)*(1 + ragged) < wide {
 				if y > h do h, rubble = y, false
 				break
 			}
 		}
-		if cell <= 2 && math.sqrt(u*u + v*v) < 2.2 do if s := under + stones(x, z, 0.7, 1.2); s > h do h, rubble = s, true
+		if cell <= 2 && math.sqrt(u*u + v*v) < 2.2 do if s := ground + stones(x, z, 0.7, 1.2); s > h do h, rubble = s, true
 	}
 	return
 }
@@ -483,14 +483,15 @@ hollow_carve :: proc(kind: Feature_Kind, c: int, at: [2]f64) -> bool {
 	h.span = make([][3]i16, n*n)
 	far := make([]f32, n*n, context.temp_allocator)   // metres from where the open air reaches the floor
 	contrast, contact := contact_at(c)
-	strong := int(rocks.bed[clamp(int(contact + 0.5 - g.base[c] - STACK_LO), 0, STACK_LEN - 1)])
+	strong := int(rocks.bed[clamp(int(contact + 0.5 - stack_base(contact + 0.5, grid_under(g, c)) - STACK_LO), 0, STACK_LEN - 1)])
 	for k in 0..<n*n {
 		x, z := f64(h.x0 + i32(k%n)) + 0.5, f64(h.z0 + i32(k/n)) + 0.5
 		gr := ground(x, z, 1)
 		floor, roof := row.floor, row.floor + high*(1 + 0.25*fbm(x, z, 16, 1, 2, seed + 723))
 		if kind == .Shelter {   // its roof is the underside of the strong bed, wherever that lies here
-			y := math.floor(gr.base + STACK_LO + rocks.floor[strong]) - 1
-			for int(rocks.bed[clamp(int(y + 0.5 - gr.base - STACK_LO), 0, STACK_LEN - 1)]) < strong do y += 1
+			b := bed_base(strong, gr.under)
+			y := math.floor(b + STACK_LO + rocks.floor[strong]) - 1
+			for int(rocks.bed[clamp(int(y + 0.5 - b - STACK_LO), 0, STACK_LEN - 1)]) < strong do y += 1
 			floor, roof = y - high, y
 		}
 		h.span[k] = {i16(floor), i16(math.round(roof)), i16(math.round(gr.h))}
@@ -534,9 +535,9 @@ hollow_carve :: proc(kind: Feature_Kind, c: int, at: [2]f64) -> bool {
 	}
 	measured := #partial [Feature_Kind][3]Measure{
 		.Slide = {}, .Lake = {}, .Pond = {},
-		.Notch = {{"how open its shore is to the swell", land.swell[c]}, {"the steepness of the cliff, rise over run", land.slope[c]}, {"the strength of its rock", MATERIALS[rock_in(0, g.base[c], 0)].strength}},
+		.Notch = {{"how open its shore is to the swell", land.swell[c]}, {"the steepness of the cliff, rise over run", land.slope[c]}, {"the strength of its rock", MATERIALS[rock_in(0, grid_under(g, c), 0)].strength}},
 		.Shelter = {{"how much stronger its roof's bed is than the bed under it", contrast}, {"the steepness of the face against what its rock holds", land.slope[c]/rocks.law[rocks.beds[strong].kind].limit}, {"metres to the sea", land.inland[c]}},
-		.Cave = {{"the share of sea within 48 m of the headland", headland(c)}, {"how open its shore is to the swell", land.swell[c]}, {"metres between the cracks of its rock", MATERIALS[rock_in(0, g.base[c], 0)].crack}},
+		.Cave = {{"the share of sea within 48 m of the headland", headland(c)}, {"how open its shore is to the swell", land.swell[c]}, {"metres between the cracks of its rock", MATERIALS[rock_in(0, grid_under(g, c), 0)].crack}},
 	}
 	append(&region.features, Feature{kind = kind, at = middle if kind == .Cave else at, reach = reach, size = carved, level = f32(row.floor) if kind != .Shelter else contact, age = region.history[len(region.history) - 1].years*region.history[len(region.history) - 1].steps if kind != .Shelter else 0, cause = -1, measured = measured[kind]})
 	append(hollows, h)
@@ -585,7 +586,7 @@ hollow_words :: proc(x, z: f64) {
 		s := h.span[j*h.w + i]
 		fmt.printfln("%s a %s, %s: %s%s. Here its floor is at %d m and %s. Measured when it was made: %s %.2f; %s %.2f; %s %.2f.",
 			"under the roof of" if s[1] < s[2] else "at the mouth of", NAMES[f.kind], fmt.tprintf("%.0f m long", f.reach), HOLLOWS[f.kind].why, fmt.tprintf(", over the %s years the sea has stood where it is", years(f.age)) if f.kind != .Shelter else "", s[0],
-			fmt.tprintf("its roof %d m over it, the underside of %v", s[1] - s[0], rock_in(f32(s[1]) + 0.5, ground(x, z, 1).base, 0)) if s[1] < s[2] else "it is open to the sky",
+			fmt.tprintf("its roof %d m over it, the underside of %v", s[1] - s[0], rock_in(f32(s[1]) + 0.5, ground(x, z, 1).under, 0)) if s[1] < s[2] else "it is open to the sky",
 			f.measured[0].what, f.measured[0].value, f.measured[1].what, f.measured[1].value, f.measured[2].what, f.measured[2].value)
 		return
 	}

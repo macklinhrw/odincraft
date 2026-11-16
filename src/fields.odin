@@ -12,8 +12,8 @@ Field :: enum u8 {
 	// on the land's 16 m grid
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
 	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge, Surf, Sand_Kept, Washed, Canopy, Lift, Barrier,
-	// from the world's plates at the point's place in the world (archipelago.odin): a fixed stand-in, which step 22's plate story replaces with the same fields
-	Setting, Front, Trench, Track, Age, Rising, Depth,
+	// from the world's plates at the point's place in the world (archipelago.odin)
+	Setting, Front, Trench, Track, Age, Rising, Depth, Crust, Offshore, Across,
 	// from the ground the generator makes at the point
 	Height, Steepness, Gravel, Fallen, Beach, Too_Steep, Under_Water, Over_Water,
 }
@@ -64,7 +64,7 @@ FIELDS := [Field]Field_Info{
 	.Plants    = {"plants", "", "the plant community that won the race for the ground (COMMUNITIES)", proc(p: ^Point) -> f32 { k, _ := community_at(p.x, p.z, p.cell); return f32(k) }, 0, 0, .Plants, {}, {}},
 	.Volcanic  = {"volcanic", "", "1 where the rock is lava and ash laid by the island's vents", proc(p: ^Point) -> f32 { return 1 if region.story.drape else 0 }, 0, 1, .Ramp, {0.90, 0.88, 0.80}, {0.25, 0.15, 0.12}},
 	.Woods     = {"woods", "", "share of the places in the canopy a tree takes, which the plant community sets", proc(p: ^Point) -> f32 { k, _ := community_at(p.x, p.z, p.cell); return COMMUNITIES[k].density }, 0, 1, .Ramp, {0.90, 0.85, 0.65}, {0.05, 0.30, 0.08}},
-	.At_Limit  = {"at-limit", "", "steepness against the steepest the rock at the surface holds", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); return grid_at(land.slope, p)/rocks.law[rock_in(land.grid.z[c] - 2, land.grid.base[c], ROCK_SIM)].limit }, 0, 1.2, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
+	.At_Limit  = {"at-limit", "", "steepness against the steepest the rock at the surface holds", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); return grid_at(land.slope, p)/rocks.law[rock_in(land.grid.z[c] - 2, grid_under(land.grid, c), ROCK_SIM)].limit }, 0, 1.2, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
 	.Cap       = {"cap", "", "how much stronger a bed in the top 50 m is than the weakest bed under it, in strength from 0 to 1", proc(p: ^Point) -> f32 { s, _, _, _ := cap_at(land_cell(p.x, p.z)); return s }, 0, 0.6, .Ramp, {0.95, 0.95, 0.90}, {0.30, 0.20, 0.60}},
 	.Valley    = {"valley", " m²", "drained by the stream the ground drains to", proc(p: ^Point) -> f32 { return land.valley[land_cell(p.x, p.z)] }, 4, 7.4, .Log, {0.95, 0.95, 0.90}, {0.05, 0.10, 0.45}},
 	.Slid      = {"slid", " m", "of a slide's debris laid here, or under 0, of ground it took away", proc(p: ^Point) -> f32 { return grid_at(land.slid, p) }, -30, 30, .Ramp, {0.30, 0.45, 0.85}, {0.85, 0.50, 0.15}},
@@ -73,7 +73,7 @@ FIELDS := [Field]Field_Info{
 	.Swell     = {"swell", "", "0 on a sheltered shore to 1 on one open all round and toward the swell, as the waves cut it; 0 off the shore", proc(p: ^Point) -> f32 { return land.swell[land_cell(p.x, p.z)] }, 0, 0.5, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.25, 0.70}},
 	.Headland  = {"headland", "", "share of sea within 48 m", proc(p: ^Point) -> f32 { return headland(land_cell(p.x, p.z)) }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.25, 0.70}},
 	.Contact   = {"contact", "", "how much stronger a bed is than the one under it, where the two meet on the hillside within 8 m of the ground, in strength from 0 to 1", proc(p: ^Point) -> f32 { s, _ := contact_at(land_cell(p.x, p.z)); return s }, 0, 0.6, .Ramp, {0.95, 0.95, 0.90}, {0.30, 0.20, 0.60}},
-	.Strength  = {"strength", "", "of the rock at the surface, from 0 for the weakest to 1 (rock.odin)", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); return MATERIALS[rock_in(land.grid.z[c] - 2, land.grid.base[c], ROCK_SIM)].strength }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
+	.Strength  = {"strength", "", "of the rock at the surface, from 0 for the weakest to 1 (rock.odin)", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); return MATERIALS[rock_in(land.grid.z[c] - 2, grid_under(land.grid, c), ROCK_SIM)].strength }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Crossing  = {"crossing", " s/m", "for a person to walk a metre of this ground straight up its slope, wading any stream across the cell (pace, trails.odin)", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); return pace(c, land.slope[c], land.slope[c]) + trails.wade[c]/LAND_CELL }, -0.3, 1.7, .Log, {0.95, 0.95, 0.90}, {0.45, 0.05, 0.30}},
 	.Risen     = {"risen", " m", "the sea has risen over the island since it stood lowest, when it may have been joined to larger land", proc(p: ^Point) -> f32 { return risen() }, 0, 120, .Ramp, {0.90, 0.88, 0.80}, {0.10, 0.30, 0.70}},
 	.Trail     = {"trail", " m", "from the middle of the nearest animal trail, less half of any cell over a metre; far, at cells over 2 m", proc(p: ^Point) -> f32 { return trail_near(p.x, p.z) - 0.5*f32(p.cell - 1) if p.cell <= 2 else ANY }, 0, 20, .Ramp, {0.60, 0.12, 0.05}, {0.95, 0.95, 0.90}},
@@ -91,6 +91,9 @@ FIELDS := [Field]Field_Info{
 	.Track     = {"track", " km", "from the line the plate has carried the hotspot's islands along, on the plate going down; 10,000 elsewhere", proc(p: ^Point) -> f32 { return world_point(p).track }, 0, 40, .Ramp, {1.00, 0.60, 0.10}, {0.95, 0.95, 0.90}},
 	.Age       = {"age", " Myr", "since the land was made: a young volcano's on the arc's front, as long as the plate has carried it on the hotspot's track, else the crust's", proc(p: ^Point) -> f32 { return world_point(p).age }, -1, 2.3, .Log, {0.95, 0.40, 0.10}, {0.20, 0.20, 0.45}},
 	.Rising    = {"rising", " mm/yr", "the crust rises, fastest on the forearc's outer ridge; under 0 it sinks, into the trench or cooling off the hotspot", proc(p: ^Point) -> f32 { return world_point(p).rising }, -0.5, 2, .Ramp, {0.10, 0.30, 0.75}, {0.95, 0.60, 0.15}},
+	.Crust     = {"crust", " km", "of crust under the point: the ocean floor's 6 to 10, an arc's 15 to 25, a continent's 30 and more", proc(p: ^Point) -> f32 { return world_point(p).crust }, 5, 35, .Ramp, {0.10, 0.20, 0.50}, {0.85, 0.55, 0.30}},
+	.Offshore  = {"offshore", " km", "out to sea from the coast of land larger than a region; under 0 on it", proc(p: ^Point) -> f32 { return -world_point(p).inland }, 0, 200, .Ramp, {0.85, 0.55, 0.30}, {0.10, 0.20, 0.50}},
+	.Across    = {"across", "", "the share of the way back from the trench to the volcanic front, 0 at the trench and 1 at the front, more behind it; 10,000 off a plate riding over a sinking one", proc(p: ^Point) -> f32 { return world_point(p).across }, 0, 1.2, .Ramp, {0.10, 0.20, 0.50}, {0.95, 0.30, 0.20}},
 	.Depth     = {"depth", " m", "of the sea over the floor the plates shape: a trench, a forearc ridge, the arc's platform, a trough, a shelf rising to the continent's coast, and the swell over the hotspot; 0 on the continent", proc(p: ^Point) -> f32 { return world_point(p).depth }, 0, 7000, .Ramp, {0.60, 0.80, 0.90}, {0.05, 0.10, 0.30}},
 	.Height    = {"height", " m", "of the ground over the sea", proc(p: ^Point) -> f32 { return p.h }, 0, 400, .Ramp, {0.95, 0.95, 0.90}, {0.35, 0.20, 0.10}},
 	.Steepness = {"steepness", "", "rise over run of the ground in blocks, ledges and all", proc(p: ^Point) -> f32 { return p.steep }, 0, 1.5, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
@@ -180,7 +183,7 @@ edges :: proc(windows: []Window, p: ^Point) -> (near: [2]string, by: f32) {
 why_at :: proc(wx, wz: f64) {
 	x, z := math.floor(wx) - f64(region.origin.x) + 0.5, math.floor(wz) - f64(region.origin.y) + 0.5
 	p := point_at(x, z, 1)
-	fmt.printfln("at %.0f, %.0f: ground %.1f m over the sea, %.0f° steep, wetness %.2f", wx, wz, p.h, math.to_degrees(math.atan(p.steep)), FIELDS[.Wetness].at(&p))
+	fmt.printfln("at %.0f, %.0f: ground %.1f m over the sea, %.0f° steep, falling toward %.0f°, wetness %.2f", wx, wz, p.h, math.to_degrees(math.atan(p.steep)), FIELDS[.Facing].at(&p), FIELDS[.Wetness].at(&p))
 	win := surface_row(&p)
 	_, m, plants := surface_at(x, z, 1)
 	r := SURFACES[win]
@@ -244,6 +247,8 @@ why_at :: proc(wx, wz: f64) {
 	feature_words(x, z, p.h)
 	hollow_words(x, z)
 	stack_words(x, z)
+	rock_words(x, z, f64(p.h))
+	story_words()
 	trail_words(x, z)
 	named_words(x, z)
 	creature_words(x, z)

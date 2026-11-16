@@ -48,6 +48,7 @@ SETTINGS := [Setting]string{.Open_Sea = "open sea", .Hotspot = "hotspot", .Forea
 World_Point :: struct {
 	setting: Setting,
 	front, trench, track, age, rising, depth, inland: f32,   // km, km, km, Myr, mm/yr, m, km behind the coast of land larger than a region
+	crust, across: f32,   // km of crust; the share of the way from the trench back to the volcanic front
 }
 
 // Where the start stands in the known world, and what is drawn for the whole world from its seed.
@@ -122,6 +123,7 @@ world_at :: proc(x, z: f64) -> (w: World_Point) {
 		w.rising += world_frame.rise*stretch*high
 	}
 	w.depth, w.inland = max(-k.h - OUTER_HIGH.relief*high, 0), inland
+	w.crust, w.across = k.thick, (k.front + k.setback)/k.setback if over else 1e4
 	w.setting = .Continent if inland > 0 else .Arc if w.front < 10 else .Hotspot if w.track < 10 else .Forearc if over && k.front < 0 else .Back_Arc if over && k.front < 400 && !k.cont else .Shelf if k.cont else .Open_Sea
 	return
 }
@@ -420,8 +422,8 @@ archipelago_map :: proc(path: string) {
 		for py in max(int(lo.y), 0)..<min(int(hi.y) + 1, MAP) do for px in max(int(lo.x), 0)..<min(int(hi.x) + 1, MAP) {
 			if p := pixel(px, py) - o; max(abs(p.x), abs(p.y)) < is.size/2 do heights[py*MAP + px] = max(land_at(land.z[2], land.n/4, p.x, p.y), 0)
 		}
-		fmt.printfln("%d %s, %s, %.1f Myr, at %.1f, %.1f km; region %.1f km, highest %.0f m, formed in %.2f s; lives on it: %s",
-			is.id, KINDS[is.kind].name, SETTINGS[is.setting], is.age, o.x/1000, o.y/1000, is.size/1000, tops[i], f.seconds, lives_words())
+		fmt.printfln("%d %s, %s, %.1f Myr, at %.1f, %.1f km; region %.1f km, highest %.0f m, formed in %.2f s; its rock %s%s; lives on it: %s",
+			is.id, KINDS[is.kind].name, SETTINGS[is.setting], is.age, o.x/1000, o.y/1000, is.size/1000, tops[i], f.seconds, region.story.name, "" if rocks.full else " (its kind's)", lives_words())
 	}
 	bind(home)
 
@@ -548,7 +550,7 @@ archipelago_map :: proc(path: string) {
 	}
 	// Each island named on whichever side of it is clear: right, left, below, above.
 	for is, i in archipelago {
-		label := fmt.tprintf("%d %s, %s", is.id, KINDS[is.kind].name, SETTINGS[is.setting])
+		label := fmt.tprintf("%d %s, %s: %s", is.id, KINDS[is.kind].name, SETTINGS[is.setting], formed[i].region.story.name)
 		q, r, w := at({f64(is.origin.x), f64(is.origin.y)}), int(0.42*is.size*MAP/VIEW), 12*len(label)
 		spot := [4]int{q.x + r, q.y - 7, q.x + r + w, q.y + 9}
 		for c in ([4][2]int{{q.x + r, q.y - 7}, {q.x - r - w, q.y - 7}, {q.x - w/2, q.y + r}, {q.x - w/2, q.y - r - 16}}) {
