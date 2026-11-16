@@ -9,7 +9,23 @@ import "core:strings"
 // picture or measure frame times without a window, or run one of the offline tools that print or
 // draw what the generator made and exit (map, archipelago, why, survey, plates, plates-why).
 //
+// The game begins in the view from above (above.odin), over the start. Any of pos, above, look,
+// fly, place and first begins it in first person instead, and so does bench without over.
+//
 // Options, each as --name=value
+//   over=x,z        the view from above, over this point of the world
+//   span=metres     how much ground lies across its picture (default 160: a hold's ground)
+//   tilt=degrees    how far it looks down, from 35 to 90, straight down (default 50)
+//   turn=degrees    which way the picture's top faces: 0 north, 90 east (default: downstream at the start)
+//   cut=level       cut the world at this height over the sea, so nothing from there up is drawn;
+//                   cut=ground keeps the cut over the ground under the view's middle
+//   bare            leaves are not drawn
+//   cursor=x,y      where the pointer is in the picture, in pixels from its top left: the block under
+//                   it is marked and said, and with why its ground explained; cursor=x,y,x,y marks the
+//                   box of blocks between two points
+//   why             with cursor: print what the block under the pointer is and why its ground is so
+//   pace=N          how fast the world's clock runs: 0 paused, or 1, 2 or 4 times (default 1)
+//   first           first person, at the start
 //   pos=x,y,z  above=x,height,z (over the ground)  look=yaw,pitch (degrees)  hour=0..24  fly  size=WxH
 //   day=N           day of the year, 0 on 1 January (default: the first fair day from 80, the March
 //                   equinox, on): sets the sun's path
@@ -42,7 +58,8 @@ import "core:strings"
 //   plates-why=x,z  print what happened through that history at this point in the world (as for why), and exit
 //   place=N         look at named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
-//                   with fly, otherwise running on the ground
+//                   with fly, otherwise running on the ground; with over, the view from above
+//                   panned toward its picture's top at `speed` m/s
 //   show            with shot or bench: open the window. Without it they draw unseen and take no focus
 
 Options :: struct {
@@ -77,10 +94,24 @@ Options :: struct {
 	plates:        string,
 	plates_why:    [2]f64,
 	has_plates_why: bool,
-}
+	over:          [2]f64,
+	has_over:      bool,
+	span, tilt:    f64,
+	turn:          f32,
+	has_turn:      bool,
+	cut:           f64,
+	has_cut:       bool,
+	cut_ground:    bool,
+	bare, first:   bool,
+	cursor:        [4]f64,
+	has_cursor:    bool,
+	cursor_box:    bool,
+	why_cursor:    bool,
+	pace:          int,
+	}
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -124,7 +155,27 @@ options :: proc() -> Options {
 		case "archipelago": o.archipelago = value
 		case "plates": o.plates = value
 		case "plates-why": ok = numbers(value, ",", o.plates_why[:]); o.has_plates_why = true
-		case "why":   ok = numbers(value, ",", o.why[:]); o.has_why = true
+		case "why":
+			if value == "" do o.why_cursor = true
+			else do ok, o.has_why = numbers(value, ",", o.why[:]), true
+		case "over":  ok = numbers(value, ",", o.over[:]); o.has_over = true
+		case "span":  ok = numbers(value, ",", v[:1]); o.span = v.x
+		case "tilt":  ok = numbers(value, ",", v[:1]); o.tilt = v.x
+		case "turn":  ok = numbers(value, ",", v[:1]); o.turn, o.has_turn = f32(v.x), true
+		case "cut":
+			if value == "ground" do o.cut_ground = true
+			else {
+				ok = numbers(value, ",", v[:1])
+				o.cut, o.has_cut = v.x, true
+			}
+		case "bare":  o.bare = true
+		case "first": o.first = true
+		case "pace":
+			ok = numbers(value, ",", v[:1]) && (v.x == 0 || v.x == 1 || v.x == 2 || v.x == 4)
+			o.pace = int(v.x)
+		case "cursor":
+			o.has_cursor, o.cursor_box = true, numbers(value, ",", o.cursor[:])
+			ok = o.cursor_box || numbers(value, ",", o.cursor[:2])
 		case "fly":   o.fly = true
 		case "survey": o.survey = true
 		case "place": ok = numbers(value, ",", v[:1]); o.place = int(v.x)

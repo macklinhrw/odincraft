@@ -108,7 +108,7 @@ plant_quad :: proc(x, y, z: i32, kind: Plant_Kind, wx, wz: i32, light: u16, slop
 	row := GROUND_PLANTS[kind]
 	h := hash(wx, wz, seed + 830)
 	size := math.lerp(row.size[0], row.size[1], f32(h >> 16)/65535)
-	return {i16(x), i16(y), i16(z), i16(u16(kind) | u16(row.tall) << 8), u16(h), u16(size*100), light, slope, .Air, 0}
+	return {i16(x), i16(y), i16(z), i16(u16(kind) | u16(row.tall) << 8), u16(h), u16(size*100), light, slope, .Air, .Air}
 }
 
 // How many of a chunk's plants stand in more water than their row can.
