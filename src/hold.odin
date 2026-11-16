@@ -1,8 +1,10 @@
 package main
 
+import "base:builtin"
 import "core:fmt"
 import fnv "core:hash"
 import "core:math"
+import "core:math/linalg"
 import "core:os"
 import "core:strconv"
 import "core:strings"
@@ -11,7 +13,7 @@ import "core:thread"
 import "core:time"
 import sdl "vendor:sdl3"
 
-// The dwarves' world (plan.md, P2; docs/adr/0007). It is a simulation of its own beside the frame:
+// The dwarves' world (plan.md, P2; docs/adr/0009). It is a simulation of its own beside the frame:
 // it advances in ticks of a tenth of a second from the world's seed and a list of orders, each
 // order with the tick it is obeyed at, and the same seed and orders give the same events every
 // time, with a window or without one. All it is lies in one record, `Hold`, that only the thread
@@ -33,12 +35,12 @@ import sdl "vendor:sdl3"
 
 TICK      :: 0.1     // seconds of the dwarves' world in a tick
 TICK_MS   :: 100
-PARTY     :: 7
+LANDING   :: 7       // who come in the first boat. The hold grows: nothing below counts on seven
 ROWING    :: 1.4     // metres a second the boat comes in
 STEP_OUT  :: 15      // ticks between one dwarf stepping ashore and the next
-IN_FILE   :: 8       // ticks between one dwarf setting out and the next, so the party walks in file
+IN_FILE   :: 8       // ticks between one dwarf setting out and the next, so a party walks in file and looks for its ways one at a time
 ASKING    :: 64      // patches the hold may make to answer one order, before any way is looked for
-AIM_REACH :: 160.0   // metres off a block can be aimed at to send the party to it, or a dwarf asked
+AIM_REACH :: 160.0   // metres off a block can be aimed at in first person to send the party to it, or a dwarf asked
 
 Doing :: enum u8 { Aboard, Ashore, Walking, Waiting, Stopped }
 Dwarf :: struct {
@@ -48,7 +50,8 @@ Dwarf :: struct {
 	into, takes: i32,                 // milliseconds into the step, and how many it takes; none when it stands
 	path:        [dynamic][3]i32,     // the floors of its way
 	next:        int,                 // the one it steps to next
-	wait:        int,                 // ticks before it sets out
+	seek:        bool,                // it has yet to look for its way
+	wait:        int,                 // ticks before it looks, or sets out
 	stride:      f64,                 // metres walked since landing
 	facing:      f32,                 // radians from north
 	said:        string,              // why it stopped
@@ -62,8 +65,9 @@ Order :: struct {
 	mat:    Mat,
 }
 
-// What the frame may know: where everyone stood at a tick and at the tick before, and what each was doing.
+// What the frame may know: who each dwarf is, where it stood at a tick and at the tick before, and what it was doing.
 Seen :: struct {
+	who:            Facts,
 	was, at:        [3]f64,
 	trod, stride:   f64,
 	facing:         f32,
@@ -77,13 +81,12 @@ Shown :: struct {
 	grounded:  bool,
 	errand:    int,
 	place:     string,
-	dwarves:   [PARTY]Seen,
+	dwarves:   [dynamic]Seen,
 }
 
 Hold :: struct {
 	island:   ^Formed,
 	walk:     Walk,
-	party:    [PARTY]Facts,   // drawn when the hold is made and not changed after, so any thread may read it
 	landed:   Landed,
 	found:    bool,           // the island has a landing
 	boat_from, boat_to: [2]f64,
@@ -91,21 +94,23 @@ Hold :: struct {
 	quiet:    bool,           // say nothing: a test
 	// Its own, touched by the thread running it alone.
 	tick:     int,
-	dwarves:  [PARTY]Dwarf,
-	spots:    [PARTY][3]i32,  // where each stands when the errand is done
+	party:    [dynamic]Facts, // who each dwarf is
+	dwarves:  [dynamic]Dwarf,
+	spots:    [dynamic][3]i32, // where each stands when the errand is done
 	errand:   int,            // orders to go obeyed so far; none while the party gathers above the landing
 	place:    string,         // where the errand leads, in words
 	summed:   bool,           // its end has been said
 	orders:   [dynamic]Order, // by tick
 	taken:    int,
 	log:      [dynamic]string,
+	showing:  [dynamic]Seen,  // the next tick's picture, as it is laid out
 	work:     struct { ways, patches: int, walking, finding, worst_tick, worst_way: time.Duration },
 	// Shared with the frame thread, under the mutex.
 	mutex:    sync.Mutex,
 	wake:     sync.Cond,
 	inbox:    [dynamic]Order,
 	shown:    Shown,
-	target:   int,            // the tick the frame's clock has reached (atomic)
+	target:   int,            // the tick the game's clock has reached (atomic)
 	until:    int,            // the tick to stop at
 	quit:     bool,
 	runner:   ^thread.Thread,
@@ -114,13 +119,15 @@ hold: Hold   // the player's hold
 
 // ---- making it ------------------------------------------------------------------------------
 
-// Make the hold on an island: draw the party, choose the landing and say both, and read the orders.
-hold_make :: proc(h: ^Hold, island: ^Formed, orders: string) {
+// Make the hold on an island: draw the party the boat brings, choose the landing and say both, and read the orders.
+hold_make :: proc(h: ^Hold, island: ^Formed, orders: string, count := LANDING) {
 	started := time.now()
 	bound(island)
 	h.island = island
 	walk_init(&h.walk, island)
-	h.party = party_draw(world_seed)
+	party_draw(world_seed, count, &h.party)
+	builtin.resize(&h.dwarves, count)
+	builtin.resize(&h.spots, count)
 	h.walk.budget = ASKING
 	h.landed, h.found = landing_choose(&h.walk)
 	if !h.found {
@@ -138,16 +145,22 @@ hold_make :: proc(h: ^Hold, island: ^Formed, orders: string) {
 	orders_read(h, orders)
 	hold_show(h)
 	if h.quiet do return
-	fmt.printfln("the hold: seven dwarves come by boat, their landing chosen in %.0f ms:", time.duration_milliseconds(time.since(started)))
+	fmt.printfln("the hold: %s dwarves come by boat, their landing chosen in %.0f ms:", count_words(count), time.duration_milliseconds(time.since(started)))
 	landing_words(l)
 	m := middle_of(land.grid, l.cell)
 	c := land_cell(m.x, m.y)
 	fmt.printfln("  the boat comes in %.0f m from the %s and grounds at %d, %d, %d; the party gathers at %d, %d, %d, %.0f m from the boat and %.0f m from fresh water",
 		math.hypot(h.boat_from.x - h.boat_to.x, h.boat_from.y - h.boat_to.y), compass(l.out.x, l.out.y), l.at.x, l.at.y, l.at.z, l.camp.x, l.camp.y, l.camp.z,
 		math.hypot(f64(l.camp.x - l.at.x), f64(l.camp.z - l.at.z)), fresh_water(c))
-	fmt.print("  the seven:")
+	fmt.printf("  the %s:", count_words(count))
 	for f, i in h.party do fmt.printf("%s %s", "" if i == 0 else ";", dwarf_name(f))
 	fmt.println()
+}
+
+// A count in a word, while a word will do.
+count_words :: proc(n: int) -> string {
+	words := [?]string{"no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"}
+	return words[n] if n >= 0 && n < len(words) else fmt.tprint(n)
 }
 
 // The party's standing places round a floor.
@@ -155,7 +168,7 @@ spots_take :: proc(h: ^Hold, at: [3]i32) {
 	h.walk.budget = ASKING
 	n := 0
 	if f := walk_floor(&h.walk, at.x, at.y, at.z); f >= 0 do n = walk_spots(&h.walk, f, h.spots[:])
-	for i in n..<PARTY do h.spots[i] = at   // no room to spread: they crowd
+	for i in n..<len(h.spots) do h.spots[i] = at   // no room to spread: they crowd
 }
 
 orders_read :: proc(h: ^Hold, path: string) {
@@ -221,33 +234,43 @@ boat_at :: proc(h: ^Hold, tick: int) -> [2]f64 {
 feet_of :: proc(h: ^Hold, i: int) -> [3]f64 {
 	d := &h.dwarves[i]
 	if d.doing == .Aboard {
-		b, out := boat_at(h, h.tick), h.landed.out
-		p := b - out*SEATS[i].y + [2]f64{out.y, -out.x}*SEATS[i].x
+		b, out, seat := boat_at(h, h.tick), h.landed.out, SEATS[i%len(SEATS)]
+		p := b - out*seat.y + [2]f64{out.y, -out.x}*seat.x
 		return {p.x, SEA_SURFACE + 0.1, p.y}
 	}
 	if d.takes == 0 do return feet_on(d.cell)
 	return math.lerp(d.from, feet_on(d.cell), f64(d.into)/f64(d.takes))
 }
 
-// Lay out what the frame may see of the tick in hand.
+// Lay out what the frame may see of the tick in hand, and put it where the frame reads it.
 hold_show :: proc(h: ^Hold) {
-	s: Shown
-	s.tick, s.errand, s.place, s.grounded = h.tick, h.errand, h.place, h.tick >= h.boat_ticks
-	s.boat_was, s.boat = h.shown.boat, boat_at(h, h.tick)
+	builtin.resize(&h.showing, len(h.dwarves))
 	for &d, i in h.dwarves {
-		was := h.shown.dwarves[i]
-		s.dwarves[i] = {was = was.at, at = feet_of(h, i), trod = was.stride, stride = d.stride, facing = d.facing, doing = d.doing, left = len(d.path) - d.next, of = len(d.path), said = d.said}
+		at := feet_of(h, i)
+		was, trod := at, d.stride
+		if h.tick > 0 && i < len(h.shown.dwarves) do was, trod = h.shown.dwarves[i].at, h.shown.dwarves[i].stride
+		h.showing[i] = {who = h.party[i], was = was, at = at, trod = trod, stride = d.stride, facing = d.facing, doing = d.doing, left = len(d.path) - d.next, of = len(d.path), said = d.said}
 	}
-	if h.tick == 0 {
-		s.boat_was = s.boat
-		for &d in s.dwarves do d.was = d.at
-	}
+	boat := boat_at(h, h.tick)
 	sync.lock(&h.mutex)
-	h.shown = s
+	h.shown.boat_was, h.shown.boat = h.shown.boat if h.tick > 0 else boat, boat
+	h.shown.tick, h.shown.errand, h.shown.place, h.shown.grounded = h.tick, h.errand, h.place, h.tick >= h.boat_ticks
+	h.shown.dwarves, h.showing = h.showing, h.shown.dwarves
 	sync.unlock(&h.mutex)
 }
 
-// One tick: obey the orders due, bring the boat in, land the party and move every dwarf.
+// A copy of what the hold shows, into a picture that keeps its own room.
+shown_copy :: proc(to: ^Shown, from: Shown) {
+	room := to.dwarves
+	to^ = from
+	to.dwarves = room
+	builtin.resize(&to.dwarves, len(from.dwarves))
+	copy(to.dwarves[:], from.dwarves[:])
+}
+
+// One tick: obey the orders due, bring the boat in, land the party and move every dwarf. A dwarf
+// that stands costs a glance; one that walks, a step now and then; one that must look for its way
+// looks when its turn in the file comes, so an order to a hundred is a hundred searches a moment apart.
 hold_tick :: proc(h: ^Hold) {
 	bound(h.island)
 	started := time.now()
@@ -256,7 +279,7 @@ hold_tick :: proc(h: ^Hold) {
 		obey(h, h.orders[h.taken])
 		h.taken += 1
 	}
-	if h.tick == 0 do say(h, "A boat with seven dwarves stands %.0f m off the shore, to the %s, and pulls for the landing.", math.hypot(h.boat_from.x - h.boat_to.x, h.boat_from.y - h.boat_to.y), compass(h.landed.out.x, h.landed.out.y))
+	if h.tick == 0 do say(h, "A boat with %s dwarves stands %.0f m off the shore, to the %s, and pulls for the landing.", count_words(len(h.dwarves)), math.hypot(h.boat_from.x - h.boat_to.x, h.boat_from.y - h.boat_to.y), compass(h.landed.out.x, h.landed.out.y))
 	if h.tick == h.boat_ticks do say(h, "The boat grounds at %d, %d, on %s.", h.landed.at.x, h.landed.at.z, ground_words(h.landed.at)[4:])
 	for &d, i in h.dwarves {
 		if d.doing == .Aboard && h.tick >= h.boat_ticks + 20 + STEP_OUT*i {   // over the bow, one at a time
@@ -265,7 +288,10 @@ hold_tick :: proc(h: ^Hold) {
 		}
 		if d.takes == 0 && d.doing == .Walking {
 			if d.wait > 0 do d.wait -= 1
-			else if !step_on(h, &d) do arrive(h, i)
+			else {
+				if d.seek do find(h, i)
+				if d.doing == .Walking && !step_on(h, &d) do arrive(h, i)
+			}
 		}
 		if d.takes == 0 do continue
 		d.into += TICK_MS
@@ -274,10 +300,9 @@ hold_tick :: proc(h: ^Hold) {
 			d.takes = 0
 			if d.doing == .Ashore {
 				say(h, "%s, steps ashore.", dwarf_name(h.party[i]))
-				send(h, i)
-				d.wait = 0
+				d.doing, d.seek, d.wait = .Walking, true, 0
 			}
-			if d.doing != .Walking do d.into = 0
+			if d.doing != .Walking || d.seek do d.into = 0   // it stands, or looks for its way next tick
 			else if !step_on(h, &d) do arrive(h, i)
 		}
 	}
@@ -320,38 +345,38 @@ errand_sum :: proc(h: ^Hold) {
 		there += int(d.doing == .Waiting)
 		stopped += int(d.doing == .Stopped)
 	}
-	if h.summed || there + stopped < PARTY do return
+	all := len(h.dwarves)
+	if h.summed || there + stopped < all do return
 	h.summed = true
-	if stopped == PARTY do say(h, "None of the seven found a way to %s.", h.place)
-	else if stopped > 0 do say(h, "%d of the seven stand at %s; %d found no way.", there, h.place, stopped)
-	else if h.errand == 0 do say(h, "The seven stand on the %s, and wait for word.", h.place)
-	else do say(h, "All seven stand at %s.", h.place)
+	if stopped == all do say(h, "None of the %s found a way to %s.", count_words(all), h.place)
+	else if stopped > 0 do say(h, "%d of the %s stand at %s; %d found no way.", there, count_words(all), h.place, stopped)
+	else if h.errand == 0 do say(h, "The %s stand on the %s, and wait for word.", count_words(all), h.place)
+	else do say(h, "All %s stand at %s.", count_words(all), h.place)
 }
 
-// Find a dwarf its way to its place in the errand, from the floor it stands on or is stepping
-// onto, and set it walking; or say why there is none. With `ask`, a dwarf that finds none is left as it was.
-send :: proc(h: ^Hold, i: int, ask := false) -> (seconds: f32, why: Found) {
-	d := &h.dwarves[i]
+// A way between two floors, timed and counted.
+way_timed :: proc(h: ^Hold, from, to: [3]i32, out: ^[dynamic][3]i32) -> (seconds: f32, why: Found, spent: time.Duration, made: int) {
 	started := time.now()
-	made := h.walk.made
-	way := make([dynamic][3]i32, context.temp_allocator)
-	seconds, why = walk_way(&h.walk, d.cell, h.spots[i], &way)
-	spent := time.since(started)
+	made = h.walk.made
+	seconds, why = walk_way(&h.walk, from, to, out)
+	spent, made = time.since(started), h.walk.made - made
 	h.work.ways += 1
 	h.work.finding += spent
-	h.work.patches += h.walk.made - made
+	h.work.patches += made
 	h.work.worst_way = max(h.work.worst_way, spent)
-	if why == .Way {
-		clear(&d.path)
-		append(&d.path, ..way[:])
-		d.next, d.said, d.doing, d.wait = 1, "", .Walking, i*IN_FILE if d.takes == 0 else 0
-	} else if !ask {
+	return
+}
+
+// A dwarf looks for its way to its place in the errand, from the floor it stands on, and sets out; or stops, and says why.
+find :: proc(h: ^Hold, i: int) {
+	d := &h.dwarves[i]
+	d.seek, d.next, d.said = false, 1, ""
+	if _, why, _, _ := way_timed(h, d.cell, h.spots[i], &d.path); why != .Way {
 		clear(&d.path)
 		d.doing, d.said = .Stopped, no_way(h, why)
 		say(h, "%s %s stops: %s.", h.party[i].given, h.party[i].byname, d.said)
 		errand_sum(h)
 	}
-	return
 }
 
 // Why no way was found, in words.
@@ -365,6 +390,9 @@ no_way :: proc(h: ^Hold, why: Found) -> string {
 	return ""
 }
 
+// Whether a dwarf has landed: an order is for those who have, and the rest follow as they land.
+ashore :: proc(d: Dwarf) -> bool { return d.doing != .Aboard && d.doing != .Ashore }
+
 obey :: proc(h: ^Hold, o: Order) {
 	w := &h.walk
 	w.budget, w.starved = ASKING, false
@@ -372,7 +400,17 @@ obey :: proc(h: ^Hold, o: Order) {
 	case .Block:
 		walk_edit(w, {o.at.x, o.at.y, o.at.z, o.mat})
 		say(h, `The hold says "block %d %d %d %v": the ground is changed there.`, o.at.x, o.at.y, o.at.z, o.mat)
-		for &d, i in h.dwarves do if d.doing == .Walking do send(h, i)   // a way laid over the old ground may not hold
+		// A way laid over the old ground may not hold: each dwarf whose way still passes the block
+		// stops at the end of its step and looks again, one a tick.
+		turn := 0
+		for &d in h.dwarves do if d.doing == .Walking && !d.seek {
+			for b in d.path[min(d.next, len(d.path)):] do if abs(b.x - o.at.x) <= 1 && abs(b.z - o.at.z) <= 1 && abs(b.y - o.at.y) <= 2 {
+				clear(&d.path)
+				d.seek, d.wait = true, turn
+				turn += 1
+				break
+			}
+		}
 	case .Go:
 		at := o.at
 		if o.column do at.y = i32(math.round(ground(f64(at.x - region.origin.x) + 0.5, f64(at.z - region.origin.y) + 0.5, 1).h)) - 1
@@ -381,34 +419,33 @@ obey :: proc(h: ^Hold, o: Order) {
 			say(h, `The hold says "go %d %d %d": there is no ground to stand on within three steps of it, so no one sets out.`, at.x, at.y, at.z)
 			return
 		}
-		was_spots, was_place := h.spots, h.place
 		to := floor_block(w, f)
-		spots_take(h, to)
+		was := h.place
 		h.place = place_say(h, to)
-		// Each dwarf ashore looks for its way; those still in the boat follow as they land. If none
-		// finds one, the party stays where it is and the order is let go.
-		started, made := time.now(), w.made
-		sent, floors, longest, last := 0, 0, f32(0), Found.Way
-		for &d, i in h.dwarves do if d.doing != .Aboard && d.doing != .Ashore {
-			seconds, why := send(h, i, true)
-			if why == .Way do sent, floors, longest = sent + 1, max(floors, len(d.path)), max(longest, seconds)
-			else do last = why
-		}
-		if !h.quiet do fmt.printfln("    (%d ways found in %.1f ms, %d patches of ground read for them; the longest %d floors and %.0f s of walking)", sent, time.duration_milliseconds(time.since(started)), w.made - made, floors, longest)
-		if sent == 0 && last != .Way {
-			say(h, `The hold says "go %d %d %d": %s, so no one sets out.`, at.x, at.y, at.z, no_way(h, last))
-			h.spots, h.place = was_spots, was_place
-			return
+		// The first dwarf ashore looks for a way there, which says whether the order can be obeyed
+		// and reads the ground the others will cross. If there is none, the party stays as it is.
+		for d in h.dwarves do if ashore(d) {
+			way := make([dynamic][3]i32, context.temp_allocator)
+			seconds, why, spent, made := way_timed(h, d.cell, to, &way)
+			if !h.quiet do fmt.printfln("    (a way looked for in %.1f ms, %d chunks of ground read for it; %d floors and %.0f s of walking)", time.duration_milliseconds(spent), made, len(way), seconds)
+			if why == .Cut_Off || why == .Too_Far {
+				say(h, `The hold says "go %d %d %d": %s, so no one sets out.`, at.x, at.y, at.z, no_way(h, why))
+				h.place = was
+				return
+			}
+			break
 		}
 		h.errand += 1
 		h.summed = false
+		spots_take(h, to)
 		say(h, `The hold says "go %d %d %d": the party is sent to %s.`, at.x, at.y, at.z, h.place)
-		for &d, i in h.dwarves do if d.doing != .Aboard && d.doing != .Ashore && (d.doing != .Walking || len(d.path) == 0 || d.path[len(d.path) - 1] != h.spots[i]) {
-			d.doing, d.said = .Stopped, no_way(h, last)
+		turn := 0
+		for &d in h.dwarves do if ashore(d) {   // each looks for its own way when its turn in the file comes
 			clear(&d.path)
-			say(h, "%s %s stops: %s.", h.party[i].given, h.party[i].byname, d.said)
+			d.doing, d.seek, d.next, d.said = .Walking, true, 0, ""
+			d.wait = 0
+			if d.takes == 0 do d.wait, turn = turn*IN_FILE, turn + 1
 		}
-		errand_sum(h)
 	}
 }
 
@@ -490,8 +527,8 @@ log_hash :: proc(h: ^Hold) -> (v: u64) {
 hold_report :: proc(h: ^Hold) {
 	if !h.found || h.tick == 0 do return
 	fmt.printfln("the dwarves' world ran %d ticks, %d:%02d of its time: %d events, the log's hash %x", h.tick, h.tick/600, h.tick/10%60, len(h.log), log_hash(h))
-	fmt.printfln("  a tick of seven dwarves took %.1f µs on average and %.1f ms at worst, an order's ways among them; %d ways found, %.2f ms each on average and %.1f ms at worst, %d patches of ground read for them of %d in all",
-		time.duration_microseconds(h.work.walking)/f64(h.tick), time.duration_milliseconds(h.work.worst_tick), h.work.ways, time.duration_milliseconds(h.work.finding)/f64(max(h.work.ways, 1)),
+	fmt.printfln("  a tick of %d dwarves took %.1f µs on average, the looking for ways apart, and %.1f ms at worst with it; %d ways looked for, %.2f ms each on average and %.1f ms at worst, %d chunks of ground read for them of %d in all",
+		len(h.dwarves), time.duration_microseconds(h.work.walking)/f64(h.tick), time.duration_milliseconds(h.work.worst_tick), h.work.ways, time.duration_milliseconds(h.work.finding)/f64(max(h.work.ways, 1)),
 		time.duration_milliseconds(h.work.worst_way), h.work.patches, h.walk.made)
 	w := &h.walk
 	fmt.printfln("  the ground read: %d floors in %d rooms of %d chunks, %.1f MB kept", len(w.floors), len(w.rooms), w.made,
@@ -500,20 +537,23 @@ hold_report :: proc(h: ^Hold) {
 
 // ---- beside the frame -------------------------------------------------------------------------
 
-// The frame thread's own view of the hold.
+// The frame thread's own view of the hold. Everything it knows of the dwarves is in `seen`.
 Watch :: struct {
-	live:    bool,              // the hold runs beside the frame; a picture is of one moment
-	clock:   f64,               // seconds of the dwarves' world the frames have shown
-	wall:    f64,
-	seen:    Shown,
-	feet:    [PARTY][3]f64,     // where each dwarf was last drawn
-	turned:  [PARTY]f32,        // and which way, eased
-	drawn:   bool,
-	pending: [dynamic]Order,    // orders not yet handed over
-	keys:    [2]bool,
-	selected: int,              // the dwarf selected, or -1
-	answer:  string,            // what a dwarf last said of itself
-	until:   f64,
+	live:     bool,              // the hold runs beside the frame; a picture is of one moment
+	clock:    f64,               // seconds of the dwarves' world the frames have shown: the game's clock (clock.odin), held back while the hold is behind it
+	wall:     f64,               // real seconds, for how long an answer stays up
+	seen:     Shown,
+	feet:     [dynamic][3]f64,   // where each dwarf was last drawn
+	turned:   [dynamic]f32,      // and which way, eased
+	drawn:    bool,
+	pending:  [dynamic]Order,    // orders not yet handed over
+	keys:     [2]bool,
+	buttons:  [2]bool,           // the left and right buttons, last frame
+	pressed:  [2]f32,            // where the right one went down
+	selected: int,               // the dwarf selected, or -1
+	send:     bool,              // an order is to be given at the pointer once a block is under it (--send)
+	answer:   string,            // what a dwarf last said of itself
+	until:    f64,
 }
 watch := Watch{selected = -1}
 
@@ -524,7 +564,7 @@ hold_alone :: proc(opt: ^Options) -> bool {
 
 // Send the party to stand on a block. The one call an order from a cursor needs.
 hold_send :: proc(x, y, z: i32) {
-	append(&watch.pending, Order{kind = .Go, at = {x, y, z}})
+	if hold.found do append(&watch.pending, Order{kind = .Go, at = {x, y, z}})
 }
 
 // Tell the hold a block was changed (world_set).
@@ -532,8 +572,9 @@ hold_block :: proc(x, y, z: i32, m: Mat) {
 	if hold.found do append(&watch.pending, Order{kind = .Block, at = {x, y, z}, mat = m})
 }
 
-// The window is up: put the player where the landing can be watched, and set the hold going.
-hold_enter :: proc(p: ^Player, opt: ^Options) {
+// The window is up: put the player where the landing can be watched and the view from above over
+// the landing, both facing the water the boat crosses, and set the hold going.
+hold_enter :: proc(p: ^Player, above: ^Above, opt: ^Options) {
 	h := &hold
 	if !h.found do return
 	bound(h.island)
@@ -558,8 +599,14 @@ hold_enter :: proc(p: ^Player, opt: ^Options) {
 			if !opt.has_look do p.yaw, p.pitch = f32(math.atan2(h.boat_to.x + 12*l.out.x - p.pos.x, -(h.boat_to.y + 12*l.out.y - p.pos.z))), -0.12
 		}
 	}
-	watch.seen, watch.clock = h.shown, f64(h.tick)*TICK
+	if !opt.has_over {
+		above.at = (feet_on(h.landed.at) + feet_on(h.landed.camp))/2
+		if !opt.has_turn do above.yaw = f32(math.atan2(h.landed.out.x, -h.landed.out.y))
+	}
+	shown_copy(&watch.seen, h.shown)
+	watch.clock = f64(h.tick)*TICK
 	watch.live = opt.shot == "" || opt.bench > 0
+	watch.send = opt.send && opt.has_cursor
 	if watch.live do hold_start(h, max(int))
 }
 
@@ -589,15 +636,21 @@ sight :: proc(w: ^World, origin: [3]f64, dir: [3]f32, reach: f64) -> (hit: [3]i3
 	}
 }
 
-// Each frame: hand over orders, take what the hold shows, move its clock on, and answer the keys.
-// G sends the party to the block aimed at; E selects the dwarf aimed at, which says who it is and what it is doing.
-hold_frame :: proc(w: ^World, eye: [3]f64, look: [3]f32, dt: f64) {
+// Each frame: hand over orders, take what the hold shows, move its clock on by the world's time
+// that passed (clock.odin: none while paused, more at a speed), and answer the keys and the pointer.
+// `ray` runs from the eye through the crosshair, or from above through the pointer; `above` is the
+// view from above, or nil in first person.
+//   G             send the party to the block aimed at, or under the pointer
+//   E             in first person, select the dwarf aimed at, which says who it is
+//   left click    from above, on a dwarf: select it, and it says who it is
+//   right click   from above: send the party to the block under the pointer (a drag still turns the view)
+hold_frame :: proc(w: ^World, eye: [3]f64, ray: [3]f32, above: ^Above, passed, dt: f64) {
 	h := &hold
 	if !h.found do return
 	watch.wall += dt
 	// The lock is only tried, as the world's is: the hold has it for moments, but a frame must not wait on a thread held off the processor.
 	if sync.try_lock(&h.mutex) {
-		watch.seen = h.shown
+		shown_copy(&watch.seen, h.shown)
 		if watch.live {
 			append(&h.inbox, ..watch.pending[:])
 			clear(&watch.pending)
@@ -605,24 +658,55 @@ hold_frame :: proc(w: ^World, eye: [3]f64, look: [3]f32, dt: f64) {
 		sync.unlock(&h.mutex)
 	}
 	if watch.live {
-		watch.clock = min(watch.clock + dt, f64(watch.seen.tick + 2)*TICK)   // a hold busy finding a way holds its clock back; it is not hurried after
+		watch.clock = min(watch.clock + passed, f64(watch.seen.tick + 2)*TICK)   // a hold busy finding a way holds its clock back; it is not hurried after
 		sync.atomic_store(&h.target, int(watch.clock/TICK))
 		sync.cond_signal(&h.wake)
+	}
+	// The block an order would send the party to, and how far a dwarf can be picked out.
+	target: [3]i32
+	aimed, reach := false, AIM_REACH
+	if above == nil do target, _, aimed = sight(w, eye, ray, AIM_REACH)
+	else if above.shown {
+		reach = 4*linalg.length(above.at - eye) + 600
+		under := above.under
+		if !under.ok do under = pick_far(eye, ray, above_level(above))
+		target, aimed = under.block, under.ok
+	}
+	if watch.send && above != nil && aimed {
+		hold_send(target.x, target.y, target.z)
+		watch.send = false
+	}
+	say_card :: proc(h: ^Hold, who: int) {
+		hold_select(who)
+		if who < 0 do return
+		watch.answer, watch.until = dwarf_words(&watch.seen, who), watch.wall + 8
+		fmt.println(watch.answer)
 	}
 	keys := sdl.GetKeyboardState(nil)
 	down := [2]bool{keys[int(sdl.Scancode.G)], keys[int(sdl.Scancode.E)]}
 	if down[0] && !watch.keys[0] {
-		if hit, _, ok := sight(w, eye, look, AIM_REACH); ok do hold_send(hit.x, hit.y, hit.z)
-		else do fmt.printfln("no block within %.0f m to send the party to", AIM_REACH)
+		if aimed do hold_send(target.x, target.y, target.z)
+		else do fmt.println("no block is aimed at to send the party to")
 	}
-	if down[1] && !watch.keys[1] {
-		hold_select(hold_aimed(w, eye, look, AIM_REACH))
-		if who := hold_selected(); who >= 0 {
-			watch.answer, watch.until = dwarf_words(h, who, watch.seen), watch.wall + 8
-			fmt.println(watch.answer)
-		} else do fmt.println("no dwarf is aimed at")
+	if above == nil && down[1] && !watch.keys[1] {
+		say_card(h, hold_aimed(w, eye, ray, reach, nil))
+		if hold_selected() < 0 do fmt.println("no dwarf is aimed at")
 	}
 	watch.keys = down
+	if above != nil {
+		mx, my: f32
+		flags := sdl.GetMouseState(&mx, &my)
+		buttons := [2]bool{flags & sdl.BUTTON_LMASK != {}, flags & sdl.BUTTON_RMASK != {}}
+		if buttons[0] && !watch.buttons[0] && above.shown {
+			if who := hold_aimed(w, eye, ray, reach, above); who >= 0 {   // a click on a dwarf is the dwarf's, not the block's behind it
+				say_card(h, who)
+				mark_clear(above)
+			} else do hold_select(-1)
+		}
+		if buttons[1] && !watch.buttons[1] do watch.pressed = {mx, my}
+		if !buttons[1] && watch.buttons[1] && above.shown && aimed && abs(mx - watch.pressed.x) + abs(my - watch.pressed.y) < 4 do hold_send(target.x, target.y, target.z)
+		watch.buttons = buttons
+	}
 }
 
 // What a dwarf last said of itself, for the window's title, while it is fresh.
@@ -633,12 +717,12 @@ hold_said :: proc() -> string {
 // What a dwarf says of itself, in the shape of the card the interface shows for the thing selected
 // (foundations/interface.md, I2, I3 and I8): who it is; what it is doing, and why; and what it will
 // do next or what it waits for, empty when there is nothing to say. Each line leads with its point
-// and keeps figures behind words. --why and the key E print these lines; a panel will draw them.
+// and keeps figures behind words. --why, the key E and a click print these lines; a panel will draw them.
 Card :: struct { who, doing, next: string }
 
-dwarf_card :: proc(h: ^Hold, i: int, s: Shown) -> (c: Card) {
-	f, d := h.party[i], s.dwarves[i]
-	c.who = fmt.tprintf("%s, who %s", dwarf_name(f), TRADES[f.trade].does)
+dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
+	d := s.dwarves[i]
+	c.who = fmt.tprintf("%s, who %s", dwarf_name(d.who), TRADES[d.who.trade].does)
 	to := fmt.tprintf("the %s", s.place) if s.errand == 0 else s.place
 	why := "where the party gathers" if s.errand == 0 else "where the hold sent the party"
 	switch d.doing {
@@ -659,47 +743,59 @@ dwarf_card :: proc(h: ^Hold, i: int, s: Shown) -> (c: Card) {
 }
 
 // The card as sentences.
-dwarf_words :: proc(h: ^Hold, i: int, s: Shown) -> string {
-	c := dwarf_card(h, i, s)
+dwarf_words :: proc(s: ^Shown, i: int) -> string {
+	c := dwarf_card(s, i)
 	return fmt.aprintf("%s. %s. %s.", c.who, c.doing, c.next)
 }
 
 // ---- for a cursor, a row or a picture (foundations/interface.md, I2 and I4) -----------------------
-// hold_send, above, gives the order. These choose a dwarf and lead to it; all are the frame thread's.
+// hold_send, above, gives the order. These list the dwarves, choose one and lead to it; all are the
+// frame thread's, and read what the hold last showed.
+
+// How many dwarves the hold has.
+hold_count :: proc() -> int { return len(watch.seen.dwarves) }
 
 // Select a dwarf, or none with -1. The card of the one selected is hold_card's.
-hold_select :: proc(i: int) { watch.selected = i if i >= 0 && i < PARTY && hold.found else -1 }
+hold_select :: proc(i: int) { watch.selected = i if i >= 0 && i < hold_count() else -1 }
 
 hold_selected :: proc() -> int { return watch.selected }
 
-// A dwarf's card, from what the hold last showed.
-hold_card :: proc(i: int) -> Card { return dwarf_card(&hold, i, watch.seen) }
+// A dwarf's card, for a panel or a row.
+hold_card :: proc(i: int) -> Card { return dwarf_card(&watch.seen, i) }
 
 // Where a dwarf's feet are, as last drawn, for the view to go to.
 hold_where :: proc(i: int) -> (at: [3]f64, ok: bool) {
-	if !hold.found || i < 0 || i >= PARTY do return
-	return watch.feet[i] if watch.drawn else watch.seen.dwarves[i].at, true
+	if i < 0 || i >= hold_count() do return
+	return watch.feet[i] if watch.drawn && i < len(watch.feet) else watch.seen.dwarves[i].at, true
 }
 
-// The dwarf a ray from the eye meets first within a reach, before any block, or -1.
-hold_aimed :: proc(w: ^World, eye: [3]f64, look: [3]f32, reach: f64) -> (who: int) {
+// The dwarf a ray from the eye meets first within a reach, before any block that is drawn, or -1.
+// From above the blocks over the cut are not drawn, and do not hide a dwarf.
+hold_aimed :: proc(w: ^World, eye: [3]f64, ray: [3]f32, reach: f64, above: ^Above) -> (who: int) {
 	who = -1
 	near := reach
-	for f, i in hold.party {   // the ray against each dwarf's box
-		lo, hi := watch.feet[i] - {0.3, 0, 0.3}, watch.feet[i] + {0.3, f64(f.tall), 0.3}
+	for d, i in watch.seen.dwarves {   // the ray against each dwarf's box
+		if i >= len(watch.feet) do break
+		lo, hi := watch.feet[i] - {0.3, 0, 0.3}, watch.feet[i] + {0.3, f64(d.who.tall), 0.3}
 		t0, t1 := 0.0, near
 		for a in 0..<3 {
-			d := f64(look[a])
-			if abs(d) < 1e-9 {
+			v := f64(ray[a])
+			if abs(v) < 1e-9 {
 				if eye[a] < lo[a] || eye[a] > hi[a] do t1 = -1
 				continue
 			}
-			a0, a1 := (lo[a] - eye[a])/d, (hi[a] - eye[a])/d
+			a0, a1 := (lo[a] - eye[a])/v, (hi[a] - eye[a])/v
 			t0, t1 = max(t0, min(a0, a1)), min(t1, max(a0, a1))
 		}
 		if t0 <= t1 do who, near = i, t0
 	}
-	if _, far, ok := sight(w, eye, look, near); ok && far < near do who = -1   // behind a block
+	if who < 0 do return
+	if above == nil {
+		if _, far, ok := sight(w, eye, ray, near); ok && far < near do who = -1
+	} else if p := pick(w, eye, ray, above_level(above), above.bare, near); p.ok {
+		b := feet_on(p.block) + {0, 0.5, 0}
+		if linalg.length(b - eye) < near - 1 do who = -1
+	}
 	return
 }
 
@@ -707,42 +803,40 @@ hold_aimed :: proc(w: ^World, eye: [3]f64, look: [3]f32, reach: f64) -> (who: in
 hold_pose :: proc(boxes: []Box, eye: [3]f64, dt: f64) -> []Box {
 	h := &hold
 	if !h.found do return boxes
-	out := make([dynamic]Box, 0, len(boxes) + 16*PARTY, context.temp_allocator)
+	s := &watch.seen
+	out := make([dynamic]Box, 0, len(boxes) + 16*len(s.dwarves) + 8, context.temp_allocator)
 	append(&out, ..boxes)
-	s := watch.seen
 	a := clamp((watch.clock - f64(s.tick)*TICK)/TICK, 0, 1) if watch.live else 1
 	rel :: proc(p, eye: [3]f64) -> [3]f32 { return {f32(p.x - eye.x), f32(p.y - eye.y), f32(p.z - eye.z)} }
 	boat := math.lerp(s.boat_was, s.boat, a)
-	toward := f32(math.atan2(-h.landed.out.x, h.landed.out.y))
-	if math.hypot(boat.x - eye.x, boat.y - eye.z) < 1500 {
-		bob := 0.0 if s.grounded else 0.04*math.sin(watch.wall*1.7)
-		boat_boxes(&out, rel({boat.x, SEA_SURFACE + 0.04 + bob, boat.y}, eye), toward)
-	}
-	for f, i in h.party {
-		d := s.dwarves[i]
+	bob := 0.0 if s.grounded else 0.04*math.sin(watch.clock*1.7)
+	boat_boxes(&out, rel({boat.x, SEA_SURFACE + 0.04 + bob, boat.y}, eye), f32(math.atan2(-h.landed.out.x, h.landed.out.y)))
+	builtin.resize(&watch.feet, len(s.dwarves))
+	for len(watch.turned) < len(s.dwarves) do append(&watch.turned, s.dwarves[len(watch.turned)].facing)
+	for d, i in s.dwarves {
 		at := math.lerp(d.was, d.at, a)
 		watch.feet[i] = at
 		turn := math.mod(d.facing - watch.turned[i] + 3*math.PI, math.TAU) - math.PI   // the short way round
 		watch.turned[i] = d.facing if !watch.drawn || !watch.live else watch.turned[i] + turn*f32(min(10*dt, 1))
-		if math.hypot(at.x - eye.x, at.z - eye.z) > 1500 do continue
-		dwarf_boxes(&out, f, rel(at, eye), watch.turned[i], math.lerp(d.trod, d.stride, a), d.doing == .Walking && d.at != d.was, d.doing == .Aboard)
+		dwarf_boxes(&out, d.who, rel(at, eye), watch.turned[i], math.lerp(d.trod, d.stride, a), d.doing == .Walking && d.at != d.was, d.doing == .Aboard)
 	}
 	watch.drawn = true
 	return out[:]
 }
 
-// The landing and any dwarf standing at a point, as --why says them.
+// The landing and any dwarf standing at a point, as --why and the key Y say them.
 hold_words :: proc(x, z: f64) {
 	h := &hold
 	if !h.found || here != h.island do return
+	s := &watch.seen if h.runner != nil else &h.shown   // beside a running hold, only what it last showed may be read
 	wx, wz := x + f64(region.origin.x), z + f64(region.origin.y)
 	l := h.landed
 	if d := math.hypot(wx - f64(l.at.x) - 0.5, wz - f64(l.at.z) - 0.5); d < 60 {
 		fmt.printfln("the dwarves' landing is %.0f m off:", d)
 		landing_words(l)
 	}
-	for _, i in h.party do if at := h.shown.dwarves[i].at; math.hypot(wx - at.x, wz - at.z) < 3 {
-		c := dwarf_card(h, i, h.shown)
-		fmt.printfln("a dwarf stands here, %d:%02d after the boat stood off: %s.\n  %s.\n  %s.", h.tick/600, h.tick/10%60, c.who, c.doing, c.next)
+	for d, i in s.dwarves do if math.hypot(wx - d.at.x, wz - d.at.z) < 3 {
+		c := dwarf_card(s, i)
+		fmt.printfln("a dwarf stands here, %d:%02d after the boat stood off: %s.\n  %s.\n  %s.", s.tick/600, s.tick/10%60, c.who, c.doing, c.next)
 	}
 }

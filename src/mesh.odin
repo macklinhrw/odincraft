@@ -10,11 +10,19 @@ Quad :: struct {
 	a:       i16,   // extent along the face's U axis
 	b:       u16,   // extent along the face's V axis
 	ao:      u16,   // light reaching each corner, four bits each, corner = u + 2v
-	info:    u16,   // face (3 bits), turned diagonal (1 bit), the sky it sees (4 bits); the high byte is spare
+	info:    u16,   // face (3 bits), turned diagonal (1 bit), the sky it sees (4 bits); then what the cut needs to know (below)
 	slope:   [2]u8, // smooth ground normal for lighting, or zero to light by the face alone
 	mat:     Mat,   // what it is made of: its tiles in the atlas
-	_:       u16,   // spare: the GPU reads a quad in steps of four bytes
-}
+	floor:   Mat,   // of a canopy that is part of a far column: what the ground under it is made of
+	}
+
+	// What the cut needs to know of a quad (cut_corner, shaders.metal), in the high byte of its info:
+	// in six bits, how many metres of a far column's top are canopy, on its top and on the leaf of its
+	// sides; on a hung quad, 1 for leaf. Then whether it is hung over the far columns, a crown or its
+	// trunk, and whether it is a cap, the face the cut makes through solid blocks.
+	CANOPY :: 8        // the shift to those six bits
+	HUNG   :: 0x4000
+	CAP    :: 0x8000
 #assert(size_of(Quad) == 20 && size_of(Mat) == 2)   // as the shader reads it (QuadIn, shaders.metal; make_pipeline, render.odin)
 
 // Faces in the order +X -X +Y -Y +Z -Z, with axes chosen so that U x V points outward.
@@ -30,7 +38,7 @@ quad :: proc(x, y, z, a, b: i32, face: int, m: Mat, corners: [4]u16, slope: [2]u
 	// corner smears across the whole face.
 	flip := corners[1] + corners[2] < corners[0] + corners[3]
 	ao := corners[0] | corners[1] << 4 | corners[2] << 8 | corners[3] << 12
-	return {i16(x), i16(y), i16(z), i16(a), u16(b), ao, u16(face) | u16(flip) << 3, slope, m, 0}
+	return {i16(x), i16(y), i16(z), i16(a), u16(b), ao, u16(face) | u16(flip) << 3, slope, m, .Air}
 }
 
 // A chunk's quads are stored by the way they face, +X to -Z, and within that by part: the quarters
@@ -236,8 +244,12 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 
 				// A top level with the one before it, of the same stuff, slope and full light, lengthens that
 				// one, which draws the same: open sea floor and flat ground cost a face a row, not one a cell.
+				ground := c.ground[(j + 1)*P + i + 1]
+				canopy := u16(min(t - ground, 63)) << CANOPY   // none on a column with no canopy
 				q := quad(i*s, t - y_base, j*s, s, s, 2, m, corners(c, i, j, t, s, false), slope)
-				if l := last; l >= 0 && q.ao == 0xFFFF && out[l].ao == q.ao && out[l].y == q.y && out[l].info == q.info && out[l].mat == q.mat && out[l].slope == q.slope {
+				q.info |= canopy
+				if canopy != 0 do q.floor = c.floor[(j + 1)*P + i + 1]
+				if l := last; l >= 0 && q.ao == 0xFFFF && out[l].ao == q.ao && out[l].y == q.y && out[l].info == q.info && out[l].mat == q.mat && out[l].slope == q.slope && out[l].floor == q.floor {
 					out[l].b += u16(s)
 				} else {
 					last = len(out)
@@ -258,7 +270,6 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 					// A riser too steep to hold soil, or cut in bare rock, shows the beds at
 					// their heights, as the blocks of a face do near by. Under a canopy that is
 					// the riser of the ground it stands on: a face below a wood is rock, not leaves.
-					ground := c.ground[(j + 1)*P + i + 1]
 					bare := ground - c.ground[(j + side.y + 1)*P + i + side.x + 1] > s + s/4 || MATERIALS[m].strength > 0
 					for at := bottom; at < t; {
 						wall_of, drop := m, t - at
@@ -270,6 +281,7 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 						mouth := c.hollow[(j + 1)*P + i + 1]
 						if mouth[1] > mouth[0] && at < mouth[1] do drop = min(drop, mouth[0] - at if at < mouth[0] else mouth[1] - at)
 						wall(out, i*s, j*s, s, at - y_base, drop, int(side.z), wall_of, slope)
+						if canopy != 0 && at + drop == t do out[len(out) - 1].info, out[len(out) - 1].floor = out[len(out) - 1].info | canopy, c.floor[(j + 1)*P + i + 1]   // the leaf of its side
 						if mouth[1] > mouth[0] && at >= mouth[0] && at < mouth[1] do out[len(out) - 1].info |= 11 << 4
 						at += drop
 					}
@@ -283,6 +295,8 @@ mesh_columns :: proc(c: ^Columns, s, y_base: i32, out: ^[dynamic]Quad, ranges: ^
 				under, over := c.crown[k][0], c.crown[k][1]
 				if over <= under do continue
 				tree := SPECIES[c.kind[k]]
+				hung := len(out)
+				defer for &q in out[hung:] do q.info |= HUNG | (1 << CANOPY if q.mat == tree.leaf else 0)
 				if c.stem[k] > 0 && under > t {
 					for face in ([4]int{0, 1, 4, 5}) do wall(out, i*s + i32(c.stem[k] - 1)%4, j*s + i32(c.stem[k] - 1)/4, 1, t - y_base, under - t, face, tree.bark, {})
 				}

@@ -1,0 +1,6 @@
+# The party is sent to three places, then to two it cannot come to.
+120 go 2620 -1720
+400 go 2300 -1380
+2100 go 2760 -1700
+3700 go 2690 -1820
+3760 go 2239 -2267

@@ -1,5 +1,6 @@
 package main
 
+import "base:builtin"
 import "core:fmt"
 import "core:math"
 import "core:math/linalg"
@@ -12,7 +13,7 @@ import "core:math/linalg"
 // is old past 100 (a guess, to be settled when age first matters). Its name is made by a rule and
 // taken from no one's setting: a given name of a stem and an ending, and a byname as a workmate
 // would give it, an earth or a rock and a part of the body or of what is worn. Its trade is a row.
-// The seven of a party are drawn from the world's seed, no trade twice.
+// A party is drawn from the world's seed, no trade twice until every trade has come.
 
 Trade :: struct {
 	name, does: string,
@@ -51,14 +52,16 @@ Facts :: struct {
 	skin, beard, hood: u32,
 }
 
-// The party of a world's seed.
-party_draw :: proc(s: u32) -> (party: [PARTY]Facts) {
+// The party of a world's seed, of so many: no trade twice until every trade has come.
+party_draw :: proc(s: u32, count: int, party: ^[dynamic]Facts) {
 	// Trades by the weighted draw the plants' race uses: each row's key is a draw to the power one
-	// over its weight, and the seven highest come.
+	// over its weight, and the highest not yet taken comes next.
+	builtin.resize(party, count)
 	taken: [len(TRADES)]bool
 	for &f, i in party {
+		if i%len(TRADES) == 0 do taken = {}
 		best := f32(-1)
-		for row, k in TRADES do if key := math.pow(hash01(i32(k), 0, s + 900), 1/row.weight); !taken[k] && key > best do f.trade, best = k, key
+		for row, k in TRADES do if key := math.pow(hash01(i32(k), i32(i/len(TRADES)), s + 900), 1/row.weight); !taken[k] && key > best do f.trade, best = k, key
 		taken[f.trade] = true
 		for try in i32(0)..<64 {   // no two of a party share a given name
 			f.given = fmt.aprintf("%s%s", STEMS[hash(i32(i), try, s + 901)%len(STEMS)], ENDS[hash(i32(i), try, s + 902)%len(ENDS)])
@@ -75,7 +78,6 @@ party_draw :: proc(s: u32) -> (party: [PARTY]Facts) {
 		dark := BEARDS[hash(i32(i), 0, s + 909)%len(BEARDS)]
 		for shift in ([3]u32{16, 8, 0}) do f.beard |= u32(math.lerp(f32(dark >> shift & 255), f32(u32(0xb8b8b0) >> shift & 255), grey)) << shift
 	}
-	return
 }
 
 // A dwarf in a sentence: "Dorra Slatethumb, a mason of 61 years".
@@ -137,7 +139,7 @@ boat_boxes :: proc(out: ^[dynamic]Box, at: [3]f32, bearing: f32) {
 }
 
 // Where a dwarf sits in the boat: metres to the right of its middle and toward its bow.
-SEATS := [PARTY][2]f64{{-0.38, 1.25}, {0.38, 1.25}, {-0.38, 0.25}, {0.38, 0.25}, {-0.38, -0.75}, {0.38, -0.75}, {0, -1.8}}
+SEATS := [LANDING][2]f64{{-0.38, 1.25}, {0.38, 1.25}, {-0.38, 0.25}, {0.38, 0.25}, {-0.38, -0.75}, {0.38, -0.75}, {0, -1.8}}
 
 // A point of the compass in words, from a way east and south.
 compass :: proc(dx, dz: f64) -> string {

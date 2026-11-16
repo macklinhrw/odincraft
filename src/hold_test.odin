@@ -7,7 +7,7 @@ import "core:sync"
 import "core:testing"
 import "core:thread"
 
-// The dwarves' world is deterministic (docs/adr/0007): the same seed and orders give the same log,
+// The dwarves' world is deterministic (docs/adr/0009): the same seed and orders give the same log,
 // run alone or beside a thread that reads it and moves its clock as the frame does. The test lands
 // the default world's party and sends it to two places by an orders file, twice, and compares the
 // logs. It keeps no golden hash: what the dwarves do follows the land, which changes on purpose.
@@ -36,9 +36,9 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 	reader := thread.create_and_start_with_poly_data(&frames, proc(f: ^Frames) {
 		for !sync.atomic_load(&f.stop) {
 			if sync.try_lock(&f.h.mutex) {
-				seen := f.h.shown
+				tick := f.h.shown.tick
 				sync.unlock(&f.h.mutex)
-				f.read += int(seen.tick >= 0)
+				f.read += int(tick >= 0)
 			}
 			sync.atomic_add(&f.h.target, 1 + f.read%7)
 			sync.cond_signal(&f.h.wake)
@@ -55,7 +55,7 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 		obeyed += int(strings.contains(line, "The hold says"))
 	}
 	fmt.printfln("the dwarves' logs: %d events, hash %x alone and %x beside a reader that read %d times", len(alone.log), log_hash(alone), log_hash(beside), frames.read)
-	testing.expect_value(t, ashore, PARTY)
+	testing.expect_value(t, ashore, LANDING)
 	testing.expect_value(t, obeyed, 3)
 	testing.expect_value(t, alone.tick, SECONDS*10)
 	testing.expect_value(t, len(beside.log), len(alone.log))

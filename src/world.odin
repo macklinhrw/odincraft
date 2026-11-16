@@ -29,6 +29,7 @@ Chunk :: struct {
 	y_base, y_lo, y_hi: i32,           // mesh origin and vertical extent, metres
 	blocks:             []Mat,         // level 0 only: the block volume, for collision and edits
 	h:                  i32,           // layers in blocks
+	under:              []Under,       // level 0 only: what lies under each column, for the rock below the layers kept (under_rock)
 	water:              ^sdl.GPUBuffer, // level 0 only: the water surface, built in water.odin
 	water_count:        u32,
 	calm:               bool,          // level 0 only: its water is calm open sea, drawn as one quad (water_calm)
@@ -47,6 +48,7 @@ Built :: struct {
 	y_base, y_lo, y_hi: i32,
 	blocks:             []Mat,
 	h:                  i32,
+	under:              []Under,
 	floor, hold:        []f32,         // level 0 only, per column: top of the ground, and the land's water level
 	sea, still, roof:   []bool,        // the sea; a lake or pond, whose water is all there is of it; under a roof
 }
@@ -62,6 +64,7 @@ World :: struct {
 	islands: int,                     // islands formed when the rings were last filled: a chunk over one not yet formed waits for it
 	behind:  bool,                    // the rings moved while a worker held the queue: they are filled next frame
 	backlog: int,                     // work queued, building or waiting for upload, when last counted
+	volume:  int,                     // counts every change to the block volume: a chunk of it come or gone, a block set
 	water:   Water,
 
 	// The frame thread only tries this lock: a worker holds it for moments, but a worker that other
@@ -139,6 +142,8 @@ build :: proc(job: Job) -> (b: Built) {
 	parts: [4][2]u32
 	if job.key.level == 0 {
 		b.blocks, b.y_base, b.h = build_volume(job.key, c, job.edits)
+		b.under = make([]Under, P*P)
+		copy(b.under, c.under[:])
 		outer, inner := mesh_volume(b.blocks, b.h, c, &quads, &plants, {job.key.x*CHUNK - region.origin.x, b.y_base, job.key.z*CHUNK - region.origin.y})
 		all := u32(len(quads))
 		parts[0], parts[1], parts[2] = {0, all - outer - inner}, {all - outer - inner, outer}, {all - inner, inner}   // at this level: the solid faces, the crowns' outer faces, the faces within them
@@ -243,6 +248,8 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 			if c.plant_buf != nil do sdl.ReleaseGPUBuffer(dev, c.plant_buf)
 			delete(c.plants)
 			delete(c.blocks)
+			delete(c.under)
+			if key.level == 0 do w.volume += 1
 			free(c)
 			delete_key(&w.chunks, key)
 		}
@@ -332,10 +339,14 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		}
 		if c == nil {   // left the ring while it was being built
 			delete(b.blocks)
+			delete(b.under)
 			delete(b.plants)
 		} else {
 			if c.buffer != nil do sdl.ReleaseGPUBuffer(dev, c.buffer)
 			delete(c.blocks)
+			delete(c.under)
+			c.under = b.under
+			if b.key.level == 0 do w.volume += 1
 			c.buffer = nil
 			if n > 0 {
 				c.buffer = sdl.CreateGPUBuffer(dev, {usage = {.VERTEX}, size = n})
@@ -398,6 +409,13 @@ world_block :: proc(w: ^World, x, y, z: i32) -> (m: Mat, known: bool) {
 	return c.blocks[int(lx + 1) + int(lz + 1)*P + int(ly)*P*P], true
 }
 
+// The rock a column of a nearest-level chunk holds at a height under the layers it keeps, where all
+// is solid: what gen_volume would have put there. The chunk's island must be bound; the open sea,
+// where there is none, is sand to the bottom.
+under_rock :: proc(c: ^Chunk, k: int, y: i32, sea: bool) -> Mat {
+	return .Sand if sea else crushed(rock_in(f32(y) + 0.5, c.under[k], 0), c.under[k])
+}
+
 // Change one block. The edit is remembered for as long as the program runs.
 world_set :: proc(w: ^World, x, y, z: i32, m: Mat) {
 	key := Key{0, x >> CHUNK_SHIFT, z >> CHUNK_SHIFT}
@@ -417,6 +435,7 @@ world_set :: proc(w: ^World, x, y, z: i32, m: Mat) {
 	if c := w.chunks[key] or_else nil; c != nil && c.ready {
 		if ly := y - c.y_base; ly >= 0 && ly < c.h {
 			c.blocks[int(x & (CHUNK - 1) + 1) + int(z & (CHUNK - 1) + 1)*P + int(ly)*P*P] = m
+			w.volume += 1
 			water_refloor(&w.water, x, z)
 		}
 	}

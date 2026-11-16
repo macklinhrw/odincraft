@@ -10,14 +10,24 @@ import sdl "vendor:sdl3"
 // The game: start-up, the frame loop and its input, and the bench report. Command-line options are
 // in options.odin; the offline tools they start live beside what they inspect.
 //
-// Controls
-//   click            capture the mouse        Esc      release it, then quit
+// The game begins in the view from above, whose own controls are in above.odin. Tab goes down to
+// first person at the place under the view's middle, and back up from where the player stands.
+//
+// Controls in either view
+//   Tab              walk / the view from above   Esc      put down the mouse, a mark, then the game
+//   P                pause the world              Y        why: say in the terminal what the block
+//   [ ]              turn the clock back / forward         under the pointer, or aimed at, is and why
+//   \                save a screenshot
+//   G                send the dwarves to the block under the pointer, or aimed at (hold.odin)
+//   from above: right click sends them there too; left click on a dwarf selects it, and it says who it is
+//   in first person: E selects the dwarf aimed at
+//
+// Controls in first person
+//   click            capture the mouse
 //   W A S D          move                     Shift    run, or fly fast
 //   Space            jump, or rise            Ctrl     sink (flying)
 //   F                walk / fly               1-6      choose the block to place
-//   left / right     break / place            [ ]      turn the clock back / forward
-//   F2               save a screenshot
-//   G                send the dwarves to the block aimed at     E    ask the dwarf aimed at who it is
+//   left / right     break / place
 
 // Start on the bank of the largest river, above the reach the sea floods, facing downstream,
 // with no tree within 6 m and no small one within 3, on gentle ground with nothing in the three
@@ -132,7 +142,7 @@ main :: proc() {
 	early := islands_form(others[:soon], max(os.get_processor_core_count() - 1, 1), .Normal, false)
 	gen_init(home)
 	bind(home)   // the frame thread reads the start island unless it binds another
-	hold_make(&hold, home, opt.orders)   // the dwarves and their landing
+	hold_make(&hold, home, opt.orders, opt.party)   // the dwarves and their landing
 	hold_run(&hold, opt.dwarves)
 	if opt.place != 0 {
 		if opt.place < 1 || opt.place > len(places) {
@@ -198,7 +208,16 @@ main :: proc() {
 		p.pos, yaw = find_start()
 		if !opt.has_look do p.yaw = yaw
 	}
-	hold_enter(&p, &opt)   // the player stands where the landing can be watched
+	// The view from above, over the start facing downstream, unless the options ask for first person.
+	afoot := opt.has_pos || opt.has_look || opt.fly || opt.first || opt.bench > 0 && !opt.has_over
+	a := Above {
+		at = p.pos, yaw = p.yaw, tilt = f32(math.to_radians(clamp(opt.tilt, 0, 90))), span = clamp(opt.span, SPAN_MIN, SPAN_MAX),
+		cut = opt.has_cut || opt.cut_ground, level = i32(opt.cut), follow = opt.cut_ground, bare = opt.bare,
+	}
+	if opt.has_over do a.at, a.yaw = {opt.over.x, 0, opt.over.y}, 0
+	if opt.has_turn do a.yaw = math.to_radians(opt.turn)
+	clock := Clock{speed = 2 if opt.pace == 4 else max(opt.pace - 1, 0), paused = opt.pace == 0}
+	hold_enter(&p, &a, &opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
 	islands_form(others[soon:], 3, .Low, false)
 	hour := opt.hour
 	place := Mat.Stone
@@ -207,7 +226,7 @@ main :: proc() {
 	frequency := f64(sdl.GetPerformanceFrequency())
 	last := sdl.GetPerformanceCounter()
 	seconds, title_at := 0.0, 0.0
-	start := p.pos
+	start := p.pos if afoot else a.at
 	intervals: [dynamic]f32   // seconds between frames
 	work: [dynamic]f32        // seconds of our own work per frame: everything but the wait for the display
 	drawn: [dynamic][4]int    // faces, ground plants, creatures' boxes and quads of water drawn each frame
@@ -222,7 +241,14 @@ main :: proc() {
 		append(&intervals, f32(dt))
 		dt = min(dt, 0.1)
 
+		pw, ph: i32   // the picture's size in pixels, and the window's in the points the pointer is told in
+		points: [2]i32
+		sdl.GetWindowSizeInPixels(window, &pw, &ph)
+		sdl.GetWindowSize(window, &points.x, &points.y)
+		aspect := f32(pw)/f32(max(ph, 1))
+
 		break_block, place_block := false, false
+		why := false
 		shot := ""
 		e: sdl.Event
 		for sdl.PollEvent(&e) {
@@ -230,37 +256,72 @@ main :: proc() {
 			case .QUIT:
 				running = false
 			case .KEY_DOWN:
-				if e.key.repeat do continue
+				level := !afoot && (e.key.scancode == .R || e.key.scancode == .F)   // held, the cut's level goes on moving
+				if e.key.repeat && !level do continue
 				#partial switch e.key.scancode {
-				case .ESCAPE:
+				case .ESCAPE:   // puts down the topmost thing: the mouse, a mark, then the game
 					if captured {
 						captured = false
 						_ = sdl.SetWindowRelativeMouseMode(window, false)
+					} else if !afoot && a.marked {
+						mark_clear(&a)
 					} else {
 						running = false
 					}
-				case .F:
-					p.fly = !p.fly
-					p.vel = 0
-				case ._1..=._6:
-					place = Mat(int(e.key.scancode) - int(sdl.Scancode._1) + int(Mat.Grass))
-				case .F2:
+				case .TAB:
+					afoot = !afoot
+					captured = afoot
+					_ = sdl.SetWindowRelativeMouseMode(window, afoot)
+					if afoot do walk_down(&a, w, &p, aspect)
+					else do walk_up(&a, &p)
+				case .P:      clock.paused = !clock.paused
+				case .Y:      why = true
+				case .BACKSLASH:
 					os.make_directory("screenshots")
 					shot = fmt.tprintf("screenshots/%d.png", sdl.GetTicksNS()/1e6)
+				case .F:
+					if afoot do p.fly, p.vel = !p.fly, 0
+					else do cut_move(&a, -8 if e.key.mod & sdl.KMOD_SHIFT != {} else -1)
+				case .R:
+					if !afoot do cut_move(&a, 8 if e.key.mod & sdl.KMOD_SHIFT != {} else 1)
+				case ._1..=._6:
+					n := int(e.key.scancode) - int(sdl.Scancode._1)
+					if afoot do place = Mat(n + int(Mat.Grass))
+					else if n < len(SPEEDS) do clock.speed, clock.paused = n, false
+				case .SPACE:  if !afoot do clock.paused = !clock.paused
+				case .C:      if !afoot do cut_set(&a, !a.cut)
+				case .H:      if !afoot do cut_follow(&a, !a.follow)
+				case .V:      if !afoot do a.bare = !a.bare
 				}
 			case .MOUSE_BUTTON_DOWN:
-				if !captured {
+				if !afoot {
+					if e.button.button == sdl.BUTTON_LEFT do mark_begin(&a)
+				} else if !captured {
 					captured = true
 					_ = sdl.SetWindowRelativeMouseMode(window, true)
 				} else {
 					break_block = e.button.button == sdl.BUTTON_LEFT
 					place_block = e.button.button == sdl.BUTTON_RIGHT
 				}
+			case .MOUSE_BUTTON_UP:
+				if !afoot && e.button.button == sdl.BUTTON_LEFT && a.marking {
+					mark_end(&a)
+					lo, hi, blocks, _ := mark_box(&a)
+					fmt.printfln("marked %d, %d, %d to %d, %d, %d: %d blocks", lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, blocks)
+				}
 			case .MOUSE_MOTION:
-				if captured {
+				if afoot && captured {
 					p.yaw += e.motion.xrel*0.0022
 					p.pitch = clamp(p.pitch - e.motion.yrel*0.0022, -1.55, 1.55)
+				} else if !afoot && a.shown && e.motion.state & sdl.BUTTON_RMASK != {} {   // dragged with the right button, the view turns and tilts
+					a.yaw -= e.motion.xrel*0.005
+					a.tilt = clamp(a.tilt + e.motion.yrel*0.005, TILT_MIN, math.PI/2)
+				} else if !afoot && a.shown && e.motion.state & sdl.BUTTON_MMASK != {} {   // with the middle one, the ground is dragged under the pointer
+					per := a.span/f64(max(points.x, 1))   // metres of ground to a point of the window, at the view's middle
+					a.at.xz -= ([2]f64{f64(math.cos(a.yaw)), f64(math.sin(a.yaw))}*f64(e.motion.xrel) - [2]f64{f64(math.sin(a.yaw)), f64(-math.cos(a.yaw))}*f64(e.motion.yrel)/f64(math.sin(a.tilt)))*per
 				}
+			case .MOUSE_WHEEL:
+				if !afoot && a.shown do a.span = clamp(a.span*math.pow(0.88, f64(e.wheel.y)), SPAN_MIN, SPAN_MAX)
 			}
 		}
 
@@ -269,21 +330,61 @@ main :: proc() {
 		wish := [3]f32{down(keys, .D) - down(keys, .A), down(keys, .SPACE) - down(keys, .LCTRL), down(keys, .W) - down(keys, .S)}
 		hour = math.mod(hour + (down(keys, .RIGHTBRACKET) - down(keys, .LEFTBRACKET))*f32(dt)*3 + 24, 24)
 
-		if opt.bench > 0 && p.fly {
-			forward := look_dir(p.yaw, 0)
-			p.pos += [3]f64{f64(forward.x), 0, f64(forward.z)}*opt.speed*dt
-		} else if opt.bench > 0 {
-			player_update(&p, w, dt, {0, 0, 1}, false, true)
+		// The camera: the player's eye, or the view from above, and the point the world streams round.
+		eye, centre: [3]f64
+		yaw, pitch, fov: f32
+		if afoot {
+			if opt.bench > 0 && p.fly {
+				forward := look_dir(p.yaw, 0)
+				p.pos += [3]f64{f64(forward.x), 0, f64(forward.z)}*opt.speed*dt
+			} else if opt.bench > 0 {
+				player_update(&p, w, dt, {0, 0, 1}, false, true)
+			} else {
+				player_update(&p, w, dt, wish, wish.y > 0, down(keys, .LSHIFT) > 0)
+			}
+			eye = p.pos + [3]f64{0, p.eye, 0}
+			centre, yaw, pitch, fov = eye, p.yaw, p.pitch, FOV
 		} else {
-			player_update(&p, w, dt, wish, wish.y > 0, down(keys, .LSHIFT) > 0)
+			if opt.bench > 0 do a.at.xz += [2]f64{f64(math.sin(a.yaw)), f64(-math.cos(a.yaw))}*opt.speed*dt
+			pan := [2]f32{down(keys, .RIGHT) - down(keys, .LEFT), down(keys, .UP) - down(keys, .DOWN)}
+			above_update(&a, dt, pan, down(keys, .E) - down(keys, .Q), down(keys, .PAGEUP) - down(keys, .PAGEDOWN), down(keys, .MINUS) - down(keys, .EQUALS), down(keys, .LSHIFT) > 0)
+			eye, pitch, centre = above_camera(&a, aspect)
+			yaw, fov = a.yaw, ABOVE_FOV
 		}
-		eye := p.pos + [3]f64{0, p.eye, 0}
-		world_update(w, g.dev, eye)
-		water_update(&w.water, g.dev, dt)
+		passed := clock_step(&clock, dt)   // the world's time this frame
+		world_update(w, g.dev, centre)
+		water_update(&w.water, g.dev, passed)
 
-		look := look_dir(p.yaw, p.pitch)
-		hit, before, aiming := raycast(w, eye, look)
-		hold_frame(w, eye, look, dt)
+		// The block aimed at in first person, which can be broken and built on; from above, the block
+		// under the pointer, picked through the cut, and the box of blocks marked with it.
+		hit, before: [3]i32
+		aiming: bool
+		if afoot {
+			hit, before, aiming = raycast(w, eye, look_dir(p.yaw, p.pitch))
+			if why do fmt.print(why_words(w, hit if aiming else {i32(math.floor(p.pos.x)), i32(math.floor(p.pos.y)) - 1, i32(math.floor(p.pos.z))}))
+		} else {
+			pointer := [2]f32{0.5, 0.5}   // in a run with no window, the middle, or where the options put it
+			if unseen && opt.has_cursor do pointer = {f32(opt.cursor[0])/f32(pw), f32(opt.cursor[1])/f32(ph)}
+			if !unseen {
+				mx, my: f32
+				_ = sdl.GetMouseState(&mx, &my)
+				pointer = {mx/f32(max(points.x, 1)), my/f32(max(points.y, 1))}
+			}
+			above_point(&a, w, eye, pitch, aspect, pointer)
+			hit, before, aiming = a.under.block, a.under.before, a.under.ok && a.shown && (!unseen || opt.has_cursor)
+			if opt.cursor_box {
+				one := a.under
+				above_point(&a, w, eye, pitch, aspect, {f32(opt.cursor[2])/f32(pw), f32(opt.cursor[3])/f32(ph)})
+				a.mark, a.marked = {one.block, a.under.block}, one.ok && a.under.ok
+				a.under = one
+			}
+			if why {
+				under := a.under
+				if !under.ok do under = pick_far(eye, view_ray(yaw, pitch, fov, aspect, pointer), above_level(&a))
+				fmt.print(why_words(w, under.block) if under.ok else "nothing under the pointer\n")
+			}
+		}
+		hold_frame(w, eye, look_dir(p.yaw, p.pitch) if afoot else view_ray(yaw, pitch, fov, aspect, a.pointer), nil if afoot else &a, passed, dt)
 		if aiming && break_block do world_set(w, hit.x, hit.y, hit.z, .Air)
 		if aiming && place_block {
 			// Not inside the player.
@@ -308,31 +409,53 @@ main :: proc() {
 		if opt.shot != "" && seconds >= opt.after && (idle_frames > 3 || seconds > opt.after + 120 || opt.bench > 0) {
 			shot = opt.shot
 			running = false
+			if !afoot && opt.has_cursor {   // what the pointer is on, said as the picture is taken
+				under := a.under
+				if !under.ok do under = pick_far(eye, view_ray(yaw, pitch, fov, aspect, a.pointer), above_level(&a))
+				if !under.ok do fmt.println("nothing under the pointer")
+				else if opt.why_cursor do fmt.print(why_words(w, under.block))
+				else do fmt.printfln("the pointer is on the block at %d, %d, %d m over the sea: %v%s", under.block.x, under.block.z, under.block.y, block_made(w, under.block), "" if under.exact else ", the top of a column of the ground beyond the block volume")
+				if lo, hi, blocks, ok := mark_box(&a); ok do fmt.printfln("marked %d, %d, %d to %d, %d, %d: %d blocks", lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, blocks)
+			}
 		}
 		if opt.bench > 0 && seconds > opt.bench do running = false
 
 		// The creatures' clock runs from the day and hour; a picture is taken `after` seconds into it, so two
 		// runs show the same animals, and two pictures with different `after` show them moved on.
-		clock := f64(opt.day)*86400 + f64(hour)*3600 + (opt.after if opt.shot != "" && opt.bench == 0 else seconds)
+		posed := f64(opt.day)*86400 + f64(hour)*3600 + (opt.after if opt.shot != "" && opt.bench == 0 else clock.seconds)
+		// From above the animals are posed round the ground under the view's middle, not round an eye
+		// that may stand a kilometre off, and from the eye's height, where no fish takes fright at it.
+		near := eye if afoot else [3]f64{a.at.x, eye.y, a.at.z}
+		boxes := creatures_pose(near, posed, f32(passed), hour, opt.day, &w.water)
+		for &b in boxes do b.centre += {f32(near.x - eye.x), 0, f32(near.z - eye.z)}
+		boxes = hold_pose(boxes, eye, dt)   // the boat and the dwarves
 		view := View {
-			eye = eye, yaw = p.yaw, pitch = p.pitch, hour = hour, day = opt.day, weather = opt.weather, seconds = f32(seconds),
-			target = hit, has_target = aiming, crosshair = shot == "", boxes = hold_pose(creatures_pose(eye, clock, f32(dt), hour, opt.day, &w.water), eye, dt),
+			eye = eye, yaw = yaw, pitch = pitch, hour = hour, day = opt.day, weather = opt.weather, seconds = f32(clock.seconds),
+			target = hit, has_target = aiming, crosshair = shot == "", boxes = boxes,
+			fov = fov, focus = eye if afoot else a.at, above = !afoot, level = NO_CUT if afoot else above_level(&a), bare = !afoot && a.bare, has_mark = !afoot && a.marked,
 		}
+		view.mark[0], view.mark[1], _, _ = mark_box(&a)
 		render(&g, w, view, shot)
 		append(&work, f32(f64(sdl.GetPerformanceCounter() - now)/frequency - g.waited))
 		append(&drawn, [4]int{g.quads_drawn, g.plants_drawn, g.boxes_drawn, g.water_drawn})
 
 		if seconds - title_at > 0.5 {
 			recent := intervals[title_from:]
-			island := island_near(p.pos.x, p.pos.z)
+			at := p.pos if afoot else a.at
+			island := island_near(at.x, at.z)
 			bound(island)
-			near, far := place_near(p.pos.x - f64(region.origin.x), p.pos.z - f64(region.origin.y))
+			near, far := place_near(at.x - f64(region.origin.x), at.z - f64(region.origin.y))
+			speeds := SPEEDS
+			view := fmt.tprintf("%s%s", "flying" if p.fly else "walking", "" if captured else "   (click to look around)")
+			if !afoot {
+				view = fmt.tprintf("from above, %.0f m across%s%s", a.span, fmt.tprintf("   cut at %d%s", a.level, ", following the ground" if a.follow else "") if a.cut else "", "   no leaves" if a.bare else "")
+				if aiming do view = fmt.tprintf("%s   block %d %d %d %v", view, hit.x, hit.y, hit.z, block_made(w, hit))
+			}
 			sdl.SetWindowTitle(window, fmt.ctprintf(
-				"OdinCraft   %.0f fps   worst %.1f ms   %d k quads   %d loading   %.0f %.0f %.0f   island %d   %s   %02d:%02d   %s%s",
+				"OdinCraft   %.0f fps   worst %.1f ms   %d k quads   %d loading   %.0f %.0f %.0f   island %d   %s   %02d:%02d   %s   %s",
 				f64(len(recent))/(seconds - title_at), slice.max(recent)*1000, g.quads_drawn/1000, backlog,
-				p.pos.x, p.pos.y, p.pos.z, island.island.id, "" if near < 0 else fmt.tprintf("at %s", places[near].name) if far < GATHER else fmt.tprintf("%s %.1f km", places[near].name, far/1000),
-				int(hour), int(hour*60)%60, "flying" if p.fly else "walking",
-				"" if captured else "   (click to look around)",
+				at.x, at.y, at.z, island.island.id, "" if near < 0 else fmt.tprintf("at %s", places[near].name) if far < GATHER else fmt.tprintf("%s %.1f km", places[near].name, far/1000),
+				int(hour), int(hour*60)%60, "paused" if clock.paused else fmt.tprintf("x%.0f", speeds[clock.speed]), view,
 			))
 			if said := hold_said(); said != "" do sdl.SetWindowTitle(window, fmt.ctprint(said))
 			title_at, title_from = seconds, len(intervals)
@@ -341,7 +464,7 @@ main :: proc() {
 	}
 
 	if opt.bench == 0 && opt.shot == "" && len(intervals) > 1 {
-		// What the session was like to play, from the first frame after entering.
+		// What the session was like to play, from the afoot frame after entering.
 		total, late, worst := f32(0), 0, f32(0)
 		for s in intervals[1:] {
 			total += s
@@ -351,7 +474,7 @@ main :: proc() {
 		fmt.printfln("played %.0f s: average %.1f fps, %d frames over 12.5 ms, the worst %.1f ms", total, f32(len(intervals) - 1)/total, late, worst*1000)
 	}
 	if opt.bench > 0 {
-		// Skip the first two seconds, while the world around the start is still loading.
+		// Skip the afoot two seconds, while the world around the start is still loading.
 		skip, t := 0, f32(0)
 		for skip < len(intervals) && t < 2 {
 			t += intervals[skip]
@@ -381,7 +504,9 @@ main :: proc() {
 			slice.sort_by(drawn[skip:], proc(a, b: [4]int) -> bool { return a.y < b.y })
 			fmt.printfln("drawn a frame (median): %d k faces, %d k ground plants, %d k quads of water, %d creatures' boxes (at most %d)", faces/1000, drawn[mid].y/1000, water/1000, boxes, most)
 		}
-		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(p.pos.x - start.x, p.pos.z - start.z), p.pos.x, p.pos.y, p.pos.z, height_in_world(p.pos.x, p.pos.z, 1))
+		fmt.printfln("the world's clock ran %.1f s in %.1f s", clock.seconds, seconds)
+		at := p.pos if afoot else a.at
+		fmt.printfln("travelled %.0f m to %.1f %.1f %.1f, ground %.1f", math.hypot(at.x - start.x, at.z - start.z), at.x, at.y, at.z, height_in_world(at.x, at.z, 1))
 	}
 	if opt.has_probe {
 		for z in opt.probe[1]..=opt.probe[3] {

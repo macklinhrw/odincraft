@@ -3,7 +3,7 @@ package main
 import "core:math"
 import "core:math/linalg"
 
-// Walking ground (docs/adr/0007): where a dwarf can stand in the block world, which standing places
+// Walking ground (docs/adr/0009): where a dwarf can stand in the block world, which standing places
 // are joined, and the way from one to another.
 //
 // The ground is the blocks the generator gives with the session's edits laid over them, a chunk at a
@@ -284,7 +284,7 @@ walk_spots :: proc(w: ^Walk, f: i32, out: [][3]i32) -> (n: int) {
 	queue := make([dynamic]i32, context.temp_allocator)
 	append(&queue, f)
 	w.seen[f] = w.stamp
-	for i := 0; i < len(queue) && n < len(out) && i < 600; i += 1 {
+	for i := 0; i < len(queue) && n < len(out) && i < 600 + 60*len(out); i += 1 {
 		b := floor_block(w, queue[i])
 		beside := false
 		for o in out[:n] do beside ||= abs(o.x - b.x) <= 1 && abs(o.z - b.z) <= 1
