@@ -239,6 +239,168 @@ Added 2026-11-15, after the reef kind was built (`foundations.md` section 8, "Th
 - **On a reef island the crest and the stream are measured as here, with every cell's rain counted.** The rain sinks into the reef and the island has no stream, as Kikaijima has none (memory); the height above a stream the routing would trace if it did not sink is what was measured on Kikaijima's grid, where the game traced streams across the plateau.
 - **What is still short:** the island is about a third of Kikaijima's window, since the 8 km region holds about 2 km from the shore to the top where Kikaijima has 3 to 4, so it is twice as rough at 250 m and 1 km and has half the flat ground; on a 12.3 km region it has 31 km². Kikaijima's terraces are flatter: its uplift is a tilted block, ours a dome in lumps, so the oldest flats are tilted most.
 
+## Yakushima against the granite massif
+
+Added 2026-11-16, after the owner decided that Yakushima is measured as the real island the granite massif story is judged against (`open-decisions.md`, 2026-11-16). Since then, an island whose rock tells that story is judged at start-up against Yakushima instead of its kind's islands (`judged` in `STORIES`, `rock.odin`).
+
+**How it was measured.** The method is the one above:
+
+- GSI's `dem_png` tiles at zoom 14, sampled at 4 m into 16 m cells.
+- The eight printed figures from the game's routing and start-up figures, through `--real=`. That option was rebuilt in a scratch copy of `src/`, as before, since the first copy did not survive.
+- The other rows from a rebuilt script.
+
+The check: on Mikurajima's window the rebuilt tools give 114, 77, 51, 5, 2.5, 0.69, 121 and 7, against `REAL`'s 117, 81, 51, 5, 2.5, 0.69, 122 and 7. Every other row of the first table comes out within a few per cent; the divide spacing, for example, is 170 m with a spread of 0.66, against 170 and 0.65.
+
+The rock was read from the Geological Survey of Japan's seamless map. Its 1:200,000 tiles were read at every cell, by colour, and each colour was named by the map's legend service.
+
+Data fetched:
+
+- 366 elevation tiles: 306 for Yakushima, 146 of them holding land; 25 for the Mikurajima check; 35 for Ikuchijima.
+- 111 tiles of the geological map.
+- About 90 legend queries.
+
+All went with a generic user agent and were kept outside the repository. Credit: 国土地理院 (GSI) elevation tiles, resampled and processed for this note. 20万分の1日本シームレス地質図V2（©産総研地質調査総合センター）, the Geological Survey of Japan's map, read and processed for this note under the Government of Japan Standard Terms of Use 2.0 ([GSJ terms](https://gbank.gsj.jp/seamless/agreement.html)).
+
+**The island.**
+
+- **Size.** 504.2 km² of land on the 16 m grid. UNEP-WCMC gives "500 sq.km" ([World Heritage datasheet](https://www.thesalmons.org/lynn/wh-wcmc/Japan%20-%20Yakushima.pdf)); GSI's figure is 504.9 km² (memory).
+- **Height.** 1,930 m on the grid. Miyanoura-dake is 1,936 m, the highest in Kyushu, among "46 peaks over 1,000 meters" ([MLIT, "The Geology of Yakushima"](https://www.mlit.go.jp/tagengo-db/R2-00882.html)).
+- **The pluton.** A Miocene pluton "intruded into Shimanto Super Group", with K-Ar ages of 15.7 to 12.2 Ma and a U-Pb age of about 16 Ma ([Kawano, Anma and Yuhara 2006, JpGU abstract K104-P015](https://www2.jpgu.org/meeting/2006/pdf/K104/K104-P015_e.pdf)).
+- **What MLIT's guide says.**
+  - The pluton is about 15.5 million years old.
+  - "Granite makes up most of Yakushima, particularly the central mountainous area."
+  - The granite "rose about one meter every 1,000 years".
+  - The sandstone and shale it met were baked to hornfels, "found throughout most of the island". MLIT names these beds the Hyuga Group.
+- **What UNEP-WCMC says.** "The predominant bedrock is granite, but small areas of sandstone and shale occur at the foot of the central mountain"; "The topography from coastline to summits is extremely steep"; rain falls at 4,400 mm a year at the coast and up to 10,000 mm inland.
+- **On GSJ's map.**
+  - Granite and granodiorite, of the Burdigalian to early Langhian, cover 70% of the land.
+  - The Eocene to early Oligocene accretionary complex (sandstone, mudstone and their alternations) covers 23%.
+  - Quaternary fans, terraces, valley and coastal deposits cover 6%.
+  - The granite meets the sea on 10% of the shore, almost all of it on the west and north-west.
+  - Elsewhere the sediments lie between the granite and the sea, a median 1.5 km from the shore to the granite: 2.5 to 2.6 km on the north, north-east and east, and 1.2 to 1.6 km on the south.
+  - The map does not draw the hornfels apart from the unbaked beds.
+- **Summit to sea.** The summit stands 9.7 km from the nearest sea.
+
+**The window.** It is the 8,192 m square centred at 30.2553 N 130.5144 E. It runs from the south coast north up the granite to 1,731 m, 6.4 km from the sea; Miyanoura-dake lies 4.9 km beyond its north edge. It was chosen by three rules, from every window 500 m apart on a 32 m grid of the whole island, before any of its figures were taken:
+
+- **Coast and height together.** No 8,192 m square holds both the summit and a real stretch of shore. Of the windows with 8 km of shore or more, the southern ones reach highest: up to 1,729 m on the 32 m grid, against 1,222 to 1,510 m on the west, north and east.
+- **The rock as the story lays it.** The story lays a pluton whose roof falls under the sea toward the coast, with the beds it baked lying over it at the rim. In this window:
+  - Granite is 76% of the land.
+  - The whole shore lies on the sedimentary rim.
+  - The rim runs a median 1.4 km (1.2 to 1.7) from the shore to the granite, and the contact stands a median 208 m above the sea.
+
+  The west and north-west, where the granite meets the sea, would answer a story with no rim.
+- **Typical of the island.** On six of the eight printed figures the window is within 3 (m, % or °) of the whole island. On the other two:
+  - Its crests are the roundest of the four sides: 0.42 m, against 0.59 for the whole island.
+  - Its deepest hollow is shallower: 3 m against 8.
+
+  Windows on the north-west, north-east and east, centred at 30.3771 N 130.4208 E, 30.4041 N 130.5664 E and 30.3816 N 130.6340 E, give the spread in the table.
+
+The window cuts land on its north, east and west sides. As for Kikaijima, Tsushima and Hahajima, the outermost 160 m there is sea, and shore within 112 m of it is left out of every coast figure.
+
+**The game's granite islands.** No island near the start of seeds 1 to 1,000 tells the granite massif story: none of 9,357 islands besides the start islands.
+
+- **Where its row holds.** The row's host asks for crust 20 km thick or more, rising 0.9 mm/yr or more, within 50 km of the volcanic front. It scores 0.5 or more at 22 islands, all within 11 km of the front and all but one within 4 km. There the seed makes cones, craters, domes and one reef, whose rock is laid by their vents or by coral, not the plates.
+- **Why the plate-laid kinds miss it.** The ridge, inlets, raised and worn kinds take a story laid by the plates. 174 of their islands stand within 50 km of the front, on crust 7 to 39 km thick (median 28), but none rises faster than 0.85 mm/yr (median 0.06); 160 of them tell the hard cap's story.
+
+So the islands below were made with the option that sets an island's kind (`--island=N --kind=K`). Five front islands were each formed as each of the four kinds whose rock the plates lay:
+
+| Island | Host |
+|---|---|
+| Seed 246, island 3 | 0.51 |
+| Seed 253, island 5 | 0.87 |
+| Seed 346, island 3 | 0.78 |
+| Seed 346, island 6 | 1.00 |
+| Seed 346, island 9 | 1.00 |
+
+All 20 tell the granite massif story, and all are 8.2 km regions. None stands where the game would form it today.
+
+The table gives Yakushima's south window, the range over its four sides, and the whole island. Beside them are our granite islands by kind (median and range over the five sites) and Ikuchijima (below). The first eight rows are what start-up prints.
+
+| | Yakushima, south window | Yakushima, four sides | Yakushima, whole | ridge, granite | inlets, granite | raised, granite | worn, granite | Ikuchijima, whole |
+|---|---|---|---|---|---|---|---|---|
+| Height within 100 m of the shore, median, m | 24 | 8 to 40 | 22 | 96 (79 to 108) | 47 (39 to 50) | 22 (12 to 29) | 40 (35 to 52) | 8 |
+| Shore rising 30 m within 50 m, % | 4 | 0 to 17 | 7 | 93 (69 to 96) | 47 (40 to 52) | 26 (24 to 39) | 23 (17 to 37) | 3 |
+| Median slope 0–100 m from the sea, ° | 15 | 5 to 20 | 12 | 42 (37 to 46) | 26 (23 to 28) | 9 (4 to 10) | 22 (19 to 27) | 4 |
+| Land under 50 m, % | 6 | 6 to 15 | 8 | 10 (10 to 15) | 28 (24 to 32) | 29 (25 to 35) | 34 (24 to 38) | 44 |
+| Land over 60°, % | 0.0 | 0.0 to 0.1 | 0.1 | 1.8 (0.9 to 3.2) | 0.6 (0.6 to 1.7) | 0.4 (0.0 to 3.2) | 0.3 (0.1 to 0.4) | 0.0 |
+| Ridge crest: fall to the four neighbours, median, m | 0.42 | 0.42 to 0.69 | 0.59 | 1.56 (1.52 to 1.86) | 1.38 (1.11 to 1.57) | 1.58 (1.35 to 1.89) | 1.28 (0.96 to 1.59) | 0.55 |
+| Height above nearest stream, median, m | 80 | 49 to 96 | 76 | 103 (102 to 126) | 76 (64 to 84) | 72 (65 to 91) | 61 (51 to 81) | 31 |
+| Deepest closed hollow, m | 3 | 3 to 6 | 8 | 6 (3 to 9) | 11 (2 to 21) | 7 (0 to 15) | 11 (2 to 15) | 6 |
+| Land, km² | 52.4 | 43.7 to 53.3 | 504.2 | 16.0 (9.1 to 18.8) | 13.6 (10.7 to 16.5) | 16.1 (12.7 to 21.4) | 14.4 (11.3 to 17.9) | 30.9 |
+| Highest point, m | 1731 | 1228 to 1731 | 1930 | 787 (699 to 836) | 579 (497 to 611) | 754 (656 to 891) | 473 (418 to 571) | 471 |
+| Granite at the surface, % of land | 76 | 13 to 93 | 70 | 87 (49 to 92) | 91 (66 to 96) | 97 (38 to 100) | 93 (84 to 99) | 67 |
+| Median slope, ° | 28 | 20 to 30 | 28 | 41 (38 to 45) | 37 (31 to 39) | 34 (31 to 41) | 35 (29 to 39) | 18 |
+| Land over 45°, % | 3 | 3 to 5 | 4 | 39 (30 to 50) | 27 (21 to 30) | 26 (19 to 35) | 19 (10 to 29) | 1 |
+| Tallest face, the game's own start-up figure, m | 260 | 143 to 260 | 364 | 349 (336 to 429) | 257 (241 to 312) | 281 (236 to 447) | 223 (176 to 252) | 66 |
+| Median slope 300–700 m from the sea, ° | 6 | 6 to 22 | 10 | 40 (36 to 45) | 39 (33 to 40) | 33 (26 to 41) | 35 (29 to 39) | 14 |
+| Median slope, highest fifth of the height, ° | 28 | 26 to 31 | 25 | 46 (39 to 50) | 43 (38 to 45) | 46 (27 to 55) | 44 (40 to 46) | 32 |
+| Mean height / highest | 0.41 | 0.28 to 0.41 | 0.33 | 0.30 (0.28 to 0.34) | 0.27 (0.23 to 0.29) | 0.28 (0.24 to 0.31) | 0.24 (0.23 to 0.26) | 0.21 |
+| Relief in 250 m, median, m | 128 | 78 to 136 | 123 | 189 (171 to 216) | 164 (127 to 173) | 157 (141 to 192) | 144 (111 to 171) | 69 |
+| Relief in 1 km, median, m | 485 | 332 to 485 | 395 | 502 (460 to 544) | 400 (354 to 419) | 470 (370 to 500) | 311 (260 to 357) | 239 |
+| Streams draining over 0.12 km², km per km² | 2.0 | 1.8 to 2.0 | 2.0 | 1.3 (1.1 to 1.4) | 1.1 (1.0 to 1.2) | 1.5 (1.4 to 1.6) | 1.3 (1.2 to 1.4) | 1.5 |
+| Divide to stream, median, m | 148 | 143 to 158 | 151 | 176 (172 to 193) | 209 (204 to 226) | 158 (148 to 161) | 172 (167 to 192) | 173 |
+| Shore rising 100 m within 100 m, % | 0 | 0 to 1 | 1 | 46 (23 to 55) | 14 (7 to 19) | 0 (0 to 1) | 2 (0 to 3) | 0 |
+| Shore under 10 m for 100 m inland, % | 19 | 19 to 67 | 28 | 0 (0 to 0) | 1 (0 to 1) | 0 (0 to 38) | 2 (0 to 2) | 59 |
+| Roughness, σ 64–128 m, m | 11.8 | 11.0 to 13.4 | 12.4 | 20.7 (19.1 to 22.7) | 17.8 (16.0 to 18.6) | 17.0 (15.7 to 19.3) | 17.2 (14.8 to 19.9) | 9.0 |
+
+Granite on Yakushima is GSJ's mapped granite. On ours it is granite in the start-up line "rock at the surface"; their baked rim (hornfels and quartzite) is a median 7% of the land. On Ikuchijima it is the share of 52 points, 768 m apart, that GSJ's map gives as granite.
+
+![Yakushima whole with its rock and the four windows; its south window, Ikuchijima and one generated granite island as three kinds, all on the game's map at 8.2 km](../real/yakushima-granite.jpg)
+
+The picture's panels:
+
+- **A.** Yakushima whole, 32.8 km across: granite pink, the accreted sediments teal, the Quaternary deposits yellow. The measured window is the southern square; the summit is ringed red.
+- **B and C.** Yakushima's south window and Ikuchijima on the game's map, at 8.2 km.
+- **D, E and F.** Seed 253 island 5 as ridge, raised and worn, at the same scale.
+
+The findings:
+
+- **Our granite islands are far from Yakushima on 58% of the printed figures** (92 of 160).
+  - Every one of the 20 is far on the share of shore rising 30 m in 50 m and on the fall at a crest.
+  - 16 of the 20 are far on land under 50 m, 12 on the share over 60°, 11 on the slope of the first 100 m and 10 on the shore height.
+  - None is far on the height above the nearest stream.
+  - Against their kinds' islands the same islands are far on 28% of figures, and against both sets together on 24%.
+- **The game's granite is too steep everywhere, not only at the coast.** By kind, against Yakushima:
+  - Median slope: 34 to 41°, against 28°.
+  - Land over 45°: 19 to 39%, against 3 to 5%.
+  - Slope 300 to 700 m from the sea: 33 to 40°, against 6 to 22°.
+  - Slope in the highest fifth: 43 to 46°, against 25 to 31°.
+  - Crests: falling 1.3 to 1.6 m, against 0.42 to 0.69 m.
+
+  Ikuchijima's granite agrees with Yakushima's: crests of 0.55 m, and 1% of its land over 45°. The cause is granite's law (`rock_init`): at strength 0.65 granite holds slopes to 51° and creeps at a fifth of the weakest rock's rate, so the forming leaves its hillsides near that limit. Real granite rots deep into grus that creeps and slides (memory). The strengths were set on 2026-11-15 by arc islands of other rock, when no granite island had been measured.
+- **Yakushima's coast is low, not cliffed.**
+  - 8 to 40 m stands within 100 m of the shore, by side, and 22 m round the whole island.
+  - 0 to 17% of the shore rises 30 m in 50 m.
+  - 19 to 67% stays under 10 m for 100 m inland.
+
+  The steep land stands behind a rim of sediments, terraces and fans. Of our kinds only the raised one comes near it, from its terraces: 22 m, and 9° in the first 100 m, though 26% of its shore still rises 30 m in 50 m. The ridge kind's granite stands in cliffs (96 m, with 93% of its shore rising 30 m in 50 m).
+- **Our rim is thinner.** Granite is a median 92% of our islands' land (38 to 100), against 70% of Yakushima's, whose granite meets the sea on 10% of its shore.
+- **Lowland is partly a matter of size.** Our granite islands are 9 to 21 km² and 418 to 891 m high; Yakushima is 504 km² and 1,936 m. So 10 to 38% of ours lies under 50 m, against 6 to 15% of Yakushima's windows. Ikuchijima, nearer our size, has 44%.
+- **Yakushima has more streams.** It has 1.8 to 2.0 km of stream per km², against 1.1 to 1.5 on ours, at the same 0.12 km² threshold, under 4,400 to 10,000 mm of rain a year (UNEP-WCMC).
+
+**A whole small granite island: Ikuchijima.** It was measured because that was cheap, to weigh a whole island of the game's size against a window of Yakushima.
+
+- **The window.** Centred at 34.285 N 133.105 E in the Seto Inland Sea, with the land of other islands in the window set to sea.
+- **Size.** 30.9 km² and 471 m on this grid (memory: about 31 km², and Kannon-yama 472 m).
+- **Rock.** On GSJ's map, of 52 points 768 m apart on its land:
+  - Massive Late Cretaceous granite: 35 (67%).
+  - Early to Middle Jurassic accretionary mixed rock: 11 (21%).
+  - Holocene plains and reclaimed land: the other 6.
+
+  The map gives the same granite at single points on Ōshima, Innoshima, Kurahashijima, Kitagishima and Ōmishima nearby.
+- **Where it agrees with Yakushima.** On what granite does: crests of 0.55 m, nothing over 60°, and 3% of the shore rising 30 m in 50 m.
+- **Where it differs.** On what its history did. It is old granite worn low (median slope 18°, 44% under 50 m, 31 m above a stream), beside a sheltered sea, with straight reclaimed shore on its north side (picture, panel C).
+
+It is the measure for a granite island worn low, not for the granite massif, whose row argues from a young pluton rising fast (the question in `open-decisions.md`, 2026-11-16).
+
+**What I could not judge.**
+
+- **The hornfels.** The 1:200,000 map does not separate it.
+- **Cliffs under 16 m.** As above, the 10 m model understates them, on Yakushima's granite slabs as on the volcanic islands.
+- **Colour and banding.** The real islands wear the game's seeded beds in the game, so only their shape was judged.
+- **Size.** The south window holds 2.4 times the land of our largest granite island.
+
 ## Livable ground
 
 Added by Claude on 2026-11-11, after the owner looked at the comparison. The owner's reading: real islands are a good north star but not the only reference. Mikurajima, the most dramatic island in the set, has nowhere to live. The references should lean toward livable real islands, the generated islands should have both drama and ground a person could settle, well balanced, and the variance should still allow an inhospitable island as a rarer kind.

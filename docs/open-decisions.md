@@ -103,6 +103,43 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Yakushima is measured** as the real island the granite massif is judged against.
 - **The default island gets the broken rock under its soil and the gravel of the rock upstream at the switch-over to the history**, with its faults, not before.
 
+**2026-11-16, Claude's call** (Yakushima measured for the granite massif; `interesting-world/notes/real-islands.md`, "Yakushima against the granite massif")
+
+- **Yakushima's window is the 8,192 m square at 30.2553 N 130.5144 E, from the south coast up its granite to 1,731 m.**
+  - No such square holds both the summit and a real stretch of shore: the summit stands 9.7 km from the sea.
+  - Of the windows with 8 km of shore or more, the southern ones reach highest.
+  - It crosses the rock as the story lays it: granite on 76% of its land, behind a rim of the accreted sediments 1.2 to 1.7 km wide that holds the whole shore (GSJ's seamless map).
+  - It is within 3 m, % or ° of the whole island on six of the eight printed figures.
+  - It was chosen by those rules before its figures were taken. Windows on the other three sides and the whole island are in the note as the spread.
+- **Its eight figures in `REAL`: 24, 4, 15, 6, 0.0, 0.42, 80 and 3.** They come from the game's own routing and start-up figures through a `--real=` option rebuilt in a scratch copy of `src/` outside the repository. Checked first on Mikurajima's window, the rebuilt tools gave 114, 77, 51, 5, 2.5, 0.69, 121 and 7 against `REAL`'s 117, 81, 51, 5, 2.5, 0.69, 122 and 7. No data is kept in the repository; GSI's and GSJ's credits are in `THIRD_PARTY.md`.
+- **A story names the real islands it is judged against, as a kind does: `judged` in `STORIES`.**
+  - An island whose story names any is judged against those alone; otherwise against its kind's, as before.
+  - Only the granite massif names any (Yakushima), so no island near the start prints anything new. The start-up line says when the story's islands stand in for the kind's.
+  - **Not both.** Against both sets together, the 20 granite islands below are far on 24% of their figures. Against Yakushima alone they are far on 58%, against their kinds' islands alone on 28%. The kinds' islands (Hahajima, Tsushima, Chichijima, Kikaijima) are none of them granite, so the union widens every range until a `!` no longer says how the granite differs.
+- **The game's granite islands were made with `--island=N --kind=K`, since the seed makes none.**
+  - On seeds 1 to 1,000 no island near the start tells the granite massif story (none of 9,357 besides the start islands).
+  - Its host holds at 22 islands, all on the volcanic front, where the seed makes volcanoes whose vents lay their rock.
+  - Five of those front islands, each formed as each of the four kinds the plates lay, give 20 granite islands.
+- **Ikuchijima was measured as a whole small granite island, because it was cheap. It is not added to `REAL`, since no row names it.** It covers 30.9 km² and stands 471 m on the grid. On GSJ's map it is 67% Late Cretaceous granite and 21% Jurassic accreted rock.
+- **No island's land changed.** `GOLDEN` is unchanged and the test passes. The default island's map is byte for byte the parent's, and its start-up lines are the same apart from timings.
+- *Asked:* **the game's granite is far steeper than both real granite islands.**
+
+  | | Ours, by kind | Yakushima | Ikuchijima |
+  |---|---|---|---|
+  | Median slope | 34 to 41° | 28° | 18° |
+  | Land over 45° | 19 to 39% | 3 to 5% | 1% |
+  | Crest fall | 1.3 to 1.6 m | 0.42 to 0.69 m | 0.55 m |
+  | Shore rising 30 m in 50 m | 23 to 93% | 0 to 17% | 3% |
+
+  Granite's law (strength 0.65, set on 2026-11-15 by arc islands of other rock) holds 51° and creeps at a fifth of the weakest rock's rate. *Recommendation*: a small step after step 32's second half, tuning granite's law, and if needed its creep as grus, by Yakushima's figures. Judge it on the granite islands that history forms. It changes the land of every island with granite: today one near the start of seeds 1 to 10, none on seed 7.
+- *Asked:* **the granite massif never forms on step 32's history.**
+  - 174 plate-laid islands stand within 50 km of the front. Their crust is thick enough (median 28 km), but none rises faster than 0.85 mm/yr, against the row's 0.9. Yakushima rises "about one meter every 1,000 years" (MLIT).
+  - Ground rising that fast stands on the front itself.
+
+  *Recommendation*: leave the row as it is, and check after step 32's second half whether its regional history raises ground near the front that fast. If it still makes none, revisit the threshold then, not before.
+- *Asked:* **a whole small granite island in place of Yakushima's window?** Ikuchijima matches Yakushima on what granite does: its crests, its low shore, nothing over 60°. It differs on what its history did: old granite worn low, 44% of it under 50 m, beside a sheltered sea. *Recommendation: no for the granite massif*, whose row argues from a young pluton rising fast; keep Yakushima's window.
+- *Asked:* **should Ikuchijima's figures go into `REAL` and be named in `judged` for "granite against sediments"?** Its rock is that story's: a granite against the older accreted beds it rose into. That story is told by 100 islands on 58 of the 1,000 seeds, mostly worn and inlets. *Recommendation: yes, as a follow-up after step 32's second half*: Ikuchijima's figures are already measured, and the change is a row and one word in `STORIES`. The story's own rows name Arran and Tsushima's south. Ikuchijima's setting, a Cretaceous pluton of south-west Japan's inner belt, behind the arc (memory), should be checked against the story's host first.
+
 **2026-11-16, Claude's call** (step 24 on step 32's history; `foundations.md` section 8, "Step 24 on step 32's history")
 
 - **The cause, found before any change: two of step 24's hosts read fields as signs that only the old history made true.** Thick crust stood for an arc's crust, where magma pools. An age of 250 Myr or more stood for a worn old shield. Step 32's history puts the forearcs near the start on the thinned edge of a continent: 17 to 31 km thick, 350 Myr old (the age of the history's first continent), 100 to 180 km in front of the volcanic front. So granite took 30 of 131 islands, and the shield took five forearc islands, where `main`'s one shield stood on a shelf no trench works. Island 7 of seed 7 was a shield 808 m high, 272,366 land cells and 3.1 s beside the others, which held entering. Traced by printing each island's fields at its middle on both histories. No change to the plates, the known world or the forming.
