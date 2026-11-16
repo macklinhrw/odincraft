@@ -118,6 +118,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **This supersedes** item 9 of `foundations.md` section 9 (people arrive first as ruins; history as a short pass), `living-world.md` decisions 2 to 4, and the "first person" line under "Assumed unless the owner objects" below as the only view: first person stays, and the view from above leads.
 - **RimWorld is the second source of inspiration, after Dwarf Fortress.** Dwarf Fortress will always be the primary; there is still plenty to learn from RimWorld.
 - **The plan is `plan.md`**, written at the owner's word after the first proposal was checked against the makers' own words (`interesting-world/notes/df-rimworld-ideas.md`). Its section 8 lists four decisions ahead; none blocks its first step.
+- **Start P1 "and so forth"**: the play track goes ahead in the plan's order, each step as it is ready, beside the natural track. Said on reading the merge of steps 25 and 27. The plan's decisions ahead that the owner did not answer are taken as recommended until the owner says otherwise (Claude's call): a dwarf stands under one and a half blocks, and the first hold is on the default island. The stream beds stay at step 34's width.
 
 **2026-11-16, Claude's call** (merging step 25)
 
