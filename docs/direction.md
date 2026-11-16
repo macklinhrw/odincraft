@@ -2,7 +2,9 @@
 
 Written 2026-11-16 by Claude, on the owner's instruction of the same day: "we need to revise our plan from the ground up to fit the direction dwarf fortress goes in- look not necesarilly into the mechanics it uses to simulate its histories but the ideas that drive it and the gameplay it is used to drive".
 
-This is a **proposal** until the owner decides section 6. It replaces the order of work in `foundations.md` section 8 from Phase 2's unbuilt steps on. Nothing built is thrown away.
+**Superseded by `plan.md`**, written the same day after the owner answered section 6 and the sources were read. Kept as the record of the first proposal: its order of work and what is marked *(memory)* are not to be relied on.
+
+This was a **proposal** until the owner decided section 6. It replaces the order of work in `foundations.md` section 8 from Phase 2's unbuilt steps on. Nothing built is thrown away.
 
 Sources: `reference/zigcraft/dwarf-fortress-worldgen-research.md` and `interesting-world/notes/df-rimworld.md`, which cite Bay 12's own logs, DF Talk and the raws. What is marked *(memory)* is Claude's recollection of Tarn Adams's talks and interviews, not checked for this note.
 

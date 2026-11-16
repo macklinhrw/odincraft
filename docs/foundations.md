@@ -766,7 +766,7 @@ Steps 17 to 20 started together; step 21 followed the seam test's failure, and s
 
 ### Where the plan stands, 2026-11-16
 
-**The order of work from here is being revised** (the owner, 2026-11-16): toward a world that makes stories, after the ideas that drive Dwarf Fortress. The proposal is `direction.md`; until the owner decides its section 6, steps 21, 25 and 27 carry on and steps 26, 29 and 30 are not started.
+**The order of work from here is `plan.md`** (the owner's direction of 2026-11-16: a world that makes stories, after Dwarf Fortress first and RimWorld second). Steps 21, 25 and 27 carry on as its N1 to N3; steps 26, 29 and 30 are replaced by its N5, P9 and P7.
 
 - **Done:** steps 17, 18, 19, 20, 22, 23, 24, 28, 31, 32, 33, 34 and 35; outside the table, the reef kind and Yakushima measured for the granite massif (`interesting-world/notes/real-islands.md`). Step 17's stand-in is replaced by step 22's history and step 32's regional history.
 - **Half done, now being built:** step 21. Its experiment found a method that leaves no seam (ordered pieces), but nothing of it is built. A continent of 30,000 to 50,000 km² is extrapolated at 18 to 30 minutes on three background threads. Phase 3 needs it, and so do rivers wider than about 8 m (step 34).

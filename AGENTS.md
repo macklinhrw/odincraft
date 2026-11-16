@@ -1,11 +1,12 @@
 # Agent notes
 
-Odincraft is a first-person block game in Odin, SDL3 GPU and Metal (macOS, Apple Silicon). It tests whether a generated world can feel like a real place. The owner sets direction and judges every visual result by looking. Record each decision in `docs/open-decisions.md` as soon as it is made.
+Odincraft is a block game in Odin, SDL3 GPU and Metal (macOS, Apple Silicon): a generated world that feels like a real place, with a history, in which the player founds and keeps a hold of dwarves, after the ideas of Dwarf Fortress first and RimWorld second. The natural world is the foundation and is never traded away for play. The owner sets direction and judges every visual result by looking. Record each decision in `docs/open-decisions.md` as soon as it is made.
 
 ## Read first
 
 - `ARCHITECTURE.md`: module map, data flow, where to start.
-- `docs/foundations.md`: the plan and the numbered steps. Read sections 3 and 8 before adding to land, rock, water, plants or living things.
+- `docs/plan.md`: the plan from 2026-11-16 on, in two tracks, the natural world (N) and play (P), with the stories it is for and its rules.
+- `docs/foundations.md`: the foundations, and the steps built so far with what each taught. Read sections 3 and 8 before adding to land, rock, water, plants or living things.
 - `docs/adr/`: read before changing level of detail, lighting, threading or water.
 - `docs/interesting-world/notes/real-islands.md`: the real islands the land is measured against. Judge a change to the land by those figures.
 - `docs/lessons.md`: why earlier attempts stalled. Read it before proposing architecture or a way of working.
