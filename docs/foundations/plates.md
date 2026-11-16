@@ -88,14 +88,15 @@ Built 2026-11-15 in part (`foundations.md`, "Step 22, second half, as built"): i
 | At 24 km cells (884,736) | 5.6 s | seed 7, a scratch build |
 | Drawing 26 frames and the known world at 1 km | 1.1–1.4 s | |
 | `--plates-why` (the history twice, every field every step the second time) | 5.4 s | |
-| The comparison script, 26 frames both worlds | 13 s | |
+| The comparison script, 26 frames both worlds | 13 s | after the first run, which fetches 270 MB of reference data |
 
 The passes over cells run on a crew of 10 threads, each with a fixed share and its own sums, added in order, so the history is the same on any machine (checked: two runs give identical grids). Memory: two crust grids of 32 bytes a cell, about 25 MB, plus 61 MB of frames kept for drawing. The guess in `foundations.md` section 7 was about a second; the history is two to three times that, run once at world creation.
 
 ## 9. Risks and what is weak
 
 - **The known world's islands are the weakest part.** Its map at 1 km blends 36 km cells; coasts follow the cells despite a warp, and windows chosen on seeds 7, 1, 3 and 12 hold 2 to 16 islands of a km² or more, mostly vents. The real Izu arc has a dozen islands in 600 km. Reading the regions (section 6) is the second half, and it may need the regional history of D1's alternative (c).
-- **Boundaries are two to three times the real length** on seed 7 (stray cells along converging edges; continents stretched into stripes along rifts).
+- **Boundaries are about twice the real length**: converging boundary 1.4 to 3.6 times the real today over eleven seeds, with 20 plates against 51 (stray cells along converging edges; continents stretched into stripes along rifts).
+- **One plate can take half the planet**: seed 7, the default, ends with an ocean plate over 55% of it (the seeds' median 27%, real 20%).
 - **The first ocean floor survives too long**, continents shrink where the real ones grow, and continental plates are too slow (`real-plates.md`).
 - **The outcome depends on the grid**: at 24 km the same seed ends with one plate of 204 million km². The history is chaotic; seeds differ more than any tuning, which is what a seed is for, but a figure from one seed is not a figure.
 - **The plate count is the balance of rows' chances and joins**, tuned on seeds 7 and 1 by the comparison; seeds 3 and 12 end with 33 and 10 plates.

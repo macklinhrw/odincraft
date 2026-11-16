@@ -64,56 +64,77 @@ The tool (`tools/plates_compare.py`) fetches these into a folder outside the rep
 
 ## Through time: the real Earth and ours, measured the same way
 
-`build/odincraft --plates=DIR` writes each frame on half-degree cells; `tools/plates_compare.py` builds the same cells for the real Earth from the references above, measures both with one function and draws them side by side. Ours here is the history as built in step 22's first half, seeds 7 and 1.
+`build/odincraft --plates=DIR` writes each frame on half-degree cells; `tools/plates_compare.py` builds the same cells for the real Earth from the references above, measures both with one function and draws them side by side. Ours here is the history as built in step 22's second half, whose arc front runs smoothly along each trench; the pictures are seed 7, the game's default, and the table eleven seeds (1 to 10 and 12), each run on its own and compared, since one seed's history is chaotic and a figure from one seed is not a figure. Run 2026-11-15.
 
 ![Today: ours (seed 7) on the left, the real Earth on the right; plates and their boundaries above (red converging, yellow spreading, white sliding), crust and land below](../real/plates-today.jpg)
 
 ![The figures through time, the real Earth solid blue, ours (seed 7) dashed orange](../real/plates-measures.jpg)
 
+"Ours" is the median of the eleven seeds with their range; "ours before" is the median of the same seeds before the arc front was smoothed (the history of step 22's first half, which reproduces that step's figures for seed 7 exactly).
+
 | Figure | | 250 Ma | 200 | 150 | 100 | 50 | today |
 |---|---|---|---|---|---|---|---|
 | Plates | real | 11 | 14 | 32 | 36 | 35 | 51 |
-| | seed 7 / 1 | 14 / 10 | 17 / 11 | 19 / 14 | 18 / 13 | 23 / 18 | 27 / 19 |
+| | ours | 11 (9–15) | 14 (7–18) | 15 (7–22) | 16 (11–23) | 15 (10–25) | 20 (10–28) |
+| | ours before | 11 | 13 | 16 | 15 | 18 | 19 |
 | Largest plate, % | real | 36 | 16 | 16 | 12 | 23 | 20 |
-| | seed 7 / 1 | 28 / 27 | 17 / 18 | 15 / 25 | 13 / 17 | 16 / 28 | 17 / 21 |
+| | ours | 41 (29–60) | 26 (21–54) | 32 (16–65) | 31 (19–40) | 27 (21–52) | 27 (14–55) |
+| | ours before | 34 | 27 | 26 | 28 | 24 | 27 |
 | Plate size slope | real | −0.37 | −0.27 | −0.43 | −0.39 | −0.43 | −0.42 |
-| | seed 7 / 1 | −0.88 / −0.37 | −0.69 / −0.35 | −0.42 / −0.53 | −1.3 / −0.41 | −0.66 / −0.45 | −0.42 / −0.63 |
+| | ours | −0.67 (−0.99 to −0.38) | −0.59 (−0.77 to −0.36) | −0.49 (−0.73 to −0.35) | −0.47 (−0.89 to −0.35) | −0.50 (−0.82 to −0.36) | −0.58 (−0.73 to −0.31) |
+| | ours before | −0.69 | −0.54 | −0.43 | −0.43 | −0.48 | −0.56 |
 | RMS speed, mm/yr | real | 74 | 59 | 68 | 64 | 50 | 44 |
-| | seed 7 / 1 | 57 / 44 | 41 / 46 | 46 / 55 | 54 / 44 | 47 / 47 | 41 / 56 |
-| Ocean plates / continent plates, mm/yr | real | 84 / 30 | 66 / 28 | 56 / 22 | 71 / 30 | 39 / 25 | 62 / 27 |
-| | seed 7 | 86 / 5 | 69 / 11 | 66 / 17 | 80 / 12 | 66 / 15 | 61 / 19 |
+| | ours | 51 (36–63) | 49 (44–59) | 47 (36–64) | 50 (37–60) | 42 (37–59) | 51 (39–58) |
+| | ours before | 53 | 51 | 46 | 54 | 48 | 44 |
+| Continent plates, mm/yr | real | 30 | 28 | 22 | 30 | 25 | 27 |
+| | ours | 4 (0–9) | 13 (6–36) | 17 (2–40) | 17 (5–24) | 18 (12–22) | 18 (3–24) |
+| | ours before | 4 | 12 | 14 | 19 | 21 | 19 |
 | Converging km (thousands) | real | 66 | 51 | 70 | 67 | 65 | 60 |
-| | seed 7 / 1 | 91 / 49 | 95 / 70 | 108 / 93 | 145 / 82 | 186 / 116 | 186 / 121 |
+| | ours | 78 (51–93) | 105 (72–137) | 114 (60–156) | 120 (74–189) | 145 (50–195) | 120 (85–216) |
+| | ours before | 79 | 99 | 99 | 129 | 133 | 130 |
 | Spreading km (thousands) | real | 68 | 49 | 95 | 93 | 89 | 84 |
-| | seed 7 / 1 | 89 / 65 | 87 / 65 | 111 / 92 | 155 / 83 | 195 / 125 | 169 / 118 |
-| Ocean floor, mean age Myr | real | 51 | 49 | 49 | 33 | 45 | 62 |
-| | seed 7 / 1 | 85 / 88 | 70 / 90 | 56 / 49 | 48 / 60 | 47 / 55 | 50 / 57 |
-| Ocean floor, 95% younger than, Myr | real | 121 | 102 | 99 | 76 | 102 | 147 |
-| | seed 7 / 1 | 178 / 175 | 224 / 220 | 132 / 148 | 153 / 161 | 148 / 151 | 126 / 169 |
-| Ocean depth from age, m | real | 4,709 | 4,743 | 4,753 | 4,439 | 4,686 | 4,862 |
-| | seed 7 / 1 | 4,793 / 4,994 | 4,748 / 4,950 | 4,754 / 4,547 | 4,519 / 4,781 | 4,559 / 4,664 | 4,642 / 4,670 |
+| | ours | 82 (64–108) | 110 (72–139) | 119 (67–155) | 124 (91–186) | 131 (48–174) | 127 (82–216) |
+| | ours before | 84 | 91 | 104 | 113 | 127 | 135 |
+| Ocean floor, mean age Myr | real | 50 | 49 | 49 | 33 | 45 | 62 |
+| | ours | 82 (70–95) | 65 (54–82) | 45 (40–65) | 50 (45–74) | 52 (39–78) | 44 (36–71) |
+| | ours before | 78 | 68 | 54 | 50 | 48 | 50 |
+| Ocean floor older than 120 Myr, % | real | 5 | 2 | 1 | 1 | 1 | 13 |
+| | ours | 37 (27–43) | 19 (11–25) | 6 (4–16) | 11 (7–21) | 9 (5–28) | 8 (5–22) |
+| | ours before | 33 | 19 | 10 | 14 | 8 | 10 |
 | Continental crust, % | real | 35 | 35 | 37 | 38 | 40 | 42 |
-| | seed 7 / 1 | 38 / 39 | 37 / 38 | 37 / 38 | 36 / 37 | 35 / 37 | 34 / 37 |
-| Land, % | real (PaleoDEM) | 29 | 35 | 31 | 27 | 26 | 28 |
-| | seed 7 / 1 | 36 / 38 | 34 / 35 | 34 / 34 | 31 / 33 | 30 / 32 | 29 / 31 |
+| | ours | 38 (38–39) | 38 (37–39) | 38 (36–38) | 38 (35–39) | 38 (33–39) | 38 (31–39) |
+| | ours before | 38 | 38 | 38 | 38 | 37 | 37 |
+| Land, % | real | 29 | 35 | 31 | 27 | 26 | 28 |
+| | ours | 37 (36–38) | 35 (34–36) | 34 (31–35) | 33 (31–35) | 32 (28–34) | 31 (27–33) |
+| | ours before | 37 | 35 | 34 | 33 | 32 | 31 |
 | Land over 1 km, % | real | 1.2 | 3.2 | 3.3 | 4.8 | 3.5 | 5.7 |
-| | seed 7 / 1 | 1.4 / 1.1 | 2.1 / 1.7 | 2.8 / 1.4 | 2.2 / 2.1 | 3.4 / 1.6 | 4.5 / 1.8 |
+| | ours | 1.0 (0.3–1.3) | 0.9 (0.3–1.8) | 1.1 (0.7–1.9) | 1.5 (0.8–2.9) | 1.7 (0.9–3.5) | 1.6 (1.1–3.6) |
+| | ours before | 0.9 | 1.0 | 1.2 | 1.5 | 1.6 | 1.9 |
 | Land masses over a million km² | real | 1 | 1 | 4 | 8 | 7 | 6 |
-| | seed 7 / 1 | 1 / 2 | 2 / 3 | 8 / 4 | 5 / 5 | 9 / 6 | 5 / 6 |
+| | ours | 2 (1–5) | 3 (1–5) | 3 (1–6) | 4 (2–6) | 5 (3–8) | 6 (3–10) |
+| | ours before | 2 | 3 | 4 | 5 | 6 | 6 |
 | Largest land mass, million km² | real | 147 | 177 | 78 | 60 | 44 | 78 |
-| | seed 7 / 1 | 183 / 191 | 164 / 165 | 57 / 138 | 83 / 58 | 78 / 61 | 82 / 87 |
+| | ours | 180 (158–188) | 170 (82–182) | 147 (79–173) | 89 (80–168) | 82 (44–140) | 85 (39–130) |
+| | ours before | 178 | 165 | 158 | 84 | 81 | 87 |
 | Land masses of 10,000 km² to a million | real | 13 | 36 | 78 | 70 | 157 | 107 |
-| | seed 7 / 1 | 21 / 34 | 44 / 57 | 92 / 56 | 125 / 62 | 104 / 67 | 144 / 93 |
+| | ours | 30 (20–65) | 48 (41–88) | 83 (70–97) | 99 (85–125) | 132 (96–153) | 149 (130–200) |
+| | ours before | 25 | 55 | 68 | 82 | 104 | 116 |
 
 What the comparison says, and what it does not:
 
-- **Both start as one supercontinent and break it up**, ours by rifts drawn from the seed after 30 Myr, the real one from the mid-Jurassic. The real world goes from 1 land mass over a million km² to 6–8; ours to 5–9.
-- **Our boundaries are too long.** With 27 plates against 51, seed 7 has three times the converging boundary. Most of it is cells of one plate left inside another along converging edges, and continents stretched into stripes along rifts; seed 1, with fewer plates, is within 1.3 to 2 times. A boundary length is the best single test of how clean the plates are.
-- **Our first ocean floor survives too long.** Ours starts with old ocean round the first continent, and until about 150 Ma 18–40% of our ocean floor is older than 120 Myr against 1–5%. Old ocean founders only by a row's chance; on the real Earth it is all subducted by about 180 Myr.
-- **Our continents shrink; the real ones grow.** 38% to 34% against 35% to 42%. Collisions stack crust and lose area, and arcs mature into continent too slowly. Part of the real growth is the model's own: more continental fragments are mapped in recent times *(inference)*.
-- **Continental plates are too slow** (5 to 19 mm/yr against 22 to 30): ridge push and trench suction are the only forces on a plate without slabs.
+- **Both start as one supercontinent and break it up**, ours by rifts drawn from the seed after 30 Myr, the real one from the mid-Jurassic. The real world goes from 1 land mass over a million km² to 6–8; ours from 2 to 6. Ours breaks up later: at 150 Ma our largest land mass is still 147 million km² against 78.
+- **We have too few plates and too much boundary.** 20 plates today against 51, yet twice the converging and one and a half times the spreading boundary. Most of it is cells of one plate left inside another along converging edges, and continents stretched into stripes along rifts. A boundary length is the best single test of how clean the plates are.
+- **One plate can take half the planet.** Seed 7's largest plate today covers 55% of it (real 20%; the seeds' median 27%, range 14–55%): a single ocean plate round most of the world. Before the smoothing, seed 8's covered 79%. Whether such a plate grows by joining others or by spreading is not yet traced.
+- **Our first ocean floor survives too long.** Ours starts with old ocean round the first continent, and at 250 Ma 37% of our ocean floor is older than 120 Myr against 5%, at 200 Ma 19% against 2%. Old ocean founders only by a row's chance; on the real Earth it is all subducted by about 180 Myr.
+- **Our continents hold level; the real ones grow.** 38% throughout against 35% to 42%. Collisions stack crust and lose area, and arcs mature into continent too slowly. Part of the real growth is the model's own: more continental fragments are mapped in recent times *(inference)*.
+- **Continental plates are too slow early** (4 mm/yr at 250 Ma against 30, 18 against 27 today): ridge push and trench suction are the only forces on a plate without slabs.
+- **Too little high land.** 1.6% of the land stands over 1 km today against 5.7%, on every seed (1.1 to 3.6%).
+- **Close**: plate speeds (RMS 42 to 51 mm/yr against 44 to 74), ocean depth from age (4,510 to 4,860 m against 4,690 to 4,860), land's share (31% today against 28%), land masses over a million km² today (6 against 6), and the largest land mass today (85 million km² against 78).
+- **What smoothing the arc front changed.** It changes every seed's history, since the history is chaotic, but moves few medians beyond the spread of the seeds. The one steady change is more land masses of 10,000 km² to a million after 150 Ma (149 today against 116 before; real 107), perhaps because a front that runs on along a trench builds a chain where one that jumped every 36 km scattered its vents *(inference, not traced)*. Today's ocean floor is younger (mean 44 Myr against 50 before; real 62), and old ocean at 150 Ma rarer (6% against 10%; real 1%).
 - **Real land is the PaleoDEMs'** in another reconstruction's frame; it measures the land and its heights but is not drawn on Müller's plates. The real map's green is today's coastlines carried back, which is not the land of the time.
 - The real model's plate count rises toward today partly because recent plates are better known *(inference)*; our count is the history's own.
+
+How the table was made: for each seed, `build/odincraft --seed=N --plates=DIR` and `tools/plates_compare.py DIR DATA OUT`; the medians and ranges are taken over the eleven `measures.csv`. The history's first half was built from commit `b50f5ba` for "ours before".
 
 ## Not verified
 
