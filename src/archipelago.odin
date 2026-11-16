@@ -65,8 +65,12 @@ world_frame: World_Frame
 // forearc's floor (a guess, after the Bonin ridge's). Its crest rises at up to 1.5 to 2.3 mm/yr, the
 // most drawn for the world, as Kikaijima's does (Nakata et al. 1978, Inagaki & Omura 2006); how much
 // of that a stretch of it about 150 km long takes is drawn too, from none, where the high has stopped
-// rising and the sea drowns what stood on it, as on the Bonin ridge, to all.
-OUTER_HIGH :: struct { rise: [2]f32, stretch, at, width, relief: f32 }{rise = {1.5, 2.3}, stretch = 150_000, at = 0.4, width = 0.2, relief = 2500}
+// rising and the sea drowns what stood on it, as on the Bonin ridge, to all. The relief is a guess for
+// a forearc over deep ocean, so between its islands, which are regions of their own, it lifts the
+// floor no nearer the sea than `crest`, deeper than any kind's sea ever fell (the inlets kind's,
+// 115 to 120 m), and where the history's own floor lies shallower, as on a shelf, it adds nothing:
+// otherwise a shelf forearc's high bares land bridges at the sea's lowest that only the guess made.
+OUTER_HIGH :: struct { rise: [2]f32, stretch, at, width, relief, crest: f32 }{rise = {1.5, 2.3}, stretch = 150_000, at = 0.4, width = 0.2, relief = 2500, crest = 200}
 
 // How much of the outer high's crest a point of the known world lies on, from 0 to 1.
 outer_high :: proc(k: Known_Sample) -> f32 {
@@ -122,7 +126,7 @@ world_at :: proc(x, z: f64) -> (w: World_Point) {
 		stretch := smoothstep(-0.4, 0.4, fbm(f64(at.x)*1000, f64(at.y)*1000, f64(OUTER_HIGH.stretch), 1000, 2, world_seed + 1731))   // keyed by the known world, which does not move with the start
 		w.rising += world_frame.rise*stretch*high
 	}
-	w.depth, w.inland = max(-k.h - OUTER_HIGH.relief*high, 0), inland
+	w.depth, w.inland = max(-k.h - OUTER_HIGH.relief*high, min(-k.h, OUTER_HIGH.crest), 0), inland
 	w.crust, w.across = k.thick, (k.front + k.setback)/k.setback if over else 1e4
 	w.setting = .Continent if inland > 0 else .Arc if w.front < 10 else .Hotspot if w.track < 10 else .Forearc if over && k.front < 0 else .Back_Arc if over && k.front < 400 && !k.cont else .Shelf if k.cont else .Open_Sea
 	return
