@@ -119,6 +119,12 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **RimWorld is the second source of inspiration, after Dwarf Fortress.** Dwarf Fortress will always be the primary; there is still plenty to learn from RimWorld.
 - **The plan is `plan.md`**, written at the owner's word after the first proposal was checked against the makers' own words (`interesting-world/notes/df-rimworld-ideas.md`). Its section 8 lists four decisions ahead; none blocks its first step.
 
+**2026-11-16, Claude's call** (merging step 25)
+
+- **The stream beds' narrowing by rain is held out of `main`**; everything else of step 25 is merged. The rule is argued from causes: a bed follows its floods, and a flood the year's largest day of rain, so the default island's beds, under 2,855 mm against Yakushima's 7,200, come out 6.4 m to 4.4 at 1 km². On the default island it hid the streams under the ferns and moved the start into the wood with no water in view. The owner asked on 2026-11-16 for streams that show and of many sizes, and has not yet said whether step 34's beds read right. So the beds stay as step 34 left them until the owner has looked. *Asked:* (a) apply the narrowing, and let the start take the largest stream's bank; (b) keep the beds at Yakushima's width on every island; (c) apply the narrowing and keep plants off a wider strip beside the water, so a narrower bed still shows. *Recommendation: (b) for now, and (c) when the look of the banks is next worked on*: the fit is sound, but what the player sees is what was asked for.
+- **Step 25's other visible changes on the default island are merged as causes, not preferences**: no red clay outside a subtropical warmth, the ridge wood off the wettest crests, the sun at the island's own latitude.
+- **Step 25's questions stand as asked in its entry below**: one to three zones an archipelago, a wind by latitude, runoff read from the island's rain, the reef kind reading the sea's warmth, and floras (the plan's N5) to make the wet side look wet.
+
 **2026-11-16, Claude's call** (merging step 27, part one)
 
 - **Merged with one figure further and one bench not settled.**
