@@ -24,7 +24,15 @@ RUNOFF      :: 2.0   // metres of the year's rain that runs off: some 3 m falls 
 FLOOD       :: 20    // how many times the mean flow a flood that scours a plunge pool carries (a guess)
 FALL_STEEP  :: 0.3   // a stream steeper than this over 30 m falls where a strong bed holds a lip
 FALL_AREA   :: 120_000   // m² a stream must drain to wear a fall back into a gorge; a smaller one hangs and runs down the face (Crosby & Whipple 2006: knickpoints stall at 0.1 to 1 km²)
-SPRING_AREA :: 30_000   // m² of land above a contact that feeds a spring (a guess)
+// m² of land that must drain through a cell before a stream runs there. On Japan's humid forested
+// hills a stream with water in it drains a hectare or less (a first-order catchment of 0.84 ha at
+// Hitachi Ohta, Sidle et al. 2000; a second-order one of 2.3 ha on granite, Fujimoto et al. 2016),
+// finer than the 16 m land shows: on real islands and ours alike, at 0.01 to 0.03 km² half or more
+// of the cells a stream would run in lie in a hollow across its flow, and below 0.01 fewer than half
+// (interesting-world/notes/real-hydrology.md). So streams begin at 0.02 km². CHANNEL_AREA stays the
+// land's valleys, as the real islands were measured.
+HEAD_AREA   :: 20_000
+SPRING_AREA :: 5_000    // m² of land above a contact that feeds a spring, a quarter of what starts a stream (a guess)
 // The rocks that pass water, through their pores or joints, have this trait in TRAITS (gen.odin);
 // the others hold it (after the ranges in Freeze and Cherry, Groundwater, 1979, from memory):
 // sandstone and grit, jointed limestone, lava flows broken by their joints and the cinders and
@@ -42,6 +50,7 @@ Segment :: struct {
 	a, b:           [2]f32,
 	bank_a, bank_b: f32,
 	half_a, half_b: f32,   // half the channel width
+	bed_a, bed_b:   f32,   // half the width of the bed of stones the floods keep bare, the channel in it
 	bend_a, bend_b: f32,   // how sharply the channel turns: -1 hard right to 1 hard left, looking downstream
 	drop:           f32,   // how far the water drops at the downstream end
 	pool:           f32,   // how much deeper than the channel a fall has scoured the bed at the upstream end
@@ -84,6 +93,19 @@ river_depth :: proc(half: f32) -> f32 {
 	return 2.1*math.pow(2*half/14, 0.8)
 }
 
+// The water runs in a bed of bare stones that the floods keep clear of trees, wider than the water
+// on most days: a mountain river's width follows its flood, about 2.5 times the root of the mean
+// yearly highest flow on 34 Japanese mountain rivers (Sakurai, Miyawaki and Hakoishi, PWRI, 2012),
+// and a small stream's floods are larger for its land than a large one's. Half the bed's width:
+// 6.4 m across at 1 km², growing as the land drained to the power 0.35 (bedrock and alluvial
+// channels grow as 0.3 to 0.5, Montgomery and Gran 2001; those 34 rivers as 0.28): 1.6 m where a
+// stream starts, 3 m at 0.12 km², 13 m at 7 km² and 31 m at 90 km², as the beds of Yakushima's
+// rivers measure on the Geospatial Information Authority's photographs (10 to 16 m at 7.6 km², 15
+// to 30 at 20, 30 to 55 at 38 and 30 to 45 at 65 to 83), and as wide as the channel at least.
+river_bed :: proc(area: f32) -> f32 {
+	return max(0.5*min(6.4*math.pow(area/1e6, 0.35), 56), river_half(area))
+}
+
 rivers_trace :: proc() {
 	g := land.grid
 	n := g.n
@@ -101,7 +123,7 @@ rivers_trace :: proc() {
 	defer { delete(stream); delete(feeders) }
 	for c in g.order {
 		r := g.next[c]
-		stream[c] = g.area[c] >= CHANNEL_AREA && land.lake[c] == 0 && (r == -1 || (r >= 0 && (stream[r] || land.lake[r] > 0)))
+		stream[c] = g.area[c] >= HEAD_AREA && land.lake[c] == 0 && (r == -1 || (r >= 0 && (stream[r] || land.lake[r] > 0)))
 		if stream[c] && r >= 0 do feeders[r] += 1
 	}
 	// Springs (foundations/water.md, D6). Rain soaks down through a bed that passes water until
@@ -220,11 +242,13 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 	// Width follows the land drained, swelling and narrowing along the way. The bend is the
 	// channel's curvature measured against its width, smoothed so bars and cut banks are
 	// a few widths long.
-	half := make([]f32, len(pts), context.temp_allocator)
+	half, stones := make([]f32, len(pts), context.temp_allocator), make([]f32, len(pts), context.temp_allocator)
 	bend := make([]f32, len(pts), context.temp_allocator)
 	for i in 0..=last {
 		swell, _, _ := noise(f64(along[i]/45), f64(id%977) + 31, seed + 201)
 		half[i] = river_half(pts[i].area)*(0.8 + 0.45*swell)
+		spread, _, _ := noise(f64(along[i]/90), f64(id%977) + 57, seed + 202)   // the bed widens and narrows over a few of its widths
+		stones[i] = max(river_bed(pts[i].area)*(0.85 + 0.4*spread), half[i])
 	}
 	for i in 1..<last {
 		turn := flow[i - 1].x*flow[i + 1].y - flow[i - 1].y*flow[i + 1].x
@@ -317,7 +341,7 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 		drop := to[i] - from[i + 1] if i + 1 < last else 0
 		pool := to[i - 1] - from[i] if i > 0 else 0
 		pool = plunge(pool, a.area, half[i]) - river_depth(half[i]) if pool > FALL_MIN else 0
-		append(&rivers.segments, Segment{a.p, b.p, from[i], to[i], half[i] + 0.5*pool, half[i + 1], bend[i], bend[i + 1], drop, max(pool, 0), gorge[i]})
+		append(&rivers.segments, Segment{a.p, b.p, from[i], to[i], half[i] + 0.5*pool, half[i + 1], max(stones[i], half[i] + 0.5*pool), stones[i + 1], bend[i], bend[i + 1], drop, max(pool, 0), gorge[i]})
 		lo := linalg.min(a.p, b.p) - RIVER_REACH + f32(region.size/2)
 		hi := linalg.max(a.p, b.p) + RIVER_REACH + f32(region.size/2)
 		for bz in max(int(lo.y)/BUCKET, 0)..=min(int(hi.y)/BUCKET, rivers.side - 1) {
@@ -448,6 +472,7 @@ River_Near :: struct {
 	fall:   bool,  // and the drop is a fall, whose lip is rock
 	pool:   f32,   // how much deeper a fall has scoured the bed here
 	gorge:  bool,  // in a fall's gorge
+	bed:    f32,   // half the width of the bed of stones round the channel
 }
 
 // The nearest river to a point, judged from the water's edge, if one is within reach.
@@ -468,14 +493,15 @@ river_near :: proc(x, z: f32) -> (r: River_Near, ok: bool) {
 			side: f32 = 1 if ab.x*ap.y - ab.y*ap.x > 0 else -1   // left or right of the flow
 			lip := s.drop > 0.01 && (1 - t)*linalg.length(ab) < 1.6
 			pool := s.pool*smoothstep(s.half_a*1.5, 0, t*linalg.length(ab))
-			r, ok = {d, half, math.lerp(s.bank_a, s.bank_b, t), side*math.lerp(s.bend_a, s.bend_b, t), lip, lip && s.drop > FALL_MIN, pool, s.gorge}, true
+			r, ok = {d, half, math.lerp(s.bank_a, s.bank_b, t), side*math.lerp(s.bend_a, s.bend_b, t), lip, lip && s.drop > FALL_MIN, pool, s.gorge, math.lerp(s.bed_a, s.bed_b, t)}, true
 		}
 	}
 	return
 }
 
-// Cut a river into the ground at a point: a bed, banks rising to the bank top, then a strip
-// of valley floor that eases back into the hillside. On the outside of a bend the bank is
+// Cut a river into the ground at a point: a bed, banks rising to the bank top, the bed of stones
+// at the bank top's level that the floods keep bare, then a strip of valley floor that eases back
+// into the hillside. On the outside of a bend the bank is
 // steep; on the inside the bed ramps up into a bar. Just above a drop the bed rises to a
 // lip that holds the pool back. `gravel` is true where the ground is river bed or bar,
 // and `water` is the river's level within the channel. At a coarse cell size the cut is
@@ -492,7 +518,8 @@ river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool, water: f3
 	}
 	bar, undercut := max(r.inside, 0), max(-r.inside, 0)
 	edge := r.half*(1.2 + 0.6*bar)   // where the bank top is reached
-	top := edge + (0.3 if r.gorge else 1.5)   // the bank top is level this far, which keeps the water's edge in its banks
+	stones := edge if r.gorge else max(r.bed*(1 + 0.3*bar), edge)   // the bed of stones, at the bank top's level, out to here; a gorge's walls rise from the water
+	top := stones + (0.3 if r.gorge else 1.5)   // the bank top is level this far, which keeps the water's edge in its banks
 	floor := top + (max(1.5, 0.3*(h - r.bank)) if r.gorge else r.half*2 + 5)   // and a gorge's walls rise from it, leaning back a little
 	if d >= floor do return h, false, NO_WATER
 	level := r.bank - FREEBOARD
@@ -506,6 +533,7 @@ river_cut :: proc(h: f32, x, z, cell: f64) -> (cut: f32, gravel: bool, water: f3
 		cut = math.lerp(steep, ramp, bar)
 		return cut, !r.fall && (bar > 0.35 || math.round(cut) < level - 0.05), level   // gravel on a bar, or where the block's top is under water; a fall's lip is rock
 	}
+	if d < stones do return crest, true, NO_WATER
 	return math.lerp(crest, h, smoothstep(top, floor, d)), false, NO_WATER
 }
 

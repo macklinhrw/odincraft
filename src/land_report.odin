@@ -141,8 +141,20 @@ land_figures :: proc(g: ^Grid) {
 		for &v in region.vents do v.fallen = v.crater > 0
 		copy(g.fill, fill); copy(g.next, next); copy(g.area, area); copy(g.order[:], order)
 	}
+	// The streams as the real islands' were measured: every cell draining CHANNEL_AREA or more, each
+	// step down a cell or a diagonal long, and the largest basin whose water reaches the sea.
+	stream, basin: f32
+	for ci in g.order {
+		c, r := int(ci), int(g.next[ci])
+		if r == -1 do basin = max(basin, area[c])
+		if area[c] < CHANNEL_AREA do continue
+		stream += g.d*(math.SQRT_TWO if r >= 0 && r%n != c%n && r/n != c/n else 1)
+	}
+	streams := fmt.tprintf("  streams draining over %.2f km² %s km per km²; the largest basin at the sea %s km²", f32(CHANNEL_AREA)/1e6,
+		against(8, stream/1000/(f32(len(g.order))*g.d*g.d/1e6), "%.2f", 0.2), against(9, basin/1e6, "%.1f", 1))
 	fmt.printfln("  livable %.0f%% of land, the largest patch %.0f ha (15-46, 63-417); sheltered landings %d, %.1f in 10 km of shore (0 on the cones, 7-14 and 1.3-1.9, 80 and 3.6 on Tsushima); deepest closed hollow %s m",
 		100*f32(livable)/f32(len(g.order)), f32(slice.max(patch[:]) if len(patch) > 0 else 0)*g.d*g.d/10_000, len(landings), f32(len(landings))*10_000/(f32(len(lists[0]))*g.d), against(7, hollow, "%.0f", 8))
+	fmt.println(streams)
 }
 
 // A material's colour as the map shows it.
@@ -207,6 +219,7 @@ land_map :: proc(path, overlay: string) {
 					if s := land_at(land.slid, land.n, x, z); abs(s) > 0.5 do col = math.lerp(col, ([3]f32{0.80, 0.50, 0.20} if s > 0 else {0.90, 0.88, 0.84})*shade, f32(0.5))
 				}
 				if r, near := river_near(f32(x), f32(z)); near && r.d < max(r.half, 4) do col = {0.10, 0.30, 0.75}
+				else if near && r.d < r.bed do col = [3]f32{0.78, 0.76, 0.70}*shade   // the bed of stones round the water
 				if level, inside, _ := lake_near(x, z); inside && h < level do col = {0.10, 0.30, 0.75}
 				if trail_near(x, z) < 4.5 do col = {0.65, 0.10, 0.05}
 				if k := trails.ford[land_cell(x, z)]; k > 0 && math.hypot(x - region.features[k - 1].at.x, z - region.features[k - 1].at.y) < 14 do col = {1, 1, 1}

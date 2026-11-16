@@ -21,7 +21,7 @@ LAND_CELL :: 16          // metres, on the finest grid
 ERODE     :: 1.3e-5      // how fast water cuts: per year, times root of drainage area, times slope
 CREEP     :: 0.012       // m²/yr of soil creep, which rounds hilltops, on the weakest rock
 
-CHANNEL_AREA :: 120_000   // m² of land that must drain through a cell before it carries a stream
+CHANNEL_AREA :: 120_000   // m² of land that must drain through a cell before its valley is a stream's, as the real islands were measured; streams themselves begin higher (HEAD_AREA, rivers.odin)
 
 // What kind of island this is lives in one record, drawn from the seed within the ranges of
 // a kind's row. Forming reads nothing else, so a seed and a record make the same land
@@ -73,14 +73,16 @@ Phase :: struct($T: typeid) {
 // game's own grid: interesting-world/notes/real-islands.md): metres standing within 100 m of the
 // shore, the share of shore rising 30 m within 50 m, the slope of the first 100 m, the share of land
 // under 50 m and over 60°, the fall at a crest, the height above the nearest stream and the deepest
-// closed hollow. An island is judged against the islands its rock's story names (`judged` in
+// closed hollow; and the streams' figures (interesting-world/notes/real-hydrology.md): km of stream
+// draining CHANNEL_AREA or more for each km² of land, and the largest basin that reaches the sea,
+// km², in the window where a window cuts the island (Aogashima's crater, whose water sinks, is not one). An island is judged against the islands its rock's story names (`judged` in
 // STORIES), or where it names none, against those its kind is after; not against all of them.
 // Yakushima is an 8 km window from its south coast up its granite to 1,731 m.
-Real :: struct { name: string, v: [8]f32 }
+Real :: struct { name: string, v: [10]f32 }
 REAL := [?]Real{
-	{"Toshima", {82, 65, 40, 14, 1.2, 0.19, 130, 2}}, {"Mikurajima", {117, 81, 51, 5, 2.5, 0.69, 122, 7}}, {"Aogashima", {107, 85, 50, 9, 2.9, 0.63, 96, 77}},
-	{"Kōzushima", {70, 48, 34, 14, 1.8, 0.56, 72, 10}}, {"Hahajima", {85, 85, 39, 16, 1.9, 0.81, 79, 9}}, {"Chichijima", {60, 67, 29, 28, 0.8, 0.73, 54, 7}},
-	{"Kikaijima", {4, 0, 2, 57, 0, 0.05, 10, 1}}, {"Tsushima", {39, 40, 24, 74, 0, 1.25, 29, 4}}, {"Yakushima", {24, 4, 15, 6, 0.0, 0.42, 80, 3}},
+	{"Toshima", {82, 65, 40, 14, 1.2, 0.19, 130, 2, 0.49, 0.2}}, {"Mikurajima", {117, 81, 51, 5, 2.5, 0.69, 122, 7, 1.58, 2.6}}, {"Aogashima", {107, 85, 50, 9, 2.9, 0.63, 96, 77, 0.99, 0.2}},
+	{"Kōzushima", {70, 48, 34, 14, 1.8, 0.56, 72, 10, 1.26, 1.9}}, {"Hahajima", {85, 85, 39, 16, 1.9, 0.81, 79, 9, 0.92, 1.9}}, {"Chichijima", {60, 67, 29, 28, 0.8, 0.73, 54, 7, 1.19, 3.5}},
+	{"Kikaijima", {4, 0, 2, 57, 0, 0.05, 10, 1, 1.83, 4.4}}, {"Tsushima", {39, 40, 24, 74, 0, 1.25, 29, 4, 0.32, 0.7}}, {"Yakushima", {24, 4, 15, 6, 0.0, 0.42, 80, 3, 2.05, 11.7}},
 }
 
 // The real islands the island is judged against, and whether its rock's story names them.
