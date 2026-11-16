@@ -86,6 +86,10 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Steps 23 (blocks widen to 16 bits) and 28 (who reached which island) start alongside step 22's second half.**
 - **Step 5 is accepted.** The questions its comparison left open (the low ridge wood on every dry crest, how much of a wild island susuki takes, whether a deep-soiled flat is tabu's) are not answered by this and stay open.
 - **A true raised-reef terrace island is built as a new kind**, after Kikaijima: reef limestone that rain sinks into, and the terraces the sea's falls left on it. The raised kind is not reshaped, so the island the default seed draws stays as it is. This answers the question in Claude's call of 2026-11-12.
+- **The start island keeps the seed's kind until the history can give each island its own uplift and rock**, as recommended on reading step 22's second half. Reading the start island from the history then changes the default island once, for a real gain, and the coordinates in `AGENTS.md` change with it.
+- **One sea for the whole world comes with that change**, not before: real sea level is the world's, but each kind's own rises and falls of the sea are part of the default island's history, so it changes the default island's land.
+- **The islands near the start stay in a 200 km square** (about 11 islands a seed; real groups that size hold 3 to 8).
+- **Rerun the comparison with the real Earth** now that the arc front is smooth, with `pygplates` in an environment of its own.
 
 **2026-11-15, Claude's call** (the reef kind; `foundations.md` section 8, "The reef kind, as built")
 
