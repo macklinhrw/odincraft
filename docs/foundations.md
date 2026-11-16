@@ -1552,6 +1552,123 @@ Not done:
 
 Weak points: every new constant is a guess or from memory (the slab's length before an arc, a vent's life and spacing, the basin's opening, the outer high's rate and its slab ages); the start stands on a forearc on 9 seeds of 10 (an inlets island on 6), since the tie-break prefers one; the hard cap row is far on most islands it holds; the judge of every picture was Claude.
 
+### Step 32, second half, part two, as built
+
+Built 2026-11-16 by Claude on the branch `t3/improve-island-quality`, from `main` at 9cc0d95 with the hydrology step (5676a72) merged in: the islands' quality that part one's regional history cost, won back by finding where each island now stands and why, and changing rows and their conditions. The owner has not looked at it. The choices are Claude's call of 2026-11-16 in `open-decisions.md`.
+
+**What changed for the player.** The default island is the same island, an inlets island 10.2 km across of basalt and breccia with 15 dikes and a plug, now told as the old volcano it stands on. Its start moved 2 km in the known world, so its land differs by a few cells and its slide fell elsewhere, a larger one that dams a small lake. Its neighbours are new: 11 islands in the square, not 16, and 4 within 64 km, not 5. On other seeds every island near the start is new. Islands stand where the history makes them, the start too. A dead volcano's island is made of that volcano. Shelf islands stand only where the sea's lowest stand left the shelf dry. Groups are often all of one or two kinds, as real ones are.
+
+![The default island before (left) and after (right): the same island, its slide and lake moved](interesting-world/real/default-island-part-two.jpg)
+
+**The causes, as traced** (a scratch build printed every island's fields, its record and every kind's host at its middle on seeds 1 to 40; each change was then measured alone and together on seeds 1 to 10 and 11 to 40):
+
+- **Cone and crater: small samples, and two rows' readings.** Their records fall in the same ranges as before: built 700 to 980 m high, rising 1.2 to 1.6 mm/yr. Their far figures are a slide's lake on two cones (23 to 45 m deep, against Toshima's and Mikurajima's 2 to 7 m) and too few faces over 60° by a few tenths of a percent. On seeds 11 to 40 the crater is 24.0% far before the regional history (36 islands) and 25.8% on `main` (15), with sharp rims and too few faces on every build; seeds 1 to 10's seven craters before were a lucky sample. One reading was inconsistent: a volcano's age set how long the sea cut it against the history's whole vent life (0 to 2 Myr), while the cone kind holds only up to 1 Myr, so every cone sat in the younger half of its range.
+- **Ridge: the rock where it now stands.** Ridge islands on old arc lavas (Hahajima's rock) are 6 to 9% far; on layered sediment 26 to 48%. The regional history put most ridges near a continent, on layered rock, and many of them on the foot of one of its dead volcanoes, where an island is that volcano. The uplift read from the history pins every ridge to the floor of its range (0.55 mm/yr), since the crust under ridge sites rose mostly under 0.3 mm/yr over 4 Myr. Drawing it from the seed again left ridge at 41% on the same islands, so that was not the cause.
+- **The hard cap: a flood basalt with no top.** Its cover was the lava plateau's, near-solid basalt laid from 90 to 190 m over the base to as high as anything reaches. An island that rose into it carried 400 to 650 m of lava and stood 500 to 800 m high, as cliffy mesas: 3.4 to 10.7% of their land over 60° (Tsushima and Chichijima 0 to 0.8; Iki, the row's own example, stands 213 m). Most of the islands it held stand on the foot of a dead volcano within 40 km of the front.
+- **Seed 6's two islands: the start stood off every site.** It stood where some kind's host held best, which is broad. Of the ten starts, five stood on ocean floor 2.6 to 3.3 km deep, two on sunken volcanoes, two on a forearc 150 m deep off its outer high, and one on a shelf. Seed 6's stood on ocean floor 2.5 Myr old by a spreading boundary, 2.9 km deep, with one shelf site in its square. Its world has no live arc; read from sites, it still holds two.
+- **Seed 9's 18 islands: a shelf 200 to 300 m deep, an island every 30 to 60 km.** The shelf row took any continental crust under less than 300 m of sea. Real shelves that deep are empty; their islands stand where the shelf was dry at the ice ages' lowest sea, as Iki's and the Gotō islands' was. A related cause showed on the smoothed history: dead volcanoes still over the sea stood 20 km apart, up to 22 in a square. The history opens a vent wherever no live vent stands within 20 to 60 km, beside dead ones, and a dead one stands for millions of years.
+- **Kinds by preference.** 17 of 91 islands took a kind not their best because a nearest neighbour had theirs (one took the raised kind where its host held 0.14), and the reef kind, at weight 0, lost every tie with the raised kind. So it stood on a forearc only where a neighbour had taken the raised kind.
+- **The 36 km steps.** Crust entering the regional history took its plate and kind by a vote of the four planet cells at the point's corners, by bilinear shares, which still follows the planet's cells: the deep floor's edge east of seed 7's start had 36 km teeth. When the planet split a plate, or lost one, the square restamped its cells from the nearest planet cell.
+
+**What changed**, rows and their conditions, and the two readings made consistent:
+
+- `rock.odin`: a row **"an old volcano"**: an island on the foot of one of the arc's volcanoes (`Vent` under 1,000 Myr, not on a hotspot's track) is that volcano's basalt and breccia, tilted, with dikes and a plug, as Hahajima and Chichijima are the Bonin arc's old volcanoes. It comes second, before the rows that read the ground under the volcano. The **hard cap's cover is "lava and ash"**, the flows and cinders the front's vents pour out, not a hotspot's flood lavas.
+- `archipelago.odin`: **the start stands on a site**, chosen among every site of the known world as before (host first, then the forearc 60 km from the front, 30 km off land, the middle). **Shelf sites need ground shallower than the sea's lowest stand** (`LOW_STAND`, 120 m), not 300 m. **Dead volcanoes' sites stand as far apart as the arc's live vents** (`VENT_APART`, 20 to 60 km), not 20 km. **Each site takes the kind whose host holds best, its neighbours not counted.** `world_at`'s per-thread cache is keyed by the point in the known world and by the known world itself (its seed and its samples), so no world made after it can be answered from it.
+- `land.odin`: the **reef kind's weight is 2**, the raised kind's: where both hosts hold, neither is preferred, since no field says how warm or clear the sea is. A **volcano's age is placed against the window on age its kind's host reads**, as its uplift is against the window on rising.
+- `plates.odin`, the regional history only: **crust from the planet takes the plate and kind most of the nine planet cells round the point have, each counted by a bell of its distance (`SMOOTH`, 0.6 of a cell)**, and its thickness and age are blended over them. The planet's splits and lost plates restamp the square by the same vote. A hotspot's volcano laid outside the square leaves it, as one carried out already did: seed 33 crashed on `main` (an index of −1 at `plates.odin:919`) and now forms its 12 islands.
+
+![Seed 9's known world before (left) and after (right): the square of the islands near the start stood on a shelf 200 to 300 m deep, an island every 30 to 60 km across it, 18 in all; it now stands on a site by the arc's front, 6 islands](interesting-world/real/regional-history-seed9-start.jpg)
+
+![East of seed 7's start, before (above) and after (below): the edge of the deep floor without the planet's 36 km teeth; the steps left are the regional history's 6 km cells](interesting-world/real/regional-history-steps-seed7.jpg)
+
+**Against the real islands**, every island near the start formed alone, figures far (`!`) among the eight figures `islands.py` counts. Before is the run before the regional history; `main` is part one with the hydrology step; this is this step:
+
+| Seeds 1 to 10 | before | `main` | this |
+|---|---|---|---|
+| All figures | 21.4% (131 islands) | 23.6% (91) | 16.3% (83) |
+| cone | 0 (11) | 15.6 (4) | 1.6 (8) |
+| crater | 17.9 (7) | 27.1 (6) | 30.0 (5) |
+| domes | 21.9 (16) | 12.5 (4) | 18.8 (4) |
+| inlets | 4.2 (27) | 5.1 (22) | 5.6 (31) |
+| raised | 71.1 (19) | 64.1 (16) | 71.2 (10) |
+| reef | 1.6 (8) | 0 (9) | 0 (10) |
+| ridge | 19.2 (30) | 26.0 (13) | 14.3 (7) |
+| worn | 0 (13) | 0 (17) | 0 (8) |
+| Islands a seed | 13.1 (5 to 21) | 9.1 (2 to 18) | 8.3 (2 to 16) |
+| Kinds a seed | 5.7 | 4.4 | 4.2 |
+
+| Seeds 11 to 40 | before (30 seeds) | `main` (29; seed 33 crashes) | this (30) |
+|---|---|---|---|
+| All figures | 23.2% (332 islands) | 21.3% (206) | 13.3% (182) |
+| cone | 3.9 (42) | 5.8 (13) | 1.0 (13) |
+| crater | 24.0 (36) | 25.8 (15) | 25.0 (6) |
+| domes | 16.1 (55) | 29.2 (3) | 25.0 (5) |
+| inlets | 3.5 (47) | 7.1 (70) | 5.7 (75) |
+| raised | 72.0 (55) | 67.0 (25) | 65.4 (17) |
+| reef | 1.1 (23) | 1.1 (11) | 0.5 (23) |
+| ridge | 21.7 (49) | 28.5 (25) | 13.6 (22) |
+| Islands a seed | 11.1 | 7.1 | 6.1 (1 to 14) |
+| Kinds a seed | 5.2 | 3.5 | 2.9 |
+
+The bar was at most 21.4% of all figures far and no kind further than before. All figures, ridge and reef meet it on both sets, and cone and raised on seeds 11 to 40. Judged one island at a time where a kind has fewer than 8 on seeds 1 to 10:
+
+- **Ridge**, 7 islands: the five on old volcanoes have one far figure between them (a slide's lake), the two on layered rock 0 and 7. That is 8 far on 7 islands, against 46 on 30 before.
+- **Domes**, 4 islands: 6 far, all too few faces over 60° or too high over the streams, the kind's own. That is 1.5 an island against 1.75 before (on seeds 11 to 40's five, 2.0 against 1.3).
+- **Crater**, 5 islands: 12 far. That is 2.4 an island against 1.4 on the seven before. Three of the five stand on 8 km regions, small and low, and their far figures are the kind's (rims too sharp, too few faces over 60°, the floor too shallow), as on every build's 8 km craters on seeds 11 to 40.
+
+Missed:
+
+- **Cone** on seeds 1 to 10, 8 islands at 1.6%: one figure, a slide's lake 23 m deep.
+- **Inlets**, 5.6% against 4.2: 10 of its 14 far figures are the deepest closed hollow, the lake a slide dams. The islands now stand on old volcanoes of basalt over breccia (102 of the slides on seeds 1 to 40 are of basalt over breccia). Without that figure inlets is 1.8% far against 2.1 before.
+- **Raised** on seeds 1 to 10, 71.2% against 71.1: one figure in 80. It is 65.4% against 72.0 on seeds 11 to 40.
+
+The slide's lake is the step the owner set for after step 32's second half; no row was tuned to it.
+
+**The two stream figures** (the hydrology step's, printed only), medians by kind on seeds 1 to 10, `main` against this, with the islands far:
+
+| | stream km per km² at 0.12 km² | islands far | largest basin at the sea, km² | islands far |
+|---|---|---|---|---|
+| cone | 1.59 / 1.40 | 0 / 0 | 1.1 / 1.2 | 0 / 0 |
+| crater | 0.98 / 0.82 | 1 / 1 | 0.2 / 0.1 | 0 / 0 |
+| domes | 1.07 / 1.09 | 0 / 0 | 2.6 / 2.9 | 1 / 1 |
+| inlets | 1.09 / 1.25 | 0 / 0 | 1.3 / 2.1 | 0 / 0 |
+| raised | 1.56 / 1.64 | 0 / 0 | 3.0 / 3.5 | 4 / 1 |
+| reef | 1.41 / 1.32 | 0 / 1 | 1.6 / 1.5 | 5 / 9 |
+| ridge | 1.37 / 1.51 | 1 / 1 | 2.7 / 3.3 | 4 / 3 |
+
+The reef's largest basin is far on most reef islands on either build (Kikaijima 4.4 km², ours about 1.5): its rain sinks, and there are more reef islands now. On seeds 11 to 40 the stream density is far on 4 islands of 182, the basin on 31, 14 of them reef.
+
+**The stories near the start**, seeds 1 to 10: an old volcano 34, layered 14, lava and ash 13, reef on mudstone 10, pale lava and pumice 4, granite against sediments 4, folded belt 2, old arc lavas 1, metamorphic shield 1. That is 9 in use, 3.4 a seed, against 10 and 3.7 on `main`. The hard cap holds no island near the start on seeds 1 to 10, and 2 on seeds 11 to 40.
+
+Tried and dropped:
+
+- **A cover of limited thickness under the hard cap** (60 to 150 m, then the island's own beds): 2.8% far on the cap's inlets islands against 4.3 with the arc's lavas alone, but two of 29 islands wore away under the sea, their upper mudstone weaker than any story's.
+- **The uplift read from today's rate**, or **every host reading the 4 Myr mean**: ridge 42.5% and 31.5%, raised 81.9 and 78.1, against 42.5 and 70.8 with neither (both before the old volcano row). Neither was the cause.
+- **Shelf sites at local highs of the shelf**: not run. The low stand says why an island stands there; a local high on a 250 m shelf does not.
+
+**Cost.** Entering seed 7 (`--bench=1`, wall time, five rounds alternating with `main`, load about 5): 2.26 to 2.35 s against 2.44 to 2.52. The islands within 64 km are 4, the largest forming in 0.82 s, against 5 and 1.25 s. The regional history takes 0.27 to 0.32 s against 0.26 to 0.31, the nine-cell vote included (seeds 7, 1 and 3, two rounds). Benches against `main`, alternating, frames over 12.5 ms and our work median:
+
+- The forest flank (the default island's, its coordinates unchanged): 5 and 4 against 6 and 1; 1.11 and 1.29 ms against 1.09 and 1.33.
+- Down through cloud: 96 and 205 against 35 and 188, under a load that rose from 5.5 to 7; 0.92 and 1.27 ms against 1.30 and 1.37.
+
+Drawing is unchanged. `src/` grew by 35 lines (143 added, 108 removed).
+
+**Checked.**
+
+- The planet is `main`'s byte for byte: the 54 frame and history files of `--plates` on seeds 1 to 10 and 12.
+- `./build.sh test` passes. Both hashes in `GOLDEN` changed on purpose: the default island's land differs by a few cells, and island 1 is a new neighbour.
+- `odin check src -vet-unused` is clean.
+- The final build reproduces the measured run's 83 maps on seeds 1 to 10 byte for byte.
+
+Weak points:
+
+- Every threshold is a guess or from memory: the low stand's 120 m, the bell's 0.6 of a cell, the dead volcanoes' spacing borrowed from the live vents'.
+- The history still opens a vent beside a dead one, so dead volcanoes over the sea pile up behind a front, and the spacing only caps how many become islands.
+- Seed 6 and 5 of seeds 11 to 40 hold one or two islands: their known worlds have no live arc and little shelf within the low stand.
+- Kinds a seed (4.2 on seeds 1 to 10) are above real groups' one to three, since the square holds a volcanic front and its forearc together.
+- The raised kind is still judged against Kikaijima, which the reef kind is.
+- The judge was Claude, by the figures and three pictures.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.

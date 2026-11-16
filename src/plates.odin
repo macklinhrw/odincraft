@@ -867,7 +867,7 @@ globe_step :: proc() {
 		for i in 0..<n {   // spaced along the path the plate moved over it this step, the oldest carried farthest
 			share := f32(n - i)/f32(n)
 			at := linalg.normalize(linalg.lerp(h.at, g.plates[p].turn*h.at, share))
-			append(&g.volcanoes, Volcano{at = at, plate = p, spot = i16(k), born = t - g.dt*share, last = t, built = min(h.build*g.dt/f32(n), h.most), most = h.most})
+			append(&g.volcanoes, Volcano{at = at, plate = p, spot = i16(k), born = t - g.dt*share, last = t, built = min(h.build*g.dt/f32(n), h.most), most = h.most, gone = cell_of(at) < 0})   // one carried out of a regional history leaves it
 		}
 		h.last = len(g.volcanoes) - 1
 	}
@@ -1197,12 +1197,11 @@ warped :: proc(p: [3]f32) -> [3]f32 {
 }
 // The four cells round a point and their shares, blended smoothly so that slopes do not change at
 // the cells' edges. Neighbours carry across a face's edge.
-corners :: proc(p: [3]f32, linear := false) -> (cells: [4]i32, share: [4]f32) {
+corners :: proc(p: [3]f32) -> (cells: [4]i32, share: [4]f32) {
 	c, gi, gj := globe_at(p)
 	dx, dy := gi - math.floor(gi) - 0.5, gj - math.floor(gj) - 0.5
 	n := planet.nbr[c]
 	fx, fy := smoothstep(0, 1, abs(dx)), smoothstep(0, 1, abs(dy))
-	if linear do fx, fy = abs(dx), abs(dy)   // so that a contour does not follow the cells' edges
 	return {i32(c), n[0] if dx > 0 else n[1], n[2] if dy > 0 else n[3], n[4 + int(dx <= 0) + 2*int(dy <= 0)]}, {(1 - fx)*(1 - fy), fx*(1 - fy), (1 - fx)*fy, fx*fy}
 }
 
@@ -1367,29 +1366,42 @@ outer_lift :: proc(c: int, h: f32) -> f32 {
 	return h + cr.lift
 }
 
-// The planet's crust at a point, of plate p if p is not -1 (or false): of the plate most of the four
-// cells round the point ride, by their shares, and of its crust the kind most of them have
-// (continent, ocean floor that floats, ocean floor that sinks), its thickness and age blended over
-// those cells. So a regional history takes on smooth boundaries and coasts, not the planet's cells'.
+// The planet's crust at a point, of plate p if p is not -1 (or false): of the plate most of the nine
+// cells round the point ride, each counted by a bell of its distance from the point (SMOOTH), and of
+// its crust the kind most of them have (continent, ocean floor that floats, ocean floor that sinks),
+// its thickness and age blended over those cells. So a regional history takes on boundaries, coasts
+// and the ocean floor's depth as they run over many of the planet's cells, not along their edges: a
+// vote of the four cells at the point's corners, by their bilinear shares, still stepped them every
+// 36 km.
+SMOOTH :: f32(0.6)   // the bell's width, in the planet's cells: a cell beside the nearest counts a quarter as much, one at its corner a sixteenth
 planet_crust :: proc(at: [3]f32, p := -1) -> (cr: Crust, ok: bool) {
-	cells, share := corners(at, true)
+	c := cube_cell(at)
+	cells: [9]i32
+	w: [9]f32
+	cells[0] = i32(c)
+	for n, i in planet.nbr[c] do cells[i + 1] = n
+	for k, i in cells do w[i] = math.exp(-0.5*math.pow(km(at, planet.centre[k])/(SMOOTH*CELL_KM), 2))
 	kind :: proc(c: Crust) -> int { return 0 if c.cont else 1 if floats(c) else 2 }
-	by: [4]f32   // each cell's plate's share, then its plate's and kind's
-	for a, i in cells do for b, j in cells do if planet.crust[a].plate == planet.crust[b].plate do by[i] += share[j]
+	by: [9]f32   // each cell's plate's weight, then its plate's and kind's
+	for a, i in cells do for b, j in cells do if planet.crust[a].plate == planet.crust[b].plate do by[i] += w[j]
 	most := 0
-	for i in 1..<4 do if by[i] > by[most] do most = i
+	for i in 1..<9 do if by[i] > by[most] || by[i] == by[most] && w[i] > w[most] do most = i
 	if p >= 0 && int(planet.crust[cells[most]].plate) != p do return planet.crust[cells[most]], false
+	plate := planet.crust[cells[most]].plate
 	by = {}
-	for a, i in cells do for b, j in cells do if x, y := planet.crust[a], planet.crust[b]; x.plate == planet.crust[cells[most]].plate && x.plate == y.plate && kind(x) == kind(y) do by[i] += share[j]
-	for i in 0..<4 do if by[i] > by[most] do most = i
+	for a, i in cells do for b, j in cells do if x, y := planet.crust[a], planet.crust[b]; x.plate == plate && y.plate == plate && kind(x) == kind(y) do by[i] += w[j]
+	for i in 0..<9 do if by[i] > by[most] || by[i] == by[most] && w[i] > w[most] do most = i
 	cr = planet.crust[cells[most]]
 	thick, born, total: f32
 	for k, n in cells do if o := planet.crust[k]; o.plate == cr.plate && kind(o) == kind(cr) {
-		thick, born, total = thick + share[n]*o.thick, born + share[n]*o.born, total + share[n]
+		thick, born, total = thick + w[n]*o.thick, born + w[n]*o.born, total + w[n]
 	}
 	cr.thick, cr.born = thick/total, born/total
 	return cr, true
 }
+
+// The plate the planet's crust at a point rides, by the same vote.
+planet_plate :: proc(at: [3]f32) -> u8 { cr, _ := planet_crust(at); return cr.plate }
 
 // Keep the planet as it stands, to run it again from here with the regional history beside it.
 planet_save :: proc() {
@@ -1489,18 +1501,18 @@ regional_after :: proc() {
 			for &v in r.volcanoes do if int(v.plate) == ch.a do v.plate = u8(ch.b)
 			for &p in r.plates[MICRO:] do if p.alive && p.from == ch.a do p.from = ch.b
 		} else {
-			for &cr, c in r.crust do if int(cr.plate) == ch.a && int(planet.crust[cube_cell(r.centre[c])].plate) == ch.b do cr.plate = u8(ch.b)
-			for &v in r.volcanoes do if !v.gone && int(v.plate) == ch.a && int(planet.crust[cube_cell(v.at)].plate) == ch.b do v.plate = u8(ch.b)
+			for &cr, c in r.crust do if int(cr.plate) == ch.a && int(planet_plate(r.centre[c])) == ch.b do cr.plate = u8(ch.b)
+			for &v in r.volcanoes do if !v.gone && int(v.plate) == ch.a && int(planet_plate(v.at)) == ch.b do v.plate = u8(ch.b)
 			r.plates[ch.b].serial = planet.plates[ch.b].serial
 		}
 	}
 	// A plate the planet lost without a join, its last cells gone under another, may linger in the
-	// square's finer cells: they take the planet's plate under them.
+	// square's finer cells: they take the planet's plate under them, by planet_crust's vote.
 	stale: [MICRO]bool
 	for p, i in planet.plates[:MICRO] do stale[i] = !p.alive || p.serial != r.plates[i].serial
-	for &cr, c in r.crust do if int(cr.plate) < MICRO && stale[cr.plate] do cr.plate = planet.crust[cube_cell(r.centre[c])].plate
-	for &v in r.volcanoes do if !v.gone && int(v.plate) < MICRO && stale[v.plate] do v.plate = planet.crust[cube_cell(v.at)].plate
-	for &p in r.plates[MICRO:] do if p.alive && stale[p.from] do p.from = int(planet.crust[cube_cell(linalg.normalize(p.centre))].plate)
+	for &cr, c in r.crust do if int(cr.plate) < MICRO && stale[cr.plate] do cr.plate = planet_plate(r.centre[c])
+	for &v in r.volcanoes do if !v.gone && int(v.plate) < MICRO && stale[v.plate] do v.plate = planet_plate(v.at)
+	for &p in r.plates[MICRO:] do if p.alive && stale[p.from] do p.from = int(planet_plate(linalg.normalize(p.centre)))
 	globe = r
 	for v in planet.volcanoes do if !v.gone && !v.arc && patch_cell(v.at) >= 0 && patch_cell(linalg.transpose(planet.plates[v.plate].turn)*v.at) < 0 do append(&r.volcanoes, v)
 	globe = &planet

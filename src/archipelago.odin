@@ -70,20 +70,26 @@ outer_high :: proc(k: Known_Sample) -> f32 {
 NEAR_SIDE :: 200_000   // metres, the side of the square round the start the islands are placed in: an arc's front and much of its forearc, which lie 170 to 260 km apart on real arcs
 
 // Where islands stand, as rows: what in the history makes them, and how far apart they stand, km.
-// Every site takes the kind whose host it holds best; a site no kind holds is left out.
+// Every site takes the kind whose host it holds best; a site no kind holds is left out. The start
+// stands on one of them too.
 Site_Line :: enum u8 {
 	Front,     // on one of the history's live vents on the volcanic front, whose top stands within 200 m of the sea
 	Forearc,   // on the forearc's outer high (OUTER), within a half of its width of its crest
-	Shelf,     // on continental crust the sea stands less than 300 m over: a continent's stretched margin or a piece rifted off it
+	Shelf,     // on continental crust the sea stands less than LOW_STAND over: a continent's stretched margin or a piece rifted off it, dry when the sea stood lowest
 	Vent,      // on one of the history's dead volcanoes whose top still stands over the sea
 	Land,      // on one of the history's own islands, where its ground stands over the sea in a mass smaller than LARGE
 }
+// Metres under today's the sea stood at its lowest in the last ice ages, as the kinds' seas fall (115 to
+// 120 m for the inlets kind): a shelf shallower than this was the continent's land then, as the shelf
+// round Iki and the Gotō islands was Kyushu's (from memory). A shelf 200 to 300 m deep holds no
+// island; on one, 18 islands stood 30 to 60 km apart across seed 9's square.
+LOW_STAND :: 120
 Site_Row :: struct { name: string, line: Site_Line, apart: [2]f32 }
 SITES := [?]Site_Row{
 	{"on a live vent of the volcanic front", .Front, {15, 15}},   // the regional history puts its vents 20 to 60 km apart (VENT_APART, plates.odin)
 	{"on the forearc's outer high", .Forearc, {50, 90}},   // the Bonin islands' groups, 50 to 70 km apart; Kikaijima stands alone
 	{"on a shelf", .Shelf, {30, 60}},   // Tsushima, Iki and the Gotō islands, 30 to 70 km apart on theirs
-	{"on an old volcano", .Vent, {20, 20}},
+	{"on an old volcano", .Vent, VENT_APART},   // as far apart as the arc's live vents: the history opens a vent beside a dead one, which stands for millions of years, so dead vents nearer than that are one centre's
 	{"on the history's own land", .Land, {12, 12}},
 }
 
@@ -99,12 +105,13 @@ known_point :: proc(x, z: f64) -> [2]f32 {
 }
 
 // The world's fields at a point in the world. A host reads several at one point, so the last point
-// read on each thread is kept.
+// read on each thread is kept, keyed by the point in the known world and by the known world it was
+// read from (its seed and its samples), so a known world made or a start moved since cannot answer.
 world_at :: proc(x, z: f64) -> (w: World_Point) {
-	@(thread_local) last: struct { x, z: f64, start: [2]f32, w: World_Point, ok: bool }
-	if last.ok && last.x == x && last.z == z && last.start == world_frame.start do return last.w
-	defer last = {x, z, world_frame.start, w, true}
 	at := known_point(x, z)
+	@(thread_local) last: struct { at: [2]f32, seed: u32, samples: rawptr, w: World_Point, ok: bool }
+	if last.ok && last.at == at && last.seed == known.seed && last.samples == raw_data(known.samples) do return last.w
+	defer last = {at, known.seed, raw_data(known.samples), w, true}
 	k, inland := known_at(at)
 	over := k.front < 1e3   // on a plate over a sinking slab, within reach of its trench
 	w.front = abs(k.front) if over else 1e4
@@ -147,36 +154,76 @@ world_of :: proc(at: [2]f32) -> [2]f64 {
 	return world_frame.origin + [2]f64{f64(at.x - world_frame.start.x), f64(at.y - world_frame.start.y)}*1000
 }
 
-// Read the islands near the start from the known world. The start is put where the history makes an
-// island; the others stand where the rows of SITES put them round it; each is the kind whose host it
-// holds best, no two nearest neighbours alike. It reads the record drawn at the start's place
+// Read the islands near the start from the known world. The start is put on a site where the history
+// makes an island; the others stand where the rows of SITES put them round it; each is the kind whose
+// host it holds best, whatever its neighbours are. It reads the record drawn at the start's place
 // (`region`: its origin, the swell, and any kind asked for), so call it after `region_init`
 // and `known_make`. With `say`, print what was left out. With a kind `forced` (--kind=), the start is
 // of that kind and stands where its host holds best.
 archipelago_make :: proc(say := false, forced := -1) {
 	world_frame = {origin = {f64(region.origin.x), f64(region.origin.y)}, wind = region.shape.swell}   // the swell the seed draws for its own kind
 	o := world_frame.origin
-	// The start: where some kind's host holds best in the known world (or the forced kind's), 6 km
-	// or more off land larger than a region; where one holds as well, where most islands would stand
+	// Where each row of SITES says the history makes an island, over the whole known world.
+	Candidate :: struct { at: [2]f32, row: int, key: i32, d: f32 }
+	cands := make([dynamic]Candidate, context.temp_allocator)
+	for s, i in known.samples {
+		at := [2]f32{f32(i%KNOWN_N) + 0.5, f32(i/KNOWN_N) + 0.5}*KNOWN_STEP - WINDOW/2
+		share := (s.front + s.setback)/s.setback if s.front < 1e3 else -1   // of the way back from the trench to the volcanic front
+		jitter := ([2]f32{hash01(i32(i), 1, world_seed + 1703), hash01(i32(i), 2, world_seed + 1703)} - 0.5)*KNOWN_STEP
+		for row, r in SITES {
+			on: bool
+			switch row.line {
+			case .Forearc: on = abs(share - OUTER.at) < 0.5*OUTER.width
+			case .Shelf:   on = s.cont && s.h < 0 && s.h > -LOW_STAND && known.inland[i] < -10
+			case .Front, .Vent, .Land:
+			}
+			if on do append(&cands, Candidate{at + jitter, r, i32(i), 0})
+		}
+	}
+	for v, i in known.vents do if live := v.arc && v.last < 2*REGION_DT; v.top > (-200 if live else 0) {   // a growing vent near the sea, or a dead one not yet planed to it
+		for row, r in SITES do if row.line == (.Front if live else .Vent) do append(&cands, Candidate{v.at, r, i32(i) + 1_000_000, 0})
+	}
+	for m, i in known.masses do if !m.large {
+		at := [2]f32{f32(m.top%KNOWN_N) + 0.5, f32(m.top/KNOWN_N) + 0.5}*KNOWN_STEP - WINDOW/2
+		for row, r in SITES do if row.line == .Land do append(&cands, Candidate{at, r, i32(i) + 2_000_000, 0})
+	}
+
+	// The start: of those sites 6 km or more off land larger than a region, the one where some kind's
+	// host holds best (or the forced kind's); where one holds as well, where most islands would stand
 	// round it, on the forearc 60 km from the volcanic front, 30 km or more off land larger than a
 	// region, nearer the middle of the known world, which was chosen for its islands. It is then an
-	// island like the others: its size drawn, its kind the one whose host holds best there.
+	// island like the others: its size drawn, its kind the one whose host holds best there. With a
+	// kind forced that no site holds, wherever its host holds best.
 	holds_any :: proc(p: [2]f64, forced: int) -> (s: f32) {
 		if forced >= 0 do return holds(forced, p)
 		for _, k in KINDS do s = max(s, holds(k, p))
 		return
 	}
+	rich :: proc(c: [2]f32, w: World_Point) -> f32 {
+		k, _ := known_at(c)
+		return math.exp(-math.pow((k.front + 60)/70, 2)) + 0.5*smoothstep(10, 30, -w.inland) - linalg.length(c)/800
+	}
 	best, chosen := f32(-1), [2]f32{}
-	for j in -80..=80 do for i in -80..=80 {
+	for cand in cands {
+		p := world_of(cand.at)
+		w := world_at(p.x, p.y)
+		if w.inland > -6 do continue
+		if s := 100*math.floor(holds_any(p, forced)*50)/50 + 0.2*rich(cand.at, w) + 0.01*hash01(cand.key, i32(cand.row), world_seed + 1701); s > best do best, chosen = s, cand.at   // the host first, to 0.02
+	}
+	if best < 100*0.02 do for j in -80..=80 do for i in -80..=80 {   // no site holds the kind forced
 		c := [2]f32{f32(i), f32(j)}*5
 		p := world_of(c)
 		w := world_at(p.x, p.y)
 		if w.inland > -6 do continue
-		k, _ := known_at(c)
-		rich := math.exp(-math.pow((k.front + 60)/70, 2)) + 0.5*smoothstep(10, 30, -w.inland) - linalg.length(c)/800
-		if s := 100*math.floor(holds_any(p, forced)*50)/50 + 0.2*rich + 0.01*hash01(i32(i), i32(j), world_seed + 1701); s > best do best, chosen = s, c   // the host first, to 0.02
+		if s := 100*math.floor(holds_any(p, forced)*50)/50 + 0.2*rich(c, w) + 0.01*hash01(i32(i), i32(j), world_seed + 1701); s > best do best, chosen = s, c
 	}
 	world_frame.start = chosen
+	in_square :: proc(at: [2]f32) -> bool { d := at - world_frame.start; return max(abs(d.x), abs(d.y)) < NEAR_SIDE/2000 }
+	{
+		square := make([dynamic]Candidate, context.temp_allocator)
+		for c in cands do if in_square(c.at) do append(&square, c)
+		cands = square
+	}
 
 	Site :: struct { at: [2]f64, size: f64 }
 	sites := make([dynamic]Site, context.temp_allocator)
@@ -209,33 +256,8 @@ archipelago_make :: proc(say := false, forced := -1) {
 		append(sites, Site{at, size})
 		return true
 	}
-	// Where each row of SITES says the history makes an island, within the square round the start,
-	// taken nearest the start first, each at least its row's distance from those already taken.
-	Candidate :: struct { at: [2]f32, row: int, key: i32, d: f32 }
-	cands := make([dynamic]Candidate, context.temp_allocator)
-	in_square :: proc(at: [2]f32) -> bool { d := at - world_frame.start; return max(abs(d.x), abs(d.y)) < NEAR_SIDE/2000 }
-	for s, i in known.samples {
-		at := [2]f32{f32(i%KNOWN_N) + 0.5, f32(i/KNOWN_N) + 0.5}*KNOWN_STEP - WINDOW/2
-		if !in_square(at) do continue
-		share := (s.front + s.setback)/s.setback if s.front < 1e3 else -1   // of the way back from the trench to the volcanic front
-		jitter := ([2]f32{hash01(i32(i), 1, world_seed + 1703), hash01(i32(i), 2, world_seed + 1703)} - 0.5)*KNOWN_STEP
-		for row, r in SITES {
-			on: bool
-			switch row.line {
-			case .Forearc: on = abs(share - OUTER.at) < 0.5*OUTER.width
-			case .Shelf:   on = s.cont && s.h < 0 && s.h > -300 && known.inland[i] < -10
-			case .Front, .Vent, .Land:
-			}
-			if on do append(&cands, Candidate{at + jitter, r, i32(i), 0})
-		}
-	}
-	for v, i in known.vents do if live := v.arc && v.last < 2*REGION_DT; in_square(v.at) && v.top > (-200 if live else 0) {   // a growing vent near the sea, or a dead one not yet planed to it
-		for row, r in SITES do if row.line == (.Front if live else .Vent) do append(&cands, Candidate{v.at, r, i32(i) + 1_000_000, 0})
-	}
-	for m, i in known.masses do if !m.large {
-		at := [2]f32{f32(m.top%KNOWN_N) + 0.5, f32(m.top/KNOWN_N) + 0.5}*KNOWN_STEP - WINDOW/2
-		if in_square(at) do for row, r in SITES do if row.line == .Land do append(&cands, Candidate{at, r, i32(i) + 2_000_000, 0})
-	}
+	// The other sites, within the square round the start, taken nearest the start first, each at
+	// least its row's distance from those already taken.
 	for &c in cands do c.d = linalg.length(c.at - world_frame.start)
 	slice.sort_by(cands[:], proc(a, b: Candidate) -> bool { return a.d < b.d })
 	taken := make([dynamic][2]f32, context.temp_allocator)
@@ -252,44 +274,22 @@ archipelago_make :: proc(say := false, forced := -1) {
 	if say do for row, r in SITES do fmt.printfln("  %s: %d sites, %d islands", row.name, counts[r][0], counts[r][1])
 
 	// Each site takes the kind whose host it holds best, ties broken by a draw keyed by the kind's
-	// name and weighted as the race's are; a kind its nearest neighbour has, or that has it as
-	// nearest, is passed over for the next best. A site whose neighbours took every kind that holds
-	// there is left out.
-	kind := make([]int, len(sites), context.temp_allocator)
-	kept := make([]bool, len(sites), context.temp_allocator)
-	for &k in kept do k = true
-	kind[0] = forced
-	nearest :: proc(sites: []Site, kept: []bool, i: int) -> (n: int) {
-		n = -1
-		for s, j in sites do if kept[j] && j != i && (n < 0 || math.hypot(s.at.x - sites[i].at.x, s.at.y - sites[i].at.y) < math.hypot(sites[n].at.x - sites[i].at.x, sites[n].at.y - sites[i].at.y)) do n = j
-		return
-	}
-	for again := true; again; {
-		again = false
-		for i in (1 if forced >= 0 else 0)..<len(sites) do if kept[i] {
-			s, best, key := sites[i], f32(0), f32(-1)
-			kind[i] = -1
+	// name and weighted as the race's are. Its neighbours do not count: an island is what its history
+	// makes it, and a group of real islands is often all of one or two kinds.
+	clear(&archipelago)
+	for s, i in sites {
+		kind, best, key := forced if i == 0 else -1, f32(0), f32(-1)
+		if kind < 0 {
 			for k, r in KINDS {
 				h := holds(r, s.at)
-				taken := false
-				for j in 0..<i do taken ||= kept[j] && kind[j] == r && (nearest(sites[:], kept, i) == j || nearest(sites[:], kept, j) == i)
 				u := math.pow(hash01(i32(i), i32(fnv.fnv32a(transmute([]u8)k.name)), world_seed + 1704), 1/k.weight)
-				if h > 0 && !taken && (h > best + 1e-4 || h > best - 1e-4 && u > key) do kind[i], best, key = r, h, u
-			}
-			if kind[i] < 0 && i == 0 {   // the start stands whatever holds; where none does, the seed's own kind
-				for k, r in KINDS do if k.name == region.kind do kind[0] = r
-			} else if kind[i] < 0 {
-				kept[i], again = false, true
-				if say do fmt.printfln("  left out at %.1f, %.1f km: its neighbours took every kind its setting holds", s.at.x/1000, s.at.y/1000)
-				break
+				if h > 0 && (h > best + 1e-4 || h > best - 1e-4 && u > key) do kind, best, key = r, h, u
 			}
 		}
-	}
-	clear(&archipelago)
-	for s, i in sites do if kept[i] {
-		w, id := world_at(s.at.x, s.at.y), len(archipelago)
-		append(&archipelago, Island{id = id, origin = {i32(math.round(s.at.x)), i32(math.round(s.at.y))}, size = s.size, kind = kind[i],
-			seed = world_seed if id == 0 else hash(i32(id), 0, world_seed + 1705), setting = w.setting, age = w.age})
+		if kind < 0 do for k, r in KINDS do if k.name == region.kind do kind = r   // the start stands whatever holds; where none does, the seed's own kind
+		w := world_at(s.at.x, s.at.y)
+		append(&archipelago, Island{id = i, origin = {i32(math.round(s.at.x)), i32(math.round(s.at.y))}, size = s.size, kind = kind,
+			seed = world_seed if i == 0 else hash(i32(i), 0, world_seed + 1705), setting = w.setting, age = w.age})
 	}
 	continent_make()
 	ashore := f64(1e12)
@@ -326,7 +326,7 @@ plates_words :: proc() {
 	start := -1
 	for r, i in KINDS do if r.name == region.kind do start = i
 	fmt.printf(". It is the %s kind", region.kind)
-	if here.island.id == 0 do fmt.printf(", the start, put where some kind's host holds best")
+	if here.island.id == 0 do fmt.printf(", the start, put on the site where some kind's host holds best")
 	if start >= 0 && len(KINDS[start].hosts) > 0 {
 		fmt.printf(": its host holds %.2f here, on", holds(start, o))
 		p := Point{cell = 2000}
