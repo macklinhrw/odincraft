@@ -87,7 +87,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 | P11 | **The world goes on.** Migrants, traders by season, news, and attacks from real neighbours, by the rules history ran on | Waits for traders | 6 |
 | P12 | **Mind control.** Take one dwarf and act through it, in first person | Fights a beast by hand | |
 
-**Each play step ships its part of the interface** into the frame I-1 fixes, as `foundations/interface.md` section 6 lists: the seven's pictures, list and card with P2; the orders bar and build choices with P3; needs and alerts with P4; stores with P5; Continue and the list of worlds with P6. The owner asked on 2026-11-16 that the interface be part of the early steps and well founded, so it has a design of its own and expedition planning comes early.
+**Each play step ships its part of the interface** into the frame I-1 fixes, as `foundations/interface.md` section 6 lists: the dwarves' pictures, list and card with P2; the orders bar and build choices with P3; needs and alerts with P4; stores with P5; Continue and the list of worlds with P6. The owner asked on 2026-11-16 that the interface be part of the early steps and well founded, so it has a design of its own and expedition planning comes early.
 
 After these, deepened by what the stories ask for: singular beasts and made things with histories, more peoples, trade and law, magic, being one person in the world.
 

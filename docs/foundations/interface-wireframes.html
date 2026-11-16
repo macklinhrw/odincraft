@@ -3,148 +3,309 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Interface wireframes</title>
+<title>Interface studies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Marcellus&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#16181b; --ink:#e9e6df; --dim:#a9a59b; --panel:rgba(22,24,27,.90); --line:#4a4d52; --hot:#e0b34a; --bad:#e2725b; --note:#7fb7d9; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  main { max-width:1500px; margin:0 auto; padding:24px 16px 60px; }
-  h1 { font-size:26px; margin:0 0 4px; } h2 { font-size:20px; margin:44px 0 6px; }
-  p.lead { color:var(--dim); margin:0 0 14px; max-width:980px; }
-  .screen { position:relative; width:100%; aspect-ratio:16/9; border:1px solid var(--line); overflow:hidden; container-type:inline-size;
-            background:#27402f url("../interesting-world/real/default-island-part-two.jpg") 100% 50% / 205% auto no-repeat; }
-  .screen.plain { background:#1d2a33; }
-  .p { position:absolute; background:var(--panel); border:1px solid var(--line); padding:.55cqw .8cqw; font-size:1.02cqw; line-height:1.35; }
-  .p b { font-weight:600; } .dim { color:var(--dim); } .hot { color:var(--hot); } .bad { color:var(--bad); }
-  .k { display:inline-block; min-width:1.5cqw; padding:0 .3cqw; margin-left:.35cqw; border:1px solid var(--line); border-radius:.2cqw; color:var(--dim); font-size:.82cqw; text-align:center; }
-  .btn { display:inline-block; padding:.3cqw .75cqw; margin-right:.3cqw; border:1px solid var(--line); background:rgba(255,255,255,.04); }
-  .btn.on { border-color:var(--hot); color:var(--hot); }
-  .face { display:inline-block; width:2.5cqw; height:2.5cqw; margin:0 .18cqw; border:1px solid var(--line); background:#6b5a48; vertical-align:middle; position:relative; }
-  .face.sel { border-color:var(--hot); } .face i { position:absolute; right:-.3cqw; top:-.3cqw; width:.9cqw; height:.9cqw; background:var(--bad); transform:rotate(45deg); }
-  .tag { position:absolute; width:1.9cqw; height:1.9cqw; border-radius:50%; background:var(--note); color:#0d1114; font-weight:700; font-size:1.05cqw; display:grid; place-items:center; }
-  .tabs span { margin-right:1cqw; color:var(--dim); } .tabs span.on { color:var(--ink); border-bottom:2px solid var(--hot); }
-  .row { display:flex; justify-content:space-between; gap:1cqw; padding:.22cqw 0; border-bottom:1px solid rgba(255,255,255,.07); }
-  ol.legend { columns:2; column-gap:40px; margin:12px 0 0; padding-left:22px; color:var(--dim); max-width:1300px; }
-  ol.legend li { margin:0 0 6px; break-inside:avoid; } ol.legend b { color:var(--ink); }
-  .mark { position:absolute; border:2px dashed var(--hot); background:rgba(224,179,74,.14); }
-  .title { font-size:3.4cqw; font-weight:700; letter-spacing:.02em; }
-  @media (max-width:800px) { ol.legend { columns:1; } }
+  :root {
+    --basalt:#222a31; --slab:#2d363e; --edge:#46525c; --chalk:#ede8dd; --ash:#9fa8ad;
+    --brass:#cda85f; --verdigris:#6db3a2; --cinnabar:#d4513b;
+    --name:"Marcellus", "Iowan Old Style", Georgia, serif;
+    --text:"Atkinson Hyperlegible", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#15191d; color:var(--chalk); font:17px/1.5 var(--text); }
+  main { max-width:1560px; margin:0 auto; padding:40px 20px 80px; }
+  h1 { font:400 34px/1.15 var(--name); margin:0 0 8px; }
+  h2 { font:400 24px/1.2 var(--name); margin:64px 0 6px; }
+  .lead, .cap { color:var(--ash); max-width:70ch; margin:0 0 18px; }
+  .cap { margin:14px 0 0; }
+  .cap b { color:var(--chalk); font-weight:700; }
+
+  /* A screen is drawn in container units: 1u is 4 px on a screen 2560 wide. */
+  .screen { --u:.15625cqw; position:relative; width:100%; aspect-ratio:16/9; overflow:hidden; container-type:inline-size;
+            background:#2c4a3a url("../interesting-world/real/default-island-part-two.jpg") 96% 38% / 215% auto no-repeat; }
+  .screen > * { font-size:calc(6*var(--u)); line-height:1.35; }
+  .screen.far { background-position:100% 46%; background-size:215% auto; }
+  .screen.door { background-size:330% auto; background-position:88% 30%; }
+  .screen.door::before { content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(21,26,30,.96) 0, rgba(21,26,30,.86) 38%, rgba(21,26,30,.35) 70%, rgba(21,26,30,.15) 100%); }
+  .abs { position:absolute; }
+  .panel { background:var(--basalt); border:1px solid var(--edge); box-shadow:0 calc(1*var(--u)) calc(6*var(--u)) rgba(0,0,0,.35); }
+  .pad { padding:calc(4*var(--u)) calc(5*var(--u)); }
+  .name { font-family:var(--name); letter-spacing:.01em; }
+  .big { font-size:calc(10*var(--u)); line-height:1.1; }
+  .mid { font-size:calc(7.5*var(--u)); line-height:1.2; }
+  .small { font-size:calc(5*var(--u)); }
+  .ash { color:var(--ash); } .brass { color:var(--brass); } .ok { color:var(--verdigris); } .bad { color:var(--cinnabar); }
+  .num { font-variant-numeric:tabular-nums; }
+
+  /* keys are written on what they press */
+  .key { display:inline-block; min-width:calc(7*var(--u)); padding:0 calc(1.5*var(--u)); margin-left:calc(2*var(--u)); font-size:calc(4.6*var(--u)); line-height:calc(6.5*var(--u));
+         text-align:center; color:var(--ash); background:#1a2026; border:1px solid var(--edge); border-bottom-width:2px; }
+  .do { display:inline-flex; align-items:center; height:calc(11*var(--u)); padding:0 calc(4*var(--u)); background:var(--slab); border:1px solid var(--edge); margin-right:calc(1.5*var(--u)); }
+  .do.held { background:#3a3424; border-color:var(--brass); color:var(--brass); }
+  .do.main { background:var(--brass); border-color:var(--brass); color:#1d1a12; font-weight:700; }
+  .know { display:inline-flex; align-items:center; height:calc(11*var(--u)); padding:0 calc(3.5*var(--u)); color:var(--ash); }
+  .know.open { color:var(--chalk); box-shadow:inset 0 calc(-.75*var(--u)) 0 var(--brass); }
+
+  /* portraits are small block busts, as the world is blocks */
+  .bust { display:inline-block; position:relative; width:calc(11*var(--u)); height:calc(11*var(--u)); background:#3b454e; border:1px solid var(--edge); vertical-align:middle; }
+  .bust svg { display:block; width:100%; height:100%; }
+  .bust.sel { border-color:var(--brass); box-shadow:0 0 0 1px var(--brass); }
+  .bust.lg { width:calc(18*var(--u)); height:calc(18*var(--u)); }
+  .pip { position:absolute; right:calc(-1.6*var(--u)); top:calc(-1.6*var(--u)); width:calc(4.2*var(--u)); height:calc(4.2*var(--u)); border:1px solid #14181c; }
+  .pip.bad { background:var(--cinnabar); transform:rotate(45deg); }
+  .pip.warn { background:var(--brass); clip-path:polygon(50% 0, 100% 100%, 0 100%); border:0; }
+
+  /* the thing itself, not a picture of it */
+  .block { display:inline-block; width:calc(5.5*var(--u)); height:calc(5.5*var(--u)); margin-right:calc(2*var(--u)); vertical-align:-8%; box-shadow:inset calc(1*var(--u)) calc(1*var(--u)) 0 rgba(255,255,255,.22), inset calc(-1*var(--u)) calc(-1*var(--u)) 0 rgba(0,0,0,.28); }
+  .store { display:inline-flex; align-items:center; margin-left:calc(6*var(--u)); }
+
+  .facts .line > span:first-child { white-space:nowrap; }
+  .line > span:last-child { text-align:right; }
+  .line { display:flex; justify-content:space-between; gap:calc(6*var(--u)); padding:calc(1.6*var(--u)) 0; border-top:1px solid rgba(255,255,255,.07); }
+  .line:first-child { border-top:0; }
+  .tabs { display:flex; gap:calc(6*var(--u)); margin:calc(3.5*var(--u)) 0 calc(2.5*var(--u)); color:var(--ash); border-bottom:1px solid var(--edge); }
+  .tabs span { padding-bottom:calc(1.5*var(--u)); } .tabs .on { color:var(--chalk); box-shadow:0 1px 0 var(--brass), 0 2px 0 var(--brass); }
+  .state { display:inline-block; padding:0 calc(2.5*var(--u)); margin-right:calc(1.5*var(--u)); border:1px solid var(--edge); line-height:calc(8*var(--u)); }
+  .state.bad { border-color:var(--cinnabar); }
+  .sign { display:inline-block; width:calc(4*var(--u)); height:calc(4*var(--u)); margin-right:calc(2.5*var(--u)); vertical-align:2%; }
+  .sign.bad { background:var(--cinnabar); transform:rotate(45deg); }
+  .sign.warn { background:var(--brass); clip-path:polygon(50% 0, 100% 100%, 0 100%); }
+  .sign.ok { background:var(--verdigris); border-radius:50%; }
+  .said { text-shadow:0 1px 2px rgba(0,0,0,.9), 0 0 calc(4*var(--u)) rgba(0,0,0,.7); }
+  .mark { border:calc(.6*var(--u)) dashed var(--brass); background:rgba(205,168,95,.16); }
+  .tip { background:#14181c; border:1px solid var(--brass); padding:calc(1*var(--u)) calc(3*var(--u)); }
+
+  /* the column: the ground under the view, bed by bed, with the cut marked on it */
+  .column { display:flex; flex-direction:column; width:calc(9*var(--u)); border:1px solid #14181c; }
+  .column i { display:block; }
+  .beds { position:relative; display:flex; gap:calc(3*var(--u)); }
+  .beds .words { display:flex; flex-direction:column; text-align:right; color:var(--ash); font-size:calc(5*var(--u)); line-height:1.15; }
+  .beds .words span { display:flex; align-items:center; justify-content:flex-end; }
+  .cut { position:absolute; left:calc(-2*var(--u)); right:calc(-2*var(--u)); height:calc(.75*var(--u)); background:var(--brass); }
+  .cut b { position:absolute; right:calc(13*var(--u)); top:calc(-4.6*var(--u)); white-space:nowrap; font-weight:700; color:var(--brass); background:var(--basalt); padding:0 calc(2*var(--u)); }
+
+  .row { display:grid; grid-template-columns:calc(11*var(--u)) 1fr auto; gap:calc(3.5*var(--u)); align-items:center; padding:calc(2*var(--u)) calc(5*var(--u)); border-top:1px solid rgba(255,255,255,.06); }
+  .row.on { background:var(--slab); box-shadow:inset calc(1*var(--u)) 0 0 var(--brass); }
+  .group { display:flex; justify-content:space-between; padding:calc(3*var(--u)) calc(5*var(--u)) calc(1.5*var(--u)); color:var(--ash); }
+  .field { background:#1a2026; border:1px solid var(--edge); padding:calc(2*var(--u)) calc(3*var(--u)); color:var(--ash); }
+  .pick { display:inline-block; padding:calc(1*var(--u)) calc(3*var(--u)); border:1px solid var(--edge); color:var(--ash); margin-right:calc(1.5*var(--u)); }
+  .pick.on { color:var(--chalk); border-color:var(--brass); }
+  .bar { height:calc(1.5*var(--u)); background:#14181c; margin-top:calc(1.5*var(--u)); } .bar i { display:block; height:100%; background:var(--brass); }
 </style>
 </head>
 <body>
 <main>
-<h1>Interface wireframes</h1>
-<p class="lead">Drawings for <code>interface.md</code>, not the game. They show where each thing lands on the screen and why. The land behind the first screen is the default island's map; the view from above does not exist in the game yet. Names and numbers are examples.</p>
+<h1>Interface studies</h1>
+<p class="lead">Drawings for <code>interface.md</code>, second pass. They show where each thing lands and what the interface looks like. The land behind them is the default island's map, standing in for the view from above. Names and figures are examples.</p>
 
-<h2>1. The play screen</h2>
-<p class="lead">Four regions, each with one job. The top is what is always true. The lower left is the hand: what is selected, or the tool in use, with the orders under it. The right is what to know. The middle is the world, and no panel covers it.</p>
-<div class="screen">
-  <!-- top strip -->
-  <div class="p" style="left:0;top:0;width:100%;height:4.3cqw;display:flex;align-items:center;justify-content:space-between;border-width:0 0 1px">
-    <div><b>Stonewater</b> <span class="dim">· 12th of autumn, 14:20</span> &nbsp;<span class="btn on">⏸<span class="k">Space</span></span><span class="btn">▶<span class="k">1</span></span><span class="btn">▶▶<span class="k">2</span></span><span class="btn">▶▶▶<span class="k">3</span></span></div>
-    <div><span class="face"></span><span class="face sel"></span><span class="face"></span><span class="face"><i></i></span><span class="face"></span><span class="face"></span><span class="face"></span></div>
-    <div>food <b>34</b> &nbsp; drink <b class="bad">0</b> &nbsp; timber <b>55</b> &nbsp; basalt <b>120</b></div>
+<h2>The play screen, a hold of thirty-four</h2>
+<div class="screen" id="play">
+  <!-- top left: the hold and the clock -->
+  <div class="abs panel pad" style="left:calc(4*var(--u));top:calc(4*var(--u))">
+    <div class="name big">Stonewater</div>
+    <div class="ash" style="margin:calc(1*var(--u)) 0 calc(3*var(--u))">12th of autumn, year 3</div>
+    <span class="do held num">Paused at 14:20<span class="key">Space</span></span><span class="do">Slow<span class="key">1</span></span><span class="do">Fast<span class="key">2</span></span><span class="do" style="margin-right:0">Fastest<span class="key">3</span></span>
   </div>
-  <!-- messages -->
-  <div class="p" style="left:.8cqw;top:5.2cqw;width:23cqw;border:0;background:none;text-shadow:0 1px 3px #000">Dural has come ashore.<br>The stream is rising.<br><span class="dim">Two logs carried to the store.</span></div>
-  <!-- alerts -->
-  <div class="p" style="right:.8cqw;top:5.2cqw;width:20cqw"><div class="row"><span class="bad">◆ No drink in the store</span><span class="dim">go</span></div><div class="row" style="border:0"><span class="hot">▲ Rain: the stream may flood the stores</span><span class="dim">go</span></div></div>
-  <!-- a marked area in the world -->
-  <div class="mark" style="left:44cqw;top:25cqw;width:9cqw;height:5cqw"></div>
-  <!-- view controls -->
-  <div class="p" style="right:.8cqw;top:27cqw;width:9.5cqw"><div class="row"><span>level</span><span><b>+31 m</b></span></div><div class="row"><span>▲<span class="k">R</span></span><span>▼<span class="k">F</span></span></div><div class="row"><span>lenses</span><span class="k">L</span></div><div class="row" style="border:0"><span>walk</span><span class="k">Tab</span></div></div>
-  <!-- the hand -->
-  <div class="p" style="left:.8cqw;bottom:5.6cqw;width:25cqw">
-    <div><b>Dural</b> <span class="dim">· mason, 61</span></div>
-    <div>Carrying basalt to the store, <span class="dim">for the wall by the stream.</span></div>
-    <div class="tabs" style="margin:.5cqw 0"><span class="on">Now</span><span>Needs</span><span>Body</span><span>Work</span><span>Ties</span></div>
-    <div class="dim">Next: the wall waits for 7 more basalt.<br>Thirsty. There is no drink in the store.</div>
-    <div style="margin-top:.6cqw"><span class="btn">Follow</span><span class="btn">Go to her work</span></div>
+  <!-- top middle: who needs you, who you keep in view, and how many more -->
+  <div class="abs panel" style="left:50%;top:calc(4*var(--u));transform:translateX(-50%);padding:calc(3*var(--u)) calc(4*var(--u));display:flex;gap:calc(2.5*var(--u));align-items:center">
+    <span class="bust" data-d="0"><i class="pip bad"></i></span><span class="bust" data-d="1"><i class="pip bad"></i></span><span class="bust" data-d="2"><i class="pip warn"></i></span>
+    <span style="width:1px;height:calc(11*var(--u));background:var(--edge);margin:0 calc(1.5*var(--u))"></span>
+    <span class="bust sel" data-d="3"></span><span class="bust" data-d="4"></span><span class="bust" data-d="5"></span><span class="bust" data-d="6"></span>
+    <span style="margin-left:calc(2*var(--u));line-height:1.15"><span class="mid num">34</span><br><span class="ash small">dwarves</span></span>
   </div>
-  <!-- orders bar -->
-  <div class="p" style="left:.8cqw;bottom:.8cqw"><span class="btn on">Dig<span class="k">D</span></span><span class="btn">Fell<span class="k">T</span></span><span class="btn">Gather<span class="k">G</span></span><span class="btn">Build<span class="k">B</span></span><span class="btn">Store<span class="k">S</span></span><span class="btn">Remove<span class="k">X</span></span></div>
-  <!-- lists bar -->
-  <div class="p" style="right:.8cqw;bottom:.8cqw"><span class="btn">Dwarves<span class="k">F1</span></span><span class="btn">Work<span class="k">F2</span></span><span class="btn">Stores<span class="k">F3</span></span><span class="btn">Places<span class="k">F4</span></span><span class="btn">Chronicle<span class="k">F5</span></span><span class="btn">Menu<span class="k">Esc</span></span></div>
-  <span class="tag" style="left:15cqw;top:4.6cqw">1</span><span class="tag" style="left:48cqw;top:4.6cqw">2</span><span class="tag" style="left:75cqw;top:4.6cqw">3</span>
-  <span class="tag" style="left:24.5cqw;top:6.2cqw">4</span><span class="tag" style="right:21.5cqw;top:6.2cqw">5</span><span class="tag" style="right:11cqw;top:29cqw">6</span>
-  <span class="tag" style="left:26.5cqw;bottom:14cqw">7</span><span class="tag" style="left:41.5cqw;bottom:1.4cqw">8</span><span class="tag" style="right:45.5cqw;bottom:1.4cqw">9</span><span class="tag" style="left:54cqw;top:24cqw">10</span>
+  <!-- top right: the stores, then what is wrong -->
+  <div class="abs panel pad" style="right:calc(4*var(--u));top:calc(4*var(--u));width:calc(172*var(--u))">
+    <div style="display:flex;justify-content:space-between;white-space:nowrap">
+      <span><i class="block" style="background:#b98a4a"></i>food for 12 days</span>
+      <span class="bad"><i class="block" style="background:#7a5a8c"></i>no drink</span>
+      <span class="num"><i class="block" style="background:#7b5a3a"></i>55 timber</span>
+      <span class="num"><i class="block" style="background:#4f5560"></i>120 basalt</span>
+    </div>
+    <div style="margin-top:calc(3.5*var(--u));border-top:1px solid var(--edge);padding-top:calc(2.5*var(--u))">
+      <div class="line"><span><i class="sign bad"></i>No drink in the store. Three dwarves are thirsty.</span><span class="ash">show</span></div>
+      <div class="line"><span><i class="sign warn"></i>Rain since dawn. The stream is rising toward the stores.</span><span class="ash">show</span></div>
+    </div>
+  </div>
+  <!-- what just happened -->
+  <div class="abs said" style="left:calc(4*var(--u));top:calc(50*var(--u));width:calc(150*var(--u));padding:calc(3*var(--u)) calc(5*var(--u));background:linear-gradient(90deg, rgba(20,24,28,.72), rgba(20,24,28,.45) 60%, rgba(20,24,28,0))">Dural has come back from the quarry.<br>The stream is over its lower bank.<br><span style="opacity:.7">Two logs were carried to the store.</span></div>
+  <!-- the world: what will be dug shows before the button is let go -->
+  <div class="abs mark" style="left:calc(262*var(--u));top:calc(196*var(--u));width:calc(52*var(--u));height:calc(26*var(--u))"></div>
+  <div class="abs tip small" style="left:calc(262*var(--u));top:calc(226*var(--u))">a room 12 by 6, into mudstone under the lava cap</div>
+  <!-- right middle: the column -->
+  <div class="abs panel pad" style="right:calc(4*var(--u));top:calc(104*var(--u));width:calc(78*var(--u));white-space:nowrap">
+    <div class="ash small" style="margin-bottom:calc(2.5*var(--u))">The ground here</div>
+    <div class="beds" style="height:calc(120*var(--u));justify-content:flex-end">
+      <div class="words" style="height:100%">
+        <span style="height:6%">soil</span><span style="height:22%">lava cap</span><span style="height:30%">mudstone</span><span style="height:12%">sandstone, wet</span><span style="height:30%">mudstone</span>
+      </div>
+      <div class="column" style="height:100%">
+        <i style="height:6%;background:#6b5a3d"></i><i style="height:22%;background:#4f5560"></i><i style="height:30%;background:#75827a"></i><i style="height:12%;background:#b39a6c"></i><i style="height:30%;background:#75827a"></i>
+      </div>
+      <div class="cut" style="top:34%"><b class="small num">cut at 31 m</b></div>
+    </div>
+    <div style="margin-top:calc(4*var(--u));display:flex;flex-direction:column;gap:calc(1.5*var(--u))">
+      <span class="do" style="margin:0;justify-content:space-between">Up, down<span><span class="key">R</span><span class="key">F</span></span></span>
+      <span class="do" style="margin:0;justify-content:space-between">Lenses<span class="key">L</span></span>
+      <span class="do" style="margin:0;justify-content:space-between">Walk here<span class="key">Tab</span></span>
+    </div>
+  </div>
+  <!-- lower left: the hand -->
+  <div class="abs panel pad" style="left:calc(4*var(--u));bottom:calc(21*var(--u));width:calc(150*var(--u))">
+    <div style="display:flex;gap:calc(4*var(--u));align-items:center">
+      <span class="bust lg sel" data-d="3"></span>
+      <div><div class="name mid">Dural Kettleback</div><div class="ash">mason, sixty-one</div></div>
+    </div>
+    <div style="margin-top:calc(3.5*var(--u))">Carrying basalt to the store, for the wall by the stream.</div>
+    <div class="tabs"><span class="on">Now</span><span>Needs</span><span>Body</span><span>Work</span><span>Ties</span><span>Past</span></div>
+    <div><span class="state bad">thirsty</span><span class="state">rested</span><span class="state">fed</span></div>
+    <div class="ash" style="margin-top:calc(2.5*var(--u))">The wall waits for seven more basalt.<br>She will not drink: there is none in the store.</div>
+    <div style="margin-top:calc(4*var(--u))"><span class="do">Follow</span><span class="do">Show her work</span><span class="do">Keep in view</span></div>
+  </div>
+  <!-- bottom left: orders -->
+  <div class="abs" style="left:calc(4*var(--u));bottom:calc(4*var(--u))">
+    <span class="do held">Dig<span class="key">D</span></span><span class="do">Fell<span class="key">T</span></span><span class="do">Gather<span class="key">G</span></span><span class="do">Build<span class="key">B</span></span><span class="do">Store<span class="key">S</span></span><span class="do">Remove<span class="key">X</span></span>
+  </div>
+  <!-- bottom right: lists -->
+  <div class="abs panel" style="right:calc(4*var(--u));bottom:calc(4*var(--u));display:flex">
+    <span class="know">Dwarves<span class="key">F1</span></span><span class="know">Work<span class="key">F2</span></span><span class="know">Stores<span class="key">F3</span></span><span class="know">Places<span class="key">F4</span></span><span class="know">Chronicle<span class="key">F5</span></span><span class="know">Menu<span class="key">Esc</span></span>
+  </div>
 </div>
-<ol class="legend">
-  <li><b>The hold and the clock.</b> Where and when, first thing the eye meets. Pause and speeds live with the clock, with their keys.</li>
-  <li><b>The seven.</b> One picture each. A mark (a shape, not only a colour) when one is hurt, hungry or idle. Click selects; click again goes there.</li>
-  <li><b>The stores, in a few words.</b> Only what the hold is living on now. Click opens the full list.</li>
-  <li><b>Messages.</b> What just happened. They fade, and are kept in the chronicle.</li>
-  <li><b>Alerts.</b> What is wrong and still true, worst first. Each goes to its cause.</li>
-  <li><b>How the world is seen.</b> The cut's level, lenses (rock, water in the ground, rain), and the walk into first person.</li>
-  <li><b>The hand.</b> The selected thing: what it is, what it is doing and why, then tabs, then what can be done. A tool's choices appear here instead when a tool is held.</li>
-  <li><b>Orders.</b> Things to do, left. Each shows its key. Next to the hand, so an order and its target are a short reach apart.</li>
-  <li><b>Lists.</b> Things to know, right. A list opens down the right side, a third of the screen, with the world still in view.</li>
-  <li><b>The world.</b> What will be marked shows before the button is let go.</li>
-</ol>
+<p class="cap"><b>Top left</b>, the hold and its clock. <b>Top middle</b>, the dwarves who need you, then the ones you chose to keep in view, then how many there are in all: it reads the same at seven and at seventy. <b>Top right</b>, what the hold is living on and what is wrong, worst first. <b>Right</b>, the ground under the view, bed by bed, with the cut marked on it. <b>Lower left</b>, the hand: the dwarf selected, what she is doing and why, and under it the orders. <b>Bottom right</b>, the lists.</p>
 
-<h2>2. Expedition planning: where</h2>
-<p class="lead">Three questions in order: where, who, what they bring. What has been chosen stays in view on the right. The site card says what the ground offers and what it lacks, each with its reason, and names the dangers before the player commits.</p>
-<div class="screen">
-  <div class="p" style="left:0;top:0;width:100%;height:4.3cqw;display:flex;align-items:center;justify-content:space-between;border-width:0 0 1px">
-    <div><b>Found a hold</b> <span class="dim">· the world of seed 7</span></div>
-    <div class="tabs"><span class="on">1 Where</span><span>2 Who</span><span>3 What they bring</span></div>
-    <div><span class="btn">Back<span class="k">Esc</span></span></div>
+<h2>A list open, and a tool in the hand</h2>
+<div class="screen far" id="list">
+  <div class="abs panel pad" style="left:calc(4*var(--u));top:calc(4*var(--u))">
+    <div class="name big">Stonewater</div>
+    <div class="ash" style="margin:calc(1*var(--u)) 0 calc(3*var(--u))">12th of autumn, year 3</div>
+    <span class="do held num">Paused at 14:20<span class="key">Space</span></span><span class="do">Slow<span class="key">1</span></span><span class="do">Fast<span class="key">2</span></span><span class="do" style="margin-right:0">Fastest<span class="key">3</span></span>
   </div>
-  <div class="mark" style="left:43cqw;top:31cqw;width:3cqw;height:3cqw;border-radius:50%"></div>
-  <div class="p" style="left:.8cqw;top:5.2cqw;width:12cqw"><div class="row"><span>lenses</span><span class="k">L</span></div><div class="row"><span class="hot">rock</span></div><div class="row"><span>fresh water</span></div><div class="row"><span>livable ground</span></div><div class="row" style="border:0"><span>rain</span></div></div>
-  <div class="p" style="left:.8cqw;bottom:.8cqw;width:30cqw">
-    <div><b>The south bay's head</b> <span class="dim">· the default island</span></div>
-    <div class="row"><span>Fresh water</span><span>a stream, 40 m off</span></div>
-    <div class="row"><span>Landing</span><span>sheltered: the bay faces away from the swell</span></div>
-    <div class="row"><span>Timber</span><span>laurel forest on both slopes</span></div>
-    <div class="row"><span>Rock</span><span>old lavas, cut by dikes: good stone</span></div>
-    <div class="row"><span>Ground to build on</span><span>a flat of 6 ha behind the reeds</span></div>
-    <div class="row"><span class="bad">◆ The stream floods</span><span>the flat is its silt</span></div>
-    <div class="row" style="border:0"><span class="hot">▲ No ore is known</span><span>none shows at the surface</span></div>
+  <div class="abs mark" style="left:calc(210*var(--u));top:calc(150*var(--u));width:calc(64*var(--u));height:calc(30*var(--u))"></div>
+  <div class="abs tip small" style="left:calc(210*var(--u));top:calc(184*var(--u))">a room 14 by 7, two high</div>
+  <!-- the hand holds a tool -->
+  <div class="abs panel pad" style="left:calc(4*var(--u));bottom:calc(21*var(--u));width:calc(150*var(--u))">
+    <div class="name mid">Dig</div>
+    <div class="ash" style="margin-bottom:calc(3*var(--u))">Drag over the ground at the cut. Let go to mark it.</div>
+    <div><span class="pick on">Room</span><span class="pick">Passage</span><span class="pick">Stair</span><span class="pick">Channel</span></div>
+    <div class="facts" style="margin-top:calc(3.5*var(--u))">
+      <div class="line"><span>Through</span><span>mudstone, 196 blocks</span></div>
+      <div class="line"><span>How hard</span><span class="ok">easy with picks</span></div>
+      <div class="line"><span><i class="sign warn"></i>Above it</span><span>the wet sandstone, two blocks up</span></div>
+      <div class="line"><span>Who can</span><span>four miners, two free now</span></div>
+    </div>
+    <div style="margin-top:calc(4*var(--u))"><span class="do">Put it down<span class="key">Esc</span></span></div>
   </div>
-  <div class="p" style="right:.8cqw;top:5.2cqw;width:21cqw;bottom:.8cqw">
-    <div class="dim">Your expedition</div>
-    <div class="row"><span>Where</span><span><b>the south bay's head</b></span></div>
-    <div class="row"><span>Who</span><span>seven, as drawn</span></div>
-    <div class="row"><span>What they bring</span><span>the usual load</span></div>
-    <div class="row" style="border:0"><span>Landing in</span><span>autumn</span></div>
-    <div style="position:absolute;left:.8cqw;right:.8cqw;bottom:.8cqw"><div class="dim" style="margin-bottom:.5cqw">One danger named: the stream floods.</div><span class="btn">Next: who<span class="k">Enter</span></span><span class="btn on">Set out</span></div>
+  <div class="abs" style="left:calc(4*var(--u));bottom:calc(4*var(--u))">
+    <span class="do held">Dig<span class="key">D</span></span><span class="do">Fell<span class="key">T</span></span><span class="do">Gather<span class="key">G</span></span><span class="do">Build<span class="key">B</span></span><span class="do">Store<span class="key">S</span></span><span class="do">Remove<span class="key">X</span></span>
   </div>
-  <span class="tag" style="left:13.5cqw;top:6cqw">1</span><span class="tag" style="left:47cqw;top:30cqw">2</span><span class="tag" style="left:31.5cqw;bottom:14cqw">3</span><span class="tag" style="right:22.5cqw;top:7cqw">4</span><span class="tag" style="right:23cqw;bottom:1.6cqw">5</span>
+  <!-- the list, down the right side -->
+  <div class="abs panel" style="right:calc(4*var(--u));top:calc(4*var(--u));bottom:calc(21*var(--u));width:calc(200*var(--u));display:flex;flex-direction:column">
+    <div class="pad" style="border-bottom:1px solid var(--edge)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="name mid">Dwarves</span><span class="ash num">34</span></div>
+      <div class="field" style="margin:calc(3*var(--u)) 0">Find by name, trade or place</div>
+      <span class="pick on">By need</span><span class="pick">By trade</span><span class="pick">By place</span><span class="pick">Kept in view</span>
+    </div>
+    <div style="overflow:hidden;flex:1">
+      <div class="group"><span>Need you</span><span class="num">3</span></div>
+      <div class="row"><span class="bust" data-d="0"><i class="pip bad"></i></span><span><span class="name">Aud Ironwake</span>, miner<br><span class="ash">Lying in the lower passage. Her leg is broken.</span></span><span class="bad">hurt</span></div>
+      <div class="row"><span class="bust" data-d="1"><i class="pip bad"></i></span><span><span class="name">Brenn Coldharbour</span>, woodcutter<br><span class="ash">Looking for drink. There is none in the store.</span></span><span class="bad">thirsty</span></div>
+      <div class="row"><span class="bust" data-d="2"><i class="pip warn"></i></span><span><span class="name">Sigrun Ashby</span>, smith<br><span class="ash">Nothing to do. No forge is built.</span></span><span class="brass">idle</span></div>
+      <div class="group"><span>At work</span><span class="num">24</span></div>
+      <div class="row on"><span class="bust sel" data-d="3"></span><span><span class="name">Dural Kettleback</span>, mason<br><span class="ash">Carrying basalt to the store, for the wall.</span></span><span>thirsty</span></div>
+      <div class="row"><span class="bust" data-d="4"></span><span><span class="name">Halla Greywether</span>, miner<br><span class="ash">Digging the east passage.</span></span><span class="ash">well</span></div>
+      <div class="row"><span class="bust" data-d="5"></span><span><span class="name">Tove Underhill</span>, grower<br><span class="ash">Gathering fern root on the north slope.</span></span><span class="ash">well</span></div>
+      <div class="row"><span class="bust" data-d="6"></span><span><span class="name">Orm Saltmarsh</span>, fisher<br><span class="ash">Fishing the bay head.</span></span><span class="ash">well</span></div>
+      <div class="row"><span class="bust" data-d="7"></span><span><span class="name">Yrsa Flint</span>, mason<br><span class="ash">Cutting basalt at the quarry.</span></span><span class="ash">tired</span></div>
+      <div class="group"><span>Nineteen more at work, and seven resting</span><span>show all</span></div>
+    </div>
+  </div>
+  <div class="abs panel" style="right:calc(4*var(--u));bottom:calc(4*var(--u));display:flex">
+    <span class="know open">Dwarves<span class="key">F1</span></span><span class="know">Work<span class="key">F2</span></span><span class="know">Stores<span class="key">F3</span></span><span class="know">Places<span class="key">F4</span></span><span class="know">Chronicle<span class="key">F5</span></span><span class="know">Menu<span class="key">Esc</span></span>
+  </div>
 </div>
-<ol class="legend">
-  <li><b>Lenses.</b> The same ones as in play, so the map is read the same way before and after landing.</li>
-  <li><b>The chosen ground,</b> on the island's own map.</li>
-  <li><b>The site card.</b> In words, from what the land already knows. What it lacks is said as plainly as what it has.</li>
-  <li><b>The expedition so far.</b> Always in view, in the place where lists open in play.</li>
-  <li><b>Set out</b> is always available: a party and a load are ready from the start, for a player who wants to begin.</li>
-</ol>
+<p class="cap"><b>A list opens down the right side</b> and the world stays in view. It finds by name, groups by need, trade or place, and every row goes to its dwarf. <b>The hand holds the tool</b>: its choices, and what the land says of the ground about to be dug. The same two places serve any size of hold.</p>
 
-<h2>3. The front door</h2>
-<p class="lead">One screen, five choices, over a slow view of the last world.</p>
-<div class="screen plain">
-  <div class="p" style="left:8cqw;top:12cqw;border:0;background:none"><div class="title">OdinCraft</div><div class="dim">the world of seed 7 · Stonewater, 12th of autumn, year 3</div></div>
-  <div class="p" style="left:8cqw;top:22cqw;width:24cqw">
-    <div class="row"><span class="hot">Continue</span><span class="dim">Stonewater</span></div>
-    <div class="row"><span>Worlds</span><span class="dim">2 worlds, 3 holds, 1 ruin</span></div>
-    <div class="row"><span>New world</span><span class="dim"></span></div>
-    <div class="row"><span>Settings</span><span class="dim">text size, keys</span></div>
-    <div class="row" style="border:0"><span>Quit</span><span class="dim"></span></div>
+<h2>Expedition planning, the first question</h2>
+<div class="screen far" id="where">
+  <div class="abs panel pad" style="left:calc(4*var(--u));top:calc(4*var(--u))">
+    <div class="name big">Found a hold</div>
+    <div class="ash" style="margin-top:calc(1*var(--u))">in the world of seed 7</div>
   </div>
-  <div class="p" style="right:8cqw;top:22cqw;width:34cqw">
-    <div><b>Making a new world</b> <span class="dim">· seed 12</span></div>
-    <div class="row"><span>The plates' history</span><span>done, 2.4 s</span></div>
-    <div class="row"><span>The region round the start</span><span>done, 0.3 s</span></div>
-    <div class="row"><span class="hot">The islands near the start</span><span>4 of 11</span></div>
-    <div class="row" style="border:0"><span class="dim">The far islands and the mainland</span><span class="dim">made as you play</span></div>
-    <div style="margin-top:.6cqw"><span class="btn">Stop</span></div>
+  <div class="abs" style="left:calc(322*var(--u));top:calc(132*var(--u));width:calc(12*var(--u));height:calc(12*var(--u));border-radius:50%;border:calc(.75*var(--u)) solid var(--brass);background:rgba(205,168,95,.25)"></div>
+  <!-- the site card -->
+  <div class="abs panel pad" style="left:calc(4*var(--u));bottom:calc(4*var(--u));width:calc(196*var(--u))">
+    <div class="name mid">The head of the south bay</div>
+    <div class="ash">on the island where the plates set you down</div>
+    <div style="display:flex;gap:calc(6*var(--u));margin-top:calc(4*var(--u))">
+      <div class="beds" style="height:calc(96*var(--u))">
+        <div class="column" style="height:100%"><i style="height:5%;background:#6b5a3d"></i><i style="height:9%;background:#b9ad8d"></i><i style="height:52%;background:#4f5560"></i><i style="height:8%;background:#2b3238"></i><i style="height:26%;background:#4f5560"></i></div>
+        <div class="words" style="height:100%;text-align:left"><span style="height:5%;justify-content:flex-start">soil</span><span style="height:9%;justify-content:flex-start">river silt</span><span style="height:52%;justify-content:flex-start">old lavas</span><span style="height:8%;justify-content:flex-start">a dike</span><span style="height:26%;justify-content:flex-start">old lavas</span></div>
+      </div>
+      <div class="facts" style="flex:1">
+        <div class="line"><span><i class="sign ok"></i>Fresh water</span><span>a stream, forty paces off</span></div>
+        <div class="line"><span><i class="sign ok"></i>A landing</span><span>sheltered: the bay faces away from the swell</span></div>
+        <div class="line"><span><i class="sign ok"></i>Timber</span><span>laurel forest on both slopes</span></div>
+        <div class="line"><span><i class="sign ok"></i>Stone</span><span>old lavas cut by dikes: it builds well</span></div>
+        <div class="line"><span><i class="sign ok"></i>Ground to build on</span><span>a flat behind the reeds</span></div>
+        <div class="line"><span><i class="sign bad"></i>The stream floods</span><span>the flat is its own silt</span></div>
+        <div class="line"><span><i class="sign warn"></i>No ore shows</span><span>none at the surface; the dike may hold some</span></div>
+      </div>
+    </div>
   </div>
-  <span class="tag" style="left:33cqw;top:23cqw">1</span><span class="tag" style="right:43cqw;top:23cqw">2</span>
+  <!-- the expedition so far -->
+  <div class="abs panel" style="right:calc(4*var(--u));top:calc(4*var(--u));bottom:calc(4*var(--u));width:calc(150*var(--u));display:flex;flex-direction:column">
+    <div class="pad" style="flex:1">
+      <div class="name mid" style="margin-bottom:calc(4*var(--u))">Your expedition</div>
+      <div class="line" style="align-items:baseline"><span class="brass">1 &nbsp;Where</span><span>the head of the south bay</span></div>
+      <div class="line" style="align-items:center"><span>2 &nbsp;Who</span><span><span class="bust" data-d="0"></span> <span class="bust" data-d="3"></span> <span class="bust" data-d="4"></span> <span class="bust" data-d="5"></span> <span class="bust" data-d="6"></span> <span class="bust" data-d="7"></span> <span class="bust" data-d="2"></span></span></div>
+      <div class="line"><span>3 &nbsp;What they bring</span><span>the usual load</span></div>
+      <div class="line"><span class="ash">They land in</span><span>autumn</span></div>
+      <div class="ash" style="margin-top:calc(8*var(--u))"><i class="sign bad"></i>One danger here: the stream floods.</div>
+    </div>
+    <div class="pad" style="border-top:1px solid var(--edge);display:flex;justify-content:space-between">
+      <span class="do">Back<span class="key">Esc</span></span>
+      <span><span class="do">Choose who<span class="key">Enter</span></span><span class="do main" style="margin-right:0">Set out</span></span>
+    </div>
+  </div>
 </div>
-<ol class="legend">
-  <li><b>Five choices.</b> A world keeps its holds and its ruins, so Worlds is where an old hold is found again.</li>
-  <li><b>Honest progress.</b> Each stage named as it runs, what is done and what is left, and a way to stop.</li>
-</ol>
+<p class="cap"><b>The site card</b> says what the ground offers and what it lacks, each with its reason, beside the column of what the dwarves would dig through. <b>The expedition so far</b> stays in view where lists open in play. A party and a load are ready from the start, so <b>Set out</b> is always there.</p>
+
+<h2>The front door</h2>
+<div class="screen door" id="door">
+  <div class="abs" style="left:calc(40*var(--u));top:calc(64*var(--u))">
+    <div class="name" style="font-size:calc(30*var(--u));line-height:1">OdinCraft</div>
+    <div class="ash" style="margin-top:calc(5*var(--u))">Stonewater, in the world of seed 7. Autumn of its third year, thirty-four dwarves.</div>
+    <div style="margin-top:calc(22*var(--u));font-size:calc(9*var(--u));line-height:2.05">
+      <div class="brass" style="box-shadow:inset calc(1*var(--u)) 0 0 var(--brass);padding-left:calc(6*var(--u));margin-left:calc(-7*var(--u))">Continue at Stonewater<span class="key">Enter</span></div>
+      <div>Worlds <span class="ash" style="font-size:calc(6*var(--u))">two worlds, three holds, one ruin</span></div>
+      <div>Make a new world</div>
+      <div>Settings</div>
+      <div>Quit</div>
+    </div>
+  </div>
+  <div class="abs panel pad" style="right:calc(24*var(--u));bottom:calc(24*var(--u));width:calc(190*var(--u))">
+    <div class="name mid">Making the world of seed 12</div>
+    <div class="ash" style="margin-bottom:calc(3*var(--u))">You can enter when the islands near the start are made.</div>
+    <div class="line"><span><i class="sign ok"></i>The plates' history</span><span class="ash">made</span></div>
+    <div class="line"><span><i class="sign ok"></i>The region round the start</span><span class="ash">made</span></div>
+    <div class="line" style="display:block"><div style="display:flex;justify-content:space-between"><span class="brass"><i class="sign warn"></i>The islands near the start</span><span class="num">4 of 11</span></div><div class="bar"><i style="width:36%"></i></div></div>
+    <div class="line"><span class="ash">The far islands and the mainland</span><span class="ash">made as you play</span></div>
+    <div style="margin-top:calc(4*var(--u))"><span class="do">Stop making it</span></div>
+  </div>
+</div>
+<p class="cap"><b>Five choices</b> over a slow view of the last world. A world keeps its holds and its ruins, so Worlds is where an old hold is found again. <b>A new world</b> names each stage as it is made and says when you can enter.</p>
 </main>
+<script>
+// Block busts: hood, skin, eyes, beard, eight by eight, as the world is blocks.
+const HOODS=["#7a3b2e","#3f5f6b","#6a6f3a","#5a4a6e","#8a6a2f","#3d4b3a","#6e4a3a","#4a5a7a"], SKINS=["#d7a785","#c49372","#e0b595","#b98566"], BEARDS=["#b8b2a6","#6b4a2c","#2f2924","#a55f2a","#d9d4c8","#4a3a2e","#8c6a3c","#3a342e"];
+const ROWS=[".hhhhhh.","hhhhhhhh","hssssssh","hsessesh","bssnnssb","bbbbbbbb",".bbbbbb.","..bbbb.."];
+document.querySelectorAll(".bust").forEach(el=>{
+  const d=+el.dataset.d, c={h:HOODS[d%8], s:SKINS[d%4], b:BEARDS[(d*3+1)%8], e:"#1b1714", n:"#00000022"};
+  let r="";
+  ROWS.forEach((row,y)=>[...row].forEach((ch,x)=>{ if(ch==="."||ch===" ") return; const fill=ch==="n"?c.s:c[ch]; r+=`<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${fill}"/>`; if(ch==="n") r+=`<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${c.n}"/>`; }));
+  el.insertAdjacentHTML("afterbegin",`<svg viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true">${r}</svg>`);
+});
+</script>
 </body>
 </html>

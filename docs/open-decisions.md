@@ -122,14 +122,22 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **The interface is part of the early play steps**: the menus, the player's interface, expedition planning, and what is built on the camera from above to manage the expedition and the dwarves, with build menus and the rest. "This needs a lot of effort and attention to detail and overall well-founded plan, and UI that is purposeful and thought has gone into where everything lands." So the interface gets a design of its own before it is built, and expedition planning moves from late in the play track to early.
 - **On the interface's first design: "that sounds good", with two criticisms.** The hold will have more than seven dwarves as the game goes on, so nothing may be designed for seven only. And the mock-ups "look pretty ugly, though the logic is okay on first glance; seems it is lacking in maturity". So the placement and grammar stand, the look is redone with care, and the design is made to grow with the hold.
 
+**2026-11-16, Claude's call** (the interface's design, second pass, after the owner's two criticisms)
+
+- **The look is redone from the game's own matter** (`foundations/interface.md`, I10): opaque stone-dark panels; brass for what is live, verdigris for what is well, cinnabar for what is wrong, each with its own shape; names in an inscription typeface and sentences in one made to be read; a dwarf's picture as a small bust of blocks; a material shown as a block of itself. Its one signature is **the column**: the ground drawn bed by bed, as the level control in play and as what the dwarves would dig through on the site card. Four screens are redrawn (`interface-play.jpg`, `-list.jpg`, `-expedition.jpg`, `-front-door.jpg`). The owner judges it by looking.
+- **The design grows with the hold** (I14): the top shows the dwarves who need you, then the ones kept in view, then the count of all; lists find, group and sort; work is given by trade (everyone, no one, or the dwarves named), not in a grid; alerts count; many dwarves can be in the hand. The first pass's row of seven pictures and its grid of dwarves against trades are withdrawn.
+- **The top is three small panels, not a strip across the screen**, so the land shows between them.
+- **"Walk the world" stays as a door on the world's screen**, taken as agreed from "that sounds good".
+- *Not settled:* the two typefaces' licences have not been read (believed Open Font Licence, from memory).
+
 **2026-11-16, Claude's call** (the interface's design; `foundations/interface.md`)
 
 - **The interface has a design before any of it is built**, as the owner asked: thirteen decisions, each with its evidence from Dwarf Fortress's Steam interface, RimWorld's and others' own accounts; the play screen, the front door, the world and expedition planning; pictures of three screens; and the order it is built in.
 - **The screen has four fixed regions, each with one job**: what is constant along the top (the hold and clock, the seven, the stores); the hand at the lower left (the thing selected or the tool in use, with the orders under it); what to know at the right (alerts, how the world is seen, the lists); the world in the middle, which no panel covers in play. Chosen against Dwarf Fortress's Steam interface, which a review found "scattered ... without any real logic regarding where they're placed".
 - **One grammar: select, read, order**, and everything says why and why not.
 - **Three steps are added to the play track**: I-1 (the interface's ground and the play screen's frame, after P1), I-2 (the front door and the world), E-1 (expedition planning, moved early). Every later play step ships its own part of the interface into the frame.
-- *Asked:* **the look**: plain dark panels and a clear sans-serif typeface, or a pixel typeface and textured panels to match the blocks? *Recommendation: plain and clear*; the game answers in sentences.
-- *Asked:* **work given in three words** (does not, does, does first) **or in numbered priorities**, as RimWorld does? *Recommendation: three words.*
+- *Asked:* **the look**: plain dark panels and a clear sans-serif typeface, or a pixel typeface and textured panels to match the blocks? *Recommendation: plain and clear*; the game answers in sentences. *The owner found the first drawings ugly and immature (2026-11-16); redrawn in the second pass, above.*
+- *Asked:* **work given in three words** (does not, does, does first) **or in numbered priorities**, as RimWorld does? *Recommendation: three words.* *Replaced in the second pass by work given by trade, which still reads when the hold has grown.*
 - *Asked:* **does "Walk the world", the game as it is today, stay as a door on the world's screen?** *Recommendation: yes.*
 
 **2026-11-16, Claude's call** (merging step 25)
