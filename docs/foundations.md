@@ -1360,6 +1360,116 @@ Done 2026-11-16 by Claude on the branch `t3/tune-rock-rules-plate-history`, from
 
 Weak points: `across` is a blunt sign of a forearc. Real forearcs show old basement and plutons in places (Chile's coastal range; the Miocene granites of SW Japan's outer zone, of which Yakushima is one, made where a young hot plate went down, which no field says yet). Tsushima's own setting, behind the arc on old continental crust, would read as a shield if its crust is 28 km or more (not checked), where its rock is folded sediment with a granite. Old arc lavas, granite and the shield no longer appear on the raised kind, so its islands are as far from Kikaijima as plain layered rock leaves them. Every threshold is still a guess from a handful of real places. The hollow figure is one slide on each island, so a run moves it by a few islands either way (ridge's went from 2 to 5 far between two runs that changed only a dolerite plug's steepest slope). The judge was Claude, by the figures alone; no picture was taken.
 
+### Step 33, as built
+
+Built 2026-11-16 by Claude: forming faster again, every island coming out bit for bit as before. The owner has not yet looked at it; there is nothing new to see but the time it takes.
+
+**Where the time went.** Entering seed 7 (`--bench=1`, launch to exit) took 3.16 to 3.28 s on the parent. About 1.15 s of that is the window's start, the second of bench and the exit; the sky line came at 2.02 to 2.13 s. Reading the known world and making the archipelago took about 20 ms. The rest was the nine islands within 64 km, formed side by side beside the start island, and entering waited for the slowest: island 7, an inlets island 14.3 km across with 216,000 land cells at 16 m until the sea's 119 m rise left 105,614. It took 2.01 to 2.05 s beside the others and 1.87 s alone, all but about 30 ms of it on its own thread. The others were done by 1.6 s; the next slowest was island 5 (raised, 12.3 km), at 1.51 to 1.58 s.
+
+Island 7 alone spent its time as follows:
+
+- the flood 988 ms: 13.9 million cells taken from the heap over 266 floods (150 at 64 m of 15,000 to 24,000 cells, 50 at 32 m of 54,000, 30 at 16 m of 216,000, and 8 after the rise of 106,000);
+- `erode` 235 ms;
+- the tracer of the deer's 377 trails 177 ms;
+- `coast` 139 ms;
+- the slide 49 ms, the steepest way down 48 (shared), the places 46, setting up the flood 45, the land's fields 35, summing the land drained 33, `creep` 32 (shared), the figures 17 and the roofed places 16.
+
+Replaying the flood's 27.7 million pushes and pops on their own took 790 ms of the 988: the heap was four fifths of the flood. Three things were not as expected:
+
+- **Beside the others island 7 lost only 7%, not a third.** Most of what it lost was in its shared loops, whose helpers were busy with other islands: the steepest way down 48 → 74 ms, `creep` 32 → 46, refining the grid 15 → 26. Its serial loops lost 2 to 8% to the caches. Entering was held by island 7's own serial work, not by the order or sharing of the islands' work.
+- **The heap was slow from comparing floats, not from its depth.** A pop passes its hole down 10.8 levels on average (the heap held 4,149 cells on average, 8,372 at most). At each level the processor compared two floats and turned the result into the next index. Read as integers, the same keys took 44% less. Reading two levels at once, keeping the keys apart from the cells, and selects in place of the push's and the climb's branches gained nothing more (0 to 3.5%).
+- **Half the shore loop was finding the shore.** Of `coast`'s 66 ms along the shore, 32 went on reading each land cell's eight neighbours, in the flood's order, to find the few beside the sea.
+
+**What changed**, none of it changing a value:
+
+- **The heap** (`erosion.odin`): keys are compared as the integers of their bits, which order a float no lower than +0 as the float does. Every key put in is one: heights over the sea in the flood, seconds in the tracer, metres to the sea in the land's fields. The items are kept from 1, so a node's children share a pair of slots, and the slot after the last holds `HIGHEST`, so a missing right child is never the smaller, with no clamp. The flood went from 988 to 660 ms. Replayed on its own, the heap went from 790 to 435 ms, with every one of the 13.9 million pops the same.
+- **The flood's loop:** the neighbours not yet reached are found as eight bits, read before any is marked, with no checks for the grid's edge away from it. Setting up reads eight cells' sea at once as one word, so open sea and the land away from the shore pass eight at a time: setting up went from 45 to 25 ms.
+- **`span`** tells a neighbour's row from how far on it lies, rather than dividing twice for each cell. `erode` skips `exp` where the cell it drains to has eased to a plain face, where the result is exactly 1.
+- **The tracer** (`trails.odin`), 177 → 102 ms:
+  - `pace` takes the way's part (`walking`, one `exp`) worked once for both cells of a step, where it worked it for each;
+  - it takes each land cell's wetness and plants from a table made once per island (`going`, shared), where it worked them out at every step;
+  - it passes over a neighbour already reached for no more than the cell in hand, which nothing added could improve.
+- **`coast`**, 139 → 102 ms alone and 138 → 120 beside the others:
+  - wearing the platform and marking the land beside the sea are one pass, shared among threads. The marks are kept in `seen`, free between floods, which rebuild it.
+  - A cell the sea cuts through marks its neighbours, so the cells after it in the loop see the sea as they did.
+  - Its table of where each mouth's silt has reached is kept from step to step, with the mouths numbered across the grid, so it is never cleared. Making it afresh each step, 3.2 MB at 16 m, had cost island 7 about 6 ms (silt 28 → 22 ms).
+  - `erode` reads back lines of the grid the helpers wrote and loses about 20 ms of this. The same pass on the forming thread cost 94 ms.
+
+**Identical.** On the parent build and this one:
+
+- `./build.sh test` passes with `GOLDEN` unchanged.
+- A hash of everything forming leaves is the same for every island of seeds 7 and 3 (21 and 10 islands), each formed alone and all formed side by side. It covers what step 31's hash did: every per-cell array of the land and its grid, the drainage order, the features, the rivers' segments, ribbon and falls, the trails, the stacks, the roofed places, the fish and the places' candidates. The hash changes when the heap takes the right child on a tie, so it sees the order of ties.
+- The `--map` is the same byte for byte, with every start-up line but the times, for island 0 of seed 7, its islands 1, 6 and 7, and `--kind=cone`, `crater`, `inlets`, `domes`, `raised` and `reef` on seed 3.
+- The thread sanitizer found no race forming island 7 alone, nor all 21 islands of seed 7 side by side.
+
+**Times** of island 7 of seed 7, medians of six runs alternating with the parent, timed inside the forming. Formed alone under a load of 3.3 to 3.7, and beside the others on entering under 3.3 to 6.9:
+
+| Island 7 | alone, before, ms | alone, after, ms | beside the others, before, ms | beside the others, after, ms |
+|---|---|---|---|---|
+| all forming | 1,874 | 1,430 | 2,006 | 1,579 |
+| the flood, all floods | 988 | 660 | 1,037 | 708 |
+| setting up the flood | 45 | 25 | 46 | 25 |
+| the steepest way down | 48 | 42 | 74 | 74 |
+| summing the land drained | 33 | 34 | 34 | 33 |
+| `erode` | 235 | 256 | 255 | 265 |
+| `creep` | 32 | 30 | 46 | 49 |
+| `coast` | 139 | 102 | 138 | 120 |
+| refining the grid | 15 | 15 | 26 | 28 |
+| the slide, with its wear | 49 | 37 | 49 | 38 |
+| the land's fields | 35 | 34 | 35 | 34 |
+| the trails (the tracer) | 194 (177) | 120 (102) | 195 (177) | 122 (104) |
+| places | 46 | 46 | 48 | 48 |
+
+The default island alone: 0.58 → 0.47 s. Island 5 beside the others: 1.51 to 1.58 → 1.20 to 1.26 s. `--archipelago=` forms seed 7's 21 islands side by side in 2.6 to 2.7 s against 3.0 to 3.2.
+
+**Entering**, `--bench=1` wall time, in eight rounds alternating with the parent under a load of 7.0 to 10.6:
+
+| Seed 7 | before, s | after, s |
+|---|---|---|
+| launch to exit, median (range) | 3.18 (3.16 to 3.28) | 2.75 (2.72 to 2.84) |
+| the sky line, median (range) | 2.04 (2.02 to 2.13) | 1.60 (1.56 to 1.68) |
+| island 7 beside the others | 1.99 to 2.11 | 1.54 to 1.65 |
+
+Before step 32's history, `main` took 2.74 to 2.81 s. A freshly built binary's first launch takes about 0.3 s more on this machine, and was left out.
+
+What the premises had right and wrong:
+
+- **That island 7's flood was the cause**: right. It was half of island 7's forming, not a third, and its heap was four fifths of it.
+- **That islands form a third slower side by side**: not for island 7, which lost 7%. The small islands lose more (the default island 0.58 s alone, 0.65 to 0.72 beside the others), but they are done long before it.
+- **That the order and sharing of the islands' work might matter as much as any loop**: wrong here. Helpers that take the largest island's work first, and island 7's thread kept on a performance core by the interactive class of service, changed nothing. What island 7 loses beside the others is helpers that cannot get a core.
+
+**Cost.** The benches were run against the parent alternately, under a load of 4.5 to 11.7 (parent first in each pair):
+
+| Bench | frames over 12.5 ms | our work, median ms | our work, worst ms |
+|---|---|---|---|
+| forest flight, three rounds | 22, 16, 20 against 10, 17, 17 | 1.59, 1.51, 1.52 against 1.46, 1.62, 1.51 | 46.0, 10.3, 37.4 against 8.5, 9.0, 7.3 |
+| down through cloud, two rounds | 5, 3 against 4, 6 | 1.28, 1.30 against 1.35, 1.28 | 6.6, 6.3 against 6.5, 7.0 |
+
+The forest flight drew 1,037 to 1,042 thousand faces and the flight through cloud 827 to 828 thousand, on both. The frame interval's median was 8.33 ms on every run. Every frame over 12.5 ms, on either build, was a missed refresh of 16.7 ms or more on a machine other agents were loading; step 31's runs of the same benches had none. The most memory held on entering was 1,066 to 1,075 MB, against 1,079 to 1,080. `src/` grew by 77 lines of Odin (138 added and 61 removed), to 11,974.
+
+Tried and dropped:
+
+- **Two levels of the heap a pass**, the four grandchildren read before the child is chosen: exact, the flood 671 → 647 ms, 3.5%, not worth its lines.
+- **Keys and cells in separate arrays**, so a node's children's keys are one word: no gain.
+- **Selects in place of branches** for the first two levels of a push and of the climb back: no gain.
+- **The steepest way down passing over neighbours no lower than the cell:** slower, 44 → 66 ms. The branch it adds mispredicts half the time, which costs more than the divisions it saves.
+- **Coast's pass on the forming thread, in the grid's order:** 94 ms against 21 to 38 shared, as the compiler did not vectorise it.
+
+Not built:
+
+- **A queue that takes cells flooding at the same height in another order.** A radix heap on the keys' bits replays island 7's floods in about 365 ms, against 435 for the heap as built: about 70 ms of island 7, or 5%. It changes the land wherever such ties fall. Step 31 found it saved 10% of the old heap's flood.
+- **`erode` by drainage basin** (as step 31 weighed it), summing the land drained in parallel, and sharing the flood's setting up. Each would split a serial loop of 25 to 260 ms, but needs the basins found each step or the sums' order kept.
+- **`creep` in one pass instead of two**, the copy folded into the stencil and the arrays swapped after: about 10 ms.
+- **The places' sort of the cells by height**, whose library sort decides the order of equal heights.
+
+Weak points:
+
+- The flood is still 660 ms of island 7's 1.43 s, and still serial. The next large gain changes the land or what is formed before entering.
+- The heap's integer comparison holds only while every key put in is a float no lower than +0. The heap's comment says so; nothing checks it.
+- Coast's shared pass costs `erode` about 20 ms of cache traffic.
+- Entering is about 0.05 s under the bar on this machine under load.
+- Every time was taken under load from other agents' work, which reached 37 during the step. Parts were compared on each thread's own clock while it was heaviest.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.
