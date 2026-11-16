@@ -228,3 +228,151 @@ The water's window is 32 chunks wide, so 448 m is the widest that could be tried
 - **Leaves left out is a lens** in the design's sense, how the world is seen, and belongs under L with the fields.
 - **D and S are orders**, so the pan is not under the left hand (asked, `open-decisions.md`).
 - **A drag that leaves the world**: a box being marked keeps its last block while the pointer is off the world, and ends where the button is let go.
+
+### P2, as built: seven dwarves (2026-11-16)
+
+**What can now happen that could not before:** a party lands where the land says a boat can, and goes where it is sent by ways of its own; any of them says who it is and what it waits for; and the same morning can be played again from its log.
+
+**What the owner sees.** The game opens from above on a sheltered inlet of the default island, the stones at a stream's mouth in the middle of the picture. A boat with seven hooded, bearded dwarves comes in from 60 m out, grounds, and they step over the bow one at a time and walk up to the grass above. Right-click a block: the seven walk there in file, each by its own way, round trees and boulders, through the stream where it is shallow. Click a dwarf: it says who it is, what it is doing and what it waits for, in the terminal and for a few seconds in the window's title. Space pauses them with the world, and 1, 2 and 3 run them at its speeds. Tab walks down among them. The terminal keeps a log of what happens.
+
+**What was built**
+
+- **The dwarves' world** (`hold.odin`, `adr/0009`): a simulation in ticks of a tenth of a second, on a thread of its own, from the world's seed and a list of orders. The same orders give the same log with a window or without, paused or hurried. It reads the game's one clock (`adr/0008`) only for how far it may run. `--dwarves=seconds --orders=file` runs it with no window and prints the log, its hash and what it cost.
+- **The dwarves** (`dwarves.odin`): each has a given name of a stem and an ending, a byname of an earth and something worn, a trade, an age, a height from 1.25 to 1.45 m and its colours, all drawn from the world's seed. Trades are twelve rows, no trade twice until every trade has come. Each is sixteen boxes: boots, legs, tunic, belt, arms, hands, head, hood, nose, eyes, beard. Legs and arms swing with the metres walked. The boat is eight.
+- **The landing** (`landing.odin`): three rows on the land's fields, the first that holds anywhere deciding, read at every cell of land beside the sea. Three fields were made for them (`sea-round`, `fresh-water`, `livable-near`), which paint as overlays and answer `--why` like the rest. On seed 7 the first row holds on 180 of 5,847 shore cells and best at 2702, -1778: a stream's mouth in a bay the land shuts in.
+- **Walking ground and ways** (`paths.odin`): a chunk's true blocks, the generator's with the session's edits, are read once into floors (ground with two blocks of air over it, under no more than half a metre of water) and the steps between them, a block up or down at most, no corner cut. Floors joined inside a chunk are a room. A way is searched first over rooms, which says whether one exists, then over the floors of those rooms.
+- **A dwarf's card**: who it is, what it is doing and why, and what comes next, as three lines of data (`dwarf_card`) that `--why`, a click and the interface to come all read (`foundations/interface.md`, I2, I3, I8).
+- **More than seven.** Seven come in the first boat, and nothing else counts on seven: the party, the dwarves and what the frame is shown are lists of any length. `--party=N` brings N, to measure with.
+
+**Keys.** In either view: G sends the party to the block under the pointer, or aimed at. From above: a right click sends it too (a right drag still turns the view), and a left click on a dwarf selects it, and it says who it is. In first person: E selects the dwarf aimed at. Space or P pauses them with the world; 1, 2, 3 set its speed.
+
+**From Dwarf Fortress.** It keeps which ground is joined to which, so that a search for a way that does not exist is never begun. A whole island cannot be flooded so here: its ground is made only when asked for. So joined ground is kept a chunk at a time, as rooms, and rooms are joined as a search crosses them. Before a search sets out, the goal's ground is followed back through 24 rooms: a ledge, a boulder's top or a rock in the sea is found whole and the order is refused at once, in 4 ms. Ground closed off behind more rooms than that costs a search of 400 chunks before it is given up.
+
+**From the deer's trails** (`trails.odin`). Reused: Tobler's walking cost (`walking`), what a cell's wetness and plants make of the pace (`going`), the rule that a worn trail is quicker, and the cost of wading by depth. Not reused: `pace` whole, whose thirty-fold cost of standing water is for a 16 m cell where at 1 m the water is in the blocks; and the tracer (`trace`), which runs on 16 m cells to the deer's own wants and limit, in scratch arrays that are let go once the trails are laid.
+
+**What was tried and dropped**
+
+- *The 16 m land's slope as the grade of a step.* A walk of 25 m up a beach rising 3 m cost 184 s, because the cell behind the beach is steep. The grade is now read from the floors themselves, two blocks either way.
+- *The land cell's plants slowing every floor in it.* The stones at the stream's mouth lie in a cell of susuki scrub, six times slower than open ground. Plants now slow only a floor that plants cover.
+- *Rooms searched by distance alone.* Five of the seven took a way of 2,270 s where two found one of 1,300 s. Rooms now carry the mean pace of their floors.
+- *Every dwarf looking for its way in the tick the order comes.* Seven searches cost 0.2 to 0.5 s in one tick; a hundred would cost seconds. One dwarf now tries the order, and the rest look as their turns in the file come.
+- *The first shore cell the row liked.* It had 10 m of open water in front. A boat now needs 30 m to come in along.
+- *Gathering on the nearest soil.* It was tall grass, which hid them. They stand clear of plants over their heads.
+- *A second test.* Odin's runner frees what a test made when it ends, and forming cannot be run twice in one process, so the dwarves' check runs inside the forming test.
+
+**Costs**, on an M-series machine that other agents kept at a load of 5 to 8:
+
+| What | Cost |
+|---|---|
+| A tick of seven dwarves | 0.3 µs with no window; 2.5 µs beside the frame, with the thread's waking |
+| A tick of thirty, and of a hundred | 0.5 µs and 1.0 µs: about 10 ns a dwarf |
+| Reading a chunk's blocks into floors, the first time it is searched or walked | about 3 ms, and 39 KB kept; 8.2 MB for the 210 chunks of the run below |
+| A way across 100 m of forested slope (46°, valley forest), over ground not yet read | 74 to 79 ms, 26 chunks read; each dwarf's own way after it 4 to 5 ms |
+| A way across 570 m of forested slope (27°, laurel forest), over ground not yet read | 371 to 413 ms, 137 chunks read; each dwarf's own way after it 13 to 25 ms |
+| A way back across 600 m, most of it read already | 69 to 87 ms, 23 to 28 chunks read |
+| All the looking for ways in the run below: 7, 30 and 100 dwarves | 32 ways, 0.8 s; 124 ways, 1.7 s; 354 ways, 3.7 s; never more than one dwarf's in a tick after the first |
+| Refusing an order to the open sea | at once: no floor within three steps |
+| Refusing an order to the top of a sea stack 670 m off | 4 ms, 3 chunks read |
+| Choosing the landing at start-up | 20 to 34 ms |
+| The whole run below, 70 minutes of the dwarves' time | 2.0 s with seven, 2.9 s with thirty, 4.9 s with a hundred |
+
+A search stalls the dwarves' world, not the frame: it runs on the hold's thread.
+
+**Frame times**, our own work, the worst frame and the frames over 12.5 ms, `main` at 4649d5b then this branch, alternating, two rounds each. The load was 5 to 8 from other agents, and each build went over once, in a different bench. No difference shows.
+
+| Bench | `main` | This branch |
+|---|---|---|
+| Forest flank | 7.1, 4.5 ms; 0 over | 6.2, 15.1 ms; 0, 1 over |
+| Down through cloud | 3.4, 4.3 ms; 0 over | 3.9, 3.4 ms; 0 over |
+| From above, the cut following the ground | 11.3, 17.4 ms; 0, 2 over | 4.9, 8.5 ms; 0 over |
+| From above over the landing, still, 40 s (`--over=2696,-1760 --span=80 --cut=ground`) | 6.4, 6.0 ms; 0 over | the seven on screen and sent 5 s in: 4.9, 6.3 ms; 0 over. A hundred on screen and sent: 4.5, 8.7 ms; 0 over |
+
+The seven and the boat are 120 of the frame's boxes, a hundred dwarves 1,608; the frame's median work was 0.66 ms with seven and 0.70 ms with a hundred. A search of 80 ms ran on the hold's thread during each of those runs. Beside the frame a tick of seven took 2.9 µs and of a hundred 4.7 µs, the thread's waking in it. Before the merge, on the first-person benches against the parent of that time, three rounds at a load of 8 to 13 gave the same answer.
+
+**Determinism.** The run below printed the same hash every time (`29dcaec9cdfdc6eb`, 39 events), before and after the merge with the view from above, and before and after the dwarves were made to look for their ways in turn. Beside the frame thread, started 95 s in and run live for 230 s, the log was the no-window log line for line, times and all, as far as it went. `./build.sh test` runs the hold twice, once beside a thread that reads it and moves its clock in fits, and compares the logs; `GOLDEN` is unchanged.
+
+**The run**, `build/odincraft --dwarves=4200 --orders=out/orders.txt`, with five orders: to 2620, -1720; to 2300, -1380; to 2760, -1700; to the sea at 2690, -1820; to a sea stack's top at 2239, -2267.
+
+```
+[0:00.0] A boat with seven dwarves stands 60 m off the shore, to the north, and pulls for the landing.
+[0:42.8] The boat grounds at 2702, -1778, on blocks at a mouth.
+[0:46.2] Bramik Tuffelbow, a weaver of 45 years, steps ashore.
+[0:47.7] Jorris Chalkheel, a cook of 29 years, steps ashore.
+[0:49.2] Vesket Chalkback, a woodcutter of 26 years, steps ashore.
+[0:50.7] Yrsa Coalsleeve, a grower of 102 years, steps ashore.
+[0:52.2] Oddum Peatshank, a fisher of 27 years, steps ashore.
+[0:53.7] Esken Tuffheel, a herder of 35 years, steps ashore.
+[0:55.2] Ardet Sootboot, a miner of 27 years, steps ashore.
+[1:40.7] The seven stand on the ground above the landing, and wait for word.
+[2:00.0] The hold says "go 2620 16 -1720": the party is sent to the valley forest a short walk south-west of the landing.
+[4:38.7] Esken Tuffheel is there.
+[4:41.2] Vesket Chalkback is there.
+[4:47.1] Oddum Peatshank is there.
+[5:02.7] Bramik Tuffelbow is there.
+[5:04.2] Jorris Chalkheel is there.
+[5:08.9] Yrsa Coalsleeve is there.
+[5:26.3] Ardet Sootboot is there.
+[5:26.3] All seven stand at the valley forest a short walk south-west of the landing.
+[6:40.0] The hold says "go 2300 76 -1380": the party is sent to the laurel forest a long walk south-west of the landing.
+[27:07.5] Esken Tuffheel is there.
+[27:23.7] Vesket Chalkback is there.
+[27:30.0] Oddum Peatshank is there.
+[27:40.8] Bramik Tuffelbow is there.
+[27:42.9] Jorris Chalkheel is there.
+[27:52.0] Ardet Sootboot is there.
+[27:52.7] Yrsa Coalsleeve is there.
+[27:52.7] All seven stand at the laurel forest a long walk south-west of the landing.
+[35:00.0] The hold says "go 2760 2 -1700": the party is sent to the blocks at a mouth a short walk south-east of the landing.
+[54:39.6] Yrsa Coalsleeve is there.
+[54:45.2] Esken Tuffheel is there.
+[54:46.2] Bramik Tuffelbow is there.
+[54:46.9] Jorris Chalkheel is there.
+[54:51.3] Vesket Chalkback is there.
+[54:55.6] Oddum Peatshank is there.
+[55:50.0] Ardet Sootboot is there.
+[55:50.0] All seven stand at the blocks at a mouth a short walk south-east of the landing.
+[61:40.0] The hold says "go 2690 -39 -1820": there is no ground to stand on within three steps of it, so no one sets out.
+[62:40.0] The hold says "go 2239 19 -2267": no way leads to the bare rock a long walk north-west of the landing: water too deep to wade, or a drop or a rise of more than a block, lies all round it or all round the walker, so no one sets out.
+```
+
+Asked with `--why` where one stands, 1:55 in: "Bramik Tuffelbow, a weaver of 45 years, who spins and weaves. Standing on the ground above the landing, where the party gathers. Waits for word from the hold."
+
+**Pictures**
+
+![The start, from above, 25 s in: the boat with the seven comes in toward the stones of the landing, in the middle of the picture](interesting-world/real/p2-start.jpg)
+
+![The boat under way, 30 s in: seven hooded dwarves, seated](interesting-world/real/p2-boat.jpg)
+
+![The landing from above, a minute in: the seven in file over the stones from the boat, which has grounded at the stream's mouth](interesting-world/real/p2-landing.jpg)
+
+![The same from the ground](interesting-world/real/p2-landing-afoot.jpg)
+
+![The party gathered above the landing, by the trees and clear of the tall grass](interesting-world/real/p2-gathered.jpg)
+
+![The same from above, the world cut over the ground: the wood is stumps and the party stands clear](interesting-world/real/p2-gathered-above.jpg)
+
+![One dwarf up close, on a stone above the stream: hood, beard, tunic, belt, hands and boots, sixteen boxes](interesting-world/real/p2-dwarf.jpg)
+
+**Weak points**
+
+- **Pathless ground is slow, as the trails' cost says.** 570 m with 60 m of climb through young wood and scrub takes the party 21 minutes, five at the clock's fastest. It is what Naismith's rule gives a walker with a load.
+- **Dwarves pass through each other** and through the player. They walk in file because each sets out 0.8 s after the one before, and nothing else keeps them apart. A hundred sent together take 80 s to set out.
+- **A way is the best through the rooms the first search chose**, not the best there is. A cheaper way through rooms off the line is missed.
+- **Ground cut off behind more than 24 rooms costs a full search** (400 chunks, a second or more) before it is refused. The frame does not wait for it, but every dwarf stands still meanwhile.
+- **A dwarf's own way over 600 m costs 13 to 25 ms**, though the ground is read: the second search looks at most of the floors of its rooms. A hundred dwarves sent far cost 2 s of the hold's thread, spread over the 80 s they take to set out.
+- **The hold wades by the land's water, not the simulated water** (`adr/0009`): a dug channel or a drained pool is not seen.
+- **A block placed on a dwarf, or dug from under one that stands, is not noticed** until it is next sent.
+- **The boat stays where it grounded** and seats seven; `--party` puts the rest in the same seats.
+- **The landing is a boulder shore**, because the row's fields are read on 16 m cells and the stream's mouth it liked best is one the floods have laid with blocks. A dwarf climbs them a block at a time.
+- **From above the cut can hide a dwarf**: it stands 3 blocks over the ground under the view's middle, and a dwarf on higher ground at the picture's edge is cut with the hill it stands on.
+- **Selecting and ordering by the pointer were checked with no window only as far as `--cursor --send` goes**: the order from a picked block. The clicks themselves (a right click that is not a drag, a left click on a dwarf) have not been tried by hand.
+- **What a dwarf says is in the terminal and the title**, as there is no text on screen yet (step I-1).
+- **Past about 500 dwarves the boxes run out**: each is sixteen of the 8,192 a frame draws.
+
+**For the interface's design** (`foundations/interface.md`)
+
+- **The card is data**: `hold_card(i)` gives a dwarf's three lines from what the hold last showed, and `hold_count()` how many there are, for the top strip, the list and the hand.
+- **Select, and go to**: `hold_select(i)`, `hold_selected()`, and `hold_where(i)`, where its feet are, for a row or a picture to take the view to. `hold_aimed` says which dwarf a ray from the pointer meets.
+- **Order**: `hold_send(x, y, z)` sends the party to a block; it is what the right click and G call.
+- **Messages are not passed out yet.** The log is the hold's own, printed as it happens. The messages strip (I5) needs its new lines handed to the frame as `Shown` is.
+- **The right button is now two things from above**: held and moved it turns the view, clicked it orders. If the interface gives orders their own tool in the hand, the click can go back to being nothing.

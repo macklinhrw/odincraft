@@ -58,4 +58,8 @@ forming_is_deterministic :: proc(t: ^testing.T) {
 	fmt.printfln("land hashes: start %x, island 1 %x (another thread) %x (this thread)", start, there, here)
 	testing.expect_value(t, here, there)
 	testing.expect_value(t, [2]u64{start, there}, GOLDEN)
+	// The dwarves' world on the start island (hold_test.odin). It runs here because the runner frees
+	// what a test made when the test ends, so one test forms the world for both.
+	bind(home)
+	dwarves_world_is_deterministic(t)
 }

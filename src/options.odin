@@ -61,6 +61,11 @@ import "core:strings"
 //                   with fly, otherwise running on the ground; with over, the view from above
 //                   panned toward its picture's top at `speed` m/s
 //   show            with shot or bench: open the window. Without it they draw unseen and take no focus
+//   dwarves=seconds run the dwarves' world this long with no window and print what happened (hold.odin); alone, exit
+//                   then; with shot or why, the picture or the answer is of that moment; with bench, it runs on from there
+//   orders=file     the orders the dwarves' world obeys, each with its time (hold.odin)
+//   party=N         how many dwarves the boat brings (default 7), to measure what a larger hold costs
+//   send            with cursor, from above: send the dwarves to the block under the pointer, as a right click does
 
 Options :: struct {
 	pos:           [3]f64,
@@ -108,10 +113,14 @@ Options :: struct {
 	cursor_box:    bool,
 	why_cursor:    bool,
 	pace:          int,
+	dwarves:       f64,
+	orders:        string,
+	party:         int,
+	send:          bool,
 	}
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -180,6 +189,10 @@ options :: proc() -> Options {
 		case "survey": o.survey = true
 		case "place": ok = numbers(value, ",", v[:1]); o.place = int(v.x)
 		case "show":  o.show = true
+		case "dwarves": ok = numbers(value, ",", v[:1]); o.dwarves = v.x
+		case "orders": o.orders = value
+		case "send":  o.send = true
+		case "party": ok = numbers(value, ",", v[:1]) && v.x >= 1; o.party = int(v.x)
 		case:         ok = false
 		}
 		if !ok {

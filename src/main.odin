@@ -18,6 +18,9 @@ import sdl "vendor:sdl3"
 //   P                pause the world              Y        why: say in the terminal what the block
 //   [ ]              turn the clock back / forward         under the pointer, or aimed at, is and why
 //   \                save a screenshot
+//   G                send the dwarves to the block under the pointer, or aimed at (hold.odin)
+//   from above: right click sends them there too; left click on a dwarf selects it, and it says who it is
+//   in first person: E selects the dwarf aimed at
 //
 // Controls in first person
 //   click            capture the mouse
@@ -132,13 +135,15 @@ main :: proc() {
 	// begun. A run that exits once the start island is formed forms only that.
 	others := make([dynamic]int)
 	apart :: proc(i: int) -> f64 { return math.hypot(f64(formed[i].island.origin.x - home.island.origin.x), f64(formed[i].island.origin.y - home.island.origin.y)) }
-	if !opt.survey && opt.map_path == "" && !opt.has_why do for _, i in formed do if &formed[i] != home do append(&others, i)
+	if !opt.survey && opt.map_path == "" && !opt.has_why && !hold_alone(&opt) do for _, i in formed do if &formed[i] != home do append(&others, i)
 	slice.sort_by(others[:], proc(a, b: int) -> bool { return apart(a) < apart(b) })
 	soon := 0
 	for soon < len(others) && apart(others[soon]) <= opt.near*1000 do soon += 1
 	early := islands_form(others[:soon], max(os.get_processor_core_count() - 1, 1), .Normal, false)
 	gen_init(home)
 	bind(home)   // the frame thread reads the start island unless it binds another
+	hold_make(&hold, home, opt.orders, opt.party)   // the dwarves and their landing
+	hold_run(&hold, opt.dwarves)
 	if opt.place != 0 {
 		if opt.place < 1 || opt.place > len(places) {
 			fmt.eprintfln("no place %d: the island has %d named places", opt.place, len(places))
@@ -160,6 +165,10 @@ main :: proc() {
 	}
 	if opt.has_why {
 		why_at(opt.why.x, opt.why.y)
+		return
+	}
+	if hold_alone(&opt) {
+		hold_report(&hold)
 		return
 	}
 	islands_done(early, others[:soon])
@@ -208,6 +217,7 @@ main :: proc() {
 	if opt.has_over do a.at, a.yaw = {opt.over.x, 0, opt.over.y}, 0
 	if opt.has_turn do a.yaw = math.to_radians(opt.turn)
 	clock := Clock{speed = 2 if opt.pace == 4 else max(opt.pace - 1, 0), paused = opt.pace == 0}
+	hold_enter(&p, &a, &opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
 	islands_form(others[soon:], 3, .Low, false)
 	hour := opt.hour
 	place := Mat.Stone
@@ -374,6 +384,7 @@ main :: proc() {
 				fmt.print(why_words(w, under.block) if under.ok else "nothing under the pointer\n")
 			}
 		}
+		hold_frame(w, eye, look_dir(p.yaw, p.pitch) if afoot else view_ray(yaw, pitch, fov, aspect, a.pointer), nil if afoot else &a, passed, dt)
 		if aiming && break_block do world_set(w, hit.x, hit.y, hit.z, .Air)
 		if aiming && place_block {
 			// Not inside the player.
@@ -417,6 +428,7 @@ main :: proc() {
 		near := eye if afoot else [3]f64{a.at.x, eye.y, a.at.z}
 		boxes := creatures_pose(near, posed, f32(passed), hour, opt.day, &w.water)
 		for &b in boxes do b.centre += {f32(near.x - eye.x), 0, f32(near.z - eye.z)}
+		boxes = hold_pose(boxes, eye, dt)   // the boat and the dwarves
 		view := View {
 			eye = eye, yaw = yaw, pitch = pitch, hour = hour, day = opt.day, weather = opt.weather, seconds = f32(clock.seconds),
 			target = hit, has_target = aiming, crosshair = shot == "", boxes = boxes,
@@ -445,6 +457,7 @@ main :: proc() {
 				at.x, at.y, at.z, island.island.id, "" if near < 0 else fmt.tprintf("at %s", places[near].name) if far < GATHER else fmt.tprintf("%s %.1f km", places[near].name, far/1000),
 				int(hour), int(hour*60)%60, "paused" if clock.paused else fmt.tprintf("x%.0f", speeds[clock.speed]), view,
 			))
+			if said := hold_said(); said != "" do sdl.SetWindowTitle(window, fmt.ctprint(said))
 			title_at, title_from = seconds, len(intervals)
 		}
 		free_all(context.temp_allocator)
@@ -503,5 +516,6 @@ main :: proc() {
 			}
 		}
 	}
+	hold_leave()
 	world_destroy(w)
 }
