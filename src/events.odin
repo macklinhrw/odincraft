@@ -12,7 +12,7 @@ import "core:time"
 // of the forming (foundations/landforms.md, D4), and it leaves three kinds of feature: its own
 // scar and debris, the lake its debris dams, and the ponds among its hummocks.
 
-Feature_Kind :: enum u8 { Slide, Lake, Pond, Notch, Shelter, Cave, Trail, Ford, Fall, Spring, Stack, Place, Haunt }
+Feature_Kind :: enum u8 { Slide, Lake, Pond, Notch, Shelter, Cave, Trail, Ford, Fall, Spring, Stack, Place, Haunt, Mouth }
 Measure :: struct { what: string, value: f32 }
 Feature :: struct {
 	kind:     Feature_Kind,
@@ -332,6 +332,11 @@ feature_words :: proc(x, z: f64, h: f32) {
 		c := land_cell(f.at.x, f.at.y)
 		fmt.printfln("by a spring %.0f m off: rain soaking down through %v comes out where it meets %v, which holds it, and %.2f km² of land above feed it %.4f m³/s; a brook starts here.",
 			math.hypot(x - f.at.x, z - f.at.y), rock_in(f.level + 3, grid_under(land.grid, c), ROCK_SIM), rock_in(f.level - 2, grid_under(land.grid, c), ROCK_SIM), f.measured[0].value, f.size)
+	}
+	if f, _ := fan_at(x, z); f != nil {
+		grade := f.measured[1].value
+		fmt.printfln("on what a stream lays at its mouth, %.0f m off: it drains %.2f km² and falls 1 in %.0f over its last 300 m to the sea, so its floods bring %s (Yamamoto's segments of Japan's rivers); its shore is %.2f open to the swell.",
+			math.hypot(x - f.at.x, z - f.at.y), f.measured[0].value, 1/max(grade, 1e-4), "blocks too large for the waves to move" if grade > BLOCKS_GRADE else "gravel" if grade > SAND_GRADE else "sand and silt", f.measured[2].value)
 	}
 	if !in_slide(x, z) do return
 	s := region.features[landslide.feature]

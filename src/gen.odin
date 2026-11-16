@@ -460,6 +460,7 @@ ground :: proc(x, z, cell: f64) -> (g: Ground) {
 	h = max(h, bank)
 	gravel: bool
 	g.h, gravel, g.water = river_cut(h, x, z, cell)
+	if g.water == NO_WATER && cell <= 2 do if bed, level, ok := marsh_pool(x, z); ok && bed < g.h do g.h, g.water = bed, level
 	if inside {
 		g.h, gravel = min(g.h, h), false
 		if g.h < lake do g.h, g.water = max(g.h, lake - 1) if cell > 1 else g.h, lake   // far off, a lake's bed is drawn flat under it, so its cells do not show through
@@ -467,6 +468,15 @@ ground :: proc(x, z, cell: f64) -> (g: Ground) {
 	g.steep = steep*l.rise
 	if g.laid > 0 do g.cover = MATERIALS[rock_in(g.h - g.laid - 0.5, under, rock_level(cell))].loose
 	if gravel do g.cover = .Gravel
+	// At the mouth of a short steep stream, the blocks its floods rolled there, as large as its rock
+	// breaks and the thickest nearest the mouth, with cobbles of its rock between them.
+	if f, near := fan_at(x, z); f != nil && f.measured[1].value > BLOCKS_GRADE && g.h > -3 && g.h < 4 && land_at(land.inland, land.n, x, z) < 40 {
+		rock := mouth_rock(f^)
+		g.cover = FORMS[rock].gravel if FORMS[rock].gravel != .Air else .Gravel
+		if cell <= 2 do if b := stones(x, z, 0.55*near*smoothstep(BLOCKS_GRADE, 3*BLOCKS_GRADE, f.measured[1].value), clamp(0.4*MATERIALS[rock].crack, 0.8, 1.8)); b > 0 {
+			g.h, g.laid, g.cover = g.h + b, g.laid + b, MATERIALS[rock].loose if MATERIALS[rock].loose != .Air else rock
+		}
+	}
 	if t, rubble := stack_at(x, z, cell, g.h, under); t > g.h {   // a stack is bare rock to its top
 		if rubble do g.laid, g.cover = g.laid + t - g.h, MATERIALS[rock_in(g.h - 0.5, under, rock_level(cell))].loose
 		else do g.steep = 3
@@ -540,6 +550,30 @@ stones :: proc(x, z: f64, chance, size: f32) -> (h: f32) {
 	return
 }
 
+// Open water in a reed marsh, where the ground dips under the water standing in it (over_water,
+// plants.odin): on a 12 m grid, in each square with this chance, a pool about this wide, its water
+// level with the water in the ground at its middle, which must lie far enough under the ground round
+// it to hold it. Their shapes are a guess; the water's level is the land's.
+POOLS :: 0.55
+marsh_pool :: proc(x, z: f64) -> (bed, level: f32, ok: bool) {
+	if len(land.community) == 0 || land.community[land_cell(x, z)] != u8(Community_Kind.Marsh) do return
+	gx, gz := i32(math.floor(x/12)), i32(math.floor(z/12))
+	for j in gz - 1..=gz + 1 do for i in gx - 1..=gx + 1 {
+		r := hash(i, j, seed + 760)
+		if f32(r & 0xFF)/255 >= POOLS do continue
+		cx, cz := f64(i)*12 + 12*f64((r >> 8) & 0xFF)/255, f64(j)*12 + 12*f64((r >> 16) & 0xFF)/255
+		if land.community[land_cell(cx, cz)] != u8(Community_Kind.Marsh) do continue
+		above := land_at(land.table, land.n, cx, cz)
+		if above < 0.25 || above > 1.2 do continue
+		rad := 3 + 5*f32(r >> 24)/255
+		q := f32((x - cx)*(x - cx) + (z - cz)*(z - cz))/(rad*rad)*(1 + 0.4*fbm(x, z, 6, 1, 2, seed + 761))
+		if q >= 1 do continue
+		w := land_at(land.z[0], land.n, cx, cz) - above
+		if !ok || w > level do bed, level, ok = w - 0.25 - 0.6*(1 - q), w, true
+	}
+	return
+}
+
 height_at :: proc(x, z, cell: f64) -> f32 {
 	return ground(x, z, cell).h
 }
@@ -557,6 +591,10 @@ Surface :: struct {
 
 SURFACES := [?]Surface{
 	{"river gravel", "a river lays gravel on its bars and its bed", .Gravel, {{.Gravel, 0, ANY, 0}}},
+	// What a stream lays where it meets the sea (mouths_make, rivers.odin), before what the waves make of the shore.
+	{"blocks at a mouth", "the floods of a short steep stream roll blocks down to its mouth, too large for the waves to move, with cobbles between them", .Air, {{.Fan, 0, ANY, 0}, {.Grade, BLOCKS_GRADE, ANY, 0}, {.Height, -3, 4, 0}, {.Inland, -ANY, 40, 0}}},
+	{"gravel at a mouth", "a stream falling between 1 in 60 and 1 in 400 to the sea lays its gravel where it meets it", .Gravel, {{.Fan, 0.5, ANY, 0}, {.Grade, SAND_GRADE, BLOCKS_GRADE, 0}, {.Height, -1.5, 1.5, 0}, {.Inland, -ANY, 24, 0}}},
+	{"tidal mud", "the silt a stream carries settles where the bay is sheltered, a flat of mud at the water's edge", .Silt, {{.Fan, 0, ANY, 0}, {.Surf, -ANY, SHELTER, 0}, {.Slope, -ANY, 0.05, 0}, {.Height, -1.5, 0.6, 0}}},
 	{"sand", "the waves keep the sand the rivers bring where the shore is sheltered enough", .Sand, {{.Beach, 0.3, ANY, 0}, {.Sand_Kept, 0, ANY, 0}}},
 	{"boulders", "the swell breaks on this shore and leaves only stones too large for it to move", .Air, {{.Beach, 0.3, ANY, 0}, {.Surf, 0.25, ANY, 0}}},
 	{"shingle", "the waves round the stones the shore gives them and throw them up in a bank", .Shingle, {{.Beach, 0.3, ANY, 0}}},

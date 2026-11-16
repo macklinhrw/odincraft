@@ -189,6 +189,7 @@ rivers_trace :: proc() {
 		if len(points) >= 2 do reach_build(points[:], u32(c))
 	}
 	lakes_draw()
+	mouths_make()
 	heights, tallest := [4]int{}, -1
 	for f, i in region.features do if f.kind == .Fall {
 		h := f.measured[0].value
@@ -568,4 +569,82 @@ spray :: proc(out: ^[dynamic]Box, e: [3]f64, clock: f64) {
 			append(out, Box{{f32(f64(p.x) - e.x), f32(f64(y) - e.y), f32(f64(p.y) - e.z)}, WHITE, {size, 0, 0}, WHITE, {0, size, 0}, 0, {0, 0, size}, 0})
 		}
 	}
+}
+
+// River mouths (foundations/water.md, section 4: mouths by kind). What a stream brings to the sea is
+// as coarse as its bed is steep where it ends. Japan's rivers lay blocks of every size where they fall
+// more than 1 in 60, gravel down to 1 in 400, sand down to 1 in 5,000 and silt below that (Yamamoto's
+// segments, 1994, as the Ministry of Land, Infrastructure, Transport and Tourism gives them); on
+// Yakushima's south coast short steep streams roll blocks of granite to the very mouth and the beach
+// beside it, while longer ones leave theirs on the way down (Shimazu, JpGU 2022 and 2023). Each mouth
+// is a feature, measured by its last MOUTH_RUN metres down to the sea, and the ground round it is its
+// fan, out to a reach that grows with the root of the land it drains: what the stream lays there is
+// read by the rows of SURFACES (the fields fan and grade).
+BLOCKS_GRADE :: 1.0/60
+SAND_GRADE   :: 1.0/400
+MOUTH_RUN    :: 300
+FAN          :: [2]f32{30, 200}   // metres a fan reaches, and more for each root of a km² drained (a guess)
+
+mouths_make :: proc() {
+	g := land.grid
+	n := g.n
+	// Down each stream: the mouth it reaches, how far off, and the farthest point of its main stem (the
+	// cells draining at least half what its mouth does) within MOUTH_RUN of it.
+	mouth, run := make([]i32, n*n, context.temp_allocator), make([]f32, n*n, context.temp_allocator)
+	far, top := make([]f32, n*n, context.temp_allocator), make([]f32, n*n, context.temp_allocator)
+	for ci in g.order {
+		c, r := int(ci), int(g.next[ci])
+		mouth[c] = i32(c) if r == -1 else mouth[r] if r >= 0 else -1
+		if mouth[c] < 0 do continue
+		if r >= 0 do run[c] = run[r] + span(g, c, r)
+		m := int(mouth[c])
+		if run[c] <= MOUTH_RUN && g.area[c] >= g.area[m]/2 && run[c] >= far[m] do far[m], top[m] = run[c], g.z[c]
+	}
+	delete(land.mouth)
+	land.mouth = make([]u16, n*n)
+	near := make([]f32, n*n, context.temp_allocator)
+	kinds, largest: [3]int   // how many of each grade of load, and the largest of each
+	largest = -1
+	for ci in g.order do if g.next[ci] == -1 && g.area[ci] >= HEAD_AREA && land.lake[ci] == 0 {
+		c := int(ci)
+		grade := max(top[c], 0)/(far[c] + g.d/2)   // the fall to the sea, from the middle of its last cell
+		reach := FAN[0] + FAN[1]*math.sqrt(g.area[c]/1e6)
+		at := middle_of(g, c)
+		append(&region.features, Feature{kind = .Mouth, at = at, reach = reach, size = discharge(g.area[c]), cause = -1,
+			measured = {{"km² draining to it", g.area[c]/1e6}, {"its fall in a metre over its last 300 m", grade}, {"how open its shore is to the swell", land.swell[c]}}})
+		k := 0 if grade > BLOCKS_GRADE else 1 if grade > SAND_GRADE else 2
+		kinds[k] += 1
+		if largest[k] < 0 || g.area[c] > region.features[largest[k]].measured[0].value*1e6 do largest[k] = len(region.features) - 1
+		r := int(reach/g.d) + 1
+		for y in max(c/n - r, 0)..=min(c/n + r, n - 1) do for x in max(c%n - r, 0)..=min(c%n + r, n - 1) {
+			k := y*n + x
+			if d := 1 - f32(math.hypot(middle_of(g, k).x - at.x, middle_of(g, k).y - at.y))/reach; d > near[k] do near[k], land.mouth[k] = d, u16(len(region.features))
+		}
+	}
+	fmt.printf("mouths: %d streams reach the sea; %d falling more than 1 in 60 over their last 300 m bring blocks, %d gravel, %d sand and silt", kinds[0] + kinds[1] + kinds[2], kinds[0], kinds[1], kinds[2])
+	LOADS := [3]string{"bringing blocks", "bringing gravel", "bringing sand"}
+	for f, k in largest do if f >= 0 {
+		m := region.features[f]
+		fmt.printf("; the largest %s at %.0f, %.0f, draining %.2f km²", LOADS[k], m.at.x + f64(region.origin.x), m.at.y + f64(region.origin.y), m.measured[0].value)
+	}
+	fmt.println()
+}
+
+// The rock a stream's blocks and gravel are of: the rock upstream, where that was read, or else the
+// strongest bed in the 40 m it cuts down through at its mouth, since a weak one breaks to sand.
+mouth_rock :: proc(f: Feature) -> (m: Mat) {
+	c := land_cell(f.at.x, f.at.y)
+	if len(land.pebble) > 0 && land.pebble[c] != .Air do return land.pebble[c]
+	for d := f32(0.5); d < 40; d += 4 {
+		if k := rock_in(land.grid.z[c] - d, grid_under(land.grid, c), ROCK_SIM); d == 0.5 || MATERIALS[k].strength > MATERIALS[m].strength do m = k
+	}
+	return
+}
+
+// The stream mouth whose fan a point lies on, if any, and how near its mouth: 1 there, 0 at the fan's edge.
+fan_at :: proc(x, z: f64) -> (f: ^Feature, near: f32) {
+	k := land.mouth[land_cell(x, z)]
+	if k == 0 do return nil, 0
+	f = &region.features[k - 1]
+	return f, max(1 - f32(math.hypot(x - f.at.x, z - f.at.y))/f.reach, 0)
 }
