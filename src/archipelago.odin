@@ -57,6 +57,7 @@ World_Frame :: struct {
 	start:  [2]f32,   // km east and south of the known world's middle: the start island's middle,
 	origin: [2]f64,   // which lies here in the game's world, metres
 	wind:   f64,      // the bearing every island's swell and wind come from, degrees from north
+	latitude: f32,    // degrees north the start truly stands at, which the climate's latitude is stretched about (climate.odin)
 }
 world_frame: World_Frame
 
@@ -305,6 +306,7 @@ archipelago_make :: proc(say := false, forced := -1) {
 	fmt.printfln("near the start: %d islands (%s), off land whose coast is %.0f km away; this one, %s, %.1f km across, stands on the %s, %s, where its kind's host holds %.2f; the wind from %.0f°",
 		len(archipelago), strings.to_string(names), ashore/1000, KINDS[archipelago[0].kind].name, archipelago[0].size/1000, SETTINGS[archipelago[0].setting], fmt.tprintf("%.0f km from the volcanic front", w.front) if w.front < 1e3 else "with no volcanic front within reach", holds(archipelago[0].kind, o), world_frame.wind)
 	lat := math.to_degrees(math.asin(linalg.normalize(known.centre + (world_frame.start.x*known.east - world_frame.start.y*known.north)/PLANET).z))
+	world_frame.latitude = lat
 	fmt.printfln("the known world: 1,000 km at %.1f° N, read from the plates' history%s; the start %.0f km east and %.0f km south of its middle, at %.1f° N",
 		math.to_degrees(math.asin(known.centre.z)), fmt.tprintf(", which ran in %.2f s (its regional history %.2f s of it)", known.took, known.regional_took) if known.took > 0 else ", kept from an earlier run", world_frame.start.x, world_frame.start.y, lat)
 }

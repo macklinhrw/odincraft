@@ -12,6 +12,8 @@ Field :: enum u8 {
 	// on the land's 16 m grid
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
 	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge, Surf, Sand_Kept, Washed, Canopy, Lift, Barrier,
+	// from the island's climate (climate.odin)
+	Temperature, Warmth, Rain, Dryness, Zone,
 	// from the world's plates at the point's place in the world (archipelago.odin)
 	Setting, Front, Trench, Track, Age, Rising, Depth, Crust, Offshore, Across, Vent,
 	// from the ground the generator makes at the point
@@ -42,7 +44,7 @@ Field_Info :: struct {
 	name, unit, from: string,   // `from` reads after the value: "0.4 m under the line the waves..."
 	at:      proc(p: ^Point) -> f32,
 	lo, hi:  f32,               // the span the map paints from one colour to the other; also the scale of a near miss
-	paint:   enum u8 { Ramp, Log, Kinds, Wheel, Soils, Plants },   // Log: lo and hi are powers of ten; Kinds: a material; Wheel: a bearing, grey where flat; Soils, Plants: a row's colour
+	paint:   enum u8 { Ramp, Log, Kinds, Wheel, Soils, Plants, Zones },   // Log: lo and hi are powers of ten; Kinds: a material; Wheel: a bearing, grey where flat; Soils, Plants, Zones: a row's colour
 	from_colour, to_colour: [3]f32,
 }
 
@@ -85,6 +87,11 @@ FIELDS := [Field]Field_Info{
 	.Canopy    = {"canopy", "", "share of the sky the stand's crowns hide from the ground: little in the open and in a fresh gap, nearly all under a closed wood", proc(p: ^Point) -> f32 { return canopy_at(p.x, p.z) }, 0, 1, .Ramp, {0.95, 0.90, 0.60}, {0.05, 0.25, 0.08}},
 	.Lift      = {"lift", " m/s", "the wind of 8 m/s off the sea is turned upward by the ground facing it, which a soaring bird rides: the wind's speed times the sine of the slope times the cosine between the way the ground faces and the way the wind comes from", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); s := land.slope[c]; return SKY.wind*s/math.sqrt(1 + s*s)*math.cos(math.to_radians(land.facing[c] - f32(region.shape.swell))) if !land.grid.sea[c] else 0 }, 0, 3, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
 	.Barrier   = {"barrier", " m", "the tallest fall between the stream the ground drains to and the sea, which a fish coming up from the sea must get past; 10,000 where no stream reaches the sea", proc(p: ^Point) -> f32 { return fauna.barrier[land_cell(p.x, p.z)] }, 0, 50, .Ramp, {0.10, 0.35, 0.80}, {0.85, 0.20, 0.10}},
+	.Temperature = {"temperature", " °C", "the year's mean in the air: the island's at the sea's level, less 0.65 °C for every 100 m up", proc(p: ^Point) -> f32 { return temperature_at(p) }, 8, 24, .Ramp, {0.20, 0.35, 0.85}, {0.95, 0.40, 0.15}},
+	.Warmth    = {"warmth", " °C·months", "Kira's warmth index: the sum over the months of each month's mean above 5 °C; the evergreen wood holds from 85 to 180", proc(p: ^Point) -> f32 { return warmth(temperature_at(p), region.climate.swing) }, 45, 220, .Ramp, {0.20, 0.35, 0.85}, {0.95, 0.40, 0.15}},
+	.Rain      = {"rain", " mm", "a year: the sea's, more on high ground and on ground rising into the wind, less in its lee", proc(p: ^Point) -> f32 { return rain_at(p) }, 1000, 6000, .Ramp, {0.98, 0.95, 0.78}, {0.05, 0.12, 0.55}},
+	.Dryness   = {"dryness", "", "Holdridge's ratio of the water the year's warmth could draw from the ground to the rain: under 0.25 rain forest, to 0.5 wet forest, to 1 moist, to 2 dry forest", proc(p: ^Point) -> f32 { return dryness(temperature_at(p), region.climate.swing, rain_at(p)) }, 0.1, 1.2, .Ramp, {0.05, 0.25, 0.60}, {0.95, 0.80, 0.40}},
+	.Zone      = {"zone", "", "the climate zone (ZONES)", proc(p: ^Point) -> f32 { return f32(zone_at(p)) }, 0, 0, .Zones, {}, {}},
 	.Setting   = {"setting", "", "where the plates put the point: 0 open sea, 1 a hotspot's track, 2 forearc, 3 the arc's volcanic front, 4 back-arc, 5 shelf, 6 the continent", proc(p: ^Point) -> f32 { return f32(world_point(p).setting) }, 0, 5, .Ramp, {0.10, 0.20, 0.50}, {0.95, 0.80, 0.30}},
 	.Front     = {"front", " km", "from the arc's volcanic front, where its young volcanoes stand", proc(p: ^Point) -> f32 { return world_point(p).front }, 0, 60, .Ramp, {0.85, 0.20, 0.10}, {0.95, 0.95, 0.90}},
 	.Trench    = {"trench", " km", "from the trench where one plate goes down under the other, back on the plate riding over it; under 0, out on the plate going down", proc(p: ^Point) -> f32 { return world_point(p).trench }, -50, 100, .Ramp, {0.10, 0.20, 0.50}, {0.95, 0.95, 0.90}},
@@ -122,7 +129,10 @@ score :: proc(w: Window, v: f32) -> f32 {
 
 host :: proc(windows: []Window, p: ^Point) -> (s: f32) {
 	s = 1
-	for w in windows do s *= score(w, FIELDS[w.field].at(p))
+	for w in windows {
+		s *= score(w, FIELDS[w.field].at(p))
+		if s == 0 do return   // the fields after it need not be read
+	}
 	return
 }
 
@@ -245,6 +255,7 @@ why_at :: proc(wx, wz: f64) {
 	fmt.println()
 	plant_words(&p, m, plants)
 	fmt.printfln("the soil is %s, %.1f m deep (%s), %s: under the cover %v, then %v down to %v and the rock", soil.name, depth, FIELDS[.Soil_Depth].from, soil.why, soil.top, soil.sub, soil.foot)
+	climate_words(&p)
 	feature_words(x, z, p.h)
 	hollow_words(x, z)
 	stack_words(x, z)

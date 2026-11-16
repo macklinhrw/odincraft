@@ -4,7 +4,7 @@ This is a map for someone opening the code for the first time. The design reason
 
 ## Shape of the program
 
-`src/` is a single Odin package (about 13,200 lines including `shaders.metal`). The one executable does two jobs:
+`src/` is a single Odin package (about 13,600 lines including `shaders.metal`). The one executable does two jobs:
 
 1. **The game.** It reads the known world from the plate history, forms the islands near the start, opens a window, streams chunks around the camera and simulates water near the player.
 2. **Offline tools behind flags.** These print or draw what the generator made, then exit: `--map`, `--archipelago`, `--known`, `--why`, `--survey`, `--plates`, `--plates-why`. They share every line of the generator with the game, which is the point. A picture or an explanation of the land is always the land the game would show.
@@ -18,6 +18,7 @@ Everything random is keyed from one seed through `hash`/`hash01` (`gen.odin`). T
 | Entry | `main.odin`, `options.odin` | Start-up order, the frame loop, input, `--bench` report; command-line parsing |
 | World layout | `known.odin`, `archipelago.odin`, `arrivals.odin`, `regions.odin` | The known world, resampled every 2 km from the regional history and kept in `build/worlds/` with how fast each place rose over its last 4 Myr; the archipelago as records (`Island`: origin, size, kind, seed) read from it, the start among them, and each island's `Record`; which animals reached which island; `Formed`, the per-island record, and `bind`, which points a thread's subsystem names at one island |
 | Land forming | `rock.odin`, `land.odin`, `erosion.odin` | Rock as a function of position: each island's story (`STORIES`), read from its setting, its beds, faults, dikes, plugs, plutons and any cover; island *kinds* (`KINDS`) and the coarse-to-fine forming driver (`land_form`); the grid simulation (priority-flood routing, uplift, stream-power erosion, creep, coast and coral reef, refine) |
+| Climate | `climate.odin` | Each island's climate: the latitude it follows (the known world's 1,000 km stand for 30°, stretched about the start's own), its year's mean, swing and the sea's rain fitted to Japan's island stations, rain carried on the one wind over its land, and the climate zones as rows over warmth and dryness |
 | Water features | `rivers.odin`, `events.odin` | Rivers traced from the simulated drainage and cut by design ([ADR 0003](docs/adr/0003-rivers-are-traced-from-the-simulation-and-cut-by-design.md)); events and the features they leave (landslide, lakes, ponds, sea notches, shelters, caves, falls, springs, stacks) |
 | Living things | `fields.odin`, `communities.odin`, `trees.odin`, `plants.odin`, `trails.odin`, `creatures.odin`, `places.odin` | The named fields every rule is written in; soil and plant communities; tree species, stands and the tree grower; ground plants; deer trails and fords; birds and fish posed from the clock; landmarks and their names |
 | Query surface | `gen.odin` | Materials (`Mat`, 16 bits) and their traits, noise, and the generator's answers: `ground`, `surface_at`, `gen_columns`, `gen_volume`. **Everything the engine knows about the world comes through here.** |
@@ -38,7 +39,7 @@ flowchart LR
   arch --> Fn["Formed: other islands<br/>(parallel; nearest first)"]
   subgraph forming ["gen_init, per island, any thread"]
     direction TB
-    rock[rock_init] --> land["land_form<br/>64→32→16 m grids"]
+    rock["climate_init, rock_init"] --> land["land_form<br/>64→32→16 m grids,<br/>then its local fields and rain"]
     land --> rivers[rivers_trace]
     rivers --> plants["plants_init<br/>soil + communities"]
     plants --> hollows["hollows_make<br/>notches, shelters, caves"]
