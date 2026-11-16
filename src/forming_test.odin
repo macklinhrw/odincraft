@@ -62,4 +62,7 @@ forming_is_deterministic :: proc(t: ^testing.T) {
 	// what a test made when the test ends, so one test forms the world for both.
 	bind(home)
 	dwarves_world_is_deterministic(t)
+	// And the play screen over it (play_test.odin), for the same reason.
+	bind(home)
+	the_play_screen_says_what_is_so(t)
 }

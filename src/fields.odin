@@ -198,10 +198,17 @@ edges :: proc(windows: []Window, p: ^Point) -> (near: [2]string, by: f32) {
 	return near, m[0]
 }
 
+// Where a part of what why_at says begins, for a card that shows each part under its own tab
+// (hand.odin): a mark in what is heard, and nothing in what is printed.
+why_part :: proc(d: Depth) {
+	if hearing != nil && hearing_parts do fmt.sbprintf(hearing, "\x1f%d", int(d))
+}
+
 // What the ground is at a point in the world and why, as `--why=x,z` prints it.
 why_at :: proc(wx, wz: f64) {
 	x, z := math.floor(wx) - f64(region.origin.x) + 0.5, math.floor(wz) - f64(region.origin.y) + 0.5
 	p := point_at(x, z, 1)
+	why_part(.Ground)
 	fmt.printfln("at %.0f, %.0f: ground %.1f m over the sea, %.0f° steep, falling toward %.0f°, wetness %.2f", wx, wz, p.h, math.to_degrees(math.atan(p.steep)), FIELDS[.Facing].at(&p), FIELDS[.Wetness].at(&p))
 	win := surface_row(&p)
 	_, m, plants := surface_at(x, z, 1)
@@ -226,6 +233,7 @@ why_at :: proc(wx, wz: f64) {
 	if miss >= 0 do fmt.printfln("nearest miss: %s, ruled out because %s", SURFACES[miss].name, miss_words)
 
 	// The plants: the race on the cell this point reads, its runner-up, and what held that back.
+	why_part(.Plants)
 	k, cell := community_at(x, z, 1)
 	q := Point{x = (f64(cell%land.n) + 0.5)*LAND_CELL - region.size/2, z = (f64(cell/land.n) + 0.5)*LAND_CELL - region.size/2, cell = LAND_CELL}
 	first, second, score := race(&q)
@@ -262,16 +270,22 @@ why_at :: proc(wx, wz: f64) {
 	soil := SOILS[row]
 	fmt.println()
 	plant_words(&p, m, plants)
+	why_part(.Ground)
 	fmt.printfln("the soil is %s, %.1f m deep (%s), %s: under the cover %v, then %v down to %v and the rock", soil.name, depth, FIELDS[.Soil_Depth].from, soil.why, soil.top, soil.sub, soil.foot)
+	why_part(.World)
 	climate_words(&p)
+	why_part(.Near)
 	feature_words(x, z, p.h)
 	hollow_words(x, z)
 	stack_words(x, z)
+	why_part(.Rock)
 	rock_words(x, z, f64(p.h))
 	story_words()
+	why_part(.Near)
 	trail_words(x, z)
 	named_words(x, z)
 	creature_words(x, z)
+	why_part(.World)
 	arrivals_why()
 	plates_words()
 	hold_words(x, z)

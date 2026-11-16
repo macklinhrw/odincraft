@@ -12,12 +12,14 @@ import sdl "vendor:sdl3"
 //
 // The game begins in the view from above, whose own controls are in above.odin. Tab goes down to
 // first person at the place under the view's middle, and back up from where the player stands.
+// The interface is laid over both (play.odin): every event goes to it first, and the keys that do
+// what a button does are its rows (BINDS), so each is written on its button.
 //
 // Controls in either view
-//   Tab              walk / the view from above   Esc      put down the mouse, a mark, then the game
-//   P                pause the world              Y        why: say in the terminal what the block
-//   [ ]              turn the clock back / forward         under the pointer, or aimed at, is and why
-//   \                save a screenshot
+//   Tab              walk / the view from above   Esc      close the topmost thing; then the menu
+//   P                pause the world              Y        why: take what is under the pointer, or
+//   [ ]              turn the clock back / forward         aimed at, in the hand, which says what it is
+//   \                save a screenshot            F4       the list of places
 //   G                send the dwarves to the block under the pointer, or aimed at (hold.odin)
 //   from above: right click sends them there too; left click on a dwarf selects it, and it says who it is
 //   in first person: E selects the dwarf aimed at
@@ -229,10 +231,13 @@ main :: proc() {
 	start := p.pos if afoot else a.at
 	intervals: [dynamic]f32   // seconds between frames
 	work: [dynamic]f32        // seconds of our own work per frame: everything but the wait for the display
+	listing: [dynamic]f32     // and of them, seconds listing the interface's parts and making its rectangles
 	drawn: [dynamic][4]int    // faces, ground plants, creatures' boxes and quads of water drawn each frame
 	idle_frames, title_from := 0, 0
 
 	running := true
+	play_begin(&opt, &a, &clock, w, &p, &afoot, &captured, &running, window, unseen)
+	if opt.row > 0 && opt.row <= len(home.places) do place_take(home.places[opt.row - 1].c)
 	for running {
 		now := sdl.GetPerformanceCounter()
 		dt := f64(now - last)/frequency
@@ -246,52 +251,27 @@ main :: proc() {
 		sdl.GetWindowSizeInPixels(window, &pw, &ph)
 		sdl.GetWindowSize(window, &points.x, &points.y)
 		aspect := f32(pw)/f32(max(ph, 1))
+		play.ratio, play.aspect = f32(pw)/f32(max(points.x, 1)), aspect
 
 		break_block, place_block := false, false
-		why := false
 		shot := ""
 		e: sdl.Event
 		for sdl.PollEvent(&e) {
+			if play_event(&e) do continue   // the interface's: a key that is one of its rows, or the pointer on a panel
 			#partial switch e.type {
 			case .QUIT:
 				running = false
 			case .KEY_DOWN:
-				level := !afoot && (e.key.scancode == .R || e.key.scancode == .F)   // held, the cut's level goes on moving
-				if e.key.repeat && !level do continue
+				if e.key.repeat do continue
 				#partial switch e.key.scancode {
-				case .ESCAPE:   // puts down the topmost thing: the mouse, a mark, then the game
-					if captured {
-						captured = false
-						_ = sdl.SetWindowRelativeMouseMode(window, false)
-					} else if !afoot && a.marked {
-						mark_clear(&a)
-					} else {
-						running = false
-					}
-				case .TAB:
-					afoot = !afoot
-					captured = afoot
-					_ = sdl.SetWindowRelativeMouseMode(window, afoot)
-					if afoot do walk_down(&a, w, &p, aspect)
-					else do walk_up(&a, &p)
-				case .P:      clock.paused = !clock.paused
-				case .Y:      why = true
 				case .BACKSLASH:
 					os.make_directory("screenshots")
 					shot = fmt.tprintf("screenshots/%d.png", sdl.GetTicksNS()/1e6)
+					tell(fmt.tprintf("A picture of this was saved as %s.", shot))
 				case .F:
 					if afoot do p.fly, p.vel = !p.fly, 0
-					else do cut_move(&a, -8 if e.key.mod & sdl.KMOD_SHIFT != {} else -1)
-				case .R:
-					if !afoot do cut_move(&a, 8 if e.key.mod & sdl.KMOD_SHIFT != {} else 1)
 				case ._1..=._6:
-					n := int(e.key.scancode) - int(sdl.Scancode._1)
-					if afoot do place = Mat(n + int(Mat.Grass))
-					else if n < len(SPEEDS) do clock.speed, clock.paused = n, false
-				case .SPACE:  if !afoot do clock.paused = !clock.paused
-				case .C:      if !afoot do cut_set(&a, !a.cut)
-				case .H:      if !afoot do cut_follow(&a, !a.follow)
-				case .V:      if !afoot do a.bare = !a.bare
+					if afoot do place = Mat(int(e.key.scancode) - int(sdl.Scancode._1) + int(Mat.Grass))
 				}
 			case .MOUSE_BUTTON_DOWN:
 				if !afoot {
@@ -303,20 +283,14 @@ main :: proc() {
 					break_block = e.button.button == sdl.BUTTON_LEFT
 					place_block = e.button.button == sdl.BUTTON_RIGHT
 				}
-			case .MOUSE_BUTTON_UP:
-				if !afoot && e.button.button == sdl.BUTTON_LEFT && a.marking {
-					mark_end(&a)
-					lo, hi, blocks, _ := mark_box(&a)
-					fmt.printfln("marked %d, %d, %d to %d, %d, %d: %d blocks", lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, blocks)
-				}
 			case .MOUSE_MOTION:
 				if afoot && captured {
 					p.yaw += e.motion.xrel*0.0022
 					p.pitch = clamp(p.pitch - e.motion.yrel*0.0022, -1.55, 1.55)
-				} else if !afoot && a.shown && e.motion.state & sdl.BUTTON_RMASK != {} {   // dragged with the right button, the view turns and tilts
+				} else if !afoot && play.owner == .World && e.motion.state & sdl.BUTTON_RMASK != {} {   // dragged with the right button, the view turns and tilts; a drag begun on the world is the world's wherever it goes
 					a.yaw -= e.motion.xrel*0.005
 					a.tilt = clamp(a.tilt + e.motion.yrel*0.005, TILT_MIN, math.PI/2)
-				} else if !afoot && a.shown && e.motion.state & sdl.BUTTON_MMASK != {} {   // with the middle one, the ground is dragged under the pointer
+				} else if !afoot && play.owner == .World && e.motion.state & sdl.BUTTON_MMASK != {} {   // with the middle one, the ground is dragged under the pointer
 					per := a.span/f64(max(points.x, 1))   // metres of ground to a point of the window, at the view's middle
 					a.at.xz -= ([2]f64{f64(math.cos(a.yaw)), f64(math.sin(a.yaw))}*f64(e.motion.xrel) - [2]f64{f64(math.sin(a.yaw)), f64(-math.cos(a.yaw))}*f64(e.motion.yrel)/f64(math.sin(a.tilt)))*per
 				}
@@ -326,7 +300,7 @@ main :: proc() {
 		}
 
 		keys := sdl.GetKeyboardState(nil)
-		down :: proc(keys: [^]bool, s: sdl.Scancode) -> f32 { return 1 if keys[int(s)] else 0 }
+		down :: proc(keys: [^]bool, s: sdl.Scancode) -> f32 { return 1 if keys[int(s)] && !typing && !play.menu else 0 }   // not while a field is typed in, or the menu is open
 		wish := [3]f32{down(keys, .D) - down(keys, .A), down(keys, .SPACE) - down(keys, .LCTRL), down(keys, .W) - down(keys, .S)}
 		hour = math.mod(hour + (down(keys, .RIGHTBRACKET) - down(keys, .LEFTBRACKET))*f32(dt)*3 + 24, 24)
 
@@ -351,7 +325,7 @@ main :: proc() {
 			eye, pitch, centre = above_camera(&a, aspect)
 			yaw, fov = a.yaw, ABOVE_FOV
 		}
-		passed := clock_step(&clock, dt)   // the world's time this frame
+		passed := clock_step(&clock, 0 if play.menu else dt)   // the world's time this frame: none while the menu is open
 		world_update(w, g.dev, centre)
 		water_update(&w.water, g.dev, passed)
 
@@ -361,7 +335,7 @@ main :: proc() {
 		aiming: bool
 		if afoot {
 			hit, before, aiming = raycast(w, eye, look_dir(p.yaw, p.pitch))
-			if why do fmt.print(why_words(w, hit if aiming else {i32(math.floor(p.pos.x)), i32(math.floor(p.pos.y)) - 1, i32(math.floor(p.pos.z))}))
+			play.aim = {block = hit if aiming else {i32(math.floor(p.pos.x)), i32(math.floor(p.pos.y)) - 1, i32(math.floor(p.pos.z))}, ok = true, exact = true}
 		} else {
 			pointer := [2]f32{0.5, 0.5}   // in a run with no window, the middle, or where the options put it
 			if unseen && opt.has_cursor do pointer = {f32(opt.cursor[0])/f32(pw), f32(opt.cursor[1])/f32(ph)}
@@ -378,11 +352,6 @@ main :: proc() {
 				a.mark, a.marked = {one.block, a.under.block}, one.ok && a.under.ok
 				a.under = one
 			}
-			if why {
-				under := a.under
-				if !under.ok do under = pick_far(eye, view_ray(yaw, pitch, fov, aspect, pointer), above_level(&a))
-				fmt.print(why_words(w, under.block) if under.ok else "nothing under the pointer\n")
-			}
 		}
 		hold_frame(w, eye, look_dir(p.yaw, p.pitch) if afoot else view_ray(yaw, pitch, fov, aspect, a.pointer), nil if afoot else &a, passed, dt)
 		if aiming && break_block do world_set(w, hit.x, hit.y, hit.z, .Air)
@@ -396,7 +365,7 @@ main :: proc() {
 		}
 
 		// A requested screenshot waits until the world has finished loading.
-		backlog := world_backlog(w) + water_backlog(&w.water)
+		backlog := world_backlog(w) + water_backlog(&w.water) + play_backlog()
 		idle_frames = idle_frames + 1 if backlog == 0 else 0
 		if len(opt.digs) > 0 && idle_frames > 3 {
 			for b in opt.digs {
@@ -429,6 +398,19 @@ main :: proc() {
 		boxes := creatures_pose(near, posed, f32(passed), hour, opt.day, &w.water)
 		for &b in boxes do b.centre += {f32(near.x - eye.x), 0, f32(near.z - eye.z)}
 		boxes = hold_pose(boxes, eye, dt)   // the boat and the dwarves
+		// The interface's parts for this frame, with the pointer where it is: nowhere while the mouse turns the head, or in a picture with no --cursor.
+		at := [2]f32{-1, -1}
+		if unseen && opt.has_cursor do at = {f32(opt.cursor[0]), f32(opt.cursor[1])}
+		if !unseen && !(afoot && captured) {
+			mx, my: f32
+			_ = sdl.GetMouseState(&mx, &my)
+			at = {mx, my}*play.ratio
+		}
+		play_posed(&opt)
+		listed := sdl.GetPerformanceCounter()
+		play_frame(f32(pw), f32(ph), at, dt, hour, opt.day, eye, yaw, pitch, fov, boxes)
+		append(&listing, f32(f64(sdl.GetPerformanceCounter() - listed)/frequency))
+		if shot == opt.shot && shot != "" && opt.say do play_say()
 		view := View {
 			eye = eye, yaw = yaw, pitch = pitch, hour = hour, day = opt.day, weather = opt.weather, seconds = f32(clock.seconds),
 			target = hit, has_target = aiming, crosshair = shot == "", boxes = boxes,
@@ -493,6 +475,8 @@ main :: proc() {
 		if total > 0 do fmt.printfln("average %.1f fps", f32(len(intervals) - skip)/total)
 		report("frame interval", intervals[skip:])
 		report("our work      ", work[skip:])
+		report("  the interface", listing[skip:])
+		fmt.printfln("the interface drew %d parts as %d rectangles in the last frame; its text takes %d of the atlas's %d rows at this scale", len(screen.items), len(ui.quads), ui.filled, ATLAS)
 		if skip < len(drawn) {
 			mid := skip + (len(drawn) - skip)/2
 			slice.sort_by(drawn[skip:], proc(a, b: [4]int) -> bool { return a.x < b.x })
@@ -517,5 +501,6 @@ main :: proc() {
 		}
 	}
 	hold_leave()
+	play_keep()
 	world_destroy(w)
 }

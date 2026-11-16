@@ -166,6 +166,22 @@ map_colour :: proc(m: Mat) -> [3]f32 {
 	return grey + (c - grey)*3   // hues told apart more easily than on the ground
 }
 
+// A field's value as the colour the map paints it, and a lens over the world (play.odin).
+field_paint :: proc(paint: ^Field_Info, v: f32, x, z: f64) -> (col: [3]f32) {
+	switch paint.paint {
+	case .Kinds: col = map_colour(Mat(v))
+	case .Soils: col = SOILS[int(v)].colour
+	case .Plants: col = COMMUNITIES[Community_Kind(v)].colour
+	case .Zones: col = ZONES[int(v)].colour
+	case .Wheel:
+		a := math.to_radians(v)
+		col = math.lerp([3]f32{0.6, 0.6, 0.6}, 0.55 + 0.4*[3]f32{math.cos(a), math.cos(a - 2.1), math.cos(a + 2.1)}, clamp(land_at(land.slope, land.n, x, z)/0.2, 0, 1))
+	case .Log:  col = math.lerp(paint.from_colour, paint.to_colour, clamp((math.log10(v) - paint.lo)/(paint.hi - paint.lo), 0, 1))
+	case .Ramp: col = math.lerp(paint.from_colour, paint.to_colour, clamp((v - paint.lo)/(paint.hi - paint.lo), 0, 1))
+	}
+	return
+}
+
 // A picture of the land from above, eight metres to the pixel: relief shaded from the
 // north-west, sea by depth, and the rivers. With an overlay, the land is painted by that
 // field instead.
@@ -195,18 +211,7 @@ land_map :: proc(path, overlay: string) {
 			} else {
 				if paint != nil {
 					p := point_at(x, z, 8) if field in GROUND_FIELDS else Point{x = x, z = z, cell = 8}
-					v := paint.at(&p)
-					switch paint.paint {
-					case .Kinds: col = map_colour(Mat(v))*shade
-					case .Soils: col = SOILS[int(v)].colour*shade
-					case .Plants: col = COMMUNITIES[Community_Kind(v)].colour*shade
-					case .Zones: col = ZONES[int(v)].colour*shade
-					case .Wheel:
-						a := math.to_radians(v)
-						col = math.lerp([3]f32{0.6, 0.6, 0.6}, 0.55 + 0.4*[3]f32{math.cos(a), math.cos(a - 2.1), math.cos(a + 2.1)}, clamp(land_at(land.slope, land.n, x, z)/0.2, 0, 1))*shade
-					case .Log:  col = math.lerp(paint.from_colour, paint.to_colour, clamp((math.log10(v) - paint.lo)/(paint.hi - paint.lo), 0, 1))*shade
-					case .Ramp: col = math.lerp(paint.from_colour, paint.to_colour, clamp((v - paint.lo)/(paint.hi - paint.lo), 0, 1))*shade
-					}
+					col = field_paint(paint, paint.at(&p), x, z)*shade
 				} else {
 					// Green at the sea, tan at 200 m, brown at 500 and pale only near 1,000, so that
 					// the height of a high island still reads.

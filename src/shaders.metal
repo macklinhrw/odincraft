@@ -21,6 +21,7 @@ struct Frame {
     float4 cut;         // x: the level above which nothing is drawn, from the eye (far above everything for none); y: 1 where leaves are not drawn
     float4 mark;        // xyz: the low corner of the marked box of blocks, from the eye; w: 1 when there is one
     float4 mark_size;   // xyz: its size in blocks
+    float4 lens;        // xy: the eye from the corner of the island a lens is painted over, z: one over that island's side, w: 1 while a lens is on (play.odin)
 };
 
 struct Draw { float4 origin; };   // xyz: chunk origin, w: cell size in metres
@@ -340,6 +341,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
                            depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]],
                            texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]],
                            texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]], texture2d<float> seen [[texture(3)]],
+                           texture2d<float> lens [[texture(4)]], sampler lens_smp [[sampler(4)]],
                            bool outside [[front_facing]]) {
     uint face = in.info & 7u;
     uint mat = (in.info >> 8u) & 0xFFFFu;
@@ -369,6 +371,17 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     float cut = max(saturate((tile.a - 0.5) / max(fwidth(tile.a), 1e-4) + 0.5), smoothstep(0.6 * LEAF_FAR, LEAF_FAR, dist));   // and whole by where the far leaves are drawn whole
     float patches = vnoise(inside.xz / 41.0) * 0.6 + vnoise(inside.xz / 11.0) * 0.4;
     albedo *= 1.0 + (patches - 0.5) * 0.24 + (block - 0.5) * 0.10 * saturate(1.0 - dist / (in.cell * 200.0));
+    // A lens: one of the land's fields painted over the ground and the woods, in the field's colour
+    // with the ground's own light and dark kept, so the relief still reads. The faces the cut makes
+    // are the inside of the ground and keep their own rock.
+    if (f.lens.w > 0.5 && (made & 5u) == 0u) {
+        float2 at = (in.rel.xz + f.lens.xy) * f.lens.z;
+        if (all(at > 0.0) && all(at < 1.0)) {
+            float4 l = lens.sample(lens_smp, at);
+            float grain = dot(albedo, float3(0.3333)) / max(dot(blocks.sample(block_smp, float2(0.5), mat * 2u, level(4.0)).rgb, float3(0.3333)), 1e-3);
+            albedo = mix(albedo, l.rgb * 0.26 * mix(1.0, clamp(grain, 0.6, 1.4), 0.5), 0.9 * l.a);
+        }
+    }
     // Where the cut passes through solid blocks, the face it makes is ruled block by block while a
     // block is a few pixels wide, so it reads as a cut and its blocks can be counted. Beyond the block
     // volume the ground is columns, whose rock at the level is not known: the cut there is one plain
