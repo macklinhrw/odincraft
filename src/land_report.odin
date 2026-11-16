@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import "core:math"
 import "core:slice"
+import "core:strings"
 
 // What start-up prints about the formed land, measured as the real islands were
 // (docs/interesting-world/notes/real-islands.md), and --map=, the picture of it from above.
@@ -199,6 +200,7 @@ land_map :: proc(path, overlay: string) {
 					case .Kinds: col = map_colour(Mat(v))*shade
 					case .Soils: col = SOILS[int(v)].colour*shade
 					case .Plants: col = COMMUNITIES[Community_Kind(v)].colour*shade
+					case .Zones: col = ZONES[int(v)].colour*shade
 					case .Wheel:
 						a := math.to_radians(v)
 						col = math.lerp([3]f32{0.6, 0.6, 0.6}, 0.55 + 0.4*[3]f32{math.cos(a), math.cos(a - 2.1), math.cos(a + 2.1)}, clamp(land_at(land.slope, land.n, x, z)/0.2, 0, 1))*shade
@@ -237,6 +239,16 @@ land_map :: proc(path, overlay: string) {
 			}
 			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
 		}
+	}
+	// A key to a field painted on a ramp, its name and span from one colour to the other, and the wind.
+	if paint != nil && (paint.paint == .Ramp || paint.paint == .Log) {
+		for py in SIZE - 36..<SIZE - 24 do for px in 20..<276 {
+			col := math.lerp(paint.from_colour, paint.to_colour, f32(px - 20)/255)
+			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
+		}
+		lo, hi := paint.lo, paint.hi
+		if paint.paint == .Log do lo, hi = math.pow(10, lo), math.pow(10, hi)
+		write(pixels, SIZE, 20, SIZE - 54, strings.to_upper(fmt.tprintf("%s %.4g to %.4g%s. the wind from %.0f", paint.name, lo, hi, paint.unit, region.shape.swell), context.temp_allocator), 2, {255, 255, 255})
 	}
 	// Each roofed place and stack (events.odin) is ringed, in orange for a notch, white for a shelter, red for a sea cave and yellow for a stack.
 	for f in region.features do if f.kind >= .Notch && f.kind <= .Cave || f.kind == .Stack {

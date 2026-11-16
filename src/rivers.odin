@@ -101,7 +101,14 @@ river_depth :: proc(half: f32) -> f32 {
 // channels grow as 0.3 to 0.5, Montgomery and Gran 2001; those 34 rivers as 0.28): 1.6 m where a
 // stream starts, 3 m at 0.12 km², 13 m at 7 km² and 31 m at 90 km², as the beds of Yakushima's
 // rivers measure on the Geospatial Information Authority's photographs (10 to 16 m at 7.6 km², 15
-// to 30 at 20, 30 to 55 at 38 and 30 to 45 at 65 to 83), and as wide as the channel at least.
+// to 30 at 20, 30 to 55 at 38 and 30 to 45 at 65 to 83), and as wide as the channel at least. That is
+// under Yakushima's rain, 7,200 mm a year on its land (the rain of climate.odin on GSI's model of its
+// relief, from its own stations). A flood follows the year's largest storm, whose day of rain grows as
+// the year's rain to the power 0.81 on 19 island stations (JMA, 1991-2020; Yakushima's 277 mm, Hachijō-
+// jima's 195), and the bed as the flood's root: so a bed would narrow as the island's mean rain
+// (land.rained) against Yakushima's to the power 0.4. That is not applied: on the default island it
+// took the bed from 6.4 m to 4.4 at 1 km² and the ferns hid the stream, and the owner, who asked for
+// streams that show, has not yet judged it (open-decisions.md, 2026-11-16).
 river_bed :: proc(area: f32) -> f32 {
 	return max(0.5*min(6.4*math.pow(area/1e6, 0.35), 56), river_half(area))
 }

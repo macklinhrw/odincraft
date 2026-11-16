@@ -318,12 +318,14 @@ gen_init :: proc(f: ^Formed) {
 	record := record_of(f.island)
 	region_init(KINDS[f.island.kind].name, f.island.size, &record)
 	region.shape.swell = world_frame.wind   // every island's swell comes from the one wind (archipelago.odin); the start island's is the one it drew
+	climate_init(f.island)
 	story, read := story_for(f.island)
 	region.story = story
 	rock_init(read)
 	land_form()
 	rivers_trace()
 	plants_init()
+	climate_say()
 	hollows_make()
 	arrivals_say()
 	trails_make()

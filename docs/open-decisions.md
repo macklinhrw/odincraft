@@ -144,6 +144,47 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - *Asked:* **should wetlands read step 25's rain?** *Recommendation: yes*: once rain is a field, the water in the ground should stand higher where more falls, which is a window on the marsh row, not new code.
 - *Asked:* **the caves are the next step.** A lava tube under a young flow on a cone island, and a solution cave entered from a valley wall in the reef's or the layered story's limestone, each one roofed place a player can walk into, on the existing machinery. *Recommendation: build them next*, judged on the same three islands' pictures.
 
+**2026-11-16, Claude's call** (step 25, climate per island; `foundations.md` section 8, "Step 25, as built: climate per island"; the stations and fits in `interesting-world/notes/real-climate.md`)
+
+- **The climate's latitude is anchored at the start.**
+  - The start's climate is at its true latitude: 33.1° N on seed 7. Every other place's is the start's plus its true difference in latitude stretched so that 1,000 km span 30°.
+  - Why: the owner's words ("stretched about three times from the start's own"). The islands near the start then keep their true place within a few degrees, and the plates already put the known world between 20 and 40° N.
+  - Anchored at the known world's middle instead, seed 7's start would be at 36° N and seed 10's at 18°. Anchored at the start, seeds 1 to 10 start at 20.2 to 39.5° N, eight of them within 25 to 37° and five within 26 to 34.
+- **The sun follows the climate's latitude, not the true one**, as climate.md D2 asks, so the sky and what grows under it agree. At the start the two are the same. Islands within 100 km differ from their true latitude by up to 3°. The sun drawn is the start island's, and each island's sunlight field is its own.
+- **The base climate is fitted to Japan's island stations.**
+  - The year's mean at the sea's level is a straight line in latitude through 24 stations from 24 to 45° N, within 0.55 °C.
+  - The swing grows with latitude and near land larger than a region, within 0.64 °C.
+  - The sea's rain is a table by latitude from low islands, with high islands' own lift taken out.
+  - Nothing of the Kuroshio: Hachijōjima comes out 1 °C cool.
+- **Rain is the upslope model on the world's one wind**, fitted on GSI's elevation model of real islands against their stations (`real-climate.md`): 1.0 more for each km of height to 1,000 m, 1.5 more for each km over the ground upwind (weighed over 5 km), never under 0.3. One sweep a region, 5 ms.
+- **Zones are six rows over warmth (Kira) and dryness (Holdridge).**
+  - Dryness, not millimetres, decides wet and dry: 1,500 mm is dry at Chichijima's 23 °C and moist at Tobishima's 13 °C.
+  - Seeds 1 to 10 hold 1 to 3 zones each, median 2. The plan asked for three to six, which no row was tuned to reach (below).
+- **Red soil needs a subtropical warmth** (over 180), since red and yellow soils form today only in the Ryukyus. It is gone from the default island (28% of the soil to none) and stays on the subtropical seeds.
+- **The ridge wood holds only where dryness is over 0.35** (fading to nothing at 0.23), on both its hosts. On the default island it took 27% of the land and now takes 23%; over seeds 1 to 10, 23.3% and now 20.1%. Where the threshold falls is a guess.
+- **The beds of stones narrow as the island's mean rain against Yakushima's to the power 0.4.** The bed is as wide as the root of its flood, and the year's largest day of rain grows as the year's rain to the power 0.81 (19 JMA stations). Default island: 6.4 m at 1 km² becomes 4.4 m. Only `river_bed` was changed in `rivers.odin`, since step 27 works in the rest.
+- **Rain growing with height in the forming was tried and not built**: 14.8% of figures far against 14.0, every kind that moved further, stream density unchanged, forming about 10% slower.
+- **`GOLDEN` changes for both islands of seed 7**, by the ridge wood alone. The land is the parent's: 14.0% of figures far on seeds 1 to 10, every kind as before.
+- *Asked:* **the narrower beds hide the default island's streams, and the start moves into the wood.**
+  - At the start's old bank, the wide grey bed with water in it is now a strip mostly hidden by ferns (`interesting-world/real/climate-beds.jpg`).
+  - The start rule takes 6 m clear of trees on any stream before 3 m on a larger one. So it now starts beside a brook of 0.17 km² with no water in view.
+  - Options: (a) keep the narrower beds and let the start take the largest stream's bank at 3 m before a smaller stream's at 6; (b) keep the beds Yakushima-wide; (c) leave both.
+  - *Recommendation: (a).* The beds follow the rain the islands get, a third of Yakushima's, and the first view should show the island's largest stream.
+- *Asked:* **an archipelago holds 1 to 3 zones, not the plan's 3 to 6.**
+  - Real groups 200 km across hold one to three: the Izu islands are warm-temperate with Mikurajima's mossy summit, and Tanegashima and Yakushima are warm-temperate under Yakushima's cool heights.
+  - More would need islands higher than ours or a stronger stretch than the owner's 30°.
+  - *Recommendation: accept it*, and judge zones across the known world when it is formed.
+- *Asked:* **one wind for the world, the seed's bearing.**
+  - Real islands at 30 to 35° N take their rain on the south-west monsoon and typhoons in summer, and on the north-west monsoon in winter. The climate design has wind belts by latitude.
+  - (a) A wind, or two seasons' winds, from the climate's latitude. It sets the swell, so it changes every island's coast. (b) Keep the seed's.
+  - *Recommendation: (a)*, as a step of its own after step 27, measured on the figures.
+- *Asked:* **a stream's water still takes 2 m of runoff a year on every island** (`RUNOFF` in `discharge`), a stand-in for rain. It sets the water's width, flow and the falls' pools, and lies outside `river_bed`.
+  - *Recommendation*: read the island's rain less what goes back to the air, once step 27 has merged.
+- *Asked:* **the reef kind's warm sea.** Its row says no field tells how warm the sea is, which decides whether coral caps a rising bank. The sea's temperature now exists.
+  - *Recommendation*: a small step after 26 and 27 in which the reef kind's host reads the coldest month at the sea's level (corals need about 18 °C; from memory). It changes which islands are reef or raised, so it is measured on the figures.
+- *Asked:* **on foot, the windward and lee sides differ by wind and salt, as before, not by rain.**
+  - *Recommendation*: step 26 next, so that wet evergreen and dry ground read in what grows: moss, ferns and the flora's species.
+
 **2026-11-16, Claude's call** (the slide's lake: how a landslide's dammed lake ages; `foundations.md` section 8, "Step 35, as built: the slide's lake")
 
 - **Traced first: the far hollows are the slides' own water.** On seeds 1 to 10, every island with a slide has its deepest closed hollow in the slide's lake or pond, and none deeper than 8 m elsewhere. Of 20 far hollows, 2 are craters' own and 18 slide water (16 lakes, 2 ponds), 11 to 39 m deep, 52 to 740 years old. The lake stayed as deep as the day it formed.

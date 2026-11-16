@@ -291,7 +291,8 @@ Region :: struct {
 	kind:     string,
 	size:     f64,      // metres along a side; the region's rim is always sea
 	origin:   [2]i32,   // where its middle lies in the world; everything in it is stored relative to that
-	latitude: f64,      // degrees north, which the sun's path and the land's sunlight both read
+	latitude: f64,      // degrees north the island's climate follows (climate.odin), which the sun's path and the land's sunlight both read
+	climate:  Climate,  // its base climate, from that latitude and the sea round it
 	shape:    Shape(f64),
 	story:    ^Story,
 	history:  []Phase(f32),
@@ -375,7 +376,7 @@ region_init :: proc(name: string, size: f64 = REFERENCE, record: ^Record = nil) 
 	ranges, drawn := transmute([N][2]f64)kind.shape, [N]f64{}
 	for r, i in ranges do drawn[i] = r[0] + (r[1] - r[0])*f64(hash01(i32(i), key, seed + 520))
 	region.kind, region.size, region.shape = kind.name, size, transmute(Shape(f64))drawn   // its origin is its island's (gen_init)
-	region.latitude = 30   // as the islands the plants come from (27 to 34° N); the world frame will set it
+	region.latitude = 30   // as the islands the plants come from (27 to 34° N), until the island's own is read (climate_init)
 	for &s in STORIES do if s.name == kind.story do region.story = &s
 	region.history = make([]Phase(f32), len(kind.history))
 	plan := make([]Phase(f32), len(kind.history), context.temp_allocator)
@@ -505,6 +506,8 @@ Land :: struct {
 	lifted:  []f32,    // metres the wind off the sea has been raised to by the ground it crossed, at sea too
 	pebble:  []Mat,    // the rock a stream's gravel is of (pebbles_make, rock.odin), or Air; none where the rock was not read from the island's setting
 	mouth:   []u16,    // 1 + the stream mouth whose fan a cell lies in (mouths_make, rivers.odin), or 0
+	rain:    []f32,    // mm a year, on the 64 m grid (land_rain, climate.odin)
+	rained:  f32,      // and its mean over the land
 }
 
 // Ground a person could live on, from where the villages on eight real islands stand
@@ -867,6 +870,7 @@ land_local :: proc(g: ^Grid) {
 			if weight > 0 do land.surf[c] = sum/weight
 		}
 	})
+	land_rain()
 	for ci in g.order do if g.next[ci] == -1 && g.area[ci] >= CHANNEL_AREA {
 		x, y, r := int(ci)%n, int(ci)/n, 20
 		for j in max(y - r, 0)..=min(y + r, n - 1) do for i in max(x - r, 0)..=min(x + r, n - 1) {

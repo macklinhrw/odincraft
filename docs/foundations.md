@@ -1955,6 +1955,150 @@ The land everywhere differs by metres: the bays have silted differently through 
 - **A solution cave**: entered from a valley wall where the lowest limestone outcrops, as on Okinoerabujima, whose Shōryūdō runs 3.5 km in raised reef limestone (Japan's tourism agency, by a search summary). Its host is the reef story's limestone and the layered story's low limestone bed.
 - The existing machinery already carves a hollow and draws it near and far. "What not to build yet" holds: a cave a player can walk into, not a system, and no water that flows under a roof.
 
+### Step 25, as built: climate per island
+
+Built 2026-11-16 by Claude on the branch `t3/cc84512e`, from `main` at 05a5377: each island's climate from its latitude and the sea round it, rain carried on the wind across it, and six climate zones as rows. The owner has not looked at it. The choices are Claude's call of 2026-11-16 in `open-decisions.md`. The real islands' figures, the fits and their sources are in `interesting-world/notes/real-climate.md`.
+
+![Rain on the default island (left) and island 1, a ridge 578 m high (right), 1,000 to 6,000 mm from pale to deep blue, the wind from 76°](interesting-world/real/climate-rain.jpg)
+
+**What changed for the player.** The land is the parent's bit for bit. On the default island:
+
+- **The sun is 3° lower.** The default island's climate is that of 33.1° N, where it truly stands, not the fixed 30° of before. At noon in early April the sun stands at 63°, not 66°.
+- **The red clay is gone.** Red soil took 28% of the island's soil and now takes none. Brown forest soil took 34% and now takes 62%. Red and yellow soils form today only in the subtropical Ryukyus, and the default island is warm-temperate.
+- **The low ridge wood has gone from the wettest crests.** It took 27% of the land and now takes 23%. The crests it left are on the high windward ridge, which now carries the laurel forest of the slopes.
+- **The beds of stones are narrower.** At 1 km² a bed was 6.4 m across and is now 4.4 m; the water beside it is 3.5 m. The island gets 2,869 mm of rain a year on average against Yakushima's 7,200, and the beds were fitted to Yakushima.
+- **The start moved.** It was on the bank of the largest stream, on its stony bed. It is now beside a brook draining 0.17 km², in the wood, with no water in view. With the beds narrower, every gentle bank of the larger streams has a tree within 6 m, and the start rule asks for 6 m before it settles for 3.
+
+On the map and in `--why`:
+
+- `--overlay=rain`, `temperature`, `warmth`, `dryness` and `zone` paint the new fields.
+- A map painted on a ramp now carries a key with the wind's bearing.
+- `--why` names the zone and gives the year's temperature, warmth and rain at the point.
+- Start-up prints the island's climate, as below.
+
+![The same bank of the default island's largest stream, before (left) and after (right): the bed of stones narrowed by the island's rain](interesting-world/real/climate-beds.jpg)
+
+**What was built** (`src/climate.odin`, about 200 lines):
+
+- **The latitude a climate follows**: the start's own, and from it the true distance in latitude stretched so that the known world's 1,000 km span 30° (the owner, 2026-11-16).
+  - The start's climate is at its true latitude, so the islands round it keep their true place: 33.1° N on seed 7. Only the known world's far parts are stretched.
+  - Seeds 1 to 10 start at 20.2 to 39.5° N, eight of them within 25 to 37°. The plates choose the known world between 20 and 40° N.
+- **The sun follows the climate's latitude**, as climate.md D2 asks, so the sky and what grows under it agree. At the start the two latitudes are the same.
+- **A base climate for each island**, at its middle, from the latitude and the sea round it:
+  - The year's mean at the sea's level is 20.5 − 0.84 °C for each degree north of 30°. That is within 0.55 °C of 24 Japanese island stations from 24 to 45° N.
+  - The months swing round it by 6.6 + 0.29 °C a degree, and by up to 2.2 °C more near land larger than a region. That is within 0.64 °C of the same stations.
+  - The rain over the sea is a table by latitude, from low islands' stations.
+- **Rain on the wind** (`land_rain`): the sea's rain, more by 1.0 for each km of height up to 1,000 m, and more by 1.5 for each km the ground stands over the ground upwind, which counts as e^(−d/5 km). Under that, the lee, gets less. One sweep runs along the world's one wind on the 64 m grid, in 5 ms. It is the upslope model of orographic rain whose cloud falls out downwind (Smith and Barstad 2004).
+- **The rain model on real relief.** On GSI's elevation model of Yakushima, with the sea's rain taken from its stations, it gives:
+  - the west lowland 2,976 mm (2,400 to 3,600 real)
+  - the east lowland 4,844 mm (4,200 to 5,500)
+  - over 1,000 m 10,773 mm (6,000 to 10,000)
+
+  On Tanegashima and Ōshima its stations come within 6% and 4%.
+- **Five fields**:
+  - temperature, the year's mean, falling 0.65 °C a 100 m
+  - warmth, Kira's index
+  - rain
+  - dryness, Holdridge's ratio of potential evapotranspiration to rain
+  - zone
+- **Six zones** (`ZONES`), the first that holds:
+
+  | Zone | Holds where | Real islands |
+  |---|---|---|
+  | subalpine | warmth under 45 | central Honshu's heights |
+  | cool-temperate | warmth under 85 | Okushiri, Rishiri |
+  | dry evergreen | dryness over 1 | Chichijima's scrub |
+  | subtropical | warmth over 180 | Amami, Okinawa |
+  | wet evergreen | dryness under 0.25 | Yakushima's east and its heights |
+  | warm-temperate | elsewhere | the Izu islands, Tsushima |
+
+- **Rows that read a stand-in now read the new fields**:
+  - **Red soil** needs warmth over 180 as well as an old dry hump.
+  - **The ridge wood** needs dryness over 0.35, fading to nothing at 0.23, on both its hosts (a dry hump, thin soil). That is about 3,000 to 4,500 mm a year at 17 °C. Where the threshold falls is a guess.
+  - The valley forest, coast strand and windy grass read where cold air pools, the shore and the wind and salt. These are local fields, not stand-ins, and were left.
+- **The beds of stones narrow by rain** (`river_bed`), only there in `rivers.odin`. A bed is as wide as the root of its flood, and the year's largest day of rain grows as the year's rain to the power 0.81 on 19 JMA stations. So a bed narrows as the island's mean rain against Yakushima's to the power 0.4.
+
+**The default island and its neighbours** (seed 7, each formed alone):
+
+| Island | High | Climate of (truly) | At the sea's level, °C: year, coldest, warmest | Warmth | Rain on the land, mm | Lowland windward / lee | Zones | Ridge wood |
+|---|---|---|---|---|---|---|---|---|
+| 0, inlets (the start) | 492 m | 33.1° N (33.1) | 17.9, 9.8, 26.0 | 155 | 1,951 to 5,009, mean 2,869 | 2,635 / 2,392 | wet evergreen 7%, warm-temperate 93% | 27 → 23% |
+| 1, ridge | 578 m | 33.7 (33.3) | 17.4, 9.1, 25.7 | 149 | 1,714 to 5,361, mean 3,153 | 2,674 / 2,245 | wet 24%, warm 76% | 28 → 18% |
+| 5, domes | 523 m | 31.2 (32.5) | 19.5, 11.6, 27.3 | 174 | 1,777 to 5,321, mean 3,476 | 2,652 / 2,271 | wet 26%, warm 74% | 23 → 13% |
+| 6, raised | 675 m | 35.0 (33.7) | 16.3, 7.5, 25.1 | 135 | 1,357 to 4,952, mean 2,731 | 2,226 / 2,021 | wet 16%, warm 84% | 23 → 17% |
+| 8, reef | 145 m | 35.6 (33.8) | 15.8, 7.0, 24.6 | 129 | 1,756 to 2,469, mean 2,036 | 1,932 / 1,849 | warm 100% | 9 → 9% |
+
+On every island of seed 7 red soil fell to none, from 24 to 31% on eight of them and 4% on the reef.
+
+**Against the real islands.**
+
+- **Temperature.** The default island stands at Hachijōjima's latitude and comes out as a slightly cooler Hachijōjima:
+
+  | | Year at the sea's level | Coldest month | Warmest month | Warmth |
+  |---|---|---|---|---|
+  | default island | 17.9 °C | 9.8 | 26.0 | 155 |
+  | Hachijōjima | 19.0 | 11.1 | 27.5 | 156 at 151 m |
+  | Miyakejima | 18.2 | 10.1 | 26.8 | 156 |
+  | Fukue | 17.2 | 7.8 | 27.5 | 144 |
+
+  The fit's 1 °C shortfall at Hachijōjima is the Kuroshio, which no field gives. The warmest month comes out 1 °C low everywhere, since the year is one cosine round its mean.
+- **Rain.**
+  - The default island's land gets 1,951 mm at the least, in the lee, 5,009 on its summit and 2,869 on average; its windward lowland a median of 2,635. Real: Hachijōjima's station at 151 m 3,307, Miyakejima's 3,025, Ōshima's 2,859 and 2,127.
+  - The lowland's lee third gets 0.91 of the windward third's rain. Over seeds 1 to 10 that is 0.96 on islands under 300 m, 0.91 at 300 to 500 m, 0.88 at 500 to 700 m and 0.78 at 700 to 1,000 m. Real: Ōshima, 751 m, 0.74 between its two stations; Yakushima's lowlands about 0.6.
+  - The wet side is clearest high up: island 1's land gets 1,714 to 5,361 mm, the most on its ridge where it faces the wind, and its lee lowland a median of 2,245.
+- **Zones.** Seeds 1 to 10 hold 1 to 3 zones each (median 2), and five of the six rows occur:
+
+  | Zone | Islands of 83 |
+  |---|---|
+  | warm-temperate | 62 |
+  | wet evergreen | 40 |
+  | subtropical | 33 |
+  | dry evergreen | 3 |
+  | cool-temperate | 3 |
+
+  Seed 5 (23.7 to 28.0° N) is all subtropical, as Okinawa's group is. Seed 7 has warm-temperate with wet evergreen on ten islands' heights. Real groups 200 km across hold one to three: the Izu islands' warm-temperate with Mikurajima's mossy summit; Tanegashima and Yakushima's warm-temperate lowlands under Yakushima's cool heights.
+
+**Against the real islands' land figures**, seeds 1 to 10, every island formed alone: 14.0% of figures far, as on `main`, every kind the same. The forming is unchanged.
+
+**The experiment: rain growing with height in the forming.** Step 34 named it to test why Yakushima's streams are denser. The cutting power in `erode` read the land drained weighted by 1 + 1.0 a km of height, over the island's mean weight, so the island's rain as a whole was unchanged and fell more on high ground. Built in a scratch copy and run on seeds 1 to 10:
+
+- 14.8% of figures far against 14.0. Crater 30.0 → 32.5, domes 18.8 → 21.9, inlets 2.8 → 3.2, raised 66.2 → 67.5 and ridge 10.7 → 12.5; none nearer.
+- Stream density did not move (medians: inlets 1.25 → 1.26, cone 1.50 → 1.47, raised 1.69 → 1.63).
+- The summits came out 7 to 47 m lower.
+- Forming took 59.5 s summed over the 83 islands against 54.0.
+
+So it was not built. Rain growing with height does not explain Yakushima's denser streams. Its size and its granite remain the candidates (`real-hydrology.md`).
+
+**Cost.**
+
+- On the default island the rain sweep takes 5 ms, the climate's start-up line 1.2 ms, and the plants' race 1 to 4 ms more.
+- Entering seed 7 (`--bench=1`, wall time, four rounds alternating with `main`, load 7 to 10): 2.92 to 3.75 s against 3.42 to 3.79.
+- Forming the start island alone (`--map`, six rounds): best 1.45 s against 1.44.
+- The benches against `main`, two rounds each (frames over 12.5 ms, our work's median):
+  - the forest flank: 8 and 9 against 6 and 17; 1.37 and 1.36 ms against 1.32 and 1.36
+  - down through cloud: 9 and 7 against 87 and 60; 1.36 and 1.25 ms against 2.10 and 1.89
+
+  Our work passed 12.5 ms on no frame of this build, and on one of `main`'s.
+
+**Checked.**
+
+- `./build.sh test` passes. Both hashes in `GOLDEN` changed on purpose: the ridge wood left the wettest crests of both islands. With that one rule taken out, the hashes are `main`'s.
+- `odin check src -vet-unused` is clean.
+- The default island's plain map differs from `main`'s by 7 pixels, the beds of stones, which 10 m pixels hardly show.
+
+![Island 1 on foot: the windward side (left), wind-cut grass and scrub under the ridge, and the lee (right), closed forest. The difference comes from the wind and salt (exposure), which was there before; the rain does not yet change what grows on a slope](interesting-world/real/climate-windward-lee.jpg)
+
+**Weak points.**
+
+- **On foot, the windward and lee slopes differ by the wind and salt, not yet by the rain.** What grows reads rain only in the ridge wood and the red soil. The floras of step 26 are what will make a wet side look wet.
+- **One wind for the world**, the seed's bearing (from 76° on seed 7). Real islands at 30 to 35° N take their rain on the south-west monsoon and typhoons in summer, and on the north-west monsoon in winter.
+- **Yakushima's coasts are wetter than any island here gets from the same sea**: 4,200 mm against Tanegashima's 2,400. Not traced.
+- **The warmest month is 1 °C low** everywhere, and the Kuroshio's warmth is in no field.
+- **An island sees only its own region's ground upwind.** A neighbour's mountain does not shadow it. That keeps forming the same alone or beside others.
+- **The beds narrow by the island's mean rain**, not their own valley's: `river_bed` is told only the land drained.
+- **The stream's water is as before.** `discharge` still takes 2 m a year of runoff on every island, a stand-in for rain. It lies outside `river_bed`, where step 27 works.
+- The judge was Claude, by the figures and seven pictures.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.

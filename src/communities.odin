@@ -24,7 +24,10 @@ SOILS := [?]Soil{
 	{"shore sand", "the wind blows sand in off the beach", .Sand, .Sand, .Sand, 0, {{.Inland, -ANY, 120, 0}, {.Cold, -ANY, 10, 0}}, {0.95, 0.85, 0.55}},
 	{"stony wash", "soil creeping down a steep slope carries stones broken from the beds", .Loam, .Dirt, .Dirt, 0.35, {{.Slope, 0.65, ANY, 0}}, {0.60, 0.55, 0.50}},
 	{"ash soil", "ash and cinders weather into a black soil full of humus", .Ash, .Ash, .Dirt, 0.1, {{.Volcanic, 0.5, ANY, 0}}, {0.22, 0.18, 0.17}},
-	{"red soil", "long rain on old dry ground leaches it to a red clay", .Loam, .Red_Clay, .Red_Clay, 0, {{.Humped, 3, ANY, 0}, {.Wetness, -ANY, 0.3, 0}}, {0.85, 0.40, 0.22}},
+	// Red and yellow soils form today only in Japan's subtropical islands, the Ryukyus; the warm-temperate
+	// belt has yellow-brown and brown forest soils, and red clay there is a relic of warmer times (Britannica,
+	// "Japan: Soils"; Matsui 1964). Kira's subtropical line, a warmth of 180, stands for it.
+	{"red soil", "long rain in a subtropical warmth leaches old dry ground to a red clay", .Loam, .Red_Clay, .Red_Clay, 0, {{.Humped, 3, ANY, 0}, {.Wetness, -ANY, 0.3, 0}, {.Warmth, 180, ANY, 0}}, {0.85, 0.40, 0.22}},
 	{"brown forest soil", "fallen leaves rot into loam over the weathered rock", .Loam, .Dirt, .Dirt, 0, {}, {0.42, 0.34, 0.26}},
 }
 
@@ -94,8 +97,12 @@ COMMUNITIES := [Community_Kind]Community{
 		{{{.Cold, -ANY, 3, 3}, {.Slope, -ANY, 0.2, 0.1}}, {{.Humped, -ANY, -8, 4}, {.Wetness, 0.35, ANY, 0.1}}}, 0.7, 0.08, {0.8, 0.2, 0, 0, 0, 0, 0}, .Grass, {0.45, 0.85, 0.30}},
 	.Slope = {"laurel forest", "shii and tabu close over the slopes wherever nothing else does better, with camellia under them", 1, 400,
 		{}, 0.85, 0.1, {0.15, 0.7, 0.15, 0, 0, 0, 0}, .Litter, {0.10, 0.42, 0.16}},
+	// A hump or thin soil is dry where the rain is not so much for the warmth that it stays moist: where
+	// the year's warmth could draw under a third of the rain (dryness), about 3,000 to 4,500 mm a year at
+	// 17 °C, a crest carries the slope's forest, as the windward ridges of Yakushima's wet east do (a
+	// guess at where; climate.odin).
 	.Ridge = {"ridge wood", "a low wood of small-leaved evergreens and pine holds dry humps and thin soil over rock", 3, 250,
-		{{{.Humped, 4, ANY, 3}, {.Wetness, -ANY, 0.25, 0.1}}, {{.Soil_Depth, -ANY, 0.5, 0.25}}}, 0.6, 0.1, {0, 0.1, 0.1, 0.6, 0.2, 0, 0}, .Litter, {0.20, 0.55, 0.60}},
+		{{{.Humped, 4, ANY, 3}, {.Wetness, -ANY, 0.25, 0.1}, {.Dryness, 0.35, ANY, 0.12}}, {{.Soil_Depth, -ANY, 0.5, 0.25}, {.Dryness, 0.35, ANY, 0.12}}}, 0.6, 0.1, {0, 0.1, 0.1, 0.6, 0.2, 0, 0}, .Litter, {0.20, 0.55, 0.60}},
 	.Windy = {"susuki grass and scrub", "sea wind and salt keep the trees out: tall grass, dwarf bamboo and wind-cut bushes", 4, 200,
 		{{{.Exposure, 0.8, ANY, 0.08}}}, 0.35, 0, {0, 0, 0, 0.1, 0.05, 0.85, 0}, .Susuki, {0.80, 0.80, 0.45}},
 	.Coast = {"coast strand", "salt and blown sand behind the shore: black pine and tobira scrub over dune grass", 5, 150,
