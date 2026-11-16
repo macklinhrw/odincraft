@@ -1213,7 +1213,7 @@ Not done:
 - **The volcanic kinds by cause.** Cone, crater and domes all stand on the front and alternate by the draw and the neighbour rule.
 - **A young hotspot shield**, which no kind makes; it is left out, as before.
 - **Latitude**: every island at 30° N, though the known world lies at 20 to 40° N (step 25).
-- **The comparison with the real Earth** after the arc front was smoothed.
+- **The comparison with the real Earth** after the arc front was smoothed. *Rerun 2026-11-15 on eleven seeds (`interesting-world/notes/real-plates.md`, "Through time"): the smoothing moves few figures beyond the spread of the seeds. It makes more land masses of 10,000 km² to a million (149 today against 116 before; real 107), and seed 7, the default, now has one plate over 55% of the planet (the seeds' median 27%, real 20%).*
 
 Weak points: the outer high's relief (2,500 m) and its stretches are guesses; the forearc's own rise is a row of the reading, not the history's; the history's settings come from its nearest 36 km cell, so an island's history row can name another trench than the one its front is read from (the default island's crust lies on a plate that sinks at one trench and rides over another); the start is always on the seed's kind, so a seed whose window holds no forearc puts the start where its host holds best, partly; entering depends on which islands lie within 64 km, so a seed with a 14.3 km island near the start enters in about 2 s; `src/` grew by about 380 lines of Odin: `known.odin` (307), `archipelago.odin` (446 to 572, the stand-in replaced), `plates.odin` (40 more); the judge of every picture was Claude.
 

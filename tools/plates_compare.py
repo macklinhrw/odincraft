@@ -27,6 +27,15 @@ AGES = "https://www.earthbyte.org/webdav/ftp/Data_Collections/Muller_etal_2019_T
 DEMS = "https://www.earthbyte.org/webdav/ftp/Data_Collections/Scotese_Wright_2018_PaleoDEM/Scotese_Wright_2018_Maps_1-88_1degX1deg_PaleoDEMS_nc.zip"
 
 
+def fetch(url, path):
+    """Download url to path. EarthByte refuses urllib's own user agent (403), so the tool names itself."""
+    request = urllib.request.Request(url, headers={"User-Agent": "odincraft-plates-compare"})
+    with urllib.request.urlopen(request) as response, open(path + ".part", "wb") as out:
+        while block := response.read(1 << 20):
+            out.write(block)
+    os.replace(path + ".part", path)
+
+
 def ours(folder, t):
     """Our frame t Myr ago, as the grids the measures read."""
     raw = np.fromfile(os.path.join(folder, "frame-%03d.raw" % t), dtype=np.uint8).reshape(H, W, 9)
@@ -55,7 +64,7 @@ class Real:
         if not glob.glob(os.path.join(dems, "**", "*.nc"), recursive=True):
             os.makedirs(dems, exist_ok=True)
             path = os.path.join(dems, "dems.zip")
-            urllib.request.urlretrieve(DEMS, path)
+            fetch(DEMS, path)
             zipfile.ZipFile(path).extractall(dems)
         found = [(re.search(r"_([0-9.]+)Ma\.nc$", f), f) for f in glob.glob(os.path.join(dems, "**", "*Ma.nc"), recursive=True)]
         self.dems = {float(m.group(1)): f for m, f in found if m}
@@ -101,7 +110,7 @@ class Real:
         path = os.path.join(self.data, "ages", "age-%d.nc" % t)
         if not os.path.exists(path):
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            urllib.request.urlretrieve(AGES.format(t), path)
+            fetch(AGES.format(t), path)
         import netCDF4
         grid = netCDF4.Dataset(path)
         z = np.array(grid.variables["z"][:], dtype=float)
