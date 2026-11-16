@@ -81,6 +81,20 @@ NONE     :: [2]f32{}
 // the rows run from the most particular cause to the most common.
 STORIES := [?]Story{
 	{
+		// A pluton under a fast-rising thick crust, unroofed: the island is granite, its rim the
+		// baked beds it rose into. Only within reach of the magma the arc's front rises over:
+		// Yakushima stands about 20 km from Kuchinoerabujima on the front, where Kikaijima, rising
+		// as fast on the forearc's outer ridge far in front of it, is mudstone under its reef.
+		name = "granite massif", after = "Yakushima", laid = .Plates,
+		hosts = {{.Crust, 20, ANY, 3}, {.Rising, 0.9, ANY, 0.2}, {.Front, -ANY, 50, 20}},
+		kinds = {0 = {.Sandstone, 2, ANYWHERE, NONE}, 1 = {.Mudstone, 2, ANYWHERE, NONE}, 2 = {.Siltstone, 1, ANYWHERE, NONE}},
+		thick = {10, 40}, hard = 0.4, gap = 80, tilt = {10, 30}, fold = {30, 80}, wave = {1500, 3000},
+		bodies = {
+			{.Pluton, .Granite, {1, 1}, NONE, {2600, 3400}, {700, 1200}, {0, 0.08}},
+			{.Dike, .Dolerite, {3, 6}, {1, 3}, {300, 900}, NONE, {0, 0.3}},
+		},
+	},
+	{
 		// The arc's lavas reached it: a pile of flows over the soft beds the sea laid before, near
 		// flat, so the cap stands as a long scarp over slopes of mudstone that slip.
 		name = "hard cap over weak rock", after = "Iki's lava over its mudstone; Trotternish on Skye", laid = .Plates,
@@ -94,31 +108,22 @@ STORIES := [?]Story{
 		},
 	},
 	{
-		// A pluton under a fast-rising thick crust, unroofed: the island is granite, its rim the
-		// baked beds it rose into.
-		name = "granite massif", after = "Yakushima", laid = .Plates,
-		hosts = {{.Crust, 20, ANY, 3}, {.Rising, 0.9, ANY, 0.2}},
-		kinds = {0 = {.Sandstone, 2, ANYWHERE, NONE}, 1 = {.Mudstone, 2, ANYWHERE, NONE}, 2 = {.Siltstone, 1, ANYWHERE, NONE}},
-		thick = {10, 40}, hard = 0.4, gap = 80, tilt = {10, 30}, fold = {30, 80}, wave = {1500, 3000},
-		bodies = {
-			{.Pluton, .Granite, {1, 1}, NONE, {2600, 3400}, {700, 1200}, {0, 0.08}},
-			{.Dike, .Dolerite, {3, 6}, {1, 3}, {300, 900}, NONE, {0, 0.3}},
-		},
-	},
-	{
 		// Old continental crust worn down where it barely rises: banded gneiss on end, ridges of
-		// quartzite, cut by a swarm of dark dikes.
+		// quartzite, cut by a swarm of dark dikes. Not on a forearc, whose crust lies under what the
+		// trench scrapes up and the basin behind it fills with: behind the arc, as Oki-Dōgo, or on a
+		// margin no trench works, as Lewis.
 		name = "metamorphic shield", after = "the Lewisian gneiss of Lewis and Harris; Oki-Dōgo", laid = .Plates,
-		hosts = {{.Crust, 28, ANY, 3}, {.Age, 250, ANY, 50}, {.Rising, -ANY, 0.3, 0.2}},
+		hosts = {{.Crust, 28, ANY, 3}, {.Age, 250, ANY, 50}, {.Rising, -ANY, 0.3, 0.2}, {.Across, 1, ANY, 0.1}},
 		kinds = {0 = {.Gneiss, 3, ANYWHERE, NONE}, 1 = {.Schist, 1.5, ANYWHERE, NONE}, 2 = {.Quartzite, 0.8, ANYWHERE, NONE}},
 		thick = {10, 40}, hard = 0.7, gap = 60, tilt = {0, 5}, fold = {400, 700}, wave = {1500, 2500}, ridges = true,
 		bodies = {{.Dike, .Dolerite, {6, 12}, {3, 10}, {800, 2000}, NONE, {0, 0.35}}},
 	},
 	{
 		// Thick crust under an arc, where magma pooled and cooled: a granite on one side of the
-		// island, the beds it rose into on the other, baked hard round it.
+		// island, the beds it rose into on the other, baked hard round it. Not on a forearc, as the
+		// shield: behind the arc, as Tsushima, or on a margin no trench works, as Arran.
 		name = "granite against sediments", after = "Arran; the granite of Tsushima's south", laid = .Plates,
-		hosts = {{.Crust, 18, ANY, 3}},
+		hosts = {{.Crust, 18, ANY, 3}, {.Across, 1, ANY, 0.1}},
 		kinds = {
 			0 = {.Mudstone, 3, ANYWHERE, NONE}, 1 = {.Siltstone, 1.5, ANYWHERE, NONE}, 2 = {.Sandstone, 2, ANYWHERE, NONE},
 			3 = {.Limestone, 0.8, {-1e5, 0}, NONE}, 4 = {.Grit, 1, {40, 1e5}, NONE},
@@ -152,29 +157,17 @@ STORIES := [?]Story{
 		bodies = {{.Fault, .Air, {2, 3}, {40, 200}, {4000, 9000}, NONE, {0, 0.35}}},
 	},
 	{
-		// The same sediment laid in the basin behind the outer high, on crust that hardly rises or
-		// sinks, so nothing tilted it: benches, flat tops, a seam of coal.
+		// The same sediment laid in a basin on crust that hardly rises or sinks, so nothing tilted it:
+		// benches, flat tops, a seam of coal. Not on a forearc, whose basin the trench tilts, as
+		// Boso's beds (layered, gently tilted): behind the arc, or on a margin no trench works.
 		name = "flat-bedded", after = "the Coal Measures", laid = .Plates,
-		hosts = {{.Offshore, -ANY, 120, 40}, {.Rising, -ANY, 0.25, 0.1}},
+		hosts = {{.Offshore, -ANY, 120, 40}, {.Rising, -ANY, 0.25, 0.1}, {.Across, 1, ANY, 0.1}},
 		kinds = {
 			0 = {.Mudstone, 3, ANYWHERE, NONE}, 1 = {.Siltstone, 2, ANYWHERE, NONE}, 2 = {.Sandstone, 2, ANYWHERE, NONE},
 			3 = {.Coal, 0.5, ANYWHERE, {1, 3}}, 4 = {.Limestone, 0.8, {-1e5, -20}, NONE}, 5 = {.Grit, 1.5, {40, 1e5}, NONE},
 		},
 		thick = {8, 30}, hard = 0.3, gap = 60, tilt = {0, 1.5}, fold = {3, 10}, wave = {3000, 6000},
 		bodies = {{.Fault, .Air, {1, 2}, {20, 60}, {3000, 7000}, NONE, {0, 0.3}}},
-	},
-	{
-		// The basin's sediment tilted as the outer high rose under it.
-		name = "layered, gently tilted", after = "the Shimajiri mudstone under Kikaijima's reef; the Boso peninsula", laid = .Plates,
-		hosts = {{.Offshore, -ANY, 120, 40}},   // a continent near enough to feed the basin
-		// Grit gathers high in the stack and caps the hills; limestone is rare and low, so it
-		// shows only in the deepest valleys.
-		kinds = {
-			{.Mudstone, 3, ANYWHERE, NONE}, {.Siltstone, 2, ANYWHERE, NONE}, {.Sandstone, 2, ANYWHERE, NONE},
-			{.Grit, 0.4, {-1e5, 50}, NONE}, {.Grit, 3, {50, 1e5}, NONE}, {.Limestone, 1.2, {-1e5, -20}, NONE},
-		},
-		thick = {12, 50}, hard = 0.3, gap = 110, tilt = {3, 8}, fold = {20, 70}, wave = {1800, 4500},
-		bodies = {{.Fault, .Air, {1, 3}, {30, 120}, {3000, 8000}, NONE, {0, 0.3}}},
 	},
 	{
 		// A drowned bank carried toward a trench rises on the bulge in front of it, a cap of
@@ -202,15 +195,33 @@ STORIES := [?]Story{
 		thick = {10, 40}, hard = 0.4, gap = 80, tilt = {0, 2}, fold = {5, 20}, wave = {3000, 6000},
 	},
 	{
-		// A forearc too far from any continent for its rivers to feed it is bare old arc crust:
-		// pillow lavas and the breccia they shattered into, tilted, cut by the dikes that fed them.
+		// A forearc too far from any continent for its rivers to feed it, on a high that has stopped
+		// rising or rises slowly, is bare old arc crust: pillow lavas and the breccia they shattered
+		// into, tilted, cut by the dikes that fed them. As the Bonin ridge, which stands still; a
+		// high rising as fast as Kikaijima's was deep under the sea until lately, and carries up
+		// the beds laid on it there.
 		name = "old arc lavas", after = "Hahajima; Chichijima", laid = .Plates,
+		hosts = {{.Offshore, 140, ANY, 0}, {.Rising, -ANY, 1, 0}},   // beyond the 140 km where the beds a continent's rivers feed hold, and rising slower than the raised kind's 1 mm/yr
 		kinds = {0 = {.Basalt, 2, ANYWHERE, NONE}, 1 = {.Breccia, 2, ANYWHERE, NONE}},
 		thick = {10, 35}, hard = 0.4, gap = 60, tilt = {8, 20}, fold = {20, 60}, wave = {1500, 3000},
 		bodies = {
 			{.Dike, .Dolerite, {10, 18}, {1, 4}, {300, 1000}, NONE, {0, 0.35}},
 			{.Plug, .Dolerite, {1, 2}, {100, 240}, NONE, NONE, {0.05, 0.3}},
 		},
+	},
+	{
+		// The basin's sediment tilted as the outer high rose under it: fed by a continent's rivers
+		// where one is near, and elsewhere by the arc's ash and the reefs, and carried up where the
+		// high rises fast. Wherever no row before it holds.
+		name = "layered, gently tilted", after = "the Shimajiri mudstone under Kikaijima's reef; the Boso peninsula", laid = .Plates,
+		// Grit gathers high in the stack and caps the hills; limestone is rare and low, so it
+		// shows only in the deepest valleys.
+		kinds = {
+			{.Mudstone, 3, ANYWHERE, NONE}, {.Siltstone, 2, ANYWHERE, NONE}, {.Sandstone, 2, ANYWHERE, NONE},
+			{.Grit, 0.4, {-1e5, 50}, NONE}, {.Grit, 3, {50, 1e5}, NONE}, {.Limestone, 1.2, {-1e5, -20}, NONE},
+		},
+		thick = {12, 50}, hard = 0.3, gap = 110, tilt = {3, 8}, fold = {20, 70}, wave = {1800, 4500},
+		bodies = {{.Fault, .Air, {1, 3}, {30, 120}, {3000, 8000}, NONE, {0, 0.3}}},
 	},
 	{
 		// Runny lava: black flows of basalt between beds of red cinders and ash, after the
@@ -265,9 +276,9 @@ ROOF_ALL    :: 1e9     // a dike's or plug's roof: it runs up through everything
 
 // How a rock wears, from its strength: D4 in docs/foundations/geology.md, with erosion
 // (0.4/strength)² rather than (0.5/strength)², which keeps the island near its old height.
-// Slopes run from 35° on the weakest rock to 60° on the strongest, rising most steeply at the
-// strong end, so that a strong bed stands as a face and the weak ones as steep hillsides, and
-// creep falls with the square of weakness, so crests in strong rock stay sharp.
+// Slopes run from 35° on the weakest rock to 60° on rock of strength 0.8 and more, rising most
+// steeply at the strong end, so that a strong bed stands as a face and the weak ones as steep
+// hillsides, and creep falls with the square of weakness, so crests in strong rock stay sharp.
 Rock_Law :: struct {
 	erodes: f32,   // how fast running water cuts it, around 1
 	limit:  f32,   // the steepest slope it holds, rise over run
@@ -403,7 +414,7 @@ rock_init :: proc(full: bool) {
 	for m in Mat {
 		s := MATERIALS[m].strength
 		if s == 0 do continue
-		rocks.law[m] = {clamp(0.16/(s*s), 0.2, 5), math.tan(math.to_radians(35 + 25*math.pow((s - 0.2)/0.6, 1.5))), (1 - s)*(1 - s)/0.5625, 1 - SOAKS if is(m, SINKS) else 1}
+		rocks.law[m] = {clamp(0.16/(s*s), 0.2, 5), math.tan(math.to_radians(35 + 25*math.pow(min((s - 0.2)/0.6, 1), 1.5))), (1 - s)*(1 - s)/0.5625, 1 - SOAKS if is(m, SINKS) else 1}
 	}
 	if full && story.cover != "" {
 		for &s in STORIES do if s.name == story.cover do rocks.cover = &s
