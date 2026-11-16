@@ -72,7 +72,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 | # | Step | The owner does | Story |
 |---|---|---|---|
 | P1 (built) | **The view from above.** The primary camera: over the land, cut at a chosen level so the ground under trees and inside hills shows; a cursor on blocks; pause and speed. First person stays, a key away | Looks down on the default island and into a hillside | |
-| I-1 | **The interface's ground and the play screen's frame** (`foundations/interface.md`). Text and panels; the screen's four fixed regions; the clock and speeds; the hand, which answers what any block, tree, stream or place is and why; messages; the cut's level, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there | |
+| I-1 (built) | **The interface's ground and the play screen's frame** (`foundations/interface.md`). Text and panels; the screen's four fixed regions; the clock and speeds; the hand, which answers what any block, tree, stream or place is and why; messages; the cut's level, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there | |
 | P2 (built) | **Seven dwarves.** Named, drawn simply, walking the block ground by a path they find. Any one can be asked who it is and what it is doing | Watches them come ashore and follow where they are sent | |
 | I-2 | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
 | E-1 | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
@@ -434,3 +434,75 @@ The trench's orders are `interesting-world/real/p2-trench-orders.txt`.
 - **Order**: `hold_send(x, y, z)` sends the party to a block; it is what the right click and G call.
 - **Messages are not passed out yet.** The log is the hold's own, printed as it happens. The messages strip (I5) needs its new lines handed to the frame as `Shown` is.
 - **The right button is now two things from above**: held and moved it turns the view, clicked it orders. If the interface gives orders their own tool in the hand, the click can go back to being nothing.
+
+### I-1, as built: the interface's ground and the play screen's frame (2026-11-16)
+
+**What can now happen that could not before:** the owner clicks a bed of rock in a cut hillside and reads on the screen what it is and why, with the column it lies in beside the words; drags the cut down that column; paints the rock or the rain over the island; opens the list of places and is taken to one; clicks a dwarf and reads its day; and does all of it by key or by mouse, with the key written on each button.
+
+Pictures: `interesting-world/real/i1-*.jpg` (the bed and the Places list at 2,560 × 1,440; the rest at 1,600 × 900, with the full pictures made by the commands in `AGENTS.md`). `i1-beside-drawing.jpg` puts the built screen beside the design's drawing.
+
+**What was built**
+
+- **The ground** (`ui.odin`, `type.odin`, `ui.metal`; `adr/0010`). A screen is a list of parts made each frame; one file draws it, says which part the pointer is on, and says the screen in words. Text comes from an atlas made for each of six scales, 75% to 200%, each glyph drawn at the exact pixel size it is shown at and set on whole pixels; body text is 24 pixels at the standard scale on 1,440. Panels, buttons with their key on them, lists that scroll, tabs, a tooltip, a field to type in, the three signs. Every colour, typeface, size and spacing is one table, `LOOK`.
+- **The typefaces**: Marcellus for names and Atkinson Hyperlegible, regular and bold, for the rest, as the drawings have. Both are under the SIL Open Font License 1.1 and are in `assets/fonts/` with their licences (`assets/LICENSE.md`).
+- **One pointer** for the world and the panels, by one rule (`play.odin`, top): a press belongs to what lies under it until that button is let go; the wheel belongs to what the pointer is over. `over_world` asks the screen.
+- **Keys are rows** (`BINDS`): a button shows the key of the row that does its act. Escape closes the topmost thing and, with nothing open, opens the menu.
+- **Top left**: where the view is ("East Top", or "North of East Top"), the day of the season, and the clock: paused or running at its hour, and three speeds.
+- **Right: the ground here.** The column of the beds under the view's middle, each bed in its own block's picture and named, the soils named together, the water in the ground marked, and what is over the cut dimmed. The brass mark is dragged to move the cut; the wheel over the column moves it a block; R, F, C and H still work, and each is on a button: Up, Down, Cut, Follow the ground. Then Lenses and Walk here.
+- **Lenses**: leaves off, and six of the land's fields painted over the ground and the woods from above: rock, water in the ground, rain, livable ground, plants, soil. Each has the key to its colours beside the ground's panel.
+- **Lower left: the hand.** A click takes up a block of ground, a tree, a stream, a lake, the sea, a named place, an animal or a dwarf; a drag takes up a box of blocks. The card says what it is in a line and why in the next, in sentences written for it, then the rest of what `--why` says under tabs: Rock, Ground, Plants, Near, World. A block of ground opens on Rock, with the column it lies in. A dwarf's card is P2's three lines with its picture as a bust of blocks, and Follow. What is in the hand is marked in the world.
+- **Messages** under the top left, with `tell(words, place)`, callable from any thread. The hold's log reaches them (`say`, `hold.odin`): who stepped ashore, where the party was sent. They fade after 14 seconds and are kept.
+- **Top right**: the place for the stores and for alerts, with `alert_raise(id, words, sign, place)` and `alert_clear(id)`. Nothing raises one, so nothing is drawn.
+- **Bottom right**: Places, and Menu. The Places list holds the island's named places and whatever else is remarkable on it by kind, each kind folded to its count; it finds by name or kind, sorts by kind or by how near, and each row takes the view there and puts the place in the hand. The places' names also stand on the land and can be clicked. The menu has back to the game, the interface's size, the lessons, and quit.
+- **Bottom left**: the orders bar's place, empty. The hand stands over it.
+- **Lessons**: three lines, one at a time, each beside its thing and gone when the thing is done once: click to ask, drag to cut, Tab to walk. They are kept between games and can be read again in the menu.
+- **Without a window**: `--shot` draws the interface, and options put it in a state (`AGENTS.md`). `--say` prints what the screen says. `--plain` leaves the interface out. `src/play_test.odin` makes the screen with no window, presses its buttons by pointer and by key, and checks what it says and that it lies inside the picture at every scale.
+
+**Keys.** As P1's, and: L lenses, F4 the Places list, Enter go to what is in the hand (or follow a dwarf), Y take what is under the pointer (or aimed at) in the hand, Escape close the topmost thing and then the menu, Q quit from the menu. The wheel over a list scrolls it and over the column moves the cut. P2's keys stand: G and a right click send the party, E selects a dwarf in first person.
+
+**What was tried and dropped**
+
+- **Odin's own stb truetype.** It links a compiled library that Homebrew's Odin keeps where the binding does not look, so the build failed on this machine before any text was drawn. The reader and glyph drawer are our own (`type.odin`, 295 lines).
+- **Messages for islands forming far off.** They are the engine's news, not the world's, and three of them filled the strip at the start.
+- **The map's own colours for the rock lens.** Basalt and breccia are both dark there, and the island looked like a darker picture of itself. The lens has colours of its own.
+- **A card that fits each tab's words.** Its top moved every time a tab was changed.
+- **A shadow under words on the land.** A place's name could not be read over the woods; it stands on a dark plate.
+
+**Costs**
+
+- **The interface's own work**, listing the parts and making the rectangles: 0.02 to 0.03 ms a frame at the median, 0.08 ms at the 99th hundredth, with the play screen at rest (29 to 34 parts, about 600 rectangles); 0.12 ms and 0.26 ms with the list, a card and a lens all open (92 parts, 1,300 rectangles). Drawing them is one buffer and one draw.
+- **Benches**, alternating with the parent (`main` with P2), interface on, our work in ms as median / 99% / worst, and frames over 12.5 ms. The machine was never quiet: other agents held its load between 6 and 16.
+
+| Bench | Parent | This step |
+|---|---|---|
+| Forest flank, first person | 1.20 / 4.1 / 5.9 (0), 1.38 / 4.3 / 6.3 (0), 1.51 / 6.0 / 21.1 (2) | 1.16 / 3.5 / 4.7 (0), 1.34 / 4.1 / 6.8 (0), 1.47 / 4.6 / 8.4 (0) |
+| Down through cloud, first person | 1.15 / 3.3 / 6.9 (0), 1.28 / 4.7 / 9.7 (0), 1.30 / 3.7 / 4.8 (0) | 1.16 / 3.2 / 4.7 (0), 1.27 / 3.5 / 10.1 (0), 1.49 / 4.5 / 10.1 (0) |
+| From above, cut following the ground | 1.51 / 5.0 / 18.6 (2), 1.51 / 4.6 / 7.3 (0), 1.66 / 5.1 / 15.7 (1) | 1.63 / 5.0 / 10.4 (0), 1.76 / 5.7 / 18.9 (1), 1.77 / 5.0 / 7.0 (0) |
+
+  Those three rounds ran at loads of 6 to 11. In four more at 11 to 16 both builds lost frames in every bench, up to 82 in one run of this step and 28 in one of the parent's, in no steady order; the interface's own share in those runs was still 0.03 to 0.06 ms at the median and 3.2 ms at its worst. From above with everything open: 1.92 / 5.1 / 6.8 (0). The benches should be run again on a quiet machine.
+- **A lens** is read over the island on a thread of its own in 60 to 180 ms (1,024 texels across, 10 m each) and is 4 MB on the GPU. The fields it paints are the land's 16 m fields, so a finer picture would show no more, except of rock.
+- **The atlas** is 2,048 pixels square, 4 MB: the text takes 347 rows of it at the standard scale and 1,124 at 200%. Making it takes 4 to 6 ms, at the start and when the scale is changed.
+- The binary grew from 2.4 to 2.8 MB, the three font files among it.
+- `odin check src -vet-unused` passes; `./build.sh test` passes with `GOLDEN` unchanged; the start island's map, plain and with three overlays, and `--why` are the parent's byte for byte.
+
+**Weak points**
+
+- **Nobody has used it.** No window was opened. Every picture was drawn unseen, and the pointer's rule, the drags, the wheel, the typing in the list's field and the keys have been run only by the test, through the same procedure the window's events go through. The owner's first minutes will find what is wrong.
+- **The look has not been judged in the game.** It is the design's second pass, drawn as the drawings are. Against the drawing (`i1-beside-drawing.jpg`): the top middle and the top right are empty, and the orders bar's place is an empty strip under the hand, so the screen is barer; the column's beds are the blocks' own pictures, which on this island are two grey-green rocks that sit closer together than the drawing's flat colours; the ground's panel has four rows of buttons where the drawing has three; the text is a little softer than the browser's, most at 75%; and a card's tabs hold small grey paragraphs where the drawing has a few short lines.
+- **The card's other tabs are `--why` as it prints.** The first lines and the rock's are written for the card. Ground, Plants, Near and World are the game's own long sentences, with their figures and windows, capitals mended. They need rewriting part by part, in `fields.odin` and beside.
+- **A lens paints the ground and the trees, not the ground plants**, which stand in their own green over it at a hold's scale; and from far off it shows the fields at 10 m, so at a hold's scale a lens is soft.
+- **The hold's messages lead nowhere.** `say` has no place to give, so a click on "Jorris steps ashore" does nothing (I4). The call takes a place.
+- **A dwarf in the hand is marked by a brass square round it**, drawn over the land, not in it: it shows through a hill.
+- **The Places list is of the island under the view** and its find field has never been typed in by hand.
+- **Three keys are P2's and not rows**: G, E and the right click are read from the keyboard and the mouse inside `hold_frame`, so no button can show them. G is the letter the design gives Gather. They should become acts when P3 brings the orders bar.
+- **Lessons and the scale are kept in `build/interface.txt`**, beside the binary, until the game has settings (I-2).
+- **At 200% on a screen 2,560 wide** the list narrows to 126 modules and the card's depth to about 24: usable, and tight.
+- **The step is 2,900 lines** in five files, more than any step before it. The play screen is 1,335 of them.
+
+**For the steps that follow**
+
+- **The top middle and the Dwarves list** (the design's I14) have their places and are not built: `bust`, `hold_count`, `hold_card` and `hold_where` are what they need, and a row's click is `hand_take`.
+- **The orders bar** (P3) is a place on the screen, `Area.Orders`, under the hand. An order is an `Act` with a row in `BINDS`; a tool in the hand is a card with choices.
+- **A system that has news** calls `tell(words, place)`; one with a standing problem calls `alert_raise` and `alert_clear`.
+- **A new screen** (the front door, expedition planning) is a procedure that lists parts, as `play_frame` does.
+

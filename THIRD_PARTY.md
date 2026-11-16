@@ -17,6 +17,15 @@ Some were changed or redrawn by Mineclonia's contributors. They are licensed und
 
 Per-file details are in [`assets/LICENSE.md`](assets/LICENSE.md).
 
+## Typefaces
+
+`assets/fonts/` holds the interface's two typefaces, unchanged, each under the [SIL Open Font License 1.1](https://openfontlicense.org) with its licence beside it:
+
+- **Marcellus** by Brian J. Bonislawsky (Astigmatic): Copyright (c) 2012, with Reserved Font Name "Marcellus". `assets/fonts/OFL-Marcellus.txt`.
+- **Atkinson Hyperlegible** (Regular and Bold) by the Braille Institute of America: Copyright 2020. `assets/fonts/OFL-AtkinsonHyperlegible.txt`.
+
+Both were taken from [Google Fonts' repository](https://github.com/google/fonts). They are embedded in the game binary and stay under the OFL. Pictures of the interface in `docs/` show text set in them. How the licences were read is in [`assets/LICENSE.md`](assets/LICENSE.md).
+
 ## Data behind research figures
 
 No third-party data is stored in this repository. Some figures in `docs/interesting-world/real/` were computed from:

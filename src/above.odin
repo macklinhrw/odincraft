@@ -57,9 +57,13 @@ Above :: struct {
 	}
 
 	// Whether a point of the picture is over the world, where a click, a drag or the wheel is the
-	// world's. Nothing is drawn over the world yet, so every point in the picture is; the interface's
-	// panels are to answer here, once, for everything the pointer does.
-	over_world :: proc(p: [2]f32) -> bool { return p.x >= 0 && p.x < 1 && p.y >= 0 && p.y < 1 }
+	// world's: it is in the picture, and no panel of the interface lies under it (screen_over,
+	// ui.odin). The one place that says so, for everything the pointer does.
+	over_world :: proc(p: [2]f32) -> bool {
+		if p.x < 0 || p.x >= 1 || p.y < 0 || p.y >= 1 do return false
+		_, solid, _ := screen_over(&screen, {p.x*screen.w, p.y*screen.h})
+		return !solid
+	}
 
 	// Cut the world at the ground under the view's middle, or not at all.
 	cut_set :: proc(a: ^Above, on: bool) {
@@ -262,12 +266,14 @@ block_made :: proc(w: ^World, b: [3]i32) -> Mat {
 	return .Air if b.y >= top else m if b.y == top - 1 else crushed(rock_in(f32(b.y) + 0.5, g.under, 0), g.under)
 }
 
-// What why_block says of a block, as words for a panel to show: its lines are caught on their way to
-// standard output. The first line is the block; the rest is what `--why=` prints.
+// What is printed, caught as words for a panel to show: from hear_begin to hear_end, the lines this
+// thread sends to standard output are kept and not printed. With `parts`, why_at marks where each
+// part of what it says begins (why_part, fields.odin).
 @(thread_local) hearing: ^strings.Builder
+@(thread_local) hearing_parts: bool
 stdout_before: ^os.File
 stdout_heard:  os.File
-why_words :: proc(w: ^World, b: [3]i32) -> string {
+hear_begin :: proc(parts := false) {
 	if stdout_before == nil {
 		stdout_before = os.stdout
 		stdout_heard = stdout_before^
@@ -280,11 +286,21 @@ why_words :: proc(w: ^World, b: [3]i32) -> string {
 		}
 		os.stdout = &stdout_heard
 	}
-	words := strings.builder_make(context.temp_allocator)
-	hearing = &words
+	hearing = new(strings.Builder, context.temp_allocator)
+	hearing^ = strings.builder_make(context.temp_allocator)
+	hearing_parts = parts
+}
+hear_end :: proc() -> string {
+	words := strings.to_string(hearing^)
+	hearing, hearing_parts = nil, false
+	return words
+}
+
+// What why_block says of a block, as words: the first line is the block; the rest is what `--why=` prints.
+why_words :: proc(w: ^World, b: [3]i32) -> string {
+	hear_begin()
 	why_block(w, b)
-	hearing = nil
-	return strings.to_string(words)
+	return hear_end()
 }
 
 // What a block is and why the ground it lies in is as it is: the block, then what `--why=` says of

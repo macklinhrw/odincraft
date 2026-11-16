@@ -66,6 +66,19 @@ import "core:strings"
 //   orders=file     the orders the dwarves' world obeys, each with its time (hold.odin)
 //   party=N         how many dwarves the boat brings (default 7), to measure what a larger hold costs
 //   send            with cursor, from above: send the dwarves to the block under the pointer, as a right click does
+//
+// The interface (play.odin) is drawn over every picture. These put it in a state, for a picture or --say:
+//   plain           draw no interface: the world alone
+//   scale=percent   its size, from 75 to 200 in steps of 25 (default: by the picture's height, 100 at 1,440 pixels)
+//   select=x,y      as if that pixel of the picture had been clicked: the thing under it is in the hand
+//   tab=name        with select: the card's depth shown (rock, ground, plants, near, world, or the thing's own)
+//   list=places     that list open; row=N chooses its Nth named place, which takes the view there
+//   lens=name       a lens on: leaves, or a field (rock, water-table, rain, livable, plants, soil); lenses opens their choices
+//   drag            the cut's mark as it is while the pointer drags it (with cut=level)
+//   menu            the menu open
+//   lessons         the one-line lessons shown, as to someone who has learned none
+//   tell=words      a message; alert=words an alert (begin it with ? for a caution)
+//   say             with shot: print what the screen says, area by area
 
 Options :: struct {
 	pos:           [3]f64,
@@ -117,6 +130,11 @@ Options :: struct {
 	orders:        string,
 	party:         int,
 	send:          bool,
+	plain, lenses, menu, lessons, say, drag: bool,
+	scale, row:    int,
+	select:        [2]f64,
+	has_select:    bool,
+	tab, list, lens, tell, alert: string,
 	}
 
 options :: proc() -> Options {
@@ -193,6 +211,22 @@ options :: proc() -> Options {
 		case "orders": o.orders = value
 		case "send":  o.send = true
 		case "party": ok = numbers(value, ",", v[:1]) && v.x >= 1; o.party = int(v.x)
+		case "plain": o.plain = true
+		case "lenses": o.lenses = true
+		case "menu":  o.menu = true
+		case "lessons": o.lessons = true
+		case "say":   o.say = true
+		case "drag":  o.drag = true
+		case "scale":
+			ok = numbers(value, ",", v[:1]) && v.x >= 75 && v.x <= 200 && int(v.x)%25 == 0
+			o.scale = int(v.x)/25
+		case "row":   ok = numbers(value, ",", v[:1]); o.row = int(v.x)
+		case "select": ok = numbers(value, ",", o.select[:]); o.has_select = true
+		case "tab":   o.tab = value
+		case "list":  o.list, ok = value, value == "places"
+		case "lens":  o.lens = value
+		case "tell":  o.tell = value
+		case "alert": o.alert = value
 		case:         ok = false
 		}
 		if !ok {

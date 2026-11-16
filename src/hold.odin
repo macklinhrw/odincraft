@@ -248,6 +248,7 @@ say :: proc(h: ^Hold, format: string, args: ..any) {
 	line := fmt.aprintf("[%d:%02d.%d] %s", s/60, s%60, h.tick%10, fmt.tprintf(format, ..args))
 	append(&h.log, line)
 	if !h.quiet do fmt.println(line)
+	if !h.quiet do tell_log(line)   // and to the screen's messages (play.odin)
 }
 
 feet_on :: proc(b: [3]i32) -> [3]f64 { return {f64(b.x) + 0.5, f64(b.y), f64(b.z) + 0.5} }
@@ -922,6 +923,7 @@ hold_frame :: proc(w: ^World, eye: [3]f64, ray: [3]f32, above: ^Above, passed, d
 	}
 	keys := sdl.GetKeyboardState(nil)
 	down := [2]bool{keys[int(sdl.Scancode.G)], keys[int(sdl.Scancode.E)]}
+	if typing do down = {}   // the keys are a field's (play.odin)
 	if down[0] && !watch.keys[0] {
 		if aimed do hold_send(target.x, target.y, target.z)
 		else do fmt.println("no block is aimed at to send the party to")

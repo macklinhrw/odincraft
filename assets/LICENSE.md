@@ -1,4 +1,6 @@
-# Block textures
+# Block textures and typefaces
+
+## Block textures
 
 `pixel-perfection/` holds block tiles taken from Mineclonia (<https://codeberg.org/mineclonia/mineclonia>),
 an open-source game. Its `LEGAL.md` says its textures, unless noted otherwise, are from
@@ -30,3 +32,34 @@ from Mineclonia on 2026-11-12 and under the same `LEGAL.md` statement (Pixel Per
 some and keeps the others, and fills their clear pixels with their own mean colour. Not taken:
 `flowers_waterlily.png`, which `mcl_flowers/CREDITS.md` credits to VanessaE, and the wildflowers,
 credited to DragonWrangler1 under VoxelForge's licence. `plants.png` is likewise under CC BY-SA 4.0.
+
+## Typefaces
+
+`fonts/` holds the interface's two typefaces (`docs/foundations/interface.md`, I10), three files as
+their makers released them, unchanged. Each is under the [SIL Open Font License, Version 1.1](https://openfontlicense.org),
+whose text and copyright notice stand beside it:
+
+- `Marcellus-Regular.ttf`, version 1.000: Copyright (c) 2012, Brian J. Bonislawsky DBA Astigmatic
+  (AOETI), with Reserved Font Name "Marcellus". Licence: `fonts/OFL-Marcellus.txt`. It sets names.
+- `AtkinsonHyperlegible-Regular.ttf` and `AtkinsonHyperlegible-Bold.ttf`, version 1.006: Copyright
+  2020 Braille Institute of America, Inc. Licence: `fonts/OFL-AtkinsonHyperlegible.txt`. It sets
+  everything else.
+
+All were taken on 2026-11-16 from Google Fonts' repository (<https://github.com/google/fonts>,
+`ofl/marcellus` and `ofl/atkinsonhyperlegible`), with the `OFL.txt` that stands beside each there.
+The licence was read three ways that day and they agree: those two `OFL.txt` files; the repository's
+`METADATA.pb` for each family (`license: "OFL"`); and the licence field inside each font file, which
+says "This Font Software is licensed under the SIL Open Font License, Version 1.1". The Braille
+Institute's own page for Atkinson Hyperlegible was not read; it once gave the face under a licence
+of its own, and the files here are the ones Google Fonts gives under the OFL.
+
+The OFL lets a font be bundled and embedded with any software, the AGPL's included, as long as the
+copyright notice and the licence go with it and the font is not sold by itself (conditions 1 and
+2). The fonts stay under the OFL; they do not become AGPL, and the rest of the repository does not
+become OFL (condition 5 covers the fonts alone). They are embedded in the game binary with `#load`
+and drawn by the game's own reader (`src/type.odin`); none is changed, so the reserved name is not
+in question. A changed copy would have to drop the name "Marcellus".
+
+SHA-256: `1cf0cd10b17d35e852729962cc1ffaffed94514895972458345e2df34abb2f81` Marcellus-Regular;
+`7fb917c89019896d0b52ee84b7cbb3304c18cb90b19a62f5e32712bd23e97669` AtkinsonHyperlegible-Regular;
+`5a3b0c8cc8ca545155150b4512a1fa248298df121c50d6557e651e61fbdab92f` AtkinsonHyperlegible-Bold.
