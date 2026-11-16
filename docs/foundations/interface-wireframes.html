@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interface wireframes</title>
+<style>
+  :root { --bg:#16181b; --ink:#e9e6df; --dim:#a9a59b; --panel:rgba(22,24,27,.90); --line:#4a4d52; --hot:#e0b34a; --bad:#e2725b; --note:#7fb7d9; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width:1500px; margin:0 auto; padding:24px 16px 60px; }
+  h1 { font-size:26px; margin:0 0 4px; } h2 { font-size:20px; margin:44px 0 6px; }
+  p.lead { color:var(--dim); margin:0 0 14px; max-width:980px; }
+  .screen { position:relative; width:100%; aspect-ratio:16/9; border:1px solid var(--line); overflow:hidden; container-type:inline-size;
+            background:#27402f url("../interesting-world/real/default-island-part-two.jpg") 100% 50% / 205% auto no-repeat; }
+  .screen.plain { background:#1d2a33; }
+  .p { position:absolute; background:var(--panel); border:1px solid var(--line); padding:.55cqw .8cqw; font-size:1.02cqw; line-height:1.35; }
+  .p b { font-weight:600; } .dim { color:var(--dim); } .hot { color:var(--hot); } .bad { color:var(--bad); }
+  .k { display:inline-block; min-width:1.5cqw; padding:0 .3cqw; margin-left:.35cqw; border:1px solid var(--line); border-radius:.2cqw; color:var(--dim); font-size:.82cqw; text-align:center; }
+  .btn { display:inline-block; padding:.3cqw .75cqw; margin-right:.3cqw; border:1px solid var(--line); background:rgba(255,255,255,.04); }
+  .btn.on { border-color:var(--hot); color:var(--hot); }
+  .face { display:inline-block; width:2.5cqw; height:2.5cqw; margin:0 .18cqw; border:1px solid var(--line); background:#6b5a48; vertical-align:middle; position:relative; }
+  .face.sel { border-color:var(--hot); } .face i { position:absolute; right:-.3cqw; top:-.3cqw; width:.9cqw; height:.9cqw; background:var(--bad); transform:rotate(45deg); }
+  .tag { position:absolute; width:1.9cqw; height:1.9cqw; border-radius:50%; background:var(--note); color:#0d1114; font-weight:700; font-size:1.05cqw; display:grid; place-items:center; }
+  .tabs span { margin-right:1cqw; color:var(--dim); } .tabs span.on { color:var(--ink); border-bottom:2px solid var(--hot); }
+  .row { display:flex; justify-content:space-between; gap:1cqw; padding:.22cqw 0; border-bottom:1px solid rgba(255,255,255,.07); }
+  ol.legend { columns:2; column-gap:40px; margin:12px 0 0; padding-left:22px; color:var(--dim); max-width:1300px; }
+  ol.legend li { margin:0 0 6px; break-inside:avoid; } ol.legend b { color:var(--ink); }
+  .mark { position:absolute; border:2px dashed var(--hot); background:rgba(224,179,74,.14); }
+  .title { font-size:3.4cqw; font-weight:700; letter-spacing:.02em; }
+  @media (max-width:800px) { ol.legend { columns:1; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Interface wireframes</h1>
+<p class="lead">Drawings for <code>interface.md</code>, not the game. They show where each thing lands on the screen and why. The land behind the first screen is the default island's map; the view from above does not exist in the game yet. Names and numbers are examples.</p>
+
+<h2>1. The play screen</h2>
+<p class="lead">Four regions, each with one job. The top is what is always true. The lower left is the hand: what is selected, or the tool in use, with the orders under it. The right is what to know. The middle is the world, and no panel covers it.</p>
+<div class="screen">
+  <!-- top strip -->
+  <div class="p" style="left:0;top:0;width:100%;height:4.3cqw;display:flex;align-items:center;justify-content:space-between;border-width:0 0 1px">
+    <div><b>Stonewater</b> <span class="dim">· 12th of autumn, 14:20</span> &nbsp;<span class="btn on">⏸<span class="k">Space</span></span><span class="btn">▶<span class="k">1</span></span><span class="btn">▶▶<span class="k">2</span></span><span class="btn">▶▶▶<span class="k">3</span></span></div>
+    <div><span class="face"></span><span class="face sel"></span><span class="face"></span><span class="face"><i></i></span><span class="face"></span><span class="face"></span><span class="face"></span></div>
+    <div>food <b>34</b> &nbsp; drink <b class="bad">0</b> &nbsp; timber <b>55</b> &nbsp; basalt <b>120</b></div>
+  </div>
+  <!-- messages -->
+  <div class="p" style="left:.8cqw;top:5.2cqw;width:23cqw;border:0;background:none;text-shadow:0 1px 3px #000">Dural has come ashore.<br>The stream is rising.<br><span class="dim">Two logs carried to the store.</span></div>
+  <!-- alerts -->
+  <div class="p" style="right:.8cqw;top:5.2cqw;width:20cqw"><div class="row"><span class="bad">◆ No drink in the store</span><span class="dim">go</span></div><div class="row" style="border:0"><span class="hot">▲ Rain: the stream may flood the stores</span><span class="dim">go</span></div></div>
+  <!-- a marked area in the world -->
+  <div class="mark" style="left:44cqw;top:25cqw;width:9cqw;height:5cqw"></div>
+  <!-- view controls -->
+  <div class="p" style="right:.8cqw;top:27cqw;width:9.5cqw"><div class="row"><span>level</span><span><b>+31 m</b></span></div><div class="row"><span>▲<span class="k">R</span></span><span>▼<span class="k">F</span></span></div><div class="row"><span>lenses</span><span class="k">L</span></div><div class="row" style="border:0"><span>walk</span><span class="k">Tab</span></div></div>
+  <!-- the hand -->
+  <div class="p" style="left:.8cqw;bottom:5.6cqw;width:25cqw">
+    <div><b>Dural</b> <span class="dim">· mason, 61</span></div>
+    <div>Carrying basalt to the store, <span class="dim">for the wall by the stream.</span></div>
+    <div class="tabs" style="margin:.5cqw 0"><span class="on">Now</span><span>Needs</span><span>Body</span><span>Work</span><span>Ties</span></div>
+    <div class="dim">Next: the wall waits for 7 more basalt.<br>Thirsty. There is no drink in the store.</div>
+    <div style="margin-top:.6cqw"><span class="btn">Follow</span><span class="btn">Go to her work</span></div>
+  </div>
+  <!-- orders bar -->
+  <div class="p" style="left:.8cqw;bottom:.8cqw"><span class="btn on">Dig<span class="k">D</span></span><span class="btn">Fell<span class="k">T</span></span><span class="btn">Gather<span class="k">G</span></span><span class="btn">Build<span class="k">B</span></span><span class="btn">Store<span class="k">S</span></span><span class="btn">Remove<span class="k">X</span></span></div>
+  <!-- lists bar -->
+  <div class="p" style="right:.8cqw;bottom:.8cqw"><span class="btn">Dwarves<span class="k">F1</span></span><span class="btn">Work<span class="k">F2</span></span><span class="btn">Stores<span class="k">F3</span></span><span class="btn">Places<span class="k">F4</span></span><span class="btn">Chronicle<span class="k">F5</span></span><span class="btn">Menu<span class="k">Esc</span></span></div>
+  <span class="tag" style="left:15cqw;top:4.6cqw">1</span><span class="tag" style="left:48cqw;top:4.6cqw">2</span><span class="tag" style="left:75cqw;top:4.6cqw">3</span>
+  <span class="tag" style="left:24.5cqw;top:6.2cqw">4</span><span class="tag" style="right:21.5cqw;top:6.2cqw">5</span><span class="tag" style="right:11cqw;top:29cqw">6</span>
+  <span class="tag" style="left:26.5cqw;bottom:14cqw">7</span><span class="tag" style="left:41.5cqw;bottom:1.4cqw">8</span><span class="tag" style="right:45.5cqw;bottom:1.4cqw">9</span><span class="tag" style="left:54cqw;top:24cqw">10</span>
+</div>
+<ol class="legend">
+  <li><b>The hold and the clock.</b> Where and when, first thing the eye meets. Pause and speeds live with the clock, with their keys.</li>
+  <li><b>The seven.</b> One picture each. A mark (a shape, not only a colour) when one is hurt, hungry or idle. Click selects; click again goes there.</li>
+  <li><b>The stores, in a few words.</b> Only what the hold is living on now. Click opens the full list.</li>
+  <li><b>Messages.</b> What just happened. They fade, and are kept in the chronicle.</li>
+  <li><b>Alerts.</b> What is wrong and still true, worst first. Each goes to its cause.</li>
+  <li><b>How the world is seen.</b> The cut's level, lenses (rock, water in the ground, rain), and the walk into first person.</li>
+  <li><b>The hand.</b> The selected thing: what it is, what it is doing and why, then tabs, then what can be done. A tool's choices appear here instead when a tool is held.</li>
+  <li><b>Orders.</b> Things to do, left. Each shows its key. Next to the hand, so an order and its target are a short reach apart.</li>
+  <li><b>Lists.</b> Things to know, right. A list opens down the right side, a third of the screen, with the world still in view.</li>
+  <li><b>The world.</b> What will be marked shows before the button is let go.</li>
+</ol>
+
+<h2>2. Expedition planning: where</h2>
+<p class="lead">Three questions in order: where, who, what they bring. What has been chosen stays in view on the right. The site card says what the ground offers and what it lacks, each with its reason, and names the dangers before the player commits.</p>
+<div class="screen">
+  <div class="p" style="left:0;top:0;width:100%;height:4.3cqw;display:flex;align-items:center;justify-content:space-between;border-width:0 0 1px">
+    <div><b>Found a hold</b> <span class="dim">· the world of seed 7</span></div>
+    <div class="tabs"><span class="on">1 Where</span><span>2 Who</span><span>3 What they bring</span></div>
+    <div><span class="btn">Back<span class="k">Esc</span></span></div>
+  </div>
+  <div class="mark" style="left:43cqw;top:31cqw;width:3cqw;height:3cqw;border-radius:50%"></div>
+  <div class="p" style="left:.8cqw;top:5.2cqw;width:12cqw"><div class="row"><span>lenses</span><span class="k">L</span></div><div class="row"><span class="hot">rock</span></div><div class="row"><span>fresh water</span></div><div class="row"><span>livable ground</span></div><div class="row" style="border:0"><span>rain</span></div></div>
+  <div class="p" style="left:.8cqw;bottom:.8cqw;width:30cqw">
+    <div><b>The south bay's head</b> <span class="dim">· the default island</span></div>
+    <div class="row"><span>Fresh water</span><span>a stream, 40 m off</span></div>
+    <div class="row"><span>Landing</span><span>sheltered: the bay faces away from the swell</span></div>
+    <div class="row"><span>Timber</span><span>laurel forest on both slopes</span></div>
+    <div class="row"><span>Rock</span><span>old lavas, cut by dikes: good stone</span></div>
+    <div class="row"><span>Ground to build on</span><span>a flat of 6 ha behind the reeds</span></div>
+    <div class="row"><span class="bad">◆ The stream floods</span><span>the flat is its silt</span></div>
+    <div class="row" style="border:0"><span class="hot">▲ No ore is known</span><span>none shows at the surface</span></div>
+  </div>
+  <div class="p" style="right:.8cqw;top:5.2cqw;width:21cqw;bottom:.8cqw">
+    <div class="dim">Your expedition</div>
+    <div class="row"><span>Where</span><span><b>the south bay's head</b></span></div>
+    <div class="row"><span>Who</span><span>seven, as drawn</span></div>
+    <div class="row"><span>What they bring</span><span>the usual load</span></div>
+    <div class="row" style="border:0"><span>Landing in</span><span>autumn</span></div>
+    <div style="position:absolute;left:.8cqw;right:.8cqw;bottom:.8cqw"><div class="dim" style="margin-bottom:.5cqw">One danger named: the stream floods.</div><span class="btn">Next: who<span class="k">Enter</span></span><span class="btn on">Set out</span></div>
+  </div>
+  <span class="tag" style="left:13.5cqw;top:6cqw">1</span><span class="tag" style="left:47cqw;top:30cqw">2</span><span class="tag" style="left:31.5cqw;bottom:14cqw">3</span><span class="tag" style="right:22.5cqw;top:7cqw">4</span><span class="tag" style="right:23cqw;bottom:1.6cqw">5</span>
+</div>
+<ol class="legend">
+  <li><b>Lenses.</b> The same ones as in play, so the map is read the same way before and after landing.</li>
+  <li><b>The chosen ground,</b> on the island's own map.</li>
+  <li><b>The site card.</b> In words, from what the land already knows. What it lacks is said as plainly as what it has.</li>
+  <li><b>The expedition so far.</b> Always in view, in the place where lists open in play.</li>
+  <li><b>Set out</b> is always available: a party and a load are ready from the start, for a player who wants to begin.</li>
+</ol>
+
+<h2>3. The front door</h2>
+<p class="lead">One screen, five choices, over a slow view of the last world.</p>
+<div class="screen plain">
+  <div class="p" style="left:8cqw;top:12cqw;border:0;background:none"><div class="title">OdinCraft</div><div class="dim">the world of seed 7 · Stonewater, 12th of autumn, year 3</div></div>
+  <div class="p" style="left:8cqw;top:22cqw;width:24cqw">
+    <div class="row"><span class="hot">Continue</span><span class="dim">Stonewater</span></div>
+    <div class="row"><span>Worlds</span><span class="dim">2 worlds, 3 holds, 1 ruin</span></div>
+    <div class="row"><span>New world</span><span class="dim"></span></div>
+    <div class="row"><span>Settings</span><span class="dim">text size, keys</span></div>
+    <div class="row" style="border:0"><span>Quit</span><span class="dim"></span></div>
+  </div>
+  <div class="p" style="right:8cqw;top:22cqw;width:34cqw">
+    <div><b>Making a new world</b> <span class="dim">· seed 12</span></div>
+    <div class="row"><span>The plates' history</span><span>done, 2.4 s</span></div>
+    <div class="row"><span>The region round the start</span><span>done, 0.3 s</span></div>
+    <div class="row"><span class="hot">The islands near the start</span><span>4 of 11</span></div>
+    <div class="row" style="border:0"><span class="dim">The far islands and the mainland</span><span class="dim">made as you play</span></div>
+    <div style="margin-top:.6cqw"><span class="btn">Stop</span></div>
+  </div>
+  <span class="tag" style="left:33cqw;top:23cqw">1</span><span class="tag" style="right:43cqw;top:23cqw">2</span>
+</div>
+<ol class="legend">
+  <li><b>Five choices.</b> A world keeps its holds and its ruins, so Worlds is where an old hold is found again.</li>
+  <li><b>Honest progress.</b> Each stage named as it runs, what is done and what is left, and a way to stop.</li>
+</ol>
+</main>
+</body>
+</html>

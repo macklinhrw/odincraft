@@ -6,7 +6,8 @@ Odincraft is a block game in Odin, SDL3 GPU and Metal (macOS, Apple Silicon): a 
 
 - `ARCHITECTURE.md`: module map, data flow, where to start.
 - `docs/plan.md`: the plan from 2026-11-16 on, in two tracks, the natural world (N) and play (P), with the stories it is for and its rules.
-- `docs/foundations.md`: the foundations, and the steps built so far with what each taught. Read sections 3 and 8 before adding to land, rock, water, plants or living things.
+- `docs/foundations.md`: the foundations, and the steps built so far with what each taught.
+- `docs/foundations/interface.md`: where everything on the screen goes and why. Read it before adding anything the player sees or clicks. Read sections 3 and 8 before adding to land, rock, water, plants or living things.
 - `docs/adr/`: read before changing level of detail, lighting, threading or water.
 - `docs/interesting-world/notes/real-islands.md`: the real islands the land is measured against. Judge a change to the land by those figures.
 - `docs/lessons.md`: why earlier attempts stalled. Read it before proposing architecture or a way of working.
