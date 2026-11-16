@@ -759,8 +759,37 @@ Started 2026-11-14 at the owner's word, in this order (Claude's proposal; the ow
 | 31 | Forming faster: the same land, bit for bit, in less time, so the islands within 64 km are formed before entering again and continents (21) and the plate story (22) keep their budget | | Entering with 64 km of islands in under 2 s; maps identical to the parent's |
 | 32 | The plate history, nearer the real Earth and down to each island. First half: the gaps the comparison with the real Earth measures (`interesting-world/notes/real-plates.md`, "Through time"), in the order they reach the islands: too little high land, too few plates and too much boundary, the first ocean floor surviving, continents that hold level, one plate over half the planet. Second half: a regional history fine enough to tell one island from its neighbour (`foundations/plates.md`, D1's alternative (c)), so each island's uplift, phases and sea come from it; with step 24's rock, the start island is then read from the history and the world has one sea (`open-decisions.md`, 2026-11-15) | 22 | The comparison over eleven seeds against the real Earth; the islands' figures against the real islands; the default island read from the history |
 | 33 | Forming faster again: the same land, bit for bit, in less time, so entering with the islands step 32's history puts within 64 km (nine on seed 7, where there were three) takes no longer than before it (`open-decisions.md`, 2026-11-16) | 31, 32 | Entering seed 7 in 2.8 s or less; maps and the determinism test's hashes identical to the parent's |
+| 34 | Streams from the valley heads: streams begin where real ones do (0.02 km² drained, not 0.12) and run in a bed of stones sized by their floods; stream density and the largest basin at the sea printed against the real islands (`interesting-world/notes/real-hydrology.md`). From the owner's observation of 2026-11-16 that ours were sparse and all one or two blocks wide | 32 | The default island's brooks and stony beds on foot; the stream networks beside the real islands' |
+| 35 | Slide lakes that fill and drain: a slide's lake shallows with what its stream brings and its outlet cuts down through the dam, over the 30 to 1,000 years since the slide (the owner, 2026-11-16) | 32 | The default island's slide and lake; the deepest closed hollow against the real islands |
 
 Steps 17 to 20 started together; step 21 followed the seam test's failure, and step 22 the owner's goal of 2026-11-15 that every island and continent comes out of one history of moving plates. Decisions still open that later steps need: how much of the world is cold and hot (section 9, item 8) before step 25; people (item 9) before step 29; the fantastic (item 10) before step 30.
+
+### Where the plan stands, 2026-11-16
+
+- **Done:** steps 17, 18, 19, 20, 22, 23, 24, 28, 31, 32, 33 and 34; outside the table, the reef kind and Yakushima measured for the granite massif (`interesting-world/notes/real-islands.md`). Step 17's stand-in is replaced by step 22's history and step 32's regional history.
+- **In progress:** step 35, slide lakes.
+- **Half done:** step 21. Its experiment found a method that leaves no seam (ordered pieces), but nothing of it is built. A continent of 30,000 to 50,000 km² is extrapolated at 18 to 30 minutes on three background threads. Phase 3 needs it, and so do rivers wider than about 8 m (step 34).
+- **Not started:** step 25 (it needs item 8 of section 9, cold to hot); 26 (it needs 25); 27 (nothing blocks it); 29 (it needs item 9); 30 (it needs item 10).
+- **Left open in step 32:** one sea for the world, which read into each phase put 33.1% of figures far, so the islands keep their kinds' seas; and the planet's boundaries, which stay two to three times the real length, since the regional history runs the planet's plates and did not shorten them.
+- **The land.**
+  - Every island near the start on seeds 1 to 10, formed alone: 16.3% of figures far from the real islands, against 21.4 before the regional history and 23.6 after its first part; 13.3% on seeds 11 to 40.
+  - The weakest kinds: raised at 71%, judged against Kikaijima, which the reef kind is built after; crater at 30% on 5 islands. The slide's lake is most of what is left on inlets and cone (step 35).
+  - Entering seed 7 takes 2.2 s.
+  - The planet, today, median of eleven seeds against the real Earth: the largest plate 10% (real 20), 40 plates (51), land over 1 km 4.3% (5.7).
+- **What the owner has seen.** None of steps 17 to 35 records the owner having looked at it, and the default island has changed since it was read from the history (an inlets island of old arc lavas, 10.2 km across). Phase 2 is accepted only when the archipelago is, so a viewing pass is due.
+- **Waiting on the owner:**
+  - items 8 to 10 of section 9;
+  - the questions in `open-decisions.md` of 2026-11-16, chiefly:
+    - a step for the crater kind;
+    - real islands for the raised kind, or retiring it;
+    - vents that reopen on old centres;
+    - granite as gentle as Yakushima's;
+    - Ikuchijima for granite against sediments;
+    - the brooks and beds by eye;
+    - rain growing with height while forming;
+    - dry channels above the stream heads;
+    - the planet's boundaries.
+- **Claude's recommended order:** item 8 as recommended, so step 25 can start; step 27 beside it; a viewing pass for the owner; then step 21 built.
 
 ### Step 17, as built
 
@@ -1669,6 +1698,32 @@ Weak points:
 - The raised kind is still judged against Kikaijima, which the reef kind is.
 - The judge was Claude, by the figures and three pictures.
 
+### Step 34, as built
+
+Built 2026-11-16 by Claude on the branch `t3/measure-island-hydrology`, merged as 5676a72. The owner has not yet looked at it. The measurements, sources and pictures are in `interesting-world/notes/real-hydrology.md`; the decisions are Claude's call of 2026-11-16 in `open-decisions.md`.
+
+![Real and generated stream networks drawn the same way: Yakushima's south window, Ikuchijima, Mikurajima and Chichijima above; the default island, a ridge, a raised island and a cone below](interesting-world/real/hydrology-networks.jpg)
+
+- **What the owner saw.** On the maps beside Yakushima and Ikuchijima, ours had sparse streams, and the owner had only ever met streams a block or two wide.
+- **What Claude measured first, and what held.** At 0.12 km² ours had 1.1 to 1.6 km of stream per km² against Yakushima's 1.9 to 2.1. Against each kind's own real islands (0.3 to 1.8) they were already in range. Density follows an island's size on ours and on the real islands alike (Spearman 0.79 on ours), and not its slope. Yakushima, 504 km² under 4 to 10 m of rain a year, stays 20 to 40% denser more than 1 km from the sea; that part is not traced.
+- **Not erosion.** Creep at a half, twice and four times, cutting at twice, three times the time on 16 m cells, the first long phase on 32 m cells and three times the starting roughness each moved density by under 15%. With the game's constants, the scale at which creep and cutting balance lies under the 16 m cell (Perron et al. 2009).
+- **What looked sparse was where streams began.** At 0.12 km² a stream began about 200 m below its divide, so every valley head was dry. In humid Japanese hills a stream with water in it drains a hectare or less. A 16 m grid sees a channel down to about 0.01 km², on GSI's model and ours alike. Streams now begin at 0.02 km² (`HEAD_AREA`). `CHANNEL_AREA` stays the land's measure of a valley, so the figures and the plants do not move.
+- **Width follows floods.** On 34 Japanese mountain rivers the width is about 2.5 times the root of the mean yearly highest flood (PWRI, 2012). On GSI's aerial photographs Yakushima's stony beds measure 10 to 16 m at 7.6 km², 15 to 30 at 20, and 30 to 55 at 38. Every stream now runs in a bed of stones (`river_bed`) 6.4 m across at 1 km², growing as the land drained to the 0.35, and never narrower than the water. The water is as before.
+- **The default island.**
+
+  | | Before | After |
+  |---|---|---|
+  | Stream per km² of land | 1.23 km | 2.91 km |
+  | Stream that holds yoshinobori | 35 km | 74 km |
+  | Widest stream | 4.8 m of water | a 7.9 m bed of stones |
+  | Falls over 2.5 m | 42 | 58 |
+
+- **Rivers of many sizes need larger land.** No generated basin passes 14 km², since no region is wider than 14.3 km. A river wider than about 8 m needs an island of 100 to 500 km² with a range in it, which is the plates' and step 21's work.
+- **Checked by Claude on merging:**
+  - `odin check` passes, and `./build.sh test` passes with `GOLDEN` unchanged: the forming is unchanged, and the streams are cut into the blocks after it.
+  - The eight existing figures are identical to `main`'s on six islands of five seeds.
+  - Both benches, alternating with `main` under a load of 6 to 9: our own work was never over 12.5 ms. The forest flight's median was 1.20 to 1.23 ms against 1.29 to 1.34; the cloud flight's 1.46 to 1.65 against 1.28 to 1.52.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.
@@ -1729,6 +1784,9 @@ Each has the plan's recommendation. Section 8 of each design holds the rest.
 - **Whether one-metre blocks can show fourteen tree silhouettes**, and whether race-drawn community edges look right, will only be known by looking.
 - **Journey sizes** (realm widths, hours of road) are guesses until walked.
 - **Sources quoted from memory** by the designers are listed at the end of each design; the Tolkien and Le Guin quotations and several ecology figures are among them.
+- **Starting more than 64 km from the start island crashes** (`--pos` or `--above` at, for example, 61652,400,-66175 on seed 7). It does on `main` and did on every branch since step 24 at least; 42 km out works. Not traced. *(Inference:)* a player who flies past the islands formed before entering may meet the same fault in play.
+- **Frames over 12.5 ms in play.** In the owner's 628 s session (2026-11-15), 659 frames took longer than 12.5 ms. The benches rarely show it on an idle machine. Not traced.
+- **The benches cannot show headroom on a shared machine.** Since step 31, other agents' work has put the load at 6 to 19, and frames over 12.5 ms come and go on the parent and the change alike. Our own work per frame is the figure that has held, at no frame over 12.5 ms.
 - **The size of this plan** is itself a risk. If a step cannot be shown to the owner in under a minute, the step is too large.
 
 ## 11. What the first steps taught
