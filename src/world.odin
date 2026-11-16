@@ -416,8 +416,9 @@ under_rock :: proc(c: ^Chunk, k: int, y: i32, sea: bool) -> Mat {
 	return .Sand if sea else crushed(rock_in(f32(y) + 0.5, c.under[k], 0), c.under[k])
 }
 
-// Change one block. The edit is remembered for as long as the program runs.
-world_set :: proc(w: ^World, x, y, z: i32, m: Mat) {
+// Change one block. The edit is remembered for as long as the program runs. The dwarves' world is
+// told, unless the change came from it.
+world_set :: proc(w: ^World, x, y, z: i32, m: Mat, tell := true) {
 	key := Key{0, x >> CHUNK_SHIFT, z >> CHUNK_SHIFT}
 	if key not_in w.edits do w.edits[key] = make([dynamic]Edit)
 	list := &w.edits[key]
@@ -429,7 +430,7 @@ world_set :: proc(w: ^World, x, y, z: i32, m: Mat) {
 		}
 	}
 	if !replaced do append(list, Edit{x, y, z, m})
-	hold_block(x, y, z, m)   // the dwarves walk the same blocks
+	if tell do hold_block(x, y, z, m)   // the dwarves walk the same blocks
 
 	// Collision should not wait for the rebuild.
 	if c := w.chunks[key] or_else nil; c != nil && c.ready {

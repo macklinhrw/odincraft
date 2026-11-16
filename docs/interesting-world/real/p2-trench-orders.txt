@@ -1,0 +1,30 @@
+# a trench one block wide, nine long, shut at its east end, with two steps down at its west: the seven are sent to its end, then to its mouth
+125 block 2689 3 -1754 Air
+125 block 2689 2 -1754 Air
+125 block 2689 1 -1754 Air
+125 block 2690 3 -1754 Air
+125 block 2690 2 -1754 Air
+125 block 2690 1 -1754 Air
+125 block 2691 3 -1754 Air
+125 block 2691 2 -1754 Air
+125 block 2691 1 -1754 Air
+125 block 2692 3 -1754 Air
+125 block 2692 2 -1754 Air
+125 block 2692 1 -1754 Air
+125 block 2693 3 -1754 Air
+125 block 2693 2 -1754 Air
+125 block 2693 1 -1754 Air
+125 block 2694 3 -1754 Air
+125 block 2694 2 -1754 Air
+125 block 2694 1 -1754 Air
+125 block 2695 3 -1754 Air
+125 block 2695 2 -1754 Air
+125 block 2695 1 -1754 Air
+125 block 2696 3 -1754 Air
+125 block 2696 2 -1754 Air
+125 block 2696 1 -1754 Air
+125 block 2688 3 -1754 Air
+125 block 2688 2 -1754 Air
+125 block 2687 3 -1754 Air
+130 go 2696 0 -1754
+230 go 2689 0 -1754

@@ -28,6 +28,7 @@ DWARF  :: 1.25   // how many times longer than a person a dwarf takes over the s
 CLIMB  :: 0.6    // the steepest grade counted against a step: a stair of blocks is climbed faster than a bare slope as steep (a guess)
 BUILDS :: 400    // patches one search may make before it gives up
 FOLLOW :: 24     // rooms the goal's ground is followed through to learn whether it is closed off
+ROUND  :: 3.0    // seconds a way is longer for each floor a dwarf stands on: it goes round one where that is quicker, and squeezes past where it is not
 
 Floor :: struct {
 	y:     i16,   // the block its feet are in
@@ -66,12 +67,14 @@ Walk :: struct {
 	// A search's own.
 	cost:             [dynamic]f32,
 	back:             [dynamic]i32,
-	seen, shut:       [dynamic]u32,
+	seen, shut, held: [dynamic]u32,   // held: the search in which a floor was one a dwarf stood on (shun)
+	shun:             [dynamic][3]i32,   // the floors standing dwarves take up, for the search in hand to go round
 	stamp:            u32,
 	heap:             Heap,
 	budget:           int,    // patches the search in hand may still make
 	starved:          bool,   // it wanted one more
 	made:             int,    // patches made in all
+	roomy:            int,    // places the last walk_spots found clear of each other, of water and of tall plants
 }
 
 walk_init :: proc(w: ^Walk, island: ^Formed) {
@@ -123,7 +126,7 @@ patch_make :: proc(w: ^Walk, cx, cz: i32) -> ^Patch {
 	wet: [P*P][FLOORS]u8
 	count: [P*P]u8
 	for k in 0..<P*P {
-		level := c.water[k]
+		level := c.water[k] if f32(c.top[k]) < c.water[k] else NO_WATER   // the land wets only the columns it made wet: a pit dug in a dry bank is dry, as it is in the world drawn (world.odin, build)
 		if c.hollow[k][1] > c.hollow[k][0] && f32(c.hollow[k][0]) < SEA_SURFACE do level = max(level, SEA_SURFACE)   // the sea reaches under a roof
 		for y in 0..=h {
 			if count[k] == FLOORS do break
@@ -203,6 +206,7 @@ patch_make :: proc(w: ^Walk, cx, cz: i32) -> ^Patch {
 		append(&w.back, -1)
 		append(&w.seen, 0)
 		append(&w.shut, 0)
+		append(&w.held, 0)
 	}
 	return p
 }
@@ -250,7 +254,7 @@ floor_step :: proc(w: ^Walk, f: i32, d: int, make_it := true) -> i32 {
 }
 
 // The floor nearest a block within `reach` columns of it, or -1; with `grown`, the nearest dry one under plants.
-walk_near :: proc(w: ^Walk, x, y, z, reach: i32, grown := false) -> (best: i32) {
+walk_near :: proc(w: ^Walk, x, y, z, reach: i32, grown := false, taken: ^map[[3]i32]int = nil) -> (best: i32) {
 	best = -1
 	least := max(i32)
 	for r in 0..=reach {
@@ -262,6 +266,7 @@ walk_near :: proc(w: ^Walk, x, y, z, reach: i32, grown := false) -> (best: i32) 
 			for i in p.first[col]..<p.first[col + 1] {
 				f := w.floors[p.base + i32(i)]
 				dy := i32(f.y) - y
+				if at := ([3]i32{x + dx, i32(f.y), z + dz}); taken != nil && at in taken^ do continue   // a dwarf stands there
 				if s := 4*(dx*dx + dz*dz) + dy*dy; s < least && (f.grown && f.wet == 0 || !grown) do best, least = p.base + i32(i), s
 			}
 		}
@@ -278,7 +283,9 @@ walk_top :: proc(w: ^Walk, x, z: i32) -> (f: i32, ok: bool) {
 }
 
 // Places to stand round a floor, the floor first, no two side by side, none in water or in plants
-// over a dwarf's head, in the order a walker spreading out from it would come to them.
+// over a dwarf's head, in the order a walker spreading out from it would come to them. Where the
+// ground joined to the floor has too few such places, as in a passage, a stream or tall grass, the
+// rest are taken in water and plants, and then side by side: no two are ever the same floor.
 walk_spots :: proc(w: ^Walk, f: i32, out: [][3]i32) -> (n: int) {
 	w.stamp += 1
 	queue := make([dynamic]i32, context.temp_allocator)
@@ -295,6 +302,17 @@ walk_spots :: proc(w: ^Walk, f: i32, out: [][3]i32) -> (n: int) {
 		for d in 0..<4 do if t := floor_step(w, queue[i], d); t >= 0 && w.seen[t] != w.stamp {
 			w.seen[t] = w.stamp
 			append(&queue, t)
+		}
+	}
+	w.roomy = n
+	for apart in ([2]bool{true, false}) do for q in queue {
+		if n == len(out) do return
+		b := floor_block(w, q)
+		beside := false
+		for o in out[:n] do beside ||= o == b || apart && abs(o.x - b.x) <= 1 && abs(o.z - b.z) <= 1
+		if !beside {
+			out[n] = b
+			n += 1
 		}
 	}
 	return
@@ -412,6 +430,7 @@ walk_way :: proc(w: ^Walk, from, to: [3]i32, out: ^[dynamic][3]i32) -> (seconds:
 
 	// The floors of those rooms, by the cost of each step.
 	w.stamp += 1
+	for s in w.shun do if f := walk_floor(w, s.x, s.y, s.z, false); f >= 0 do w.held[f] = w.stamp
 	heap_clear(&w.heap)
 	w.seen[a], w.cost[a], w.back[a] = w.stamp, 0, -1
 	heap_push(&w.heap, {QUICKEST*apart(from, to), a})
@@ -424,7 +443,7 @@ walk_way :: proc(w: ^Walk, from, to: [3]i32, out: ^[dynamic][3]i32) -> (seconds:
 			t := floor_step(w, f, d, false)
 			if t < 0 || w.shut[t] == w.stamp || w.rooms[floor_room(w, t)].on != laid do continue
 			next := floor_block(w, t)
-			g := w.cost[f] + step_seconds(w, f, t)
+			g := w.cost[f] + step_seconds(w, f, t) + (ROUND if w.held[t] == w.stamp && t != b else 0)
 			if w.seen[t] != w.stamp || g < w.cost[t] {
 				w.seen[t], w.cost[t], w.back[t] = w.stamp, g, f
 				heap_push(&w.heap, {g + QUICKEST*apart(next, to), t})
