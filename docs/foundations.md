@@ -767,8 +767,8 @@ Steps 17 to 20 started together; step 21 followed the seam test's failure, and s
 ### Where the plan stands, 2026-11-16
 
 - **Done:** steps 17, 18, 19, 20, 22, 23, 24, 28, 31, 32, 33, 34 and 35; outside the table, the reef kind and Yakushima measured for the granite massif (`interesting-world/notes/real-islands.md`). Step 17's stand-in is replaced by step 22's history and step 32's regional history.
-- **Half done:** step 21. Its experiment found a method that leaves no seam (ordered pieces), but nothing of it is built. A continent of 30,000 to 50,000 km² is extrapolated at 18 to 30 minutes on three background threads. Phase 3 needs it, and so do rivers wider than about 8 m (step 34).
-- **In progress:** steps 25 and 27, started 2026-11-16 once the owner decided item 8 of section 9 (cold to hot: thirty degrees).
+- **Half done, now being built:** step 21. Its experiment found a method that leaves no seam (ordered pieces), but nothing of it is built. A continent of 30,000 to 50,000 km² is extrapolated at 18 to 30 minutes on three background threads. Phase 3 needs it, and so do rivers wider than about 8 m (step 34).
+- **In progress:** steps 25 and 27, started 2026-11-16 once the owner decided item 8 of section 9 (cold to hot: thirty degrees). Step 21 resumed the same day, to build continents as land within the owner's goal of 10 minutes for the whole world's generation, staged coarse first and detail later if need be, with no loss of quality (`open-decisions.md`, 2026-11-16).
 - **Not started:** 26 (it needs 25); 29 (it needs item 9); 30 (it needs item 10).
 - **Left open in step 32:** one sea for the world, which read into each phase put 33.1% of figures far, so the islands keep their kinds' seas; and the planet's boundaries, which stay two to three times the real length, since the regional history runs the planet's plates and did not shorten them.
 - **The land.**
