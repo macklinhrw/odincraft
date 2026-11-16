@@ -96,10 +96,10 @@ land_figures :: proc(g: ^Grid) {
 	rising := 0
 	for h in lists[4] do if h > 30 do rising += 1
 	fmt.print("against")
-	for k in KINDS do if k.name == region.kind {
-		for name, i in k.after do fmt.printf("%s %s", "" if i == 0 else " and", name)
-		if len(k.after) == 0 do fmt.print(" no real island, this kind having none in the set")
-	}
+	names, by_story := judged_by()
+	for name, i in names do fmt.printf("%s %s", "" if i == 0 else " and", name)
+	if len(names) == 0 do fmt.print(" no real island, this kind having none in the set")
+	else if by_story do fmt.printf(", the real island%s its rock's story stands for, not its kind's", "s" if len(names) > 1 else "")
 	fmt.printfln(": shore height within 100 m %s m; shore rising 30 m in 50 m %s%%; slope in the first 100 m %s°",
 		against(0, median(lists[0]), "%.0f", 8), against(1, 100*f32(rising)/f32(max(len(lists[4]), 1)), "%.0f", 10), against(2, math.to_degrees(math.atan(median(lists[1]))), "%.0f", 3))
 	fmt.printfln("  land under 50 m %s%%; over 60° %s%%; fall at a crest %s m; height above the nearest stream %s m",

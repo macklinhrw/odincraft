@@ -69,23 +69,33 @@ Phase :: struct($T: typeid) {
 	vents, spread, build, form, flank, crater, deep: T,
 }
 
-// The real islands the kinds stand for, by the figures start-up prints (measured on the game's own
-// grid: interesting-world/notes/real-islands.md): metres standing within 100 m of the shore, the
-// share of shore rising 30 m within 50 m, the slope of the first 100 m, the share of land under
-// 50 m and over 60°, the fall at a crest, the height above the nearest stream and the deepest
-// closed hollow. A kind is judged against the islands it is after, not against all of them.
+// The real islands the kinds and stories stand for, by the figures start-up prints (measured on the
+// game's own grid: interesting-world/notes/real-islands.md): metres standing within 100 m of the
+// shore, the share of shore rising 30 m within 50 m, the slope of the first 100 m, the share of land
+// under 50 m and over 60°, the fall at a crest, the height above the nearest stream and the deepest
+// closed hollow. An island is judged against the islands its rock's story names (`judged` in
+// STORIES), or where it names none, against those its kind is after; not against all of them.
+// Yakushima is an 8 km window from its south coast up its granite to 1,731 m.
 Real :: struct { name: string, v: [8]f32 }
 REAL := [?]Real{
 	{"Toshima", {82, 65, 40, 14, 1.2, 0.19, 130, 2}}, {"Mikurajima", {117, 81, 51, 5, 2.5, 0.69, 122, 7}}, {"Aogashima", {107, 85, 50, 9, 2.9, 0.63, 96, 77}},
 	{"Kōzushima", {70, 48, 34, 14, 1.8, 0.56, 72, 10}}, {"Hahajima", {85, 85, 39, 16, 1.9, 0.81, 79, 9}}, {"Chichijima", {60, 67, 29, 28, 0.8, 0.73, 54, 7}},
-	{"Kikaijima", {4, 0, 2, 57, 0, 0.05, 10, 1}}, {"Tsushima", {39, 40, 24, 74, 0, 1.25, 29, 4}},
+	{"Kikaijima", {4, 0, 2, 57, 0, 0.05, 10, 1}}, {"Tsushima", {39, 40, 24, 74, 0, 1.25, 29, 4}}, {"Yakushima", {24, 4, 15, 6, 0.0, 0.42, 80, 3}},
 }
 
-// A figure of ours beside the same on the islands this kind is after, with a ! where ours lies
-// outside theirs by more than half as much again and `slack`.
+// The real islands the island is judged against, and whether its rock's story names them.
+judged_by :: proc() -> (names: []string, by_story: bool) {
+	if region.story != nil && len(region.story.judged) > 0 do return region.story.judged, true
+	for k in KINDS do if k.name == region.kind do return k.after, false
+	return nil, false
+}
+
+// A figure of ours beside the same on the islands this one is judged against, with a ! where ours
+// lies outside theirs by more than half as much again and `slack`.
 against :: proc(i: int, ours: f32, format: string, slack: f32) -> string {
 	lo, hi := max(f32), min(f32)
-	for k in KINDS do if k.name == region.kind do for name in k.after do for r in REAL do if r.name == name do lo, hi = min(lo, r.v[i]), max(hi, r.v[i])
+	names, _ := judged_by()
+	for name in names do for r in REAL do if r.name == name do lo, hi = min(lo, r.v[i]), max(hi, r.v[i])
 	if lo > hi do return fmt.tprintf(format, ours)
 	real := fmt.tprintf(format, lo) if lo == hi else fmt.tprintf("%s-%s", fmt.tprintf(format, lo), fmt.tprintf(format, hi))
 	return fmt.tprintf("%s (%s)%s", fmt.tprintf(format, ours), real, "!" if ours > 1.5*hi + slack || ours < lo/1.5 - slack else "")

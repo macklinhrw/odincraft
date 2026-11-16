@@ -54,6 +54,7 @@ Story_Body :: struct {
 
 Story :: struct {
 	name, after: string,   // and the real places it is after
+	judged: []string,      // the real islands (REAL, land.odin) an island telling it is judged against, in place of those its kind is after; none: its kind's
 	laid:   Laid,
 	hosts:  []Window,      // where the plates make it, on the world's fields at the island's middle (story_for); none: wherever no row before it holds
 	kinds:  [6]Story_Kind,
@@ -84,8 +85,9 @@ STORIES := [?]Story{
 		// A pluton under a fast-rising thick crust, unroofed: the island is granite, its rim the
 		// baked beds it rose into. Only within reach of the magma the arc's front rises over:
 		// Yakushima stands about 20 km from Kuchinoerabujima on the front, where Kikaijima, rising
-		// as fast on the forearc's outer ridge far in front of it, is mudstone under its reef.
-		name = "granite massif", after = "Yakushima", laid = .Plates,
+		// as fast on the forearc's outer ridge far in front of it, is mudstone under its reef. Judged
+		// against Yakushima, not its kind's islands, none of which is granite.
+		name = "granite massif", after = "Yakushima", judged = {"Yakushima"}, laid = .Plates,
 		hosts = {{.Crust, 20, ANY, 3}, {.Rising, 0.9, ANY, 0.2}, {.Front, -ANY, 50, 20}},
 		kinds = {0 = {.Sandstone, 2, ANYWHERE, NONE}, 1 = {.Mudstone, 2, ANYWHERE, NONE}, 2 = {.Siltstone, 1, ANYWHERE, NONE}},
 		thick = {10, 40}, hard = 0.4, gap = 80, tilt = {10, 30}, fold = {30, 80}, wave = {1500, 3000},
