@@ -11,7 +11,7 @@ import "core:math"
 Field :: enum u8 {
 	// on the land's 16 m grid
 	Wetness, Livable, Slope, Drainage, Uplift, Rock, Facing, Humped, Inland, Sunlight, Exposure, Cold, Soil_Depth, Soil, Plants, Volcanic, Woods,
-	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge, Surf, Sand_Kept, Washed, Canopy, Lift, Barrier,
+	At_Limit, Cap, Valley, Slid, Disturbed, Stand_Age, Swell, Headland, Contact, Strength, Crossing, Risen, Trail, Lifted, Discharge, Surf, Sand_Kept, Washed, Canopy, Lift, Barrier, Fan, Grade, Water_Table,
 	// from the world's plates at the point's place in the world (archipelago.odin)
 	Setting, Front, Trench, Track, Age, Rising, Depth, Crust, Offshore, Across, Vent,
 	// from the ground the generator makes at the point
@@ -85,6 +85,9 @@ FIELDS := [Field]Field_Info{
 	.Canopy    = {"canopy", "", "share of the sky the stand's crowns hide from the ground: little in the open and in a fresh gap, nearly all under a closed wood", proc(p: ^Point) -> f32 { return canopy_at(p.x, p.z) }, 0, 1, .Ramp, {0.95, 0.90, 0.60}, {0.05, 0.25, 0.08}},
 	.Lift      = {"lift", " m/s", "the wind of 8 m/s off the sea is turned upward by the ground facing it, which a soaring bird rides: the wind's speed times the sine of the slope times the cosine between the way the ground faces and the way the wind comes from", proc(p: ^Point) -> f32 { c := land_cell(p.x, p.z); s := land.slope[c]; return SKY.wind*s/math.sqrt(1 + s*s)*math.cos(math.to_radians(land.facing[c] - f32(region.shape.swell))) if !land.grid.sea[c] else 0 }, 0, 3, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
 	.Barrier   = {"barrier", " m", "the tallest fall between the stream the ground drains to and the sea, which a fish coming up from the sea must get past; 10,000 where no stream reaches the sea", proc(p: ^Point) -> f32 { return fauna.barrier[land_cell(p.x, p.z)] }, 0, 50, .Ramp, {0.10, 0.35, 0.80}, {0.85, 0.20, 0.10}},
+	.Fan       = {"fan", "", "1 at the mouth of the stream whose fan the ground lies on, falling to 0 at the edge of what it lays there (mouths_make, rivers.odin); 0 off any", proc(p: ^Point) -> f32 { _, near := fan_at(p.x, p.z); return near }, 0, 1, .Ramp, {0.95, 0.95, 0.90}, {0.55, 0.30, 0.10}},
+	.Grade     = {"grade", "", "the fall in a metre of the stream whose fan the ground lies on, over its last 300 m to the sea, which sets how coarse a load it brings; 0 off any fan", proc(p: ^Point) -> f32 { f, _ := fan_at(p.x, p.z); return f.measured[1].value if f != nil else 0 }, 0, 0.1, .Ramp, {0.95, 0.95, 0.90}, {0.45, 0.20, 0.10}},
+	.Water_Table = {"water-table", " m", "how far under the ground the water in it stands: at the level of the stream or shore it drains to, where the rain runs off to one; 10,000 where it sinks into the rock or a crater's floor", proc(p: ^Point) -> f32 { return grid_at(land.table, p) }, 3, 0, .Ramp, {0.95, 0.92, 0.85}, {0.10, 0.35, 0.60}},
 	.Setting   = {"setting", "", "where the plates put the point: 0 open sea, 1 a hotspot's track, 2 forearc, 3 the arc's volcanic front, 4 back-arc, 5 shelf, 6 the continent", proc(p: ^Point) -> f32 { return f32(world_point(p).setting) }, 0, 5, .Ramp, {0.10, 0.20, 0.50}, {0.95, 0.80, 0.30}},
 	.Front     = {"front", " km", "from the arc's volcanic front, where its young volcanoes stand", proc(p: ^Point) -> f32 { return world_point(p).front }, 0, 60, .Ramp, {0.85, 0.20, 0.10}, {0.95, 0.95, 0.90}},
 	.Trench    = {"trench", " km", "from the trench where one plate goes down under the other, back on the plate riding over it; under 0, out on the plate going down", proc(p: ^Point) -> f32 { return world_point(p).trench }, -50, 100, .Ramp, {0.10, 0.20, 0.50}, {0.95, 0.95, 0.90}},
@@ -103,7 +106,7 @@ FIELDS := [Field]Field_Info{
 	.Beach     = {"beach", " m", "of sand or stones the waves have laid on the shore (waters_edge, gen.odin)", proc(p: ^Point) -> f32 { return p.laid }, 0, 3, .Ramp, {0.30, 0.55, 0.30}, {0.95, 0.85, 0.50}},
 	.Too_Steep = {"too-steep", "", "how much steeper than soil holds, which is a rise over run of 1.3 (52°) give or take 0.15 in patches", proc(p: ^Point) -> f32 { return p.steep - (SOIL_HOLDS + 0.15*p.vary) }, -0.5, 0.5, .Ramp, {0.30, 0.55, 0.30}, {0.55, 0.50, 0.45}},
 	.Under_Water = {"under-water", " m", "of a lake's or pond's still water over the ground", proc(p: ^Point) -> f32 { l, inside, _ := lake_near(p.x, p.z); return max(l - p.h, 0) if inside else 0 }, 0, 5, .Ramp, {0.95, 0.95, 0.90}, {0.10, 0.30, 0.75}},
-	.Over_Water = {"over-water", " m", "of the ground over the level of the lake or pond it lies in or beside, or of a slow stream (on ground gentler than 1 in 5) within 8 m; under 0, the depth of water over it", proc(p: ^Point) -> f32 { return over_water(p) }, -1, 3, .Ramp, {0.10, 0.30, 0.75}, {0.95, 0.95, 0.90}},
+	.Over_Water = {"over-water", " m", "of the ground over the level of the lake or pond it lies in or beside, or of a slow stream (on ground gentler than 1 in 5) within 8 m, or of the sea where a stream comes into a sheltered bay, or on a flat, of the water in the ground; under 0, the depth of water over it", proc(p: ^Point) -> f32 { return over_water(p) }, -1, 3, .Ramp, {0.10, 0.30, 0.75}, {0.95, 0.95, 0.90}},
 }
 
 // A window holds where its field is over `lo` and up to `hi`, and fades to nothing `edge`

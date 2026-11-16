@@ -29,7 +29,7 @@ DEER := Animal{"sika deer",
 // How many times slower than open ground a person goes through each community's plants (guesses):
 // old laurel and valley forest are halls with an open floor, the ridge wood is low and close, susuki
 // and dwarf bamboo stand over a person's head. A young stand of close poles is twice as slow again.
-GOING := [Community_Kind]f32{.Valley = 1.3, .Slope = 1.2, .Ridge = 2, .Windy = 3, .Coast = 1.5, .Fresh = 2.5, .Alder = 2.5, .Young = 1.8}
+GOING := [Community_Kind]f32{.Valley = 1.3, .Slope = 1.2, .Ridge = 2, .Windy = 3, .Coast = 1.5, .Fresh = 2.5, .Alder = 2.5, .Young = 1.8, .Marsh = 3}
 
 Trail_Segment :: struct { a, b: [2]f32, route: i32, worn: u16 }   // the first route along it, and how many
 Trails :: struct {

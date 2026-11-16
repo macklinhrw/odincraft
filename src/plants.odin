@@ -13,6 +13,7 @@ import sdl "vendor:sdl3"
 // rows are tried in order and the first whose draw comes up at a column stands there. Its pictures
 // are a row of assets/plants.png, built by tools/blocks.py. The flora is from
 // docs/interesting-world/notes/real-vegetation.md, "The ground layer".
+MARSH_FLAT :: 0.02   // rise over run of ground flat enough that the water in it stands at its stream's level (a guess)
 Plant_Kind :: enum u8 { Reed, Sedge, Susuki, Bamboo, Bracken, Fern, Shrub, Ardisia, Forest_Grass, Grass, Knotweed, Dead_Stems, Dune_Sedge, Vitex, Flower }
 Ground_Plant :: struct {
 	name, why: string,
@@ -90,12 +91,14 @@ canopy_at :: proc(x, z: f64) -> f32 {
 // within 8 m: one on ground gentler than 1 in 5, as a stream runs over a valley floor or a plain.
 over_water :: proc(p: ^Point) -> f32 {
 	level, inside, _ := lake_near(p.x, p.z)
-	if !inside {
-		r, ok := river_near(f32(p.x), f32(p.z))
-		if !ok || r.d - r.half > 8 || land_at(land.slope, land.n, p.x, p.z) > 0.2 do return ANY
-		level = r.bank - FREEBOARD
-	}
-	return p.h - level
+	if inside do return p.h - level
+	slope := land_at(land.slope, land.n, p.x, p.z)
+	if r, ok := river_near(f32(p.x), f32(p.z)); ok && r.d - r.half <= 8 && slope <= 0.2 do return p.h - (r.bank - FREEBOARD)
+	// The sea where a stream comes into a sheltered bay, which its water freshens.
+	if f, _ := fan_at(p.x, p.z); f != nil && land_at(land.surf, land.n, p.x, p.z) < SHELTER do return p.h - SEA_SURFACE
+	// On a flat, the water in the ground stands at the stream or shore it drains to.
+	if slope <= MARSH_FLAT do if t := land_at(land.table, land.n, p.x, p.z); t < 10 do return p.h - land_at(land.z[0], land.n, p.x, p.z) + t
+	return ANY
 }
 
 // A plant as the renderer takes it, in a Quad: the column's corner from the chunk's

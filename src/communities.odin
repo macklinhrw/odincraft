@@ -78,7 +78,7 @@ SPECIES := [Tree_Kind]Species{
 // how thickly trees stand (the share of 6 m squares with one), how many of those squares have a
 // bush under the trees as well, the species in their shares, what covers the ground between
 // them, and its colour on the map.
-Community_Kind :: enum u8 { Valley, Slope, Ridge, Windy, Coast, Fresh, Alder, Young }
+Community_Kind :: enum u8 { Valley, Slope, Ridge, Windy, Coast, Fresh, Alder, Young, Marsh }
 Community :: struct {
 	name, why:       string,
 	weight, patch:   f32,          // its weight in the race, and the size of its patches, metres
@@ -109,6 +109,10 @@ COMMUNITIES := [Community_Kind]Community{
 		{{{.Disturbed, -ANY, 120, 180}}}, 0.6, 0.1, {0, 0, 0, 0, 0, 0.2, 0.8}, .Susuki, {0.80, 1.00, 0.30}},
 	.Young = {"young wood", "tabu and small evergreens grow up through the alders, a darker and lower wood than the old forest round it", 8, 100,
 		{{{.Disturbed, -ANY, 400, 500}}}, 0.8, 0.12, {0.45, 0, 0.1, 0.25, 0, 0, 0.2}, .Litter, {0.30, 0.65, 0.55}},
+	// Where the water in the ground stands within a metre of the surface, on a valley floor or the flat
+	// at a bay's head, the trees of the forest cannot root: reeds and sedges take it, with a few alders.
+	.Marsh = {"reed marsh", "the water stands at the ground on this flat, too wet for the forest's trees to root: reeds and sedges, and a few alders", 40, 80,
+		{{{.Water_Table, -ANY, 1, 0.5}, {.Slope, -ANY, MARSH_FLAT, 0.01}}}, 0.03, 0, {0, 0, 0, 0, 0, 0, 1}, .Susuki, {0.80, 0.40, 0.75}},
 }
 crowns: [Community_Kind]f32   // the mean radius of a community's crowns, metres
 @(init) crowns_init :: proc "contextless" () {

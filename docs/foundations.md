@@ -770,8 +770,8 @@ Steps 17 to 20 started together; step 21 followed the seam test's failure, and s
 
 - **Done:** steps 17, 18, 19, 20, 22, 23, 24, 28, 31, 32, 33, 34 and 35; outside the table, the reef kind and Yakushima measured for the granite massif (`interesting-world/notes/real-islands.md`). Step 17's stand-in is replaced by step 22's history and step 32's regional history.
 - **Half done, now being built:** step 21. Its experiment found a method that leaves no seam (ordered pieces), but nothing of it is built. A continent of 30,000 to 50,000 km² is extrapolated at 18 to 30 minutes on three background threads. Phase 3 needs it, and so do rivers wider than about 8 m (step 34).
-- **In progress:** steps 25 and 27, started 2026-11-16 once the owner decided item 8 of section 9 (cold to hot: thirty degrees). Step 21 resumed the same day, to build continents as land within the owner's goal of 10 minutes for the whole world's generation, staged coarse first and detail later if need be, with no loss of quality (`open-decisions.md`, 2026-11-16).
-- **Not started:** 26 (it needs 25); 29 (it needs item 9); 30 (it needs item 10).
+- **In progress:** steps 25 and 27, started 2026-11-16 once the owner decided item 8 of section 9 (cold to hot: thirty degrees). Step 21 resumed the same day, to build continents as land within the owner's goal of 10 minutes for the whole world's generation, staged coarse first and detail later if need be, with no loss of quality (`open-decisions.md`, 2026-11-16). Step 27's first part (mouths, the bay-head flats, reed marsh) is merged; its second part, the caves, is left for a step of its own ("Step 27, part one, as built").
+- **Not started, and now ordered by `plan.md`:** floras (its N5), peoples and history (P9), the fantastic (P7).
 - **Left open in step 32:** one sea for the world, which read into each phase put 33.1% of figures far, so the islands keep their kinds' seas; and the planet's boundaries, which stay two to three times the real length, since the regional history runs the planet's plates and did not shorten them.
 - **The land.**
   - Every island near the start on seeds 1 to 10, formed alone: 14.0% of figures far from the real islands, against 21.4 before the regional history, 23.6 after its first part and 16.3 before step 35; 11.4% on seeds 11 to 40.
@@ -1819,6 +1819,141 @@ Weak points:
 - **Ponds in the scar stay deep.** The scar is a spoon cut down to the valley floor and closed by the debris at its foot, and only its own few hectares drain into it.
 - **A filled lake leaves no feature.** Nothing names the flat of silt where it stood.
 - The judge was Claude, by the figures and four pictures.
+
+### Step 27, part one, as built: mouths, the flats at bay heads, and marshes
+
+Built 2026-11-16 by Claude on the branch `t3/ground-and-water-by-kind`, from `main` at 05a5377, alongside step 25. This is the first part of step 27: river mouths by kind, deposition and wetlands. Part two, lava tubes and solution caves, is left for a step of its own (below). The owner has not looked at it. The choices are Claude's call of 2026-11-16 in `open-decisions.md`.
+
+**What changed for the player.**
+
+- A stream that meets the sea lays what its floods bring there. On a steep island it rolls blocks to its mouth: a beach of blocks of its own rock on cobbles, between the cliffs. Below a gentler stream the shore is gravel.
+- At the head of a sheltered bay, the flat a stream built shelves gently under the water. Mud lies at the water's edge, and reeds stand in the shallows over it.
+- Where the water in the ground stands at the surface, on a valley floor or the flat at a bay's head, a reed marsh holds: reeds and sedges, pools of open water, and a few alders.
+- `--why` says what a mouth brings and why, and the map tints the marshes the colour of reeds.
+
+![Seed 7's default island, the head of its south bay: reeds standing in the shallows over the mud a 2.6 km² stream brought, the flat behind](interesting-world/real/step27-bayhead.jpg)
+
+**What the sources say.**
+
+- **What a river brings follows its bed's fall.** Japan's river engineers divide a river by its bed's slope (Yamamoto 1994, in the Ministry of Land, Infrastructure, Transport and Tourism's [segment table](https://www.mlit.go.jp/river/bousai/hukkyu/shinsei/4/segment.pdf); a search summary, the table not read in full):
+  - steeper than 1 in 60: the mountain segment, blocks of every size;
+  - 1 in 60 to 1 in 400: the fan, gravel of 2 cm and more;
+  - 1 in 400 to 1 in 5,000: the natural-levee reach, sand;
+  - gentler: the delta, silt and fine sand.
+- **Short steep streams roll blocks to the sea.** On Yakushima's south coast, rounded granite blocks of 3 m and more lie at the river mouths and on the beaches beside them, carried down by the rivers. Short steep rivers carry their blocks all the way to the mouth, while longer ones leave them on the way (Shimazu, Japan Geoscience Union 2022, HGM03-P04, and 2023, HGM02-02, ["Huge block deposits at river mouths and on marine terraces in the south coast of Yaku Island"](https://confit.atlas.jp/guide/event/jpgu2023/subject/HGM02-02/date); both from search summaries, the abstracts not read).
+- **Rias have mud flats and reed beds at their heads.**
+  - Tsushima's Asō and Tsutsu bays are "continuous mild ria coastlines", with 0.7 km² of tidal mud flat in all (the Ministry of the Environment's [coastal EBSA page for Tsushima](https://www.env.go.jp/en/nature/biodic/kaiyo-hozen/kaiiki/engan/15701.html), read).
+  - Across the strait, the inner coves of Imari Bay's ria coast hold rare snails in the reed beds and tidal flats of their river mouths and inner bays (the [ministry's page](https://www.env.go.jp/nature/biodic/kaiyo-hozen/kaiiki/engan/15603.html) for Matsuura and Imari Bay; a search summary).
+- **A larger stream on a larger island builds a plain.** Iki's largest river, the Hatahoko, runs through Fukaetabaru, Nagasaki's second largest natural alluvial plain, to Uchime Bay. Small boats went 1.5 km up it to the ancient port of Haru-no-tsuji (the [Haru-no-tsuji site report](https://sitereports.nabunken.go.jp/ja/article/120931/pdf_page) and Nagasaki Prefecture's plans; a search summary).
+- **Reeds and alders.** Phragmites stands in shallower water than *Typha* or makomo (`interesting-world/notes/real-vegetation.md`). The swamp alder, *Alnus japonica*, is the tree of Japan's lowland wetlands (memory). The game's one alder stands for it.
+
+**What was traced first.** The bay-head flats the forming built (`coast`, `FLAT`) stood 2.8 to 4.3 m over the sea at their mouths, all the way to their front. Each fell to the water in a step of 2 to 4 m, with deep water beyond it. Nothing lay at the sea's level for mud or reeds. On the default island, every one of 96 mouths fell 1 in 71 or more over its last 300 m.
+
+**What changed**, in `erosion.odin`, `rivers.odin`, `gen.odin`, `plants.odin`, `communities.odin`, `land.odin` and `fields.odin`:
+
+- **Deposition: the bay-head flat shelves under the sea** (`coast`). What a stream brings fills the sheltered water nearest its mouth first, as before. It no longer fills it to 4 m everywhere:
+  - It builds to 1 m over the sea by the mouth (`FLAT`).
+  - It falls 1 in 200 away from the mouth (`FLAT_FALL`), to 1.5 m under the sea (`FLAT_FOOT`).
+  - Under that, the deposit's front falls to the bay's floor.
+  - The island goes on rising under the deposit, so the oldest part of a flat stands highest, at 2 to 4 m.
+  - Every figure here is a guess. The design asked for a deposition term on islands over about 10 km (`foundations/water.md`, section 5). A flat's size already follows its stream's load, so a larger stream on a larger island builds a larger flat, and no new term was added (Claude's call).
+- **Mouths** (`mouths_make`, `rivers.odin`). Each stream that reaches the sea is a feature: what it drains, its fall over its last 300 m, and how open its shore is.
+  - The ground round it is its fan, out to 30 m and 200 m more for each root of a km² drained (a guess).
+  - Three rows of `SURFACES` read two new fields, `fan` and `grade`:
+    - blocks at the mouth where the stream falls more than 1 in 60, within 40 m of the sea and under 4 m;
+    - gravel by the mouth where it falls 1 in 60 to 1 in 400;
+    - tidal mud at the water's edge where the shore is sheltered (`SHELTER`) and flat.
+  - The blocks are the strongest rock the stream cuts at its mouth, or the rock upstream where that is read (`pebbles_make`). They are as large as that rock breaks (`crack`): 2 to 3.7 m across on basalt, 5 to 8 m on granite. Cobbles of the rock lie between them.
+- **The water in the ground** (`table`, `land_drained`; the field `water-table`). It stands at the level of the stream or shore the ground drains to. It is out of reach where the water sinks: into a crater's floor, as on Aogashima, or into rock that drinks the rain, as Kikaijima's reef does.
+- **Reed marsh** (a new community). It holds where the water in the ground is within a metre of the surface, on ground flatter than 1 in 50 (`MARSH_FLAT`). Reeds and sedges take it, with alders on 3 in 100 of its places.
+  - Reeds and sedges read the water in the ground on such flats, and the sea where a stream comes into a sheltered bay (`over_water`).
+  - Pools of open water stand in it (`marsh_pool`, near the player only). In 55 of every hundred 12 m squares of marsh, a pool 3 to 8 m across lies a little under the ground. Its water stands at the level of the water in the ground at its middle. The pools' shapes are a guess.
+- `--why` says what the mouth whose fan a point is on brings, and why. Start-up prints the mouths by what they bring, and where the largest of each lies.
+
+**The default island** (seed 7, inlets, 10.2 km):
+
+| | `main` | this |
+|---|---|---|
+| Mouths | none recorded | 81: 64 bring blocks, 15 gravel, 2 sand and silt |
+| Its largest mouth | | 2.61 km² at 424, 808, falling 1 in 412 |
+| Reed marsh | | 3% of the land |
+| River silt soil | 3% | 5% |
+| The slide | 2.3 million m³, a lake of 1.7 ha, 4 m deep, and 2 ponds | 2.4 million m³ from the same hillside, a lake of 2.3 ha, 3 m deep, and 1 pond |
+| Places | 5 | 4: Black Scar is no longer named, and Windtop is East Top |
+
+The land everywhere differs by metres: the bays have silted differently through the whole history. The highest point is 493 m where it was 492. The deepest closed hollow is 12 m where it was 5, within what Tsushima and Chichijima's figures allow.
+
+**Against the real islands**, seeds 1 to 10, every island near the start formed alone, the eight figures `islands.py` counts:
+
+| Kind (islands) | Figures far, `main` | this | Mouths: blocks / gravel / sand | Reed marsh, mean share of land |
+|---|---|---|---|---|
+| All (83) | 14.0% | 14.0% | 4,528 / 613 / 69 | |
+| cone (8) | 0 | 0 | 361 / 0 / 0 | 0 |
+| crater (5) | 30.0 | 30.0 | 124 / 0 / 0 | 0 |
+| domes (4) | 18.8 | 18.8 | 425 / 5 / 0 | 0.5% |
+| inlets (31) | 2.8 | 2.8 | 1,752 / 435 / 23 | 2.0% |
+| raised (10) | 66.2 | 66.2 | 1,043 / 42 / 0 | 0.5% |
+| reef (10) | 0 | 0 | 51 / 28 / 4 | 0 |
+| ridge (7) | 10.7 | 10.7 | 436 / 53 / 11 | 1.0% |
+| worn (8) | 0 | 0 | 336 / 50 / 31 | 2.4% |
+
+- **One figure on one island is newly far, and one is no longer far.** Both are the deepest closed hollow, and both are a slide's lake.
+  - Seed 8's island 1: the slide now breaks from another hillside, at 5.9 million m³ against 0.9. It dams a lake of 38.7 ha, 35 m deep at 190 years, where the hollow was 4 m. This is the young deep lake of step 35's open question.
+  - Seed 10's island 0: the hollow is 3 m where it was 25.
+  - A slide is placed where its host holds best, and the land the bays' silt reshapes moves that place.
+- **Five figures already far moved 1 further**: on four raised and ridge islands, land under 50 m by a point, the height over the stream by 1 m, the shore by 1 m, and faces over 60° by 0.1 point. 207 of the 600 figures moved.
+- **The two stream figures**, medians by kind, `main` against this (islands far):
+  - Stream km per km² at 0.12 km²:
+    - cone 1.50/1.50 (0/0), crater 0.82/0.82 (1/1), domes 1.19/1.18 (0/0)
+    - inlets 1.25/1.35 (0/0), raised 1.69/1.69 (0/0), reef 1.37/1.37 (1/1)
+    - ridge 1.51/1.58 (1/3)
+  - On a shelving flat, streams from the hills cross to the sea each on its own, rather than meeting. Two ridge islands near 1.58, where a figure against Hahajima's 0.92 counts as far, passed it: seed 2's island 4, 1.56 to 1.60, and seed 7's island 1, 1.51 to 1.59.
+  - The largest basin at the sea: inlets 2.1 → 2.3 km², ridge 3.3 → 3.4, others as before; far on the same 14 islands.
+
+**Cost.**
+
+- **Entering seed 7.** Measured as `--bench=1` wall time, ten rounds alternating with `main` under a load of 7 to 13: 2.25 to 2.51 s against 2.25 to 2.51. The new build's first run, cold, took 6.5 s.
+- The default island's land forms in 0.92 to 1.09 s, against `main`'s 0.88 to 1.08.
+- **The forest flank**, two runs each: our work's median 1.32 and 1.14 ms against 1.12 and 1.08, and over 12.5 ms on no frame of either.
+- **Down through cloud**, eight runs each, alternating, under a load of 7 to 13. Our work was over 12.5 ms on 3, 0, 8, 7, 9, 8, 0 and 0 frames, against `main`'s 0, 2, 6, 1, 10, 5, 0 and 3. Its median was 1.32 to 3.18 ms against 1.32 to 2.93.
+  - Both builds pass 12.5 ms in the busy minutes and neither does in the quiet ones. The new work per column is two array reads, and a few more on flats and in fans.
+  - The benches should be run again on a quiet machine.
+- `src/` grew by 146 lines (172 added, 26 removed).
+
+**Checked.**
+
+- `./build.sh test` passes. Both hashes in `GOLDEN` changed on purpose: the bays' silt and the reed marsh.
+- `odin check src -vet-unused` is clean.
+- Pictures (`interesting-world/real/step27-*.jpg`, taken with `--shot`):
+  - the default island's bay head and its reed bed;
+  - a reed marsh on a valley floor with its pools;
+  - blocks at the largest mouth of seed 2's cone island 7;
+  - the largest mouth of seed 6's worn island, 12.3 km across, with its flat, mud and marsh;
+  - the maps round each.
+
+![The maps round each, 1.2 km across: the default island's south bay head (above) and west valley (middle), `main` on the left and this on the right, the reed marsh tinted the colour of reeds and the mud dark; below, seed 2's cone island 7 at its largest mouth and seed 6's start island at its largest](interesting-world/real/step27-maps.jpg)
+
+![Seed 6's start island, worn, 12.3 km across: a 5.6 km² stream comes out over its mud flat, a reed marsh with pools and alders on the flat beside it](interesting-world/real/step27-larger-mouth.jpg)
+
+![Seed 2's cone island 7: blocks of basalt on cobbles where a 2.4 km² stream falling 1 in 7 meets the sea, between cliffs of scoria](interesting-world/real/step27-blocks.jpg)
+
+![A reed marsh on the default island's west valley floor: sedges, pools and alders](interesting-world/real/step27-marsh.jpg)
+
+**Weak points:**
+
+- **No tides.** The mud flat stands under up to 1.5 m of still sea, and reeds stand in it. A real flat is bared twice a day.
+- **The reed marsh has no tile of its own.** Its ground is susuki's colour, and only near the player do reeds and sedges show.
+- **Every fan reaches as far as the root of its land.** A mouth's blocks, gravel and mud do not follow the waves along the shore. A larger stream's flat is one lobe, with no channels splitting across it.
+- **Streams cross a flat apart.** That adds stream length on flats (above).
+- **Wetlands read the land, not the rain.** Step 25's rain should set where the water in the ground stands, once it merges.
+- **No real island's marsh share was measured.** Tsushima's 0.7 km² of mud flat is about 0.1% of its 700 km² (its area from memory); ours are 0 to 2.4% marsh.
+- The judge was Claude, by the figures and the pictures.
+
+**Part two, left for its own step.** Lava tubes on a young volcanic island, and solution caves in limestone, each a roofed place (`HOLLOWS`, `events.odin`) placed by rows on the island's rock and history:
+
+- **A lava tube**: a passage 3 to 5 m high a few metres under a young flow, running down from its vent, with skylights where the roof is thin (NPS; USGS 1997; `interesting-world/notes/real-geology.md`). Its host is the cone kind's runny lava and its age.
+- **A solution cave**: entered from a valley wall where the lowest limestone outcrops, as on Okinoerabujima, whose Shōryūdō runs 3.5 km in raised reef limestone (Japan's tourism agency, by a search summary). Its host is the reef story's limestone and the layered story's low limestone bed.
+- The existing machinery already carves a hollow and draws it near and far. "What not to build yet" holds: a cave a player can walk into, not a system, and no water that flows under a roof.
 
 ### Phase 3: the mainland and the known lands
 

@@ -492,6 +492,7 @@ Land :: struct {
 	sun:     []f32,    // clear-sky sunlight through a year, against the same ground lying flat
 	exposed: []f32,    // 0 in a hollow sheltered from the wind to 1 on a crest or shore facing the wind and salt
 	above:   []f32,    // metres over the stream or shore a cell drains to; the cold air of a still night pools from there up
+	table:   []f32,    // metres under the ground the water in it stands: `above`, where the water runs off to that stream or shore; SANK where it sinks into the rock or a crater's floor
 	soil:    []f32,    // metres of soil over the rock
 	community: []u8,   // the plant community that won the race for each land cell (plants_init), 255 at sea
 	age:     []f32,    // years since a storm or slide last threw the canopy of the stand a cell lies in (plants_init)
@@ -503,6 +504,7 @@ Land :: struct {
 	supply:  []f32,    // sand the rivers bring the shore, from each mouth along 320 m of it
 	lifted:  []f32,    // metres the wind off the sea has been raised to by the ground it crossed, at sea too
 	pebble:  []Mat,    // the rock a stream's gravel is of (pebbles_make, rock.odin), or Air; none where the rock was not read from the island's setting
+	mouth:   []u16,    // 1 + the stream mouth whose fan a cell lies in (mouths_make, rivers.odin), or 0
 }
 
 // Ground a person could live on, from where the villages on eight real islands stand
@@ -874,15 +876,18 @@ land_local :: proc(g: ^Grid) {
 	}
 }
 
-// Where cold air pools: the height over the stream a cell drains to, or over the sea; and the
-// land the stream drains.
+// Where cold air pools: the height over the stream a cell drains to, or over the sea; the land the
+// stream drains; and how deep the water lies in the ground, which is as deep where it runs off to a
+// stream or the sea, and out of reach where it sinks into the rock or a crater's floor.
+SANK :: 1e4
 land_drained :: proc(g: ^Grid) {
-	delete(land.above); delete(land.valley)
-	land.above, land.valley = make([]f32, g.n*g.n), make([]f32, g.n*g.n)
+	delete(land.above); delete(land.valley); delete(land.table)
+	land.above, land.valley, land.table = make([]f32, g.n*g.n), make([]f32, g.n*g.n), make([]f32, g.n*g.n)
 	for ci in g.order {
 		c, r := int(ci), g.next[ci]
 		land.above[c] = 0 if g.area[c] >= CHANNEL_AREA || r == SINK else g.z[c] if r < 0 else g.z[c] - g.z[r] + land.above[r]
 		land.valley[c] = g.area[c] if g.area[c] >= CHANNEL_AREA || r < 0 else land.valley[r]
+		land.table[c] = SANK if r == SINK || r >= 0 && land.table[r] >= SANK || wear(g, c, g.z[c] - 0.5).runs < 0.5 else land.above[c]
 	}
 }
 

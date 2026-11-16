@@ -217,6 +217,8 @@ land_map :: proc(path, overlay: string) {
 					col = math.lerp(col, map_colour(bed)*shade, 0.8*bare)
 					// A slide's debris is tinted ochre and its scar pale.
 					if s := land_at(land.slid, land.n, x, z); abs(s) > 0.5 do col = math.lerp(col, ([3]f32{0.80, 0.50, 0.20} if s > 0 else {0.90, 0.88, 0.84})*shade, f32(0.5))
+					// A reed marsh is tinted the colour of reeds.
+					if land.community[land_cell(x, z)] == u8(Community_Kind.Marsh) do col = math.lerp(col, [3]f32{0.70, 0.72, 0.40}*shade, f32(0.6))
 				}
 				if r, near := river_near(f32(x), f32(z)); near && r.d < max(r.half, 4) do col = {0.10, 0.30, 0.75}
 				else if near && r.d < r.bed do col = [3]f32{0.78, 0.76, 0.70}*shade   // the bed of stones round the water
@@ -226,9 +228,9 @@ land_map :: proc(path, overlay: string) {
 			}
 			// The shore as the ground has it (waters_edge, gen.odin): sand, stones and the rock
 			// platform in their own colours where they stand over the sea, and the stacks.
-			if paint == nil && land_at(land.surf, land.n, x, z) > 0.01 {
+			if _, fan := fan_at(x, z); paint == nil && (land_at(land.surf, land.n, x, z) > 0.01 || fan > 0) {
 				p := point_at(x, z, 8)
-				if w := SURFACES[surface_row(&p)].host; p.h > 0 && len(w) > 0 && (w[0].field == .Beach || w[0].field == .Surf) || p.steep == 3 {
+				if w := SURFACES[surface_row(&p)].host; p.h > 0 && len(w) > 0 && (w[0].field == .Beach || w[0].field == .Surf || w[0].field == .Fan) || p.steep == 3 {
 					_, m, _ := surface_at(x, z, 8)
 					col = map_colour(m)*shade
 				}

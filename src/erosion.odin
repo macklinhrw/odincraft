@@ -259,7 +259,13 @@ PLATFORM  :: 2      // metres under the sea that a cut shore is left,
 ABRADE    :: 1e-5   // and m/yr the waves wear it lower, slowing to nothing at
 WAVE_BASE :: 20     // this depth, so a platform deepens away from its cliff
 SHELTER   :: 0.07   // exposure below which the waves neither undercut a shore nor carry silt off
-FLAT      :: 4      // metres over the sea that floods build a flat of river silt to
+// What a stream brings settles out of the still water of a sheltered bay up to its surface, and the
+// tides and floods lay it a little higher by the mouth: a flat of silt that falls gently away from
+// the mouth under the water to a foot, under which its front falls steeply to the bay's floor. (Every
+// figure a guess; mud flats fall about 1 in 1,000 on wide tidal coasts, more steeply in a small bay.)
+FLAT      :: 1      // metres over the sea it is built to by the mouth,
+FLAT_FALL :: 0.005  // falling this many metres for each metre out from the mouth,
+FLAT_FOOT :: -1.5   // to this far under the sea at most
 REEF_DEPTH :: 30    // metres: coral grows up toward the sea from water no deeper than this,
 REEF_TOP   :: 1.5   // and to this far under it: the reef's flat, just under the lowest tides
 
@@ -338,31 +344,32 @@ coast :: proc(g: ^Grid, dt: f32) {
 	// the silt runs out or the water grows open, where the waves carry the rest away.
 	if region.shape.silt == 0 do return
 	if g.reached == nil do g.reached = make([]i32, n*n)
-	queue := make([dynamic]i32)
+	queue := make([dynamic][2]i32)   // a cell, and how many cells out from the mouth it lies
 	defer delete(queue)
 	for ci in g.order {
 		if g.next[ci] >= 0 || g.area[ci] < CHANNEL_AREA do continue
 		g.mouths += 1
 		left := g.load[ci]*f32(region.shape.silt)
 		clear(&queue)
-		append(&queue, ci)
+		append(&queue, [2]i32{ci, 0})
 		for head := 0; head < len(queue) && left > 0; head += 1 {
-			k := int(queue[head])
+			k, out := int(queue[head].x), queue[head].y + 1
+			top := max(FLAT - FLAT_FALL*g.d*f32(out), FLAT_FOOT)
 			for o in OFFSETS {
 				x, y := k%n + o.x, k/n + o.y
 				c := y*n + x
 				if x < 0 || y < 0 || x >= n || y >= n || !g.sea[c] || g.reached[c] == g.mouths do continue
 				g.reached[c] = g.mouths
 				if exposure(open, n, x, y, r, ahead) >= SHELTER do continue
-				need := (FLAT - g.z[c])*g.d*g.d
+				need := max(top - g.z[c], 0)*g.d*g.d
 				if left < need {
 					g.z[c] += left/(g.d*g.d)
 					left = 0
 					break
 				}
-				g.z[c], g.sea[c] = FLAT, false
-				left -= need
-				append(&queue, i32(c))
+				g.z[c] = max(g.z[c], top)
+				if g.z[c] > 0 do g.sea[c] = false
+				append(&queue, [2]i32{i32(c), out})
 			}
 		}
 	}
