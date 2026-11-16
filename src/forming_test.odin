@@ -11,7 +11,7 @@ import "core:thread"
 // island and its nearest neighbour and hash what forming leaves. A change that alters the land on
 // purpose updates GOLDEN, and says so in its commit; any other change must leave it as it is.
 
-GOLDEN :: [2]u64{0xf48f867a7a20ab61, 0x3436344872982ea9}   // seed 7: the start island, island 1
+GOLDEN :: [2]u64{0xf48f867a7a20ab61, 0xebb272ad216e107b}   // seed 7: the start island, island 1 (since step 32's history, an inlets island)
 
 @(private="file")
 land_hash :: proc() -> u64 {
