@@ -4,10 +4,10 @@ This is a map for someone opening the code for the first time. The design reason
 
 ## Shape of the program
 
-`src/` is a single Odin package (about 13,600 lines including `shaders.metal`). The one executable does two jobs:
+`src/` is a single Odin package (about 15,300 lines including `shaders.metal`). The one executable does two jobs:
 
 1. **The game.** It reads the known world from the plate history, forms the islands near the start, opens a window, streams chunks around the camera and simulates water near the player.
-2. **Offline tools behind flags.** These print or draw what the generator made, then exit: `--map`, `--archipelago`, `--known`, `--why`, `--survey`, `--plates`, `--plates-why`. They share every line of the generator with the game, which is the point. A picture or an explanation of the land is always the land the game would show.
+2. **Offline tools behind flags.** These print or draw what the generator made, then exit: `--map`, `--archipelago`, `--known`, `--why`, `--survey`, `--plates`, `--plates-why`, and `--dwarves`, which runs the dwarves' world with no window and prints what happened. They share every line of the generator with the game, which is the point. A picture or an explanation of the land is always the land the game would show.
 
 Everything random is keyed from one seed through `hash`/`hash01` (`gen.odin`). There is no global RNG state, so any value can be recomputed anywhere, on any thread, in any order.
 
@@ -21,6 +21,7 @@ Everything random is keyed from one seed through `hash`/`hash01` (`gen.odin`). T
 | Climate | `climate.odin` | Each island's climate: the latitude it follows (the known world's 1,000 km stand for 30°, stretched about the start's own), its year's mean, swing and the sea's rain fitted to Japan's island stations, rain carried on the one wind over its land, and the climate zones as rows over warmth and dryness |
 | Water features | `rivers.odin`, `events.odin` | Rivers traced from the simulated drainage and cut by design ([ADR 0003](docs/adr/0003-rivers-are-traced-from-the-simulation-and-cut-by-design.md)), and what each lays at its mouth; events and the features they leave (landslide, lakes, ponds, sea notches, shelters, caves, falls, springs, stacks) |
 | Living things | `fields.odin`, `communities.odin`, `trees.odin`, `plants.odin`, `trails.odin`, `creatures.odin`, `places.odin` | The named fields every rule is written in; soil and plant communities; tree species, stands and the tree grower; ground plants; deer trails and fords; birds and fish posed from the clock; landmarks and their names |
+| Play | `hold.odin`, `dwarves.odin`, `landing.odin`, `paths.odin` | The dwarves' world: a simulation in ticks on a thread of its own, its orders and its log ([ADR 0007](docs/adr/0007-the-dwarves-world-runs-in-ticks-beside-the-frame.md)), and what the frame draws and asks of it; who each dwarf is, its body as boxes and its card of three lines; the landing as rows on the land's fields; walking ground read from the blocks into floors, rooms and the way between two floors |
 | Query surface | `gen.odin` | Materials (`Mat`, 16 bits) and their traits, noise, and the generator's answers: `ground`, `surface_at`, `gen_columns`, `gen_volume`. **Everything the engine knows about the world comes through here.** |
 | Engine | `world.odin`, `mesh.odin`, `water.odin`, `player.odin` | 9 LOD rings of chunks built on worker threads; 20-byte instanced quads; per-column water depth near the player ([ADR 0004](docs/adr/0004-water-near-the-player-is-a-depth-in-every-column.md)); walking/flying collision |
 | Drawing | `render.odin`, `shaders.metal` | SDL3 GPU pipeline: 4 sun shadow cascades, half-size cloud layer, terrain, sky and water into a 4× MSAA target; lighting, fog, curvature and tone mapping in Metal |
@@ -56,6 +57,10 @@ flowchart LR
   gen --> water["water.odin<br/>depth per column, ~256 m"]
   water --> render
   gen --> tools["--map / --why / --survey<br/>(offline, same code)"]
+  gen --> hold["hold.odin, on its own thread<br/>patches of floors (paths.odin),<br/>ticks from the seed and orders"]
+  orders([orders: a file, or G in play]) --> hold
+  hold -- "Shown: two ticks of<br/>where everyone stands" --> render
+  hold --> log([the log, and its hash])
 ```
 
 ### Start-up (`main`)
@@ -63,13 +68,14 @@ flowchart LR
 1. Parse options. `--plates` branches off here, because it needs no island.
 2. Draw a record at the start's place, for the swell and any `--kind`. Read the known world (`known_make`: from `build/worlds/`, or by running the plate history and its regional history, about 2.5 to 3 s, on a seed's first run), make the archipelago records from it, the start island's among them (`archipelago_make`; `--plates-why` and `--known` answer here and exit), and decide which animals reached each island (`arrivals_make`).
 3. Form the islands within `--near` km (default 64) on all cores but one, in the background. At the same time, form the start island on the main thread (`gen_init`).
-4. `--map`, `--why` and `--survey` act on the start island and exit.
-5. Wait for the near islands. Pick the weather. Open the window, or don't, for `--shot`/`--bench`, so scripts never steal focus. Initialise the world and water. Put the player on the bank of the largest river, or near the shore of an island with none (`find_start`).
-6. Form the remaining islands on three low-priority threads while play goes on.
+4. Make the hold on the start island (`hold_make`): draw the seven, choose their landing by its rows on the land's fields and say where and why. `--dwarves=seconds` runs their world that long, here, with no window.
+5. `--map`, `--why` and `--survey` act on the start island and exit. So does `--dwarves` alone, having printed its log.
+6. Wait for the near islands. Pick the weather. Open the window, or don't, for `--shot`/`--bench`, so scripts never steal focus. Initialise the world and water. Put the player where the landing and the water the boat crosses can be seen (`hold_enter`), or, on an island no boat can come in to, on the bank of the largest river (`find_start`). Start the hold's thread.
+7. Form the remaining islands on three low-priority threads while play goes on.
 
 ### A frame
 
-`player_update` → `world_update`: queue chunks for rings whose reach now covers ground, and upload finished meshes from the workers. → `water_update`: steps at 30 Hz within the block volume. → raycast for break/place. → `creatures_pose`: animals are not stored; each is posed from its home, kind and the clock. → `render`.
+`player_update` → `world_update`: queue chunks for rings whose reach now covers ground, and upload finished meshes from the workers. → `water_update`: steps at 30 Hz within the block volume. → raycast for break/place. → `hold_frame`: hand the hold any orders, copy what it last showed, move its clock on, and answer the keys G and E. → `creatures_pose`: animals are not stored; each is posed from its home, kind and the clock. → `hold_pose`: the boat and the dwarves as boxes, drawn between the last two ticks. → `render`.
 
 ## Key decisions
 
@@ -78,6 +84,7 @@ flowchart LR
 - **Thread-local bound names, not a context parameter** ([ADR 0005](docs/adr/0005-each-thread-reads-one-island-through-bound-names.md)). The code was written for one island. To hold many islands without threading a `^Formed` through every call, each subsystem's state (`region`, `land`, `rivers`, …) became a `@(thread_local)` pointer that `bind` sets. The cost: a procedure that forgets to bind silently reads the last island. Every world-space entry point therefore binds first, and `bound` restores the binding on scope exit. The check is that islands formed alone and side by side produce identical maps.
 - **Lit by the slope, not the face** ([ADR 0002](docs/adr/0002-faces-are-lit-by-the-slope-they-are-cut-from.md)). A block face is lit halfway between its own normal and the smooth ground's normal, which makes stepped hillsides read as hillsides.
 - **Round world, flat shading** ([ADR 0006](docs/adr/0006-the-world-is-drawn-round-and-shaded-flat.md)). Each vertex is lowered by d²/2R in the vertex shader, while shadows are computed on the flat world. Distant islands sink below the horizon correctly, and nothing else has to know the world is round.
+- **The dwarves' world in ticks, beside the frame** ([ADR 0007](docs/adr/0007-the-dwarves-world-runs-in-ticks-beside-the-frame.md)). One thread owns one record and advances it a tenth of a second at a time from the seed and a list of orders, so the same orders give the same log with a window or without. It reads the ground from the generator into its own floors, never from what the frame has streamed. A way is found over rooms of joined floors first, which says whether one exists, and then over the floors of those rooms.
 - **Rules as data.** Soil, cover, communities, plants, creatures and places are ordered rows. Each row's *host* is a product of windows on named fields (`FIELDS` in `fields.odin`). `--overlay` paints any field, and `--why` prints which row won at a point and why.
 
 ## Where to start reading
@@ -86,10 +93,11 @@ flowchart LR
 2. [`land.odin`](src/land.odin), `KINDS` and `land_form`: how an island's recipe becomes land.
 3. [`world.odin`](src/world.odin), the top comment and `worker`: how that becomes chunks.
 4. [`regions.odin`](src/regions.odin) and ADR 0005, before touching anything that runs on more than one thread.
+5. [`hold.odin`](src/hold.odin), the top comment and `hold_tick`, and ADR 0007: how the dwarves' world runs. Then [`paths.odin`](src/paths.odin), the top comment and `walk_way`.
 
 ## Tooling
 
 - `./build.sh [run …]`: one `odin build` with `-o:speed -vet-unused`.
 - `odin check src -vet-unused`: the typecheck CI runs first.
-- `./build.sh test`: the determinism test (`src/forming_test.odin`). It forms the start island and island 1, the second on a worker thread and again on the test thread, and checks both against a golden hash. Beyond that, changes to forming are checked by comparing `--map` output byte for byte and by `--bench` frame times, as the commit messages record.
+- `./build.sh test`: the determinism test (`src/forming_test.odin`). It forms the start island and island 1, the second on a worker thread and again on the test thread, and checks both against a golden hash. It then runs the dwarves' world twice on the start island, once beside a thread that reads it as the frame does, and checks that the two logs are the same (`src/hold_test.odin`). Beyond that, changes to forming are checked by comparing `--map` output byte for byte and by `--bench` frame times, as the commit messages record.
 - `tools/blocks.py` (Pillow) rebuilds the texture atlases. `tools/plates_compare.py` (pygplates, plate-model-manager, numpy, netCDF4, Pillow, matplotlib) fetches the EarthByte reference data and compares it with `--plates` output.

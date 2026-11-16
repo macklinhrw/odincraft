@@ -7,7 +7,7 @@ Odincraft is a block game in Odin, SDL3 GPU and Metal (macOS, Apple Silicon): a 
 - `ARCHITECTURE.md`: module map, data flow, where to start.
 - `docs/plan.md`: the plan from 2026-11-16 on, in two tracks, the natural world (N) and play (P), with the stories it is for and its rules.
 - `docs/foundations.md`: the foundations, and the steps built so far with what each taught. Read sections 3 and 8 before adding to land, rock, water, plants or living things.
-- `docs/adr/`: read before changing level of detail, lighting, threading or water.
+- `docs/adr/`: read before changing level of detail, lighting, threading, water or the dwarves' world.
 - `docs/interesting-world/notes/real-islands.md`: the real islands the land is measured against. Judge a change to the land by those figures.
 - `docs/lessons.md`: why earlier attempts stalled. Read it before proposing architecture or a way of working.
 
@@ -20,6 +20,7 @@ The longer working notes this file replaced are in the history of `CLAUDE.md` (n
 - Rules are rows on named fields (`FIELDS` in `fields.odin`). A new kind of condition becomes a new field, not code in a row.
 - A block is a `Mat`, 16 bits wherever it is kept. A rule asks what a material is through its traits (`TRAITS` in `gen.odin`, `is(m, LEAVES)`); never write a `bit_set[Mat]`, which holds no more than 128 materials.
 - What lives on an island is never a preference: a plant or animal is there because it could reach the island, the island can keep it, and the seed drew it. Give it a row that decides, and print why not.
+- The dwarves' world must stay deterministic (ADR 0007). Only the thread running it touches `Hold`. The frame sends it orders and reads `Shown`. It learns the ground from `gen.odin` and its own list of edits, never from the frame's `World`, the simulated water or a clock.
 - Keep it small. Prefer changing a rule to adding a system.
 
 ## Checking work
@@ -30,6 +31,7 @@ odin check src -vet-unused             # what CI runs
 ./build.sh test                        # forming is deterministic (src/forming_test.odin)
 build/odincraft --map=out/a.png        # forming changes: compare maps byte for byte against the parent
 build/odincraft --shot=out/v.png --above=x,h,z --look=yaw,pitch --hour=h   # a picture for the owner
+build/odincraft --dwarves=600 --orders=out/orders.txt   # the dwarves' world with no window: its log, the log's hash, what it cost
 ```
 
 The two benches, after any change to drawing, streaming, trees or the start (target: no frame over 12.5 ms):
@@ -41,7 +43,9 @@ build/odincraft --bench=10 --fly --speed=60 --pos=500,700,-1000 --look=200,-35  
 
 The first run of a world's seed runs the plates' history (about 2 s) and keeps the known world in `build/worlds/`, keyed by `plates.odin` and `known.odin`; later runs read it back.
 
-`./build.sh test` hashes what forming leaves. A change that alters the land on purpose updates `GOLDEN` in `src/forming_test.odin` and says so in its commit message.
+`--dwarves=seconds` runs the dwarves' world that long and exits. The same seed and orders must print the same hash twice. An orders file has a time and an order on each line: `120 go 2620 -1720` (the ground at a column), `6:40.0 go 2300 76 -1380` (a block to stand on), `300 block 2700 3 -1750 Air` (a block changed). The log prints an order it obeyed in this form, so a played game's log can be played again. Add `--shot` for a picture of that moment, or `--why=x,z` to ask a dwarf standing there who it is. Start-up says where the party lands.
+
+`./build.sh test` hashes what forming leaves, then runs the dwarves' world twice and compares the logs. A change that alters the land on purpose updates `GOLDEN` in `src/forming_test.odin` and says so in its commit message.
 
 Never open a window unless asked to. Use `--shot` or `--bench`, which draw unseen; the binary refuses to open a window without a terminal. Place cameras with `--above` near the ground, since a camera inside the ground sees sky through it. Put outputs in `out/`, which is ignored.
 

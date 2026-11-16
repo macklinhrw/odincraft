@@ -44,6 +44,9 @@ import "core:strings"
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground
 //   show            with shot or bench: open the window. Without it they draw unseen and take no focus
+//   dwarves=seconds run the dwarves' world this long with no window and print what happened (hold.odin); alone, exit
+//                   then; with shot or why, the picture or the answer is of that moment; with bench, it runs on from there
+//   orders=file     the orders the dwarves' world obeys, each with its time (hold.odin)
 
 Options :: struct {
 	pos:           [3]f64,
@@ -77,6 +80,8 @@ Options :: struct {
 	plates:        string,
 	plates_why:    [2]f64,
 	has_plates_why: bool,
+	dwarves:       f64,
+	orders:        string,
 }
 
 options :: proc() -> Options {
@@ -129,6 +134,8 @@ options :: proc() -> Options {
 		case "survey": o.survey = true
 		case "place": ok = numbers(value, ",", v[:1]); o.place = int(v.x)
 		case "show":  o.show = true
+		case "dwarves": ok = numbers(value, ",", v[:1]); o.dwarves = v.x
+		case "orders": o.orders = value
 		case:         ok = false
 		}
 		if !ok {

@@ -411,6 +411,7 @@ world_set :: proc(w: ^World, x, y, z: i32, m: Mat) {
 		}
 	}
 	if !replaced do append(list, Edit{x, y, z, m})
+	hold_block(x, y, z, m)   // the dwarves walk the same blocks
 
 	// Collision should not wait for the rebuild.
 	if c := w.chunks[key] or_else nil; c != nil && c.ready {
