@@ -52,6 +52,14 @@ SLIDE := Event{
 }
 SOIL_GROWS :: 0.0004   // metres of soil that weathers on bare rock in a year (a guess)
 DROWNED    :: 100      // years the trunks of drowned trees stand in a lake before they rot and fall (a guess, after Taishō pond)
+SILT       :: 300      // m³ a year that a stream brings down from each km² it drains: what Japan's mountain reservoirs fill with, on average (Tsuruta et al. 2005; 49 to 5,257 recorded, Sumi 2013)
+
+// The chance that a landslide's dam fails, by its blockage index: log10 of the m² draining to
+// it times its metres over the stream, over its m³ of debris (Ermini and Casagli 2003). A dam
+// across a large stream fails, and one that holds much debris across a small stream lasts. From
+// 266 of New Zealand's dams of known fate (GNS Science's tool, after Morgenstern et al. 2023),
+// held at the ends of what they show.
+DAM_FAILS := [?][2]f32{{1.08, 0.10}, {1.38, 0.25}, {2.07, 0.50}, {3.10, 0.75}, {3.95, 0.90}}
 
 // The strongest contrast between a bed in the top 50 m of a cell and a weaker one below it, the
 // depth of that weaker bed, and the two rocks.
@@ -99,8 +107,9 @@ slide_make :: proc(g: ^Grid) -> bool {
 	// The scar: a spoon reaching through the cap, steep at its head and sides, thinning to
 	// nothing at its foot, where the mass left the hillside, and never lower than the valley floor.
 	// Only ground nearly as steep as at its head gives way; the gentle foot of the slope stays.
-	before := make([]f32, n*n, context.temp_allocator)
+	before, stream := make([]f32, n*n, context.temp_allocator), make([]bool, n*n, context.temp_allocator)
 	copy(before, g.z)
+	for c in 0..<n*n do stream[c] = g.area[c] >= CHANNEL_AREA && !g.sea[c]   // the valley's stream, as it ran before
 	moved: f64
 	r := int(long/g.d) + 1
 	foot, lowest := middle + down*f64(long/2), g.z[valley]
@@ -148,9 +157,25 @@ slide_make :: proc(g: ^Grid) -> bool {
 		measured = {{"its steepness against what its rock holds", FIELDS[.At_Limit].at(&p)}, {"the strength of the cap over the bed under it", contrast}, {"km² drained by the valley below", land.valley[head]/1e6}}})
 	landslide.feature = len(region.features) - 1
 
+	// Whether the dam holds. The stream fills the lake behind it and spills over it within months,
+	// and most dams fail in the first floods, the stream cutting down through the debris; those
+	// that hold are cut a little and armoured by their blocks (Swanson et al. 1986). A dam that
+	// fails is cut along the stream's old course down to the old valley floor.
+	high: f32   // the dam's top over the stream
+	for c in 0..<n*n do if stream[c] do high = max(high, land.slid[c])
+	index := math.log10(max(land.valley[head]*high/(f32(moved)*swell), 1e-6))
+	chance := DAM_FAILS[0][1]
+	for k in 1..<len(DAM_FAILS) do if index > DAM_FAILS[k - 1][0] do chance = math.lerp(DAM_FAILS[k - 1][1], DAM_FAILS[k][1], min((index - DAM_FAILS[k - 1][0])/(DAM_FAILS[k][0] - DAM_FAILS[k - 1][0]), 1))
+	drawn := draw({0, 1}, 5)
+	failed := high > 0.5 && drawn < chance
+	if failed do for c in 0..<n*n do if stream[c] && land.slid[c] > 0 {
+		g.z[c] -= land.slid[c]
+		land.slid[c] = 0
+	}
+
 	// The land wears for the slide's age, with the water standing behind the debris kept as a
 	// lake: the stream cuts its outlet into the debris, the scar's head stands back to what its
-	// rock holds and the hummocks soften. What it carries into the lake is not yet laid there.
+	// rock holds and the hummocks soften.
 	g.keep = true
 	for _ in 0..<3 {
 		route(g)
@@ -181,11 +206,31 @@ slide_make :: proc(g: ^Grid) -> bool {
 		pools[k].spill, pools[k].inflow = min(pools[k].spill, g.fill[c]), max(pools[k].inflow, g.area[c])
 		pools[k].slid ||= abs(land.slid[c]) > 0.5
 	}
-	lakes, ponds := -1, 0
+	// What the land draining into each brings down in the slide's age settles on its floor, the
+	// finest carried to the deepest water first, so the floor fills flat with silt; one that fills
+	// is a flat its stream runs over.
+	lakes, ponds, full := -1, 0, 0
+	within := make([dynamic]i32, context.temp_allocator)
 	for q, k in pools do if q.slid && len(region.features) < 255 {
 		f := Feature{kind = .Lake if q.inflow >= CHANNEL_AREA else .Pond, level = math.floor(q.spill - 0.55) + 0.55, age = age, cause = landslide.feature}
+		clear(&within)
+		for c in g.order do if group[c] == i32(k) do append(&within, c)
+		silt, room, lo, hi := SILT*q.inflow/1e6*age, f32(0), f32(1e9), f32(-1e9)
+		for c in within do room, lo, hi = room + (g.fill[c] - g.z[c])*g.d*g.d, min(lo, g.z[c]), max(hi, g.fill[c])
+		if silt >= room {
+			for c in within do g.z[c] = g.fill[c]
+			full += int(f.kind == .Lake)
+			continue
+		}
+		for _ in 0..<30 {
+			top, laid := (lo + hi)/2, f32(0)
+			for c in within do laid += max(min(top, g.fill[c]) - g.z[c], 0)*g.d*g.d
+			if laid > silt do hi = top
+			else do lo = top
+		}
+		for c in within do g.z[c] = max(g.z[c], min(lo, g.fill[c]))
 		cells, deepest := 0, f32(0)
-		for c in g.order do if group[c] == i32(k) && g.z[c] < f.level {
+		for c in within do if g.z[c] < f.level {
 			cells += 1
 			f.at += middle_of(g, int(c))
 			deepest = max(deepest, f.level - g.z[c])
@@ -194,8 +239,8 @@ slide_make :: proc(g: ^Grid) -> bool {
 		if cells == 0 do continue
 		f.at /= f64(cells)
 		f.size = f32(cells)*g.d*g.d
-		for c in g.order do if land.lake[c] == u8(len(region.features) + 1) do f.reach = max(f.reach, f32(math.hypot(middle_of(g, int(c)).x - f.at.x, middle_of(g, int(c)).y - f.at.y)) + g.d/2)
-		f.measured = {{"its deepest, metres", deepest}, {"km² draining into it", q.inflow/1e6}, {}}
+		for c in within do if land.lake[c] == u8(len(region.features) + 1) do f.reach = max(f.reach, f32(math.hypot(middle_of(g, int(c)).x - f.at.x, middle_of(g, int(c)).y - f.at.y)) + g.d/2)
+		f.measured = {{"its deepest, metres", deepest}, {"km² draining into it", q.inflow/1e6}, {"m³ of silt its streams have laid in it", silt}}
 		if f.kind == .Lake && (lakes < 0 || f.size > region.features[lakes].size) do lakes = len(region.features)
 		ponds += int(f.kind == .Pond)
 		append(&region.features, f)
@@ -207,10 +252,16 @@ slide_make :: proc(g: ^Grid) -> bool {
 
 	fmt.printf("a slide about %s years ago, in %.0f ms: %.1f million m³ of %v over %v, %.0f m long, from %.0f, %.0f into a valley draining %.1f km²",
 		years(age), time.duration_milliseconds(time.since(started)), moved/1e6, strong, weak, long, middle.x + f64(region.origin.x), middle.y + f64(region.origin.y), land.valley[head]/1e6)
+	if high > 0.5 {
+		fmt.printf("; its dam stood %.0f m over the stream and %s: a dam of its blockage index, %.2f, fails %.0f%% of the time, and the seed drew %.2f", high,
+			"failed, and the stream cut down through it to the old valley floor" if failed else "held", index, 100*chance, drawn)
+	} else do fmt.print("; its debris lies beside the valley's stream, not across it")
 	if lakes >= 0 {
 		l := region.features[lakes]
-		fmt.printf("; it dammed a lake of %.1f ha at %.1f m, %.0f m deep, that %s", l.size/1e4, l.level, l.measured[0].value, "spills over it")
-	} else do fmt.print("; it dammed no lake")
+		fmt.printf("; %s a lake of %.1f ha at %.1f m, %.0f m deep over %.0f m³ of the silt its stream has brought, that spills over it", "what is left of its debris dams" if failed else "it dammed",
+			l.size/1e4, l.level, l.measured[0].value, l.measured[2].value)
+	} else if full > 0 do fmt.print("; the lake it dammed has filled with the silt its stream brought")
+	else do fmt.print("; it dammed no lake")
 	fmt.printfln("; %d pond%s", ponds, "" if ponds == 1 else "s")
 	return true
 }
@@ -289,9 +340,9 @@ feature_words :: proc(x, z: f64, h: f32) {
 		k := int(land.lake[land_cell(x, z)]) - 1
 		if k < 0 do for f, i in region.features do if (f.kind == .Lake || f.kind == .Pond) && f.level == level do k = i
 		f, under := region.features[k], h < level
-		fmt.printfln("%s a %s of %.1f ha whose water stands at %.1f m%s, %s by %s; %s.", "in" if under else "on the shore of", "lake" if f.kind == .Lake else "pond", f.size/1e4, f.level,
+		fmt.printfln("%s a %s of %.1f ha whose water stands at %.1f m%s, %s by %s; %s. Its floor is %.0f m³ of silt washed down from the %.2f km² draining into it.", "in" if under else "on the shore of", "lake" if f.kind == .Lake else "pond", f.size/1e4, f.level,
 			fmt.tprintf(", %.1f m deep here", level - h) if under else "", "dammed" if f.kind == .Lake else "left in a hollow", ago,
-			"no stream leaves it, and it seeps away through the debris" if f.kind == .Pond else "its stream leaves over the lowest point of the debris, which it has cut")
+			"no stream leaves it, and it seeps away through the debris" if f.kind == .Pond else "its stream leaves over the lowest point of the debris, which it has cut", f.measured[2].value, f.measured[1].value)
 	}
 	if t := land_at(land.slid, land.n, x, z); t > 0.5 {
 		fmt.printfln("debris of %s, %.0f m deep here: blocks of %v broken from a scar %.0f m off, which held %.2f million m³. Soil has had %s years to grow on it.", ago, t, landslide.rock, math.hypot(x - s.at.x, z - s.at.y), s.size/1e6, years(s.age))

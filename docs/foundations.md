@@ -766,14 +766,13 @@ Steps 17 to 20 started together; step 21 followed the seam test's failure, and s
 
 ### Where the plan stands, 2026-11-16
 
-- **Done:** steps 17, 18, 19, 20, 22, 23, 24, 28, 31, 32, 33 and 34; outside the table, the reef kind and Yakushima measured for the granite massif (`interesting-world/notes/real-islands.md`). Step 17's stand-in is replaced by step 22's history and step 32's regional history.
-- **In progress:** step 35, slide lakes.
+- **Done:** steps 17, 18, 19, 20, 22, 23, 24, 28, 31, 32, 33, 34 and 35; outside the table, the reef kind and Yakushima measured for the granite massif (`interesting-world/notes/real-islands.md`). Step 17's stand-in is replaced by step 22's history and step 32's regional history.
 - **Half done:** step 21. Its experiment found a method that leaves no seam (ordered pieces), but nothing of it is built. A continent of 30,000 to 50,000 km² is extrapolated at 18 to 30 minutes on three background threads. Phase 3 needs it, and so do rivers wider than about 8 m (step 34).
 - **Not started:** step 25 (it needs item 8 of section 9, cold to hot); 26 (it needs 25); 27 (nothing blocks it); 29 (it needs item 9); 30 (it needs item 10).
 - **Left open in step 32:** one sea for the world, which read into each phase put 33.1% of figures far, so the islands keep their kinds' seas; and the planet's boundaries, which stay two to three times the real length, since the regional history runs the planet's plates and did not shorten them.
 - **The land.**
-  - Every island near the start on seeds 1 to 10, formed alone: 16.3% of figures far from the real islands, against 21.4 before the regional history and 23.6 after its first part; 13.3% on seeds 11 to 40.
-  - The weakest kinds: raised at 71%, judged against Kikaijima, which the reef kind is built after; crater at 30% on 5 islands. The slide's lake is most of what is left on inlets and cone (step 35).
+  - Every island near the start on seeds 1 to 10, formed alone: 14.0% of figures far from the real islands, against 21.4 before the regional history, 23.6 after its first part and 16.3 before step 35; 11.4% on seeds 11 to 40.
+  - The weakest kinds: raised at 66%, judged against Kikaijima, which the reef kind is built after; crater at 30% on 5 islands, whose craters are too small and shallow for Aogashima's. Step 35 brought the deepest closed hollow from far on 20 islands to 6.
   - Entering seed 7 takes 2.2 s.
   - The planet, today, median of eleven seeds against the real Earth: the largest plate 10% (real 20), 40 plates (51), land over 1 km 4.3% (5.7).
 - **What the owner has seen.** None of steps 17 to 35 records the owner having looked at it, and the default island has changed since it was read from the history (an inlets island of old arc lavas, 10.2 km across). Phase 2 is accepted only when the archipelago is, so a viewing pass is due.
@@ -1723,6 +1722,100 @@ Built 2026-11-16 by Claude on the branch `t3/measure-island-hydrology`, merged a
   - `odin check` passes, and `./build.sh test` passes with `GOLDEN` unchanged: the forming is unchanged, and the streams are cut into the blocks after it.
   - The eight existing figures are identical to `main`'s on six islands of five seeds.
   - Both benches, alternating with `main` under a load of 6 to 9: our own work was never over 12.5 ms. The forest flight's median was 1.20 to 1.23 ms against 1.29 to 1.34; the cloud flight's 1.46 to 1.65 against 1.28 to 1.52.
+
+### Step 35, as built: the slide's lake
+
+Built 2026-11-16 by Claude on the branch `t3/landslide-lake-aging`, from `main` at e4a071e: a landslide's dammed lake that fills with what its stream brings and drains if its dam is cut, over the 30 to 1,000 years since the slide. This is the step the owner set for after step 32's second half. The owner has not looked at it. The choices are Claude's call of 2026-11-16 in `open-decisions.md`.
+
+**What changed for the player.** A slide's lake is as deep as its age and its stream leave it. On the default island the lake behind the 360-year-old slide keeps its level (34.5 m) and its 1.7 ha. It is 4 m deep where it was 23, over 70,000 m³ of silt brought down from the 0.66 km² draining into it, and its bed shows through the water. Two of its four ponds have filled, so the place is named Great Slip, not the Four Ponds. Elsewhere about one dam in five has failed. Where a dam failed, its lake is gone and the stream runs through the debris on its old course. Start-up says whether the dam held and why. `--why` in a lake says how much silt floors it.
+
+![The default island's lake before (left) and after (right): from the north-east toward the scar (above), and down on the scar's end of the lake, where it was deepest (below)](interesting-world/real/slide-lake-before-after.jpg)
+
+**The far hollows, as traced** (a scratch build printed where each island's deepest closed hollow lies, on seeds 1 to 10, every island formed alone):
+
+- On every island with a slide, the deepest closed hollow is the slide's own water. Away from the slide no hollow is deeper than 8 m (0 to 8, most 1 to 4).
+- Of the 20 far hollows, 2 are craters too shallow, the crater's own. The other 18 are a slide's water: 16 lakes and 2 ponds, 11 to 39 m deep, 52 to 740 years old, draining 0.07 to 3.1 km². Six are deepest in the scar, which is cut down to the valley floor and closed at its foot by the debris.
+- The lake stayed as deep as the day it formed. The wear cut a dam's outlet as its cap's rock: by 0.0 to 0.4 m in the slide's age on 8 of 11 dams checked, and by 1.7, 4 and 10 m on the other three (not traced further). Nothing settled in the lake.
+
+**What the sources say.** "Memory" marks what was not checked.
+
+- **Most dams fail, and soon.** Costa and Schuster counted 73 landslide dams that failed: 27% within a day, about half within 10 days (USGS open-file report, 1987). Schuster and Costa (1986), on 63: 22% and half. Both figures are from a search summary; neither paper was read. Up to 85% of failures come within a year (GNS Science's DBI tool, after Costa and Schuster 1988). Overtopping is the usual way. Of 410 dams over 1 million m³ formed since 1900 (Fan et al. 2020, as summarised by Fan et al. 2021):
+  - about 60% of those of loose sediment, 65% of debris flows' and 80% of complex ones' last under a year
+  - rock avalanches' and rockslides' last longer
+  - beyond 10 years, 30 to 40% survive, whatever made them
+- **In Japan** (Swanson, Oyagi and Tominaga 1986, "Landslide dams in Japan", ASCE Geotechnical Special Publication 3, pp. 131 to 145):
+  - The Totsu River flood of August 1889 made 53 dams in 70 hours, most lasting up to a few days. The only lake left is Shigesato, a pond in a 32 ha basin behind about 1 million m³: our slides' size and basins.
+  - The Zenkoji earthquake's dams of 1847 with known lives failed in 4 days (2), 17 days (1), 19 days (2) and 4 months (1).
+  - Short-lived dams are where small slides enter large streams. Long-lived ones are where the slide is large for its basin.
+  - Most dams fail completely in the first few large floods. "For dams that do not fail, the lifetime of the lake is controlled by the rate of sediment accumulation."
+  - An outlet can cut down tens of metres before a lag of large boulders armours it. Onogawa's drainage "slowed abruptly" so, and it is still a lake of 156 ha.
+- **Which dams fail.** Ermini and Casagli's (2003) blockage index is log₁₀ of the m² draining to the dam times its height, over its m³. GNS Science's tool gives the chance of failure from 266 New Zealand dams (Morgenstern et al. 2023): 10% at 1.08, 25% at 1.38, 50% at 2.07, 75% at 3.10 and 90% at 3.95. Coarser and grain-supported debris lasts longer (Fan et al. 2021, citing Costa and Schuster 1988, Ermini and Casagli 2003 and Weidinger et al. 2014). Boulders falling into a spillway can stop its cutting (Fan et al. 2021, citing Plaza et al. 2011).
+- **How fast a lake fills**, from what Japan's reservoirs fill with, in m³ a year for each km² draining to them:
+  - 300 on average over all its mountains (Tsuruta, Kobayashi and Uchita 2005, on the Takase dam). Takase's own basin gives 4,750, and a basin of fresh slope failures within it 26,970.
+  - Recorded rates run from 49 to 5,257 (the Ministry of Construction's criteria of 1976, in Sumi 2013), and some dams in Chūbu take over 2,000.
+  - Hokkaido's 28 mountain reservoirs average 178. Sedimentary catchments yield eight times what volcanic ones do, and the yield grows with the catchment up to 100 km² (Marutani, Kuroki and Kasai 2019).
+- **Where it settles.** Fine silt is carried to the deepest water, so a lake's floor flattens as it fills (sediment focusing; memory). The coarse part builds a delta at the inflow. In one Himalayan landslide lake, bedload was a third of the load (Pratt-Sitaula et al. 2007; a search summary, not read in full).
+
+**What changed**, in the slide's rule in `events.odin`, nothing else:
+
+- **Whether the dam holds** (`DAM_FAILS`):
+  - The dam's blockage index is read as it is laid: its top over the stream's old course, the valley's land drained and its debris.
+  - The chance is New Zealand's, held at 10% below its first point and 90% above its last. The seed draws.
+  - A dam that fails is cut along the stream's old course down to the old valley floor at once, before the wear. Whatever hollow is left stands as a lake or pond, as any other.
+  - A dam that holds keeps the forming's own cut of its outlet.
+- **What the stream brings** (`SILT`): 300 m³ a year for each km² draining into a lake or pond, over the slide's age.
+  - It settles in the hollow the deepest first, as water fills one, so the floor fills flat.
+  - A hollow that fills is a flat its stream runs over, and is no longer a feature.
+  - A lake's third measure is the silt in it.
+
+**Against the real islands**, seeds 1 to 10, every island near the start formed alone, the eight figures `islands.py` counts:
+
+| Kind (islands) | Figures far, `main` | this | Deepest closed hollow far | its median, m | real |
+|---|---|---|---|---|---|
+| All (83) | 16.3% | 14.0% | 20 → 6 | | |
+| cone (8) | 1.6 | 0 | 1 → 0 | 8 → 1.5 | 2 to 7 |
+| crater (5) | 30.0 | 30.0 | 2 → 2 | 47 → 46 | 77 |
+| domes (4) | 18.8 | 18.8 | 0 → 0 | 17.5 → 8 | 10 |
+| inlets (31) | 5.6 | 2.8 | 10 → 3 | 13 → 5 | 4 to 7 |
+| raised (10) | 71.2 | 66.2 | 5 → 1 | 9.5 → 4 | 1 |
+| reef (10) | 0 | 0 | 0 → 0 | 1 → 1 | 1 |
+| ridge (7) | 14.3 | 10.7 | 2 → 0 | 10 → 3 | 9 |
+| worn (8) | 0 | 0 | | | none |
+
+- **No other figure is far on any island where it was not.** Besides the hollow, 16 figures moved: crest falls and stream density by 0.01 to 0.05, and on one island the land under 50 m by a point and the height over the stream by 1 m.
+- **The hollow is nearer by metres outside the real range** on every kind with slide lakes: cone 4.9 → 1.2 m on average, domes 7.0 → 3.5, inlets 8.1 → 3.1, raised 11.2 → 5.1 and ridge 6.9 → 6.0. Crater moved 1 m further on one island, where a pond in the slide reached into the crater's floor. By ratio, cone and ridge are further. Several of their hollows now stand at 0 to 3 m, under Toshima's 2 and Hahajima's 9: their slides' lakes filled, and the hollows left are elsewhere.
+- **Still far:** two craters (their own), and four slide waters:
+  - three young lakes: 22 m at 52 years, 25 m at 80, and 21 m in a 12.5 ha lake at 136 years
+  - one pond 21 m deep, 1.1 ha, in a 72-year-old scar draining 0.07 km²
+- **The dams:** of 68 that crossed their stream, 15 failed (22%), at blockage indices of 0.91 to 2.11 (median 1.30). The other 4 slides' debris lies beside the stream. `main` left a lake behind 64 of the slides. 29 of those lakes are left, 29 have filled with silt, and the rest drained when their dam failed. The lakes left are 0 to 20 m deep, median 4, where `main`'s were 0 to 39, median 10.
+
+**The two stream figures**, medians by kind, `main` against this (islands far): stream km per km² at 0.12 km², cone 1.40/1.40 (0/0), crater 0.82/0.82 (1/1), domes 1.09/1.10 (0/0), inlets 1.25/1.25 (0/0), raised 1.64/1.64 (0/0), reef 1.32/1.32 (1/1), ridge 1.51/1.51 (1/1). The largest basin at the sea is unchanged on every kind (far on 14 islands on both).
+
+**Seeds 11 to 40** (182 islands, alone): 11.4% of figures far against 13.3%. The hollow is far on 10 islands against 34, and no other figure is far where it was not. By kind, far share before and after: cone 1.0 → 1.0 (13 islands), crater 25.0 → 25.0 (6), domes 25.0 → 22.5 (5), inlets 5.7 → 3.2 (75), raised 65.4 → 62.5 (17), reef 0.5 → 0.5 (23), ridge 13.6 → 11.4 (22), worn 0 → 0 (21). In metres outside the real range the hollow is nearer on cone, domes, inlets, raised and ridge, and the same on crater and reef. 35 of 149 dams failed (23%). The stream figures' medians and far islands are unchanged on every kind.
+
+**Cost.** Entering seed 7 (`--bench=1`, wall time, four rounds alternating with `main`, load 5.5 to 7): 2.19 to 2.21 s against 2.19 to 2.21 (`main`'s first, cold run took 2.49). The slide's own time is as before (33 to 35 ms on the default island). Benches against `main` (frames over 12.5 ms, our work median):
+
+- the forest flank: 45 against 34, 1.70 ms against 1.75
+- down through cloud: 8 against 11, 1.80 ms against 1.92
+
+Our work passed 12.5 ms on no frame of either. Drawing is unchanged. `src/` grew by 51 lines (62 added, 11 removed).
+
+**Checked.**
+
+- `./build.sh test` passes. Both hashes in `GOLDEN` changed on purpose: the default island's lake and ponds took silt, and so did island 1's.
+- `odin check src -vet-unused` is clean.
+- The final build reproduces the measured run's 83 maps on seeds 1 to 10 byte for byte.
+- On the maps, a failed dam's lake is gone and its stream runs through the debris (seed 3's island 11). Elsewhere a lake keeps its outline and level, and only its depth changes.
+
+Weak points:
+
+- **One yield for every island.** A 1 km² basin of basalt may yield a fifth of 300 or less: Hokkaido's volcanic catchments and its small ones yield less. A raw scar above the lake may yield many times more.
+- **Silt fills the deepest water first.** That is the most it can take from the deepest point. A delta building in from the inflow would leave the far end deep for longer.
+- **New Zealand's chances** are held at 10% below their first point, and every dam here lies at 0.9 to 2.1. The index knows nothing of the dam's rock, which the sources say matters.
+- **A dam that holds is hardly cut.** Its outlet is cut at the forming's rate for its cap's rock, under half a metre in its age on most. No partial breach was built: no source here gives how deep an outlet is cut before its blocks armour it, on streams as small as these.
+- **Ponds in the scar stay deep.** The scar is a spoon cut down to the valley floor and closed by the debris at its foot, and only its own few hectares drain into it.
+- **A filled lake leaves no feature.** Nothing names the flat of silt where it stood.
+- The judge was Claude, by the figures and four pictures.
 
 ### Phase 3: the mainland and the known lands
 
