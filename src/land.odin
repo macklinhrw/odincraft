@@ -431,13 +431,15 @@ Grid :: struct {
 	jitter: [][2]f32,       // where each cell's node sits in its square, so flow has no favourite compass direction
 	seen:   []bool,
 	order:  [dynamic]i32,   // land cells from the shore upward
-	heap:   [dynamic]Heap_Item,
+	heap:   Heap,
 	lift:   f32,            // the share of the uplift in this phase
 	left:   f32,            // years of full uplift still to come
 	rise:   f32,            // metres the sea has still to rise
 	keep:   bool,           // the water that stands in a hollow is a lake, and the ground under it is left as it is
 	block:  []u8,           // where all the arrays above are kept
-	open:   []i32,          // the table of sea cells the coast reads, kept from step to step (sea_table)
+	open:   []i32,          // the table of sea cells the coast reads, kept from step to step (sea_table),
+	reached: []i32,         // the last mouth whose silt reached each cell, numbered on the grid from 1 so it is never cleared,
+	mouths: i32,            // and the mouths so far
 }
 
 // The finished land, read by the generator.
@@ -553,7 +555,7 @@ uplift_at :: proc(x, z: f64, s: f32) -> f32 {
 }
 
 grid_free :: proc(g: ^Grid) {
-	delete(g.block); delete(g.open); delete(g.order); delete(g.heap); delete(g.bodies)
+	delete(g.block); delete(g.open); delete(g.reached); delete(g.order); delete(g.heap.items); delete(g.bodies)
 	free(g)
 }
 
@@ -639,8 +641,8 @@ land_form :: proc() {
 	last: f32   // years on the finest cells
 	for p in history do if p.cell == history[len(history) - 1].cell do last += p.steps*p.years
 
-	delete(g.open)
-	g.open = nil
+	delete(g.open); delete(g.reached)
+	g.open, g.reached = nil, nil
 	land.n, land.grid, land.z[0] = n, g, g.z
 	land.slid, land.lake = make([]f32, n*n), make([]u8, n*n)
 	land_finish(g, false)   // what the slide's place is found by
@@ -718,7 +720,7 @@ land_local :: proc(g: ^Grid) {
 	// Distance to the sea, nearest first: each cell takes the sea cell nearest a neighbour
 	// already reached, which is near enough the true nearest that no contour shows the grid.
 	from := make([]i32, n*n, context.temp_allocator)   // the sea cell nearest each cell
-	clear(&g.heap)
+	heap_clear(&g.heap)
 	for c in 0..<n*n {
 		from[c] = i32(c)
 		if !g.sea[c] do land.inland[c] = 1e9
@@ -729,7 +731,7 @@ land_local :: proc(g: ^Grid) {
 			}
 		}
 	}
-	for len(g.heap) > 0 {
+	for g.heap.n > 0 {
 		top := heap_pop(&g.heap)
 		c := int(top.c)
 		if top.h > land.inland[c] do continue   // reached nearer since

@@ -39,6 +39,7 @@ Trails :: struct {
 	worn:       []u16,            // routes through it
 	first, ford, back: []i32,     // the first route through it (a feature) or -1; 1 + its ford, or 0; where the tracer came from
 	seen:       []u32, stamp: u32,   // when the tracer reached it, and the tracer's count
+	going:      []Going,          // on each land cell, while the trails are laid
 }
 TRAIL_REACH :: 4   // metres from a trail's line within which anything asks about it
 
@@ -51,13 +52,23 @@ risen :: proc() -> f32 {
 
 // Seconds a person takes to walk a metre of a land cell at a grade along the way, on ground this
 // steep: Tobler's hiking function, 0.6 s on the flat (6 km/h) and slower by e^3.5 for each unit of
-// grade (Tobler 1993), a wall past 45°, slower again on the wettest valley floors and in standing
-// water, and by the plants in the way, which a worn trail has trodden down.
-pace :: proc(c: int, grade, steep: f32) -> f32 {
-	s := 0.6*math.exp(3.5*grade)*(1 + 99*smoothstep(0.84, 1, steep))*(1 + smoothstep(0.75, 1, land.wet[c]))*(30 if land.lake[c] > 0 else 1)
+// grade (Tobler 1993), a wall past 45° (`walking`), slower again on the wettest valley floors and in
+// standing water, and by the plants in the way, which a worn trail has trodden down (`going`).
+pace :: proc(c: int, way: f32, at: Going) -> f32 {
+	s := way*at.wet*(30 if land.lake[c] > 0 else 1)
 	if land.community[c] == 255 do return s
+	return s*(0.7 if trails.worn[c] > 0 else at.plants)
+}
+
+walking :: proc(grade, steep: f32) -> f32 { return 0.6*math.exp(3.5*grade)*(1 + 99*smoothstep(0.84, 1, steep)) }
+
+// What a cell's wetness and its plants, unworn, make of the pace on it, which the tracer reads for
+// each cell once (`trails.going`) rather than at every step.
+Going :: struct { wet, plants: f32 }
+going :: proc(c: int) -> Going {
+	if land.community[c] == 255 do return {1 + smoothstep(0.75, 1, land.wet[c]), 0}
 	_, _, old := stand(land.age[c])
-	return s*(0.7 if trails.worn[c] > 0 else GOING[Community_Kind(land.community[c])]*(2 - old))
+	return {1 + smoothstep(0.75, 1, land.wet[c]), GOING[Community_Kind(land.community[c])]*(2 - old)}
 }
 
 // The cheapest route from a cell to the first it wants, within the animal's limit: the cell
@@ -66,10 +77,10 @@ End :: enum u8 { Drink, Feed, Bed }
 trace :: proc(from, to: int, want: End, feeds: []bool) -> int {
 	g, n := land.grid, land.n
 	trails.stamp += 1
-	clear(&g.heap)
+	heap_clear(&g.heap)
 	trails.cost[from], trails.back[from], trails.seen[from] = 0, -1, trails.stamp
 	heap_push(&g.heap, {0, i32(from)})
-	for len(g.heap) > 0 {
+	for g.heap.n > 0 {
 		top := heap_pop(&g.heap)
 		c := int(top.c)
 		if top.h > trails.cost[c] do continue
@@ -79,14 +90,15 @@ trace :: proc(from, to: int, want: End, feeds: []bool) -> int {
 			x, y := c%n + o.x, c/n + o.y
 			b := y*n + x
 			if x < 1 || y < 1 || x >= n - 1 || y >= n - 1 || g.sea[b] do continue
+			if trails.seen[b] == trails.stamp && trails.cost[b] <= top.h do continue   // reached already for no more than a step from here could cost
 			step, wade, steep := g.d, trails.wade[b], max(land.slope[c], land.slope[b])
 			if k >= 4 {   // a diagonal step also crosses its two corners: a cliff there, or a stream it must step into
 				if trails.wade[c + o.x] > 0 && trails.wade[c + o.y*n] > 0 do continue
 				step *= math.SQRT_TWO
 				steep = max(steep, land.slope[c + o.x], land.slope[c + o.y*n])
 			}
-			grade := abs(g.z[b] - g.z[c])/step
-			t := top.h + step*(pace(c, grade, steep) + pace(b, grade, steep))/2 + wade
+			way := walking(abs(g.z[b] - g.z[c])/step, steep)
+			t := top.h + step*(pace(c, way, trails.going[c]) + pace(b, way, trails.going[b]))/2 + wade
 			if trails.seen[b] != trails.stamp || t < trails.cost[b] {
 				trails.cost[b], trails.back[b], trails.seen[b] = t, i32(c), trails.stamp
 				heap_push(&g.heap, {t, i32(b)})
@@ -153,6 +165,9 @@ trails_make :: proc() {
 	// Each bed's routes: to water, to feed and to the bed beside it to the east or the south, as the
 	// seed has it, each laid as it is found so that the next is drawn to it. A stream crossed on the
 	// way is a ford.
+	trails.going = make([]Going, n*n, context.temp_allocator)
+	defer trails.going = nil
+	shared(len(g.order), 2048, g, proc(g: ^Grid, lo, hi: int) { for c in g.order[lo:hi] do trails.going[c] = going(int(c)) })
 	links := make([]u8, n*n, context.temp_allocator)   // bit k: a trail runs to the neighbour OFFSETS[k]
 	path := make([dynamic]int, context.temp_allocator)
 	age := region.history[len(region.history) - 1].steps*region.history[len(region.history) - 1].years   // since the sea last moved: a guess

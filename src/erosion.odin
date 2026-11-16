@@ -1,5 +1,6 @@
 package main
 
+import "base:intrinsics"
 import "core:math"
 import "core:slice"
 
@@ -10,11 +11,12 @@ import "core:slice"
 
 OFFSETS :: [8][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}}
 
-// Distance between the nodes of two cells.
+// Distance between the nodes of a cell and a neighbour: every caller's is the cell it drains to or
+// the next on a path. The neighbour's row is told from how far on it lies, as a grid is at least
+// three cells across, which is faster than dividing for it.
 span :: #force_inline proc(g: ^Grid, a, b: int) -> f32 {
-	dx := f32(b%g.n - a%g.n) + g.jitter[b].x - g.jitter[a].x
-	dz := f32(b/g.n - a/g.n) + g.jitter[b].y - g.jitter[a].y
-	return g.d*math.sqrt(dx*dx + dz*dz)
+	y := int(b - a > 1) - int(b - a < -1)
+	return step(g, a, {b - a - y*g.n, y})
 }
 
 // The same to the neighbour an offset away, which the grid holds.
@@ -30,15 +32,29 @@ beside_sea :: #force_inline proc(sea: []bool, c, n: int) -> bool #no_bounds_chec
 	return bool(u8(sea[c - n - 1]) | u8(sea[c - n]) | u8(sea[c - n + 1]) | u8(sea[c - 1]) | u8(sea[c + 1]) | u8(sea[c + n - 1]) | u8(sea[c + n]) | u8(sea[c + n + 1]))
 }
 
+// A binary heap of cells, the lowest first: the flood's, the tracer's and the distance to the sea's.
+// The items are kept from 1 to n, so a node's children share a pair of slots, and the slot after
+// the last holds HIGHEST, so a missing right child is never the smaller. Every height and cost put
+// in is a float no lower than +0, and such floats stand in the order of their bits read as
+// integers, which are compared faster: the heap pops what comparing them as floats did.
 Heap_Item :: struct { h: f32, c: i32 }
+Heap :: struct { items: [dynamic]Heap_Item, n: int }
+HIGHEST :: Heap_Item{max(f32), -1}
 
-heap_push :: proc(heap: ^[dynamic]Heap_Item, item: Heap_Item) #no_bounds_check {
-	append(heap, item)
-	h := heap[:]
-	i := len(h) - 1
-	for i > 0 {
-		parent := (i - 1)/2
-		if h[parent].h <= item.h do break
+@(private="file")
+bits :: #force_inline proc(h: f32) -> u32 { return transmute(u32)h }
+
+heap_clear :: proc(heap: ^Heap) { heap.n = 0 }
+
+heap_push :: proc(heap: ^Heap, item: Heap_Item) #no_bounds_check {
+	heap.n += 1
+	for len(heap.items) < heap.n + 2 do append(&heap.items, HIGHEST)
+	h := heap.items[:]
+	h[heap.n + 1] = HIGHEST
+	i := heap.n
+	for i > 1 {
+		parent := i/2
+		if bits(h[parent].h) <= bits(item.h) do break
 		h[i] = h[parent]
 		i = parent
 	}
@@ -49,21 +65,22 @@ heap_push :: proc(heap: ^[dynamic]Heap_Item, item: Heap_Item) #no_bounds_check {
 // the bottom, and the last item is put back up that path past every item no lower than it: the
 // heap comes out as sifting the last item down from the top would leave it, item for item, which
 // the order of the land's cells depends on, with no branch on which child is smaller.
-heap_pop :: proc(heap: ^[dynamic]Heap_Item) -> Heap_Item #no_bounds_check {
-	top := heap[0]
-	last := pop(heap)
-	h := heap[:]
-	n := len(h)
+heap_pop :: proc(heap: ^Heap) -> Heap_Item #no_bounds_check {
+	h := heap.items[:]
+	top, last := h[1], h[heap.n]
+	h[heap.n] = HIGHEST
+	heap.n -= 1
+	n := heap.n
 	if n == 0 do return top
-	i := 0
-	for child := 1; child < n; child = 2*i + 1 {
-		child += int(h[min(child + 1, n - 1)].h < h[child].h)
+	i := 1
+	for child := 2; child <= n; child = 2*i {
+		child += int(bits(h[child + 1].h) < bits(h[child].h))
 		h[i] = h[child]
 		i = child
 	}
-	for i > 0 && h[(i - 1)/2].h >= last.h {
-		h[i] = h[(i - 1)/2]
-		i = (i - 1)/2
+	for i > 1 && bits(h[i/2].h) >= bits(last.h) {
+		h[i] = h[i/2]
+		i = i/2
 	}
 	h[i] = last
 	return top
@@ -79,16 +96,32 @@ SINK :: -2   // in `next`: the water sinks into the ground here
 route :: proc(g: ^Grid) #no_bounds_check {
 	n := g.n
 	clear(&g.order)
-	clear(&g.heap)
+	heap_clear(&g.heap)
 	copy(g.seen, g.sea)
 	slice.fill(g.next, -1)
 	copy(g.fill, g.z)
-	for y in 0..<n do for x in 0..<n {
-		c := y*n + x
-		if g.sea[c] || !(x == 0 || y == 0 || x == n - 1 || y == n - 1 || beside_sea(g.sea, c, n)) do continue
+	// The flood starts from the land beside the sea or the grid's edge, row by row. Away from the edge
+	// eight cells are read at once, a byte each in one word, so open sea and the land away from the
+	// shore are passed eight at a time.
+	seed :: #force_inline proc(g: ^Grid, c: int) {
 		g.fill[c] = max(g.z[c], 0.05)
 		g.seen[c] = true
 		heap_push(&g.heap, {g.fill[c], i32(c)})
+	}
+	eight :: #force_inline proc(sea: []bool, c: int) -> u64 #no_bounds_check { return intrinsics.unaligned_load((^u64)(&sea[c])) }
+	for y in 0..<n {
+		for x := 0; x < n; {
+			c := y*n + x
+			if y > 0 && y < n - 1 && x > 0 && x + 9 <= n {
+				shore := ~eight(g.sea, c) & 0x0101010101010101 & (eight(g.sea, c - n - 1) | eight(g.sea, c - n) | eight(g.sea, c - n + 1) | eight(g.sea, c - 1) |
+					eight(g.sea, c + 1) | eight(g.sea, c + n - 1) | eight(g.sea, c + n) | eight(g.sea, c + n + 1))
+				for ; shore != 0; shore &= shore - 1 do seed(g, c + int(intrinsics.count_trailing_zeros(shore))/8)
+				x += 8
+				continue
+			}
+			if !g.sea[c] && (x == 0 || y == 0 || x == n - 1 || y == n - 1 || beside_sea(g.sea, c, n)) do seed(g, c)
+			x += 1
+		}
 	}
 	sinks: [dynamic]i32
 	defer delete(sinks)
@@ -103,17 +136,27 @@ route :: proc(g: ^Grid) #no_bounds_check {
 		heap_push(&g.heap, {g.fill[lowest], i32(lowest)})
 		append(&sinks, i32(lowest))
 	}
-	for len(g.heap) > 0 {
+	offsets, ahead := OFFSETS, [8]int{}
+	for o, k in offsets do ahead[k] = o.y*n + o.x
+	for g.heap.n > 0 {
 		item := heap_pop(&g.heap)
 		c := int(item.c)
-		x, y := c%n, c/n
 		append(&g.order, item.c)
-		for o in OFFSETS {
-			if x + o.x < 0 || y + o.y < 0 || x + o.x >= n || y + o.y >= n do continue
-			nb := c + o.y*n + o.x
-			if g.seen[nb] do continue
+		// The neighbours not yet reached, a bit each in the order of OFFSETS, read before any is
+		// marked (none is another's), so the loop over them branches once for each it reaches.
+		y := c/n
+		x := c - y*n
+		open: u32
+		if x > 0 && y > 0 && x < n - 1 && y < n - 1 {
+			for k in 0..<8 do open |= u32(!g.seen[c + ahead[k]]) << u32(k)
+		} else {
+			for o, k in offsets do if x + o.x >= 0 && y + o.y >= 0 && x + o.x < n && y + o.y < n do open |= u32(!g.seen[c + ahead[k]]) << u32(k)
+		}
+		for ; open != 0; open &= open - 1 {
+			k := intrinsics.count_trailing_zeros(open)
+			nb := c + ahead[k]
 			g.seen[nb] = true
-			g.fill[nb] = max(g.z[nb], item.h + 0.001*step(g, c, o))   // a filled hollow keeps a trace of slope
+			g.fill[nb] = max(g.z[nb], item.h + 0.001*step(g, c, offsets[k]))   // a filled hollow keeps a trace of slope
 			g.next[nb] = item.c
 			heap_push(&g.heap, {g.fill[nb], i32(nb)})
 		}
@@ -167,7 +210,8 @@ erode :: proc(g: ^Grid, dt: f32) #no_bounds_check {
 		}
 		if r := g.next[c]; r >= 0 {
 			below, run = g.z[r], span(g, c, int(r))
-			g.face[c] = 1 + (g.face[r] - 1)*math.exp(-run/100)   // a cliff the sea undercuts eases over 100 m inland
+			if g.face[r] != 1 do g.face[c] = 1 + (g.face[r] - 1)*math.exp(-run/100)   // a cliff the sea undercuts eases over 100 m inland
+			else do g.face[c] = 1   // as that gives where it has eased to nothing, without the exp
 		}
 		law := wear(g, c, g.z[c])
 		f := ERODE*g.soft[c]*law.erodes*math.sqrt(g.area[c])*dt/run
@@ -253,23 +297,37 @@ coast :: proc(g: ^Grid, dt: f32) {
 		if g.z[c] > 0 do g.sea[c], g.cut[c] = false, 0
 	}
 	open := sea_table(g, into = g.open)
-	for c in 0..<n*n do if g.sea[c] && g.z[c] > -WAVE_BASE do g.z[c] -= ABRADE*dt*(1 + g.z[c]/WAVE_BASE)
+	// Each cell on its own, shared among threads: the platform wears deeper, and each land cell beside
+	// the sea is marked in `seen`, which is free to use, since route rebuilds it.
+	Wear :: struct { g: ^Grid, dt: f32 }
+	w := Wear{g, dt}
+	shared(n, rows(n), &w, proc(w: ^Wear, lo, hi: int) {
+		g, n := w.g, w.g.n
+		for c in lo*n..<hi*n {
+			if g.sea[c] && g.z[c] > -WAVE_BASE do g.z[c] -= ABRADE*w.dt*(1 + g.z[c]/WAVE_BASE)
+			if g.sea[c] do continue
+			beside := false
+			for o in OFFSETS do beside ||= g.sea[c + o.y*n + o.x]
+			g.seen[c] = beside
+		}
+	})
 	r := max(int(FETCH/g.d), 2)
 	bearing := math.to_radians(f32(region.shape.swell))
 	ahead := [2]int{int(math.round(math.sin(bearing)*f32(r))), int(math.round(-math.cos(bearing)*f32(r)))}
 	back := max(int(100/g.d), 1)   // the cliff is the highest ground this many cells inland
 	for ci in g.order {
 		c := int(ci)
+		if !g.seen[c] do continue
 		x, y := c%n, c/n
-		beside := false
-		for o in OFFSETS do beside ||= g.sea[c + o.y*n + o.x]
-		if !beside do continue
 		cliff, deep: f32   // the highest ground and the deepest water within 100 m
 		for j in max(y - back, 0)..=min(y + back, n - 1) do for i in max(x - back, 0)..=min(x + back, n - 1) do cliff, deep = max(cliff, g.z[j*n + i]), max(deep, -g.z[j*n + i])
 		exposed := exposure(open, n, x, y, r, ahead)
 		law := wear(g, c, 0.5)
 		if exposed >= SHELTER do g.cut[c] += WAVES*dt*exposed*law.erodes*min(deep/WAVE_BASE, 1)/(cliff + PLATFORM)
-		if g.cut[c] >= g.d do g.z[c], g.sea[c] = -PLATFORM, true
+		if g.cut[c] >= g.d {
+			g.z[c], g.sea[c] = -PLATFORM, true
+			for o in OFFSETS do g.seen[c + o.y*n + o.x] = true   // the cells after it beside it now lie beside the sea
+		}
 		// A face the waves undercut stands steeper than the rock holds on a hillside: up to twice
 		// as steep where the shore is open, and no steeper than a hillside where it is sheltered.
 		g.face[c] = 1 + smoothstep(SHELTER, 0.2, exposed)
@@ -279,10 +337,12 @@ coast :: proc(g: ^Grid, dt: f32) {
 	// water nearest first to just over the sea, so a flat grows out from the head of a bay until
 	// the silt runs out or the water grows open, where the waves carry the rest away.
 	if region.shape.silt == 0 do return
-	reached, queue := make([]i32, n*n), make([dynamic]i32)   // the last mouth whose silt reached a cell
-	defer { delete(reached); delete(queue) }
-	for ci, mouth in g.order {
+	if g.reached == nil do g.reached = make([]i32, n*n)
+	queue := make([dynamic]i32)
+	defer delete(queue)
+	for ci in g.order {
 		if g.next[ci] >= 0 || g.area[ci] < CHANNEL_AREA do continue
+		g.mouths += 1
 		left := g.load[ci]*f32(region.shape.silt)
 		clear(&queue)
 		append(&queue, ci)
@@ -291,8 +351,8 @@ coast :: proc(g: ^Grid, dt: f32) {
 			for o in OFFSETS {
 				x, y := k%n + o.x, k/n + o.y
 				c := y*n + x
-				if x < 0 || y < 0 || x >= n || y >= n || !g.sea[c] || reached[c] == i32(mouth) + 1 do continue
-				reached[c] = i32(mouth) + 1
+				if x < 0 || y < 0 || x >= n || y >= n || !g.sea[c] || g.reached[c] == g.mouths do continue
+				g.reached[c] = g.mouths
 				if exposure(open, n, x, y, r, ahead) >= SHELTER do continue
 				need := (FLAT - g.z[c])*g.d*g.d
 				if left < need {

@@ -140,6 +140,32 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - *Asked:* **a whole small granite island in place of Yakushima's window?** Ikuchijima matches Yakushima on what granite does: its crests, its low shore, nothing over 60°. It differs on what its history did: old granite worn low, 44% of it under 50 m, beside a sheltered sea. *Recommendation: no for the granite massif*, whose row argues from a young pluton rising fast; keep Yakushima's window.
 - *Asked:* **should Ikuchijima's figures go into `REAL` and be named in `judged` for "granite against sediments"?** Its rock is that story's: a granite against the older accreted beds it rose into. That story is told by 100 islands on 58 of the 1,000 seeds, mostly worn and inlets. *Recommendation: yes, as a follow-up after step 32's second half*: Ikuchijima's figures are already measured, and the change is a row and one word in `STORIES`. The story's own rows name Arran and Tsushima's south. Ikuchijima's setting, a Cretaceous pluton of south-west Japan's inner belt, behind the arc (memory), should be checked against the story's host first.
 
+**2026-11-16, Claude's call** (step 33, forming faster again; `foundations.md` section 8, "Step 33, as built")
+
+- **Profiled before any change, and aimed at island 7's serial work, not at how the islands share the machine.**
+  - Entering waits for island 7 of seed 7 (inlets, 14.3 km): 2.0 s beside the others against 1.87 alone. It loses 7% beside them, not a third.
+  - Its flood was half its forming, and the binary heap four fifths of the flood.
+  - Helpers that take the largest island's work first, and its thread kept on a performance core, changed nothing.
+- **The heap compares its keys as the integers of their bits**, which order every key it is given (floats no lower than +0) as the floats do. Its items are kept from 1, with `HIGHEST` after the last. Island 7's flood went from 988 to 660 ms, with every pop the same.
+- **The flood finds the unreached neighbours as eight bits, and its seeds eight cells at a time.** `span` finds a neighbour's row without dividing, and `erode` skips `exp` where the face is plain.
+- **The deer's tracer works the way's part of the pace once a step and each cell's part once an island, and passes over cells it cannot improve:** 177 → 102 ms on island 7.
+- **Coast's platform wear and its marks for the land beside the sea are one shared pass, and its silt table is kept from step to step.** Kept though `erode` loses about 20 ms to the cache traffic: island 7 is 48 ms faster alone, and 60 ms faster beside the others, than with the same pass on its own thread.
+- **Not built:**
+  - A queue that takes cells flooding at the same height in another order: about 70 ms of island 7, and it changes the land.
+  - `erode` by drainage basin, and `creep` in one pass (about 10 ms).
+- **Results.**
+  - Entering seed 7 (`--bench=1`, eight rounds alternating, load 7 to 11): 2.72 to 2.84 s, median 2.75, against the parent's 3.16 to 3.28, median 3.18.
+  - The sky line comes at 1.60 s against 2.04.
+  - Every island of seeds 7 and 3 is the same alone and side by side by a hash of all forming leaves, the ten maps match byte for byte, and `GOLDEN` is unchanged.
+- *Asked:* **whether a later speed step may change which of the cells flooding at the same height goes first.**
+  - What is left of island 7 is mostly its flood, 0.66 s, which cannot be shared or reordered while the land stays bit for bit.
+  - A radix heap would save about 0.07 s, and change the land wherever ties fall: every shore cell under 5 cm, every silt flat at 4 m.
+  - *Recommendation: no.* It is too little to make every island's land differ from today's. The larger gains left also change the land, and each should be measured and put to the owner before it is built.
+- *Asked:* **whether to keep `--near=64` when step 32's second half moves the islands.**
+  - Entering now grows with the largest island within 64 km, at about 50 ns for each of its land cells at each step of its flood.
+  - 14.3 km is the largest region, and island 7, an inlets island of that size, is near the most land a region holds.
+  - *Recommendation: keep 64 km, and measure entering again when step 32's second half is merged.* More islands near the start take more cores, not more time, while no more than fifteen form at once.
+
 **2026-11-16, Claude's call** (step 24 on step 32's history; `foundations.md` section 8, "Step 24 on step 32's history")
 
 - **The cause, found before any change: two of step 24's hosts read fields as signs that only the old history made true.** Thick crust stood for an arc's crust, where magma pools. An age of 250 Myr or more stood for a worn old shield. Step 32's history puts the forearcs near the start on the thinned edge of a continent: 17 to 31 km thick, 350 Myr old (the age of the history's first continent), 100 to 180 km in front of the volcanic front. So granite took 30 of 131 islands, and the shield took five forearc islands, where `main`'s one shield stood on a shelf no trench works. Island 7 of seed 7 was a shield 808 m high, 272,366 land cells and 3.1 s beside the others, which held entering. Traced by printing each island's fields at its middle on both histories. No change to the plates, the known world or the forming.
