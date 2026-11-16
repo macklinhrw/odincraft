@@ -7,7 +7,7 @@ Odincraft is a block game in Odin, SDL3 GPU and Metal (macOS, Apple Silicon): a 
 - `ARCHITECTURE.md`: module map, data flow, where to start.
 - `docs/plan.md`: the plan from 2026-11-16 on, in two tracks, the natural world (N) and play (P), with the stories it is for and its rules.
 - `docs/foundations.md`: the foundations, and the steps built so far with what each taught. Read sections 3 and 8 before adding to land, rock, water, plants or living things.
-- `docs/adr/`: read before changing level of detail, lighting, threading or water.
+- `docs/adr/`: read before changing level of detail, lighting, threading, water, the view from above and its cut, or the clock.
 - `docs/interesting-world/notes/real-islands.md`: the real islands the land is measured against. Judge a change to the land by those figures.
 - `docs/lessons.md`: why earlier attempts stalled. Read it before proposing architecture or a way of working.
 
@@ -29,14 +29,18 @@ odin check src -vet-unused             # what CI runs
 ./build.sh                             # build/odincraft
 ./build.sh test                        # forming is deterministic (src/forming_test.odin)
 build/odincraft --map=out/a.png        # forming changes: compare maps byte for byte against the parent
-build/odincraft --shot=out/v.png --above=x,h,z --look=yaw,pitch --hour=h   # a picture for the owner
+build/odincraft --shot=out/v.png --above=x,h,z --look=yaw,pitch --hour=h   # a picture in first person, for the owner
+build/odincraft --shot=out/v.png --over=x,z --span=metres --tilt=degrees --turn=degrees --cut=level   # a picture from above
 ```
 
-The two benches, after any change to drawing, streaming, trees or the start (target: no frame over 12.5 ms):
+The game starts in the view from above (`src/above.odin`); `--over` puts it somewhere, and any of `--pos`, `--above`, `--look`, `--fly`, `--place` and `--first` give first person. `--cut=ground` holds the cut over the ground under the view's middle, `--bare` leaves out the leaves, `--cursor=x,y` puts the pointer at a pixel of the picture and says the block under it (with `--why`, why), and `--cursor=x,y,x,y` marks the box between two. `--pace=0`, `2` or `4` pauses or hurries the world's clock, and a bench says how far it ran.
+
+The three benches, after any change to drawing, streaming, trees or the start (target: no frame over 12.5 ms):
 
 ```sh
 build/odincraft --bench=15 --fly --speed=120 --above=-2500,60,-600 --look=90,0   # forest flank
 build/odincraft --bench=10 --fly --speed=60 --pos=500,700,-1000 --look=200,-35  # down through cloud
+build/odincraft --bench=15 --over=-2500,-600 --turn=90 --speed=120 --span=200 --cut=ground   # from above, the cut following the ground
 ```
 
 The first run of a world's seed runs the plates' history (about 2 s) and keeps the known world in `build/worlds/`, keyed by `plates.odin` and `known.odin`; later runs read it back.

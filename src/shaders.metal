@@ -17,6 +17,10 @@ struct Frame {
     float4 screen;      // xy: size in pixels
     float4 cloud;       // xy: camera in the drifting cloud field, zw: camera from the region's corner
     float4 weather;     // x: cover 0..1, y: cloud base, z: depth of the deck, w: region size, metres
+    float4 focus;       // xyz: the point the shadows and the ground plants are centred on, from the eye; w: 1 in the view from above
+    float4 cut;         // x: the level above which nothing is drawn, from the eye (far above everything for none); y: 1 where leaves are not drawn
+    float4 mark;        // xyz: the low corner of the marked box of blocks, from the eye; w: 1 when there is one
+    float4 mark_size;   // xyz: its size in blocks
 };
 
 struct Draw { float4 origin; };   // xyz: chunk origin, w: cell size in metres
@@ -120,6 +124,7 @@ static float cloud_top(float2 rel, constant Frame &f, texture2d<float> lifted, s
 // The share of the sun's light that reaches a point through the cloud over where its ray
 // crosses the deck.
 static float cloud_shade(float3 rel, constant Frame &f, texture2d<float> lifted, sampler smp) {
+    if (f.focus.w > 0.5) return 1.0;   // from above the clouds are not drawn, and a shade with nothing to cast it reads as a stain on the ground
     float up = max(f.weather.y + 100.0 - f.cam.y - rel.y, 0.0) / max(f.sun.y, 0.05);
     return 1.0 - 0.85 * smoothstep(0.0, 60.0, cloud_top(rel.xz + f.sun.xz * up, f, lifted, smp, 0.0));
 }
@@ -149,6 +154,7 @@ static float2 cloud_span(float3 rd, constant Frame &f) {
 // its colour, hazed by its distance, and in w how much of what lies beyond still shows. The steps
 // `steps` of them, starting `start` of a step in, which differs from pixel to pixel.
 static float4 clouds(float3 rd, float far, int steps, float start, constant Frame &f, texture2d<float> lifted, sampler smp) {
+    if (f.focus.w > 0.5) return float4(0, 0, 0, 1);   // the view from above looks through the cloud layer at the ground
     float2 span = cloud_span(rd, f);
     float lo = f.weather.y - f.cam.y, t0 = span.x, t1 = min(span.y, far);
     if (t1 <= t0) return float4(0, 0, 0, 1);
@@ -184,6 +190,7 @@ static float3 apply_fog(float3 col, float3 rel, float2 pixel, constant Frame &f,
     float dist = length(rel);
     float3 rd = rel / max(dist, 1e-4);
     col = mix(col, sky_color(float3(rd.x, max(rd.y, 0.0), rd.z), f.sun.xyz, f.weather.x), haze(rel, f));
+    if (f.focus.w > 0.5) return col;
     float2 span = cloud_span(rd, f);
     if (dist <= span.x || span.y <= span.x) return col;
     float4 c = dist < span.y ? clouds(rd, dist, 16, hash21(pixel + 17.0), f, lifted, smp) : clouds_seen(pixel, f, seen, smp);
@@ -221,13 +228,45 @@ static Corner quad_corner(QuadIn q, uint vid) {
     return r;
 }
 
+// The cut (above.odin, docs/adr/0007): nothing above its level is drawn. A face of the block volume
+// is clipped at the level, and where that opens solid ground a cap closes it (caps_make,
+// render.odin). Beyond the volume the ground is columns, which have no inside to show: a column
+// that stands over the level is lowered to it, and its top is marked as cut (1). A canopy that is
+// part of a column (mesh_columns) cannot be lifted off it: where the cut passes through the
+// canopy, or leaves are not drawn, the column takes the ground's material in place of the leaf's
+// (2). A crown hung over the columns, and its trunk, is clipped as a block is.
+constant uint HUNG = 0x4000u;   // in a quad's info, as in mesh.odin
+constant uint CAP = 0x8000u;
+
+struct Cut { float y; float clip; uint mark; };
+
+static Cut cut_corner(QuadIn q, float y, float base, float cell, float4 cut) {
+    uint info = q.b.z, face = info & 7u, canopy = (info >> 8u) & 63u;
+    Cut o;
+    o.y = y;
+    o.mark = (info & CAP) != 0u ? 4u : 0u;
+    o.clip = cut.x - y + 0.002;   // a face lying in the level itself is kept
+    if (cell < 1.5) return o;
+    if ((info & HUNG) != 0u) {
+        if (canopy != 0u && cut.y > 0.5) o.clip = -1.0;
+        return o;
+    }
+    o.clip = 1.0;
+    o.y = min(y, cut.x);
+    float top = base + float(q.a.y) + FACE_U[face].y * float(q.a.w) + FACE_V[face].y * float(q.b.x);   // the quad's upper edge
+    if (canopy != 0u && (cut.y > 0.5 || top > cut.x)) o.mark = face == 2u && top - float(canopy) >= cut.x ? 1u : 2u;
+    else if (face == 2u && top > cut.x) o.mark = 1u;
+    return o;
+}
+
 struct TerrainV {
     float4 position [[position]];
     float3 rel;
     float ao;
     float cell [[flat]];
-    uint info [[flat]];     // face | flip | sky in the low byte (QuadIn), the material over it
+    uint info [[flat]];     // face | flip | sky in the low byte (QuadIn), the material over it, and over that what the cut made of it (cut_corner)
     float3 soft [[flat]];   // direction the light treats this face as pointing
+    float clip [[clip_distance]];
 };
 
 vertex TerrainV vs_terrain(QuadIn q [[stage_in]], uint vid [[vertex_id]],
@@ -235,31 +274,41 @@ vertex TerrainV vs_terrain(QuadIn q [[stage_in]], uint vid [[vertex_id]],
     Corner c = quad_corner(q, vid);
     TerrainV o;
     o.rel = d.origin.xyz + c.pos;
+    Cut k = cut_corner(q, o.rel.y, d.origin.y, d.origin.w, f.cut);
+    o.rel.y = k.y;
+    o.clip = k.clip;
     o.position = drawn(o.rel, f);
     o.ao = c.ao;
     o.cell = d.origin.w;
-    o.info = (uint(q.b.z) & 255u) | uint(q.m.x) << 8u;
+    o.info = (uint(q.b.z) & 255u) | uint(k.mark == 2u ? q.m.y : q.m.x) << 8u | k.mark << 24u;
     // Light a face partly by the slope of the hill it is cut from: half its own direction,
     // half the smooth ground's. Faces with no ground slope (trees) keep their own.
     float3 N = FACE_N[q.b.z & 7u];
     uint packed = q.b.w;
     float2 g = (float2(packed & 255u, packed >> 8u) - 128.0) / 127.0;
-    o.soft = packed == 0u ? N : normalize(N + float3(g.x, sqrt(max(1.0 - dot(g, g), 0.0)), g.y));
+    o.soft = packed == 0u || k.mark == 1u ? N : normalize(N + float3(g.x, sqrt(max(1.0 - dot(g, g), 0.0)), g.y));
     return o;
 }
 
-struct ShadowU { float4x4 vp; };
+struct ShadowU { float4x4 vp; float4 cut; };
+struct ShadowV { float4 position [[position]]; float clip [[clip_distance]]; };
 
 // Drawn flat, not lowered as the view is (drawn): every shader looks shadows up where a thing stands on the flat world.
-vertex float4 vs_shadow(QuadIn q [[stage_in]], uint vid [[vertex_id]],
-                        constant ShadowU &s [[buffer(0)]], constant Draw &d [[buffer(1)]]) {
-    return s.vp * float4(d.origin.xyz + quad_corner(q, vid).pos, 1.0);
+// What the cut takes away casts no shadow.
+vertex ShadowV vs_shadow(QuadIn q [[stage_in]], uint vid [[vertex_id]],
+                         constant ShadowU &s [[buffer(0)]], constant Draw &d [[buffer(1)]]) {
+    float3 rel = d.origin.xyz + quad_corner(q, vid).pos;
+    Cut k = cut_corner(q, rel.y, d.origin.y, d.origin.w, s.cut);
+    ShadowV o;
+    o.position = s.vp * float4(rel.x, k.y, rel.z, 1.0);
+    o.clip = k.clip;
+    return o;
 }
 
 fragment void fs_shadow() {}
 
 static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<float> map, sampler smp) {
-    float dist = length(rel);
+    float dist = length(rel - f.focus.xyz);   // the maps are centred on the eye, or from above on the ground under the view's middle
     uint c = dist < f.cascade_r.x * 0.9 ? 0u : dist < f.cascade_r.y * 0.9 ? 1u : dist < f.cascade_r.z * 0.9 ? 2u : 3u;
     float r = f.cascade_r[c];
     if (dist > r * 0.9) return 1.0;
@@ -274,13 +323,27 @@ static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<fl
     return c == 3u ? mix(lit, 1.0, smoothstep(0.75, 0.9, dist / r)) : lit;
 }
 
+// A box of blocks shown on the faces of the blocks inside it: tinted, and lined where they meet
+// the box's sides, the line no thinner than a pixel and a half.
+static float3 outlined(float3 col, float3 rel, float3 N, float4 box, float3 size, float3 line, float tint) {
+    if (box.w < 0.5) return col;
+    float3 local = rel - N * 0.5 - box.xyz;
+    if (any(local < -0.001) || any(local > size + 0.001)) return col;
+    float3 p = rel - box.xyz, e = min(p, size - p);   // how far from the box's sides
+    float3 w = max(1.5 * fwidth(p), 0.03);
+    float3 near = 1.0 - smoothstep(0.6 * w, w, e);
+    float edge = abs(N.x) > 0.5 ? max(near.y, near.z) : abs(N.y) > 0.5 ? max(near.x, near.z) : max(near.x, near.y);
+    return mix(col, line, max(tint, 0.85 * edge));
+}
+
 fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(0)]],
                            depth2d_array<float> shadow_map [[texture(0)]], sampler shadow_smp [[sampler(0)]],
                            texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]],
                            texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]], texture2d<float> seen [[texture(3)]],
                            bool outside [[front_facing]]) {
     uint face = in.info & 7u;
-    uint mat = in.info >> 8u;
+    uint mat = (in.info >> 8u) & 0xFFFFu;
+    uint made = in.info >> 24u;   // what the cut made of this face (cut_corner)
     float3 N = FACE_N[face];
     float dist = length(in.rel);
     float3 world = in.rel + f.cam.xyz;
@@ -306,6 +369,16 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     float cut = max(saturate((tile.a - 0.5) / max(fwidth(tile.a), 1e-4) + 0.5), smoothstep(0.6 * LEAF_FAR, LEAF_FAR, dist));   // and whole by where the far leaves are drawn whole
     float patches = vnoise(inside.xz / 41.0) * 0.6 + vnoise(inside.xz / 11.0) * 0.4;
     albedo *= 1.0 + (patches - 0.5) * 0.24 + (block - 0.5) * 0.10 * saturate(1.0 - dist / (in.cell * 200.0));
+    // Where the cut passes through solid blocks, the face it makes is ruled block by block while a
+    // block is a few pixels wide, so it reads as a cut and its blocks can be counted. Beyond the block
+    // volume the ground is columns, whose rock at the level is not known: the cut there is one plain
+    // dark tone.
+    float px = max(fwidth(world.x), fwidth(world.z));   // metres to a pixel
+    if ((made & 4u) != 0u) {
+        float2 e = min(fract(world.xz), 1.0 - fract(world.xz));
+        albedo *= 1.0 - 0.22 * (1.0 - smoothstep(0.4 * px, 1.2 * px, min(e.x, e.y))) * saturate(1.5 - 10.0 * px);
+    }
+    if ((made & 1u) != 0u) albedo = float3(0.062, 0.060, 0.058);
 
     float3 sun = f.sun.xyz;
     // A face turned from the sun on a sunlit slope is an accident of cutting the slope into
@@ -318,20 +391,18 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     float lit = ndl > 0.0 && outside ? shadow_at(probe, turned ? in.soft : N, f, shadow_map, shadow_smp) * shade : 0.0;   // only a leaf is seen from inside, and the inside of a crown is in its own shade
     float ao = mix(0.5, 1.0, in.ao);
     float sky = 1.0 - float((in.info >> 4u) & 15u) / 15.0;   // the share of the sky a face under a roof sees (mesh.odin); far off, of the sunlight too
+    if (f.cut.x < 1e8) sky = 1.0;   // the cut has taken the roof off, for the light as well
     float3 col = albedo * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) * (in.cell > 1.0 ? sky : 1.0) + sky_ambient(in.soft, sun, f.weather.x) * ao * sky * mix(0.7, 1.0, shade));
 
     // Light lost on the way down through water.
     float depth = f.cam.w - world.y;
     if (depth > 0.0) col *= exp(-depth * float3(0.30, 0.11, 0.08));
 
-    // Outline of the block being aimed at.
-    if (f.target.w > 0.5 && in.cell < 1.5) {
-        float3 local = in.rel - N * 0.5 - f.target.xyz;
-        if (all(local > -0.001) && all(local < 1.001)) {
-            float3 e = min(fract(world), 1.0 - fract(world));
-            float edge = face < 2u ? min(e.y, e.z) : face < 4u ? min(e.x, e.z) : min(e.x, e.y);
-            col = mix(col, float3(0.0), 0.8 * (1.0 - smoothstep(0.02, 0.035, edge)));
-        }
+    // The block aimed at or under the pointer, outlined: dark in first person, bright from above,
+    // where it must show from far off. Then the box of blocks marked, tinted and outlined.
+    if (in.cell < 1.5) {
+        col = outlined(col, in.rel, N, f.target, float3(1.0), f.target.w > 1.5 ? float3(2.2, 2.0, 1.2) : float3(0.0), 0.0);
+        col = outlined(col, in.rel, N, f.mark, f.mark_size.xyz, float3(1.9, 1.2, 0.25), 0.12);
     }
 
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, cut);
@@ -342,7 +413,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
 // Two pictures crossed in an X over a column (plants.odin), set off its middle, turned and sized
 // by its hash. They thin out from PLANT_NEAR to PLANT_FAR, each sinking into the ground as it
 // reaches its own distance, so the edge of where they are drawn is never a line.
-constant float PLANT_NEAR = 70.0, PLANT_FAR = 190.0;   // render.odin skips chunks beyond PLANT_FAR
+constant float PLANT_NEAR = 70.0, PLANT_FAR = 190.0, PLANT_ABOVE = 256.0;   // render.odin skips chunks beyond PLANT_FAR, or from above PLANT_ABOVE
 
 struct PlantV {
     float4 position [[position]];
@@ -354,6 +425,7 @@ struct PlantV {
     uint info [[flat]];
     float3 soft [[flat]]; // the ground's normal, by which the plant is lit as the ground is
     float2 facing [[flat]]; // the picture's own normal across the ground, either way
+    float clip [[clip_distance]];
 };
 
 vertex PlantV vs_plant(QuadIn q [[stage_in]], uint vid [[vertex_id]],
@@ -364,8 +436,8 @@ vertex PlantV vs_plant(QuadIn q [[stage_in]], uint vid [[vertex_id]],
     float pictures = (kind >> 8u) != 0u ? 2.0 : 1.0;
     float r0 = float(h & 255u) / 255.0, r1 = float(h >> 8u) / 255.0;
     float3 foot = d.origin.xyz + float3(q.a.xyz) + float3(0.2 + 0.6 * r0, 0.0, 0.2 + 0.6 * r1);
-    float reach = mix(PLANT_NEAR, PLANT_FAR, fract(r0 * 13.7 + r1 * 5.3));
-    float size = float(q.b.y) / 100.0 * (1.0 - smoothstep(0.8 * reach, reach, length(foot)));
+    float reach = f.focus.w > 0.5 ? mix(PLANT_FAR, PLANT_ABOVE, fract(r0 * 13.7 + r1 * 5.3)) : mix(PLANT_NEAR, PLANT_FAR, fract(r0 * 13.7 + r1 * 5.3));   // from above they are part of reading the ground: all of them, to the block volume's edge
+    float size = float(q.b.y) / 100.0 * (1.0 - smoothstep(0.8 * reach, reach, length(foot - f.focus.xyz)));
     float turn = float(plane) * 1.571 + fract(r0 * 7.1 + r1 * 3.3) * 1.571;   // any turn: an X repeats every quarter
     float across = float(c & 1u) * 2.0 - 1.0, rise = float(c >> 1u) * pictures * size;
     float3 p = foot + float3(cos(turn), 0.0, sin(turn)) * (0.7071 * size * across) + float3(0.0, rise, 0.0);
@@ -374,6 +446,7 @@ vertex PlantV vs_plant(QuadIn q [[stage_in]], uint vid [[vertex_id]],
     PlantV o;
     o.rel = p;
     o.position = drawn(p, f);
+    o.clip = f.cut.x - foot.y + 0.002;   // a plant stands or is gone with the block it stands on
     o.uv = float2(float(c & 1u), float(c >> 1u) * pictures);
     o.up = rise;
     o.ao = float(q.b.z & 15u) / 15.0;
@@ -429,6 +502,7 @@ struct BoxV {
     float3 upper [[flat]];
     float3 under [[flat]];
     float wet [[flat]];
+    float clip [[clip_distance]];
 };
 
 static float3 unpack_rgb(float c) {
@@ -441,6 +515,7 @@ vertex BoxV vs_box(BoxIn b [[stage_in]], uint vid [[vertex_id]], constant Frame 
     BoxV o;
     o.rel = b.c.xyz + b.x.xyz * s.x + b.y.xyz * s.y + b.z.xyz * s.z;
     o.position = drawn(o.rel, f);
+    o.clip = f.cut.x - o.rel.y;
     o.local = s;
     o.upper = unpack_rgb(b.c.w);
     o.under = unpack_rgb(b.x.w);
@@ -507,6 +582,7 @@ struct WaterV {
     float2 flow;    // metres a second, where the water is simulated
     float3 kind;    // x: 1 for simulated water, y: 0 for level water to 1 for falling, z: depth
     float roof;     // the share of it under a roof of rock
+    float clip [[clip_distance]];
 };
 
 // The sea beyond the simulated water: a sheet at sea level round the eye, as a grid of SEA_GRID
@@ -524,6 +600,7 @@ vertex WaterV vs_water(uint vid [[vertex_id]], uint cell [[instance_id]], consta
     o.kind = float3(0.0, 0.0, 10.0);
     o.roof = 0.0;
     o.position = drawn(o.rel, f);
+    o.clip = f.cut.x - o.rel.y + 0.002;
     return o;
 }
 
@@ -540,6 +617,7 @@ vertex WaterV vs_river(RiverIn in [[stage_in]], constant Frame &f [[buffer(0)]],
     o.kind = float3(0.0, 0.0, lake ? 10.0 : 1.5);
     o.roof = 0.0;
     o.position = drawn(o.rel, f);
+    o.clip = f.cut.x - o.rel.y + 0.002;
     return o;
 }
 
@@ -567,6 +645,7 @@ vertex WaterV vs_pool(PoolIn in [[stage_in]], uint vid [[vertex_id]], constant F
     o.kind = float3(1.0, m.w - 2.0 * quarters, m.z);
     o.roof = quarters * 0.25;
     o.position = drawn(o.rel, f);
+    o.clip = f.cut.x - o.rel.y + 0.002;
     return o;
 }
 

@@ -26,7 +26,8 @@ LEAF_FAR   :: 72     // metres within which leaves are seen through
 EARTH      :: 7.4e6  // metres: the world is drawn round (drawn, shaders.metal), on the Earth's radius lengthened for refraction
 SEA_GRID   :: 64     // the sea is drawn as this many quads squared, as in shaders.metal
 BOX_MAX    :: 8192   // creatures' boxes drawn a frame at most
-FOV        :: 70.0   // vertical, degrees
+FOV        :: 70.0   // vertical, degrees, in first person
+NO_CUT     :: 1e9    // the cut's level when the world is not cut (above.odin)
 NEAR       :: 0.1
 DARK       :: 150    // metres under the sea past which the ground is drawn black, so casts no shadow worth drawing; as in shaders.metal
 
@@ -57,6 +58,13 @@ Gpu :: struct {
 	block_sampler:  ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
 	terrain, leaf, shadow_pipe, sky, water, river, pool, present, plant, cloud_pipe, box: ^sdl.GPUGraphicsPipeline,
+	caps:           ^sdl.GPUBuffer,    // the faces the cut makes through solid blocks (caps_make)
+	cap_staging:    ^sdl.GPUTransferBuffer,
+	caps_room:      int,               // quads they have room for
+	cap_list:       [dynamic]Cap,
+	caps_level:     i32,               // the level and the block volume they were made for, and whether without leaves
+	caps_volume:    int,
+	caps_bare:      bool,
 	boxes:          ^sdl.GPUBuffer,    // the creatures' boxes, written each frame
 	box_staging:    ^sdl.GPUTransferBuffer,
 	boxes_drawn:    int,
@@ -80,18 +88,105 @@ View :: struct {
 	day:        f32,    // of the year, 0 on 1 January
 	weather:    [2]f32, // cover and cloud base forced by --weather, where they are 0 or more
 	seconds:    f32,
-	target:     [3]i32, // block being aimed at
+	target:     [3]i32, // block being aimed at, or under the pointer
 	has_target: bool,
 	crosshair:  bool,
 	boxes:      []Box,  // the creatures near enough to see (creatures.odin)
-}
+	fov:        f32,    // vertical, degrees
+	focus:      [3]f64, // what the shadow maps and the ground plants are centred on: the eye, or from above the ground under the view's middle
+	above:      bool,   // the view from above (above.odin): the cloud layer is not drawn, and leaves are drawn whole
+	level:      f64,    // the cut: nothing above this height is drawn; NO_CUT for none
+	bare:       bool,   // leaves are not drawn
+	mark:       [2][3]i32,   // the box of blocks marked, its low corner and its high one
+	has_mark:   bool,
+	}
 
 // Mirrors `Frame` in shaders.metal.
 Frame :: struct {
 	view_proj: matrix[4, 4]f32,
 	shadow_vp: [4]matrix[4, 4]f32,
-	cascade_r, sun, cam, target, cam_r, cam_u, cam_f, screen, cloud, weather: [4]f32,
+	cascade_r, sun, cam, target, cam_r, cam_u, cam_f, screen, cloud, weather, focus, cut, mark, mark_size: [4]f32,
+	}
+
+	// Mirrors `ShadowU` in shaders.metal.
+	Shadow_U :: struct { vp: matrix[4, 4]f32, cut: [4]f32 }
+
+	// A chunk's faces among the caps.
+	Cap :: struct { key: Key, first, count: u32 }
+
+	// The faces the cut makes through solid blocks, as the block volume has them: wherever a block
+	// under the level has a block over it, its top, of its own stuff, so a hillside cut through shows
+	// its soil and its beds, and a trunk its rings. A run of one material along a row is one face.
+	// Under the layers a chunk keeps all is rock, read from what lies under each column. They are made
+	// again when the level moves or the volume changes, into one buffer, a part for each chunk.
+	caps_make :: proc(g: ^Gpu, w: ^World, cmd: ^sdl.GPUCommandBuffer, level: i32, bare: bool) {
+		if level == g.caps_level && w.volume == g.caps_volume && bare == g.caps_bare do return
+		g.caps_level, g.caps_volume, g.caps_bare = level, w.volume, bare
+	clear(&g.cap_list)
+	quads := make([dynamic]Quad, 0, 8192, context.temp_allocator)
+	was := here
+	defer bind(was)
+	for key, c in w.chunks {
+		if key.level != 0 || !c.ready || len(c.blocks) == 0 do continue
+		ly := level - 1 - c.y_base   // the layer under the level
+		if ly >= c.h do continue      // the level passes over everything here
+		sea := !bind_at(f64(key.x*CHUNK + CHUNK/2), f64(key.z*CHUNK + CHUNK/2))
+		first := len(quads)
+		for z in 0..<i32(CHUNK) {
+			run := -1   // the face before this one in the row
+			for x in 0..<i32(CHUNK) {
+				k := int(x + 1) + int(z + 1)*P
+				m := c.blocks[k + int(ly)*P*P] if ly >= 0 else under_rock(c, k, level - 1, sea)
+				over := Mat.Air if ly + 1 >= c.h else c.blocks[k + int(ly + 1)*P*P] if ly + 1 >= 0 else Mat.Stone
+				if m == .Air || over == .Air || is(over, LEAVES) && !is(m, LEAVES) || bare && is(m, LEAVES) {   // open, or a top the mesh has already
+					run = -1
+					continue
+				}
+				if GRAIN[m] != {} do m = GRAIN[m][0]   // a trunk cut across shows its rings
+				if run >= 0 && quads[run].mat == m {
+					quads[run].b += 1
+					continue
+				}
+				run = len(quads)
+				q := quad(x, level - c.y_base, z, 1, 1, 2, m, OPEN, {})
+				q.info |= CAP
+				append(&quads, q)
+			}
+		}
+		if len(quads) > first do append(&g.cap_list, Cap{key, u32(first), u32(len(quads) - first)})
+	}
+	if len(quads) == 0 do return
+	if len(quads) > g.caps_room {
+		if g.caps != nil {
+			sdl.ReleaseGPUBuffer(g.dev, g.caps)
+			sdl.ReleaseGPUTransferBuffer(g.dev, g.cap_staging)
+		}
+		for g.caps_room = 16384; g.caps_room < len(quads); g.caps_room *= 2 {}
+		g.caps = sdl.CreateGPUBuffer(g.dev, {usage = {.VERTEX}, size = u32(g.caps_room*size_of(Quad))})
+		g.cap_staging = sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = u32(g.caps_room*size_of(Quad))})
+	}
+	// Both are written by the CPU, so both are cycled: the frame before may still be drawing from them.
+	bytes := len(quads)*size_of(Quad)
+	copy((cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, g.cap_staging, true))[:bytes], (cast([^]u8)raw_data(quads))[:bytes])
+	sdl.UnmapGPUTransferBuffer(g.dev, g.cap_staging)
+	pass := sdl.BeginGPUCopyPass(cmd)
+	sdl.UploadToGPUBuffer(pass, {g.cap_staging, 0}, {g.caps, 0, u32(bytes)}, true)
+	sdl.EndGPUCopyPass(pass)
 }
+
+// Draw the caps, with the pipeline and the frame's uniforms already bound.
+	caps_draw :: proc(g: ^Gpu, w: ^World, cmd: ^sdl.GPUCommandBuffer, pass: ^sdl.GPURenderPass, eye: [3]f64) {
+	for cap in g.cap_list {
+		c := w.chunks[cap.key] or_else nil
+		if c == nil do continue
+		origin := [4]f32{f32(f64(cap.key.x*CHUNK) - eye.x), f32(f64(c.y_base) - eye.y), f32(f64(cap.key.z*CHUNK) - eye.z), 1}
+		sdl.PushGPUVertexUniformData(cmd, 1, &origin, size_of(origin))
+		binding := sdl.GPUBufferBinding{buffer = g.caps}
+		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
+		sdl.DrawGPUPrimitives(pass, 4, cap.count, 0, cap.first)
+		g.quads_drawn += int(cap.count)
+	}
+	}
 
 // The sky through the year, from the 1991-2020 normals at Tanegashima (30.7° N, 25 m high, the
 // nearest low island to this latitude): each month's mean cover is the share of its daylight
@@ -483,8 +578,13 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		sdl.EndGPUCopyPass(copy_pass)
 	}
 
+	cut := v.level < NO_CUT
+	if cut do caps_make(g, w, cmd, i32(v.level), v.bare)
+	else do g.caps_level = min(i32)   // no caps, and none kept for when the cut comes back
+	if !cut do clear(&g.cap_list)
+
 	// Camera. Positions sent to the GPU are relative to the eye.
-	tan_y := math.tan(math.to_radians(f32(FOV))/2)
+	tan_y := math.tan(math.to_radians(v.fov)/2)
 	tan_x := tan_y*f32(sw)/f32(sh)
 	fwd := look_dir(v.yaw, v.pitch)
 	right := [3]f32{math.cos(v.yaw), 0, math.sin(v.yaw)}
@@ -515,10 +615,18 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	f.cloud = {f32(math.mod(v.eye.x + math.sin(from)*drift, 65536)), f32(math.mod(v.eye.z - math.cos(from)*drift, 65536)), f32(v.eye.x - f64(near.region.origin.x) + near.region.size/2), f32(v.eye.z - f64(near.region.origin.y) + near.region.size/2)}
 	f.weather = {cover, base, SKY.deck, f32(near.region.size)}
 	if v.has_target {
-		f.target = {f32(f64(v.target.x) - v.eye.x), f32(f64(v.target.y) - v.eye.y), f32(f64(v.target.z) - v.eye.z), 1}
+		f.target = {f32(f64(v.target.x) - v.eye.x), f32(f64(v.target.y) - v.eye.y), f32(f64(v.target.z) - v.eye.z), 2 if v.above else 1}
 	}
+	if v.has_mark {
+		f.mark = {f32(f64(v.mark[0].x) - v.eye.x), f32(f64(v.mark[0].y) - v.eye.y), f32(f64(v.mark[0].z) - v.eye.z), 1}
+		f.mark_size = {f32(v.mark[1].x - v.mark[0].x + 1), f32(v.mark[1].y - v.mark[0].y + 1), f32(v.mark[1].z - v.mark[0].z + 1), 0}
+	}
+	focus := [3]f32{f32(v.focus.x - v.eye.x), f32(v.focus.y - v.eye.y), f32(v.focus.z - v.eye.z)}
+	f.focus = {focus.x, focus.y, focus.z, 1 if v.above else 0}
+	f.cut = {f32(v.level - v.eye.y) if cut else NO_CUT, 1 if v.bare else 0, 0, 0}
 
-	// Shadow cascades are boxes centred on the camera, looking along the sunlight. Each
+	// Shadow cascades are boxes centred on the camera, or from above on the ground under the view's
+	// middle (the focus), looking along the sunlight. Each
 	// centre moves in whole texels so shadow edges hold still while the camera moves. A
 	// cascade that is not redrawn this frame is read as it was drawn, sun and all, so a clock
 	// that moves the sun costs no extra redraws.
@@ -527,6 +635,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	l_up := linalg.cross(l_right, light)
 	along :: proc(p: [3]f64, axis: [3]f32) -> f64 { return p.x*f64(axis.x) + p.y*f64(axis.y) + p.z*f64(axis.z) }
 	eye_lit := [3]f64{along(v.eye, l_right), along(v.eye, l_up), along(v.eye, light)}
+	mid_lit := [3]f64{along(v.focus, l_right), along(v.focus, l_up), along(v.focus, light)}
 	radius, interval := CASCADE_RADIUS, CASCADE_INTERVAL
 	offset: [4][3]f32
 	redraw: [4]bool
@@ -534,7 +643,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		redraw[i] = g.frame == 0 || g.frame % interval[i] == i % interval[i]
 		if redraw[i] {
 			texel := f64(2*r/SHADOW_RES)
-			o := eye_lit - {math.floor(eye_lit.x/texel)*texel, math.floor(eye_lit.y/texel)*texel, eye_lit.z}
+			o := eye_lit - {math.floor(mid_lit.x/texel)*texel, math.floor(mid_lit.y/texel)*texel, mid_lit.z}
 			offset[i] = {f32(o.x), f32(o.y), f32(o.z)}
 			d := 4*r   // depth range; casters nearer the sun than this are clamped, not lost
 			g.cascade_vp[i] = {
@@ -556,6 +665,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	lowest := f32(0)   // the lowest ground there is, from the eye: no shadow falls farther
 	for key, c in w.chunks {
 		if !c.ready || c.buffer == nil do continue
+		if key.level == 0 && f64(c.y_lo) >= v.level do continue   // wholly above the cut
 		s := i32(1) << u32(key.level)
 		size := f64(CHUNK*s)
 		x, z := f32(f64(key.x)*size - v.eye.x), f32(f64(key.z)*size - v.eye.z)
@@ -571,6 +681,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 			}
 		}
 		lowest = min(lowest, it.lo.y)
+		if cut && key.level > 0 do it.lo.y, it.hi.y = min(it.lo.y, f.cut.x), min(it.hi.y, f.cut.x)   // columns over the cut are lowered to it
 		// It is drawn lower the farther it is (drawn, shaders.metal): its box takes in how low.
 		it.lo.y -= (max(it.lo.x*it.lo.x, it.hi.x*it.hi.x) + max(it.lo.z*it.lo.z, it.hi.z*it.hi.z))/(2*EARTH)
 		append(&items, it)
@@ -598,13 +709,14 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 			}
 			pass := sdl.BeginGPURenderPass(cmd, nil, 0, &target)
 			sdl.BindGPUGraphicsPipeline(pass, g.shadow_pipe)
-			sdl.PushGPUVertexUniformData(cmd, 0, &f.shadow_vp[i], size_of(f.shadow_vp[i]))
+			shadow := Shadow_U{f.shadow_vp[i], f.cut}
+			sdl.PushGPUVertexUniformData(cmd, 0, &shadow, size_of(shadow))
 			cascade := Caster{r = r, offset = offset[i], l_right = l_right, l_up = l_up, light = light, lowest = lowest, wide = wide}
 			for &it in items {
 				if it.level < min_level[i] || f64(it.hi.y) + v.eye.y < SEA_SURFACE - DARK || !shades(cascade, it.lo, it.hi) do continue   // light falls downward, so what lies wholly in the dark shades only the dark
 				faces: [4]u8
 				if it.level == 0 {
-					faces = {lit_faces, lit_faces, 0, 0}   // the blocks and their leaves, which cast shadows whole
+					faces = {lit_faces, 0 if v.bare else lit_faces, 0, 0}   // the blocks and their leaves, which cast shadows whole
 				} else {
 					// Each quarter that can shade, of those not drawn finer, or of all at the finest level drawn here.
 					for q in 0..<4 {
@@ -613,11 +725,12 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 					}
 				}
 				draw_item(g, cmd, pass, &it, faces)
-			}
-			sdl.EndGPURenderPass(pass)
-		}
-	}
-	shadow_quads := g.quads_drawn
+				}
+				if min_level[i] == 0 do caps_draw(g, w, cmd, pass, v.eye)
+				sdl.EndGPURenderPass(pass)
+				}
+				}
+				shadow_quads := g.quads_drawn
 
 	// The cloud layer along each line of sight, once for the frame at half size: the sky reads it,
 	// and so does whatever is seen through the layer (fs_clouds, shaders.metal).
@@ -662,8 +775,11 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		faces: [4]u8
 		if it.level == 0 {
 			toward := facing_eye(it.lo, it.hi)
-			faces = {toward, 0 if it.near < LEAF_FAR else toward, 0, 0}
-			if it.near < LEAF_FAR do append(&lacy, &it)
+			if v.above do faces = {toward, 0 if v.bare else toward, 0, 0}   // from above every crown is whole: the view is for reading the ground, and is seldom this near
+			else {
+				faces = {toward, 0 if it.near < LEAF_FAR else toward, 0, 0}
+				if it.near < LEAF_FAR do append(&lacy, &it)
+			}
 		} else {
 			for q in 0..<4 {
 				lo, hi := quarter_box(&it, q)
@@ -671,9 +787,10 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 			}
 		}
 		draw_item(g, cmd, pass, &it, faces)
-	}
+		}
+		caps_draw(g, w, cmd, pass, v.eye)
 
-	// The leaves of the nearest chunks, seen through and from both sides.
+		// The leaves of the nearest chunks, seen through and from both sides.
 	sdl.BindGPUGraphicsPipeline(pass, g.leaf)
 	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 4)
 	// Nearest first, and a crown's outer faces before those within it, so most of what is hidden is never shaded.
@@ -688,10 +805,10 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.BindGPUGraphicsPipeline(pass, g.plant)
 	plant_bindings := [4]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.plant_pics, g.plant_sampler}, lifted, seen}
 	sdl.BindGPUFragmentSamplers(pass, 0, &plant_bindings[0], 4)
-	PLANT_FAR :: 190   // as in shaders.metal: no plant is drawn farther off
+	PLANT_FAR := f32(256 if v.above else 190)   // as in shaders.metal: no plant is drawn farther off
 	for &it in items {
 		if !it.seen || it.chunk.plant_buf == nil do continue
-		if near := linalg.clamp([2]f32{0, 0}, it.lo.xz, it.hi.xz); linalg.length(near) > PLANT_FAR do continue
+		if near := linalg.clamp(focus.xz, it.lo.xz, it.hi.xz) - focus.xz; linalg.length(near) > PLANT_FAR do continue
 		sdl.PushGPUVertexUniformData(cmd, 1, &it.origin, size_of(it.origin))
 		binding := sdl.GPUBufferBinding{buffer = it.chunk.plant_buf}
 		sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)

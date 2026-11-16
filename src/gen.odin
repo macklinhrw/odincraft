@@ -246,6 +246,7 @@ Columns :: struct {
 	kind:   [P*P]Tree_Kind, // the species of that crown and trunk
 	water:  [P*P]f32,   // level of the river or sea standing here, or NO_WATER
 	mat:    [P*P]Mat,   // what the surface is made of
+	floor:  [P*P]Mat,   // what the ground is made of: the same, but under a canopy that is part of the column, whose surface is leaf
 	under:  [P*P]Under, // what lies under the ground: the rock stack's base, which places the beds, and any cover or body (rock.odin)
 	slope:  [P*P][2]u8, // the smooth ground normal's x and z, packed; zero in the border
 	hollow: [P*P][2]i32, // the floor and roof of a hollow carved under the top here (events.odin); far off, of its mouth
@@ -674,7 +675,7 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			x, z := (f64(ix) + 0.5)*cell - f64(region.origin.x), (f64(iz) + 0.5)*cell - f64(region.origin.y)
 			p: Point
 			g, m, plants := surface_at(x, z, cell, &p)
-			heights[k], c.water[k], c.under[k], c.mat[k] = g.h, g.water, g.under, m
+			heights[k], c.water[k], c.under[k], c.mat[k], c.floor[k] = g.h, g.water, g.under, m, m
 			if s == 1 do if kind, ok := plant_at(&p, m, plants); ok && g.water - g.h <= GROUND_PLANTS[kind].wet do c.plant[k] = u8(kind) + 1
 			c.top[k] = i32(math.round(heights[k]))
 			if heights[k] < SEA_SURFACE do c.top[k] = min(c.top[k], SEA_LEVEL - 1)   // what the land says is under the sea is drawn under it: a shoal is a shallow, not a raft of sand
