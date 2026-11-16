@@ -116,6 +116,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
   5. **The party is led from above, and that view becomes the primary camera.** Selecting one dwarf and controlling it by hand ("mind control") is a further feature, which may be deferred. A first-person camera must exist for certain.
   6. **AI agents and narration: not now.** They can be fitted in slowly, after the Dwarf Fortress-like approach without AI stands.
 - **This supersedes** item 9 of `foundations.md` section 9 (people arrive first as ruins; history as a short pass), `living-world.md` decisions 2 to 4, and the "first person" line under "Assumed unless the owner objects" below as the only view: first person stays, and the view from above leads.
+- **RimWorld is the second source of inspiration, after Dwarf Fortress.** Dwarf Fortress will always be the primary; there is still plenty to learn from RimWorld.
 
 **2026-11-16, Claude's call** (the slide's lake: how a landslide's dammed lake ages; `foundations.md` section 8, "Step 35, as built: the slide's lake")
 
