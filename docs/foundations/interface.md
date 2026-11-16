@@ -4,6 +4,8 @@ A design for OdinCraft v5, written 2026-11-16 by Claude at the owner's word: the
 
 It is a plan, not a decision. Section 8 holds what is the owner's. Pictures of four screens are beside this file (`interface-*.jpg`, drawn by `interface-wireframes.html`).
 
+**Step I-1 is built** (`../plan.md`, section 10, "I-1, as built"): the ground and the play screen's frame. Section 10 below says what building it changed in this design. The drawings beside this file are still the design's; pictures of the built screen are in `../interesting-world/real/i1-*.jpg`.
+
 Revised the same day after the owner's two criticisms of the first pass: a hold will grow past seven dwarves, and the first drawings were ugly and immature. The placement and the grammar stand. The look is redone (I10), and the design now grows with the hold (I14).
 
 The evidence is a survey of Dwarf Fortress's Steam interface, RimWorld's, and what the makers of Factorio, Victoria 3, Crusader Kings 3 and others have written about theirs, made by a research agent on 2026-11-16 that fetched each page. Its sources are listed at the end. Claude did not re-check its quotations. *(Memory)* marks what neither checked.
@@ -107,7 +109,7 @@ The first drawings used flat translucent panels, a system typeface and a yellow 
 
 *Alternatives.* A pixel typeface to match the 16-pixel block tiles: it suits the blocks and tires the eye over the paragraphs this game answers in. Light panels like a map's margin: handsome on a page, glaring over the land for hours.
 
-*Not settled.* Both typefaces are believed to be under the Open Font Licence, which allows shipping them; that is from memory and must be read before either is put in the repository. The drawings are a browser's; the game's own text will be drawn from an atlas (I9) and has to be looked at again there.
+*Settled in I-1.* Both typefaces are under the SIL Open Font License 1.1, read from the files and from where they were taken, and both are in the repository with their licences (`../../assets/LICENSE.md`). The game draws them itself from an atlas made for each scale (I9). It runs none of a face's own instructions for fitting to pixels, so its text is a little softer than the browser's in the drawings, most at the 75% scale. *The owner has not yet judged the look in the game.*
 
 **I11. Lessons come when they are needed, and are learned by doing.**
 
@@ -199,8 +201,8 @@ The interface steps sit in the play track (`plan.md`, section 5).
 
 | Step | What is built | The owner does |
 |---|---|---|
-| **I-1. The interface's ground and the play screen's frame** (after P1) | Text, panels on the module grid, the pointer shared between the world and the panels, scale, `--shot` with the interface. The four regions. The clock and speeds. The hand, answering what any block, tree, stream or place is and why. Messages. The level control, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there; paints the rain over the island |
-| **With P2. The dwarves on screen** | Their pictures at the top, the dwarves list, a dwarf's card, sending them | Clicks a dwarf's picture and is taken to her |
+| **I-1. The interface's ground and the play screen's frame** (after P1; built) | Text, panels on the module grid, the pointer shared between the world and the panels, scale, `--shot` with the interface. The four regions. The clock and speeds. The hand, answering what any block, tree, stream or place is and why. Messages. The level control, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there; paints the rain over the island |
+| **After I-1. The dwarves on screen** | Their pictures at the top and the dwarves list. A dwarf's card is built with I-1: a dwarf clicked on the land is in the hand, with its picture, P2's three lines and Follow | Clicks a dwarf's picture and is taken to her |
 | **I-2. The front door and the world** | The front door, a new world with honest progress, the world's map, Walk the world, settings for text size and keys | Makes a world from the menu and walks it |
 | **E-1. Expedition planning** | Where, with the site card; who, with drawing again; set out | Chooses a hard site on purpose |
 | **With P3. Orders** | The orders bar, marking ground by dragging, the build choices, what an order waits for | Has a room dug |
@@ -212,8 +214,8 @@ The interface steps sit in the play track (`plan.md`, section 5).
 ## 7. Risks and known failures
 
 - **It is more work than it looks.** Factorio's took four years and 800 styles. The answer here is the fixed frame, the one grammar, and shipping a screen only with its system.
-- **Text.** Sharp text at every scale needs an atlas per scale. A typeface must be found whose licence allows shipping it; none is in the repository.
-- **The view from above and panels share the pointer.** A drag that begins on the world and ends on a panel, a wheel over a list: each needs a rule, written once.
+- **Text.** *Built in I-1:* an atlas for each scale, and two typefaces under the Open Font License in the repository.
+- **The view from above and panels share the pointer.** *Built in I-1, as one rule:* a press belongs to what lies under it, and so does everything until that button is let go; the wheel belongs to what the pointer is over. No one has tried it by hand.
 - **Frame time.** The interface is drawn every frame. It must add nothing to notice: the target is still no frame of our own work over 12.5 ms.
 - **The game's sentences are long.** `--why` answers in paragraphs. A card needs the first sentence, with the rest a click away, and some sentences will need rewriting to lead with the point.
 - **A hold of seventy is designed for and not drawn.** I14 says how each part grows. Only the hold of thirty-four is drawn, and none is built.
@@ -229,8 +231,26 @@ The interface steps sit in the play track (`plan.md`, section 5).
 
 - The survey's quotations were fetched by a research agent and not re-checked by Claude.
 - RimWorld's start flow, its letters, and how its drag-marking behaves are from memory.
-- The two typefaces in the drawings are not in the repository, and their licences have not been read.
-- No placement has been tried on a screen. The wireframes are drawings.
+- The Braille Institute's own page for Atkinson Hyperlegible was not read; the licence was read from Google Fonts' repository and from inside the files.
+- No placement has been tried by hand. The play screen is built and has been looked at only in pictures taken with no window: no one has moved a pointer over it.
+
+## 10. What building I-1 changed
+
+The four regions and the grammar stood. These are the places where the built screen differs from sections 3 and 4, and why.
+
+- **The ground's panel has more on it** than the drawing's three buttons. The cut has to be turned on and off by the mouse, so its title carries a small switch, Cut, with its key. Up and Down are two buttons, since one button with two keys cannot be clicked. The third control P1 asked for is there as **Follow the ground**. Dragging the mark above the column's top makes the world whole again, and the wheel over the column moves the cut a block.
+- **The column says more than the drawing's.** Each bed is drawn in its own block's picture, so it is the stuff the cut shows. The soils are named together as "soil" where each is a block thick. What stands over the cut is dimmed, since it is not drawn in the world. Where water stands in the ground, its level is marked and named. The column shows 120 m, or more by doubling when the cut is deeper than that, and holds still while the mark is dragged.
+- **Lenses open beside the ground's panel**, not inside it, so that nothing in the panel moves. While a lens is on and its choices are shut, the key to its colours stays there. A lens of rock uses colours of its own, the island's first rock in one and its second in another: painted in the map's colours, basalt and breccia could not be told apart over the land.
+- **A card is as deep as its longest tab**, within limits, so that changing tabs moves nothing. For a block of ground the first tab is Rock, with the column the block lies in beside the words. For anything else the first tab is the thing's own.
+- **The card's depths are Rock, Ground, Plants, Near and World**: what `--why` says, by part. Its first lines are written for the card and lead with the point; the rock's lines are rewritten; **the other tabs are still the game's sentences as `--why` prints them**, long and full of figures. They need the same rewriting, part by part.
+- **Places stand on the land as names**, so that a place can be clicked in the world, as I2 asks of everything. The Places list holds the named places, then whatever else is remarkable on the island, by kind, each kind folded to its count.
+- **Escape's order** (I6) is: the field being typed in, the menu, the mouse (in first person), the lenses, the list, a box being marked, the hand; with nothing open it opens the menu. It no longer leaves the game: Quit is in the menu.
+- **The list narrows before it covers anything.** At 175% and 200% on a screen 2,560 wide, a list a third of the screen wide lay over the place's panel. It is now never wider than the room beside the hand and the place. The test that found this checks every scale.
+- **The top left names where the view is**: the named place under it, or which way it lies from the nearest ("North of East Top"), until a hold has a name. The date is the day of the season ("16th of spring"); there is no year yet.
+- **Clicking the date does nothing**: there is no chronicle to open. The messages are kept for it.
+- **Lessons can be read again in the menu** (I11), which also holds the interface's size until settings exist (I-2).
+- **A message need not have a place.** The hold's log has none to give yet, so its lines are told and cannot be followed (I4). Anything told with a place leads there.
+- **A picture can leave the interface out** (`--plain`), since pictures of the land are how the natural world is judged, and can say what the screen says (`--say`), which I12 did not name.
 
 ## Sources
 
