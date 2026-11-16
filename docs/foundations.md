@@ -768,7 +768,8 @@ Steps 17 to 20 started together; step 21 followed the seam test's failure, and s
 
 - **Done:** steps 17, 18, 19, 20, 22, 23, 24, 28, 31, 32, 33, 34 and 35; outside the table, the reef kind and Yakushima measured for the granite massif (`interesting-world/notes/real-islands.md`). Step 17's stand-in is replaced by step 22's history and step 32's regional history.
 - **Half done:** step 21. Its experiment found a method that leaves no seam (ordered pieces), but nothing of it is built. A continent of 30,000 to 50,000 km² is extrapolated at 18 to 30 minutes on three background threads. Phase 3 needs it, and so do rivers wider than about 8 m (step 34).
-- **Not started:** step 25 (it needs item 8 of section 9, cold to hot); 26 (it needs 25); 27 (nothing blocks it); 29 (it needs item 9); 30 (it needs item 10).
+- **In progress:** steps 25 and 27, started 2026-11-16 once the owner decided item 8 of section 9 (cold to hot: thirty degrees).
+- **Not started:** 26 (it needs 25); 29 (it needs item 9); 30 (it needs item 10).
 - **Left open in step 32:** one sea for the world, which read into each phase put 33.1% of figures far, so the islands keep their kinds' seas; and the planet's boundaries, which stay two to three times the real length, since the regional history runs the planet's plates and did not shorten them.
 - **The land.**
   - Every island near the start on seeds 1 to 10, formed alone: 14.0% of figures far from the real islands, against 21.4 before the regional history, 23.6 after its first part and 16.3 before step 35; 11.4% on seeds 11 to 40.
@@ -788,7 +789,7 @@ Steps 17 to 20 started together; step 21 followed the seam test's failure, and s
     - rain growing with height while forming;
     - dry channels above the stream heads;
     - the planet's boundaries.
-- **Claude's recommended order:** item 8 as recommended, so step 25 can start; step 27 beside it; a viewing pass for the owner; then step 21 built.
+- **Claude's recommended order:** steps 25 and 27, now running; a viewing pass for the owner; then step 21 built.
 
 ### Step 17, as built
 
@@ -1862,7 +1863,7 @@ Each has the plan's recommendation. Section 8 of each design holds the rest.
 **Before the archipelago**
 
 7. **The end shape of the world.** *A mainland with islands off its coast inside known lands about 300 km across, far lands beyond*, subject to the seam test. *Decided by the owner on 2026-11-15:* one cohesive simulated world with continents and islands where the simulation makes them; the seam test decides only the method.
-8. **Cold to hot.** *Let 1,000 km stand for about thirty degrees of latitude.*
+8. **Cold to hot.** *Let 1,000 km stand for about thirty degrees of latitude.* *Decided by the owner on 2026-11-16: thirty.*
 9. **People.** *The first island is wild; people arrive with the archipelago, first as ruins; history is a short pass over a few eras that writes dated facts*, not a simulation.
 10. **The fantastic.** *Admitted only as a cause with a source, a reach and an age; at most one marvel per region; inspection gives signs first and the cause once learned.*
 11. **Named places.** *Eight to twelve on an island, in plain descriptive English drawn from their causes.*
