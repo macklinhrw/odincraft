@@ -34,7 +34,7 @@ build/odincraft --shot=out/v.png --above=x,h,z --look=yaw,pitch --hour=h   # a p
 The two benches, after any change to drawing, streaming, trees or the start (target: no frame over 12.5 ms):
 
 ```sh
-build/odincraft --bench=15 --fly --speed=120 --above=-900,60,1700 --look=90,0   # forest flank
+build/odincraft --bench=15 --fly --speed=120 --above=-2500,60,-600 --look=90,0   # forest flank
 build/odincraft --bench=10 --fly --speed=60 --pos=500,700,-1000 --look=200,-35  # down through cloud
 ```
 

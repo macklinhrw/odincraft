@@ -26,12 +26,14 @@ import "core:strings"
 //                   the start island at the origin); it says all its start-up lines
 //   near=km         the islands within this many km of that one are formed beside it before entering (default 64);
 //                   the rest form in the background, nearest first, and the world waits for each
-//   kind=name       which kind of island that one is, whatever the seed would pick (names in KINDS, land.odin)
+//   kind=name       which kind of island that one is, whatever the history would make (names in KINDS,
+//                   land.odin); the start island of that kind is put where its host holds best
 //   origin=x,z      where island 0's middle lies in the world, in whole metres (default 0,0); the
 //                   islands near it and the stand-in's plates move with it
 //   map=file.png    save a map of the island's land and exit
 //   archipelago=file.png   form every island near the start side by side, save a map of them and the
 //                   continent they lie off, and exit
+//   known=file.png  save a map of the known world as its regional history of the plates left it, and exit
 //   overlay=name    with map: paint one field over the relief (names in FIELDS, fields.odin)
 //   why=x,z         print what the ground is at this point in the world and why, and exit
 //   survey          print what the island holds and the ranked candidates for named places, and exit
@@ -60,6 +62,7 @@ Options :: struct {
 	has_probe:     bool,
 	map_path:      string,
 	archipelago:   string,
+	known:         string,
 	overlay:       string,
 	above:         bool,
 	bench, speed:  f64,
@@ -106,6 +109,7 @@ options :: proc() -> Options {
 			o.weather = {f32(v.x), f32(v.y) if strings.contains(value, ",") else SKY.base[1]}
 		case "bench": ok = numbers(value, ",", v[:1]); o.bench = v.x
 		case "speed": ok = numbers(value, ",", v[:1]); o.speed = v.x
+		case "known": o.known = value
 		case "shot":  o.shot = value
 		case "after": ok = numbers(value, ",", v[:1]); o.after = v.x
 		case "probe":

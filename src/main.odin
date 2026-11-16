@@ -68,22 +68,32 @@ main :: proc() {
 	}
 	quiet_init()
 	seed = world_seed   // the islands are made from the world's seed
-	// The start island's record is drawn first, at its place; the islands near it and the land they
-	// lie off are read from the world's history round it (known.odin, archipelago.odin).
+	// A record is drawn first at the start's place, for the swell and any kind asked for, unsaid; the
+	// islands near it, the start among them, and the land they lie off are read from the world's
+	// history round it (known.odin, archipelago.odin).
 	@(static) first: Formed   // static: the bound names keep pointing at it
 	first.island, first.region.origin = {origin = opt.origin, size = REFERENCE, seed = world_seed}, opt.origin
 	bind(&first)
-	if !region_init(opt.kind if opt.island == 0 else "") {
+	quiet = true
+	ok := region_init(opt.kind if opt.island == 0 else "")
+	quiet = false
+	if !ok {
 		fmt.eprint("no kind of island named", opt.kind, "; there are:")
 		for k in KINDS do fmt.eprint("", k.name)
 		fmt.eprintln()
 		os.exit(2)
 	}
 	known_make()
-	archipelago_make(opt.archipelago != "")
+	forced := -1   // --kind= for the start
+	if opt.kind != "" && opt.island == 0 do for k, i in KINDS do if k.name == region.kind do forced = i
+	archipelago_make(opt.archipelago != "", forced)
 	if opt.has_plates_why {
 		at := known_point(opt.plates_why.x, opt.plates_why.y)*1000
 		plates_why(f64(at.x), f64(at.y))
+		return
+	}
+	if opt.known != "" {
+		known_map(opt.known)
 		return
 	}
 	if opt.island < 0 || opt.island >= len(archipelago) {

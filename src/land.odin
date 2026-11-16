@@ -105,8 +105,8 @@ Kind :: struct {
 	name:    string,
 	after:   []string, // the real islands it stands for (REAL); none is a guess
 	weight:  f32,      // how often the seed draws this kind, against the other rows' weights
-	story:   string,   // what the start island's rock is, until its uplift is read from the plates too; the others' is read from their setting (story_for, rock.odin)
-	hosts:   [][]Window, // where the world's plates put it, on the world's fields (archipelago.odin; a stand-in until step 22): it takes the best of them
+	story:   string,   // what an island's rock is where no story's host holds at its middle (story_for, rock.odin)
+	hosts:   [][]Window, // where the world's plates put it, on the world's fields (archipelago.odin): it takes the best of them
 	shape:   Shape([2]f64),
 	history: []Phase([2]f32),
 }
@@ -157,7 +157,7 @@ KINDS := [?]Kind{
 		// of the sea from lava and ash in a few tens of thousands of years, and the sea and its
 		// streams then cut it for a few hundred thousand, into a wall of cliffs round radial gorges.
 		name = "cone", after = {"Toshima", "Mikurajima"}, weight = 1, story = "lava and ash",
-		hosts = {{{.Front, 0, 6, 4}}},   // on the arc's volcanic front
+		hosts = {{{.Front, 0, 6, 4}, {.Vent, -ANY, 1, 0.5}, {.Crust, -ANY, 22, 4}}},   // a young vent on the volcanic front, of runny lava from an arc's thin crust
 		shape = {xx = {0.9, 1.1}, zz = {0.9, 1.1}, xz = {-0.2, 0.2}, rate = {0.0012, 0.0016}, swell = {0, 360}, silt = {0, 0.1}, lumps = {0.05, 0.1}, lumps_wave = {2000, 3000}},
 		history = {
 			{cell = 64, years = 2000, steps = {15, 25}, vents = {1, 1}, spread = {0, 400}, build = {700, 1000}, form = {0.7, 0.9}, flank = {0.28, 0.38}},
@@ -172,7 +172,7 @@ KINDS := [?]Kind{
 		// few hundred thousand years, whose top then falls in after a last small eruption, leaving
 		// a rim round a closed floor, in which a small cone grows with a crater of its own.
 		name = "crater", after = {"Aogashima"}, weight = 1, story = "lava and ash",
-		hosts = {{{.Front, 0, 6, 4}}},
+		hosts = {{{.Front, 0, 6, 4}, {.Vent, 0.6, ANY, 0.3}}},   // a vent on the front long at work, whose top falls in at the end of its life
 		shape = {xx = {0.75, 1}, zz = {1, 1.3}, xz = {-0.3, 0.3}, rate = {0.0011, 0.0015}, swell = {0, 360}, silt = {0, 0.1}, lumps = {0.04, 0.08}, lumps_wave = {1500, 2500}},
 		history = {
 			{cell = 64, years = 2000, steps = {15, 20}, vents = {1, 1}, build = {880, 980}, form = {1, 1.2}, flank = {0.55, 0.65}},
@@ -190,7 +190,7 @@ KINDS := [?]Kind{
 		// lies between them. The sea cuts the headlands, the streams fill the bays' heads, and at
 		// last a young dome grows with a shallow sunken top.
 		name = "domes", after = {"Kōzushima"}, weight = 2, story = "pale lava and pumice",
-		hosts = {{{.Front, 0, 6, 4}}},
+		hosts = {{{.Front, 0, 6, 4}, {.Crust, 20, ANY, 4}}},   // a vent on the front over thick crust, which melts to stiff pale lava
 		shape = {xx = {0.9, 1.1}, zz = {0.9, 1.1}, xz = {-0.2, 0.2}, rate = {0.0011, 0.0016}, swell = {0, 360}, silt = {0.2, 0.5}, lumps = {0.15, 0.25}, lumps_wave = {1500, 2500}},
 		history = {
 			{cell = 64, years = 2000, steps = {3, 5}, vents = {1, 1}, spread = {0, 600}, build = {230, 290}, form = {2.5, 3.5}, flank = {0.1, 0.13}},
@@ -356,8 +356,9 @@ phase_draw :: proc(p: Phase([2]f32), i: int, key: i32, s: u32) -> Phase(f32) {
 // Draw the region's record from the seed, of the named kind or, with none named, of the kind
 // the seed picks: each row draws a number keyed by its name, raised to one over its weight, and
 // the highest wins, so a row wins in proportion to its weight and a new row changes only the
-// seeds it wins. The region is `size` metres across. False if no kind has the name.
-region_init :: proc(name: string, size: f64 = REFERENCE) -> bool {
+// seeds it wins. The region is `size` metres across. With a record of the regional history's, what
+// it says is read in place of the draws (record_phases). False if no kind has the name.
+region_init :: proc(name: string, size: f64 = REFERENCE, record: ^Record = nil) -> bool {
 	kind: ^Kind
 	best: f32 = -1
 	for &k in KINDS {
@@ -373,9 +374,12 @@ region_init :: proc(name: string, size: f64 = REFERENCE) -> bool {
 	region.latitude = 30   // as the islands the plants come from (27 to 34° N); the world frame will set it
 	for &s in STORIES do if s.name == kind.story do region.story = &s
 	region.history = make([]Phase(f32), len(kind.history))
+	plan := make([]Phase(f32), len(kind.history), context.temp_allocator)
+	for p, i in kind.history do plan[i] = phase_draw(p, i, key, seed)
+	if record != nil do record_phases(kind, record, plan, &region.shape)
 	from := [2]f64{}   // the middle of the last vents to open
 	for p, i in kind.history {
-		region.history[i] = phase_draw(p, i, key, seed)
+		region.history[i] = plan[i]
 		// Each vent draws its own place, size and form within the phase's ranges.
 		middle, first := [2]f64{}, len(region.vents)   // the vents of a phase erupt together, each onto the ground as it stood
 		for _ in 0..<int(region.history[i].vents) {
@@ -383,6 +387,7 @@ region_init :: proc(name: string, size: f64 = REFERENCE) -> bool {
 			vary :: proc(r: [2]f32, j, key: i32) -> f32 { return r[0] + (r[1] - r[0])*hash01(j, key, seed + 522) }
 			turn, out := 2*math.PI*f64(hash01(j, key, seed + 523)), f64(vary(p.spread, j, key))*region.size/REFERENCE
 			v := Vent{phase = i, at = from + out*[2]f64{math.cos(turn), math.sin(turn)}, build = vary(p.build, j + 1, key), form = vary(p.form, j + 2, key)}
+			if record != nil && record.on && record.vent.arc && j == 0 do v.build = math.lerp(p.build[0], p.build[1], clamp((record.vent.built - ARC_TOP[0])/(ARC_TOP[1] - ARC_TOP[0]), 0, 1))   // the history's volcano, the taller the higher it builds
 			v.reach = v.build/vary(p.flank, j + 3, key)*f32(region.size/REFERENCE)
 			v.top = built(v.at.x, v.at.y, first) + v.build
 			append(&region.vents, v)
@@ -411,6 +416,27 @@ region_init :: proc(name: string, size: f64 = REFERENCE) -> bool {
 	}
 	fmt.println()
 	return true
+}
+
+// What an island's record says, read in place of its kind's draws, each into its kind's range, since
+// the forming's rates are its own, not the plates' (they make an island's relief from its rock and
+// the erosion's law, over a few million years): its uplift at the heart, by how fast its crust rose
+// on average over the regional history's last steps, against the window on how fast it rises that
+// its kind's host reads; on a volcano, how high it builds by how high the history's built, and how
+// long the sea has cut it since, by the volcano's age.
+record_phases :: proc(kind: ^Kind, record: ^Record, plan: []Phase(f32), shape: ^Shape(f64)) {
+	rising := Window{lo = 1e30}
+	for w in (kind.hosts[0] if len(kind.hosts) > 0 else nil) do if w.field == .Rising do rising = w
+	if rising.lo < 1e29 {
+		lo, hi := rising.lo if rising.lo > -ANY else rising.hi - 1, rising.hi if rising.hi < ANY else rising.lo + 1
+		mean: f32
+		for r in record.past do mean += r/PAST
+		shape.rate = math.lerp(kind.shape.rate[0], kind.shape.rate[1], f64(clamp((mean - lo)/(hi - lo), 0, 1)))
+	}
+	if record.on && record.vent.arc && laid_by(kind) != .Plates do for &p, i in plan[1:] {   // the phases after a volcano's first: the older it is, the longer the sea has cut it
+		r := kind.history[i + 1].steps
+		if p.vents == 0 do p.steps = math.round(math.lerp(r[0], r[1], clamp(record.vent.born/VENT_LIFE[1], 0, 1)))
+	}
 }
 
 Grid :: struct {

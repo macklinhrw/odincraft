@@ -25,7 +25,7 @@ Snap :: struct {
 }
 
 snap_take :: proc() -> Snap {
-	g := &globe
+	g := globe
 	s := Snap{t = g.t, cells = make([]Snap_Cell, GLOBE_CELLS)}
 	for c in 0..<GLOBE_CELLS {
 		cr := g.crust[c]
@@ -127,7 +127,7 @@ frame_draw :: proc(s: ^Snap, path: string) {
 
 // The known world today at 1 km a pixel, -z (north) at the top, and its islands counted.
 world_draw :: proc(path: string) {
-	g := &globe
+	g := globe
 	SIZE :: 1000
 	cones := make([dynamic]Cone)
 	defer delete(cones)
@@ -204,7 +204,7 @@ world_draw :: proc(path: string) {
 // longitude, from the north pole and the date line: plate, crust (0 ocean, 1 continent, 2 arc-built
 // ocean floor), ocean floor's age in Myr, ground over the sea in m, motion east and north in mm/yr.
 raw_write :: proc(path: string) {
-	g := &globe
+	g := globe
 	W, H :: 720, 360
 	out := make([dynamic]u8, 0, W*H*9)
 	defer delete(out)
@@ -229,7 +229,7 @@ plates_main :: proc(dir: string) {
 	crew_init()
 	defer crew_end()
 	took := plates_history(&snaps, dir)
-	g := &globe
+	g := globe
 	window_choose()
 	drawing := time.now()
 	for &s in snaps do frame_draw(&s, fmt.tprintf("%s/frame-%03d.png", dir, int(math.round(-s.t))))
@@ -291,7 +291,7 @@ plates_main :: proc(dir: string) {
 // there and where it formed, and again following that crust from then on.
 trace_last: string
 plates_why :: proc(x, z: f64) {
-	g := &globe
+	g := globe
 	crew_init()
 	defer crew_end()
 	recording = true
@@ -328,7 +328,7 @@ plates_why :: proc(x, z: f64) {
 }
 
 trace_note :: proc() {
-	g := &globe
+	g := globe
 	if g.t < trace_from || trace_path[len(trace_steps)] < 0 do return
 	c := cell_of(followed)
 	cr := g.crust[c]

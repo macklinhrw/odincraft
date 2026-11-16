@@ -21,6 +21,7 @@ Known_Sample :: struct {
 	rising:  f32,   // mm/yr, over the history's last step
 	thick:   f32,   // km of crust
 	row:     u8,    // its row in PLATE_SETTINGS
+	plate:   u8,    // the plate it rides
 	cont:    bool,  // continental crust
 }
 Known_Vent :: struct {
@@ -44,7 +45,8 @@ Known :: struct {
 	chains:              [dynamic][2][2]f32,    // the hotspots' tracks, as segments from each volcano to the next older
 	feet:                [VENT_N*VENT_N][dynamic]i32,   // the volcanoes whose foot reaches each square of the known world,
 	tracks:              [VENT_N*VENT_N][dynamic]i32,   // and the tracks within a square of it
-	took:                f64,                   // seconds the history and its reading took, when not read back
+	past:                [][PAST]f32,           // each cell of the regional history: how fast its crust rose over its last steps (regional_past)
+	took, regional_took: f64,                   // seconds the history and its reading took, and of it the regional history, when not read back
 }
 Known_Mass :: struct { area: f32, top: int, large: bool }   // km²; its highest sample; larger than a region could hold, or cut by the known world's edge
 known: Known
@@ -65,25 +67,20 @@ window_of :: proc(p: [3]f32) -> [2]f32 {
 	return {linalg.dot(q, globe.east), -linalg.dot(q, globe.north)}*PLANET
 }
 
-// Read the known world from the history that has just run, its window chosen.
+// Read the known world from the regional history that has just run (regional_history), its
+// cells blended between the four round each sample.
 known_read :: proc() {
-	g := &globe
+	r := &regional
 	k := &known
-	k^ = {seed = world_seed, centre = g.window, east = g.east, north = g.north, samples = make([]Known_Sample, KNOWN_N*KNOWN_N)}
-	// Each cell's rise over the last step: its height over the sea against that of the cell its
-	// crust came from; new ocean floor deepens as it cools.
-	known_rise = make([]f32, GLOBE_CELLS)
-	defer delete(known_rise)
-	for c in 0..<GLOBE_CELLS {
-		s := g.src[c]
-		known_rise[c] = ((g.h[c] - g.sea) - g.before[s])/(DT*1000) if s >= 0 else (ocean_depth(DT) - ocean_depth(2*DT))/(DT*1000)
-	}
+	k^ = {seed = world_seed, centre = r.window, east = r.east, north = r.north, samples = make([]Known_Sample, KNOWN_N*KNOWN_N), past = regional_past()}
+	globe = r
+	defer globe = &planet
 	crew_run(KNOWN_N*KNOWN_N, proc(id, lo, hi: int) {
-		g := &globe
+		r := &regional
 		for i in lo..<hi {
 			e, s := (f32(i%KNOWN_N) + 0.5)*KNOWN_STEP - WINDOW/2, (f32(i/KNOWN_N) + 0.5)*KNOWN_STEP - WINDOW/2
 			p := window_point(e, s)
-			cells, share := corners(warped(p))
+			cells, share := square(e, s)
 			// A field blended over the cells that have it: a distance to a boundary is had only on its own plate.
 			blend :: proc(cells: [4]i32, share: [4]f32, v: []f32, f: proc(c: i32) -> f32 = nil) -> f32 {
 				sum, total: f32
@@ -94,26 +91,46 @@ known_read :: proc() {
 				return sum/total if total > 0 else 1e4
 			}
 			o := &known.samples[i]
-			o.h = fine_height(p, nil)
-			o.front = blend(cells, share, g.dist[.Front][:])
-			o.setback = blend(cells, share, g.dist[.Front][:], proc(c: i32) -> f32 { return arc_front(globe.from[.Front][c]) })
-			o.slab = blend(cells, share, g.dist[.Slab][:])
-			o.rising = blend(cells, share, known_rise)
+			o.front = blend(cells, share, r.dist[.Front][:])
+			o.setback = blend(cells, share, r.dist[.Front][:], proc(c: i32) -> f32 { return arc_front(regional.from[.Front][c]) })
+			o.slab = blend(cells, share, r.dist[.Slab][:])
+			o.rising = blend(cells, share, r.rose)/1000
 			most := 0
 			for c, j in cells {
-				o.age += share[j]*(g.t - g.crust[c].born)
-				o.thick += share[j]*g.crust[c].thick
+				// The ground and its relief, read where the crust formed so that it moves with it.
+				cr := r.crust[c]
+				amp: f32 = 350 if cr.cont else 260 if cr.thick > 12 else 150
+				o.h += share[j]*(r.h[c] - r.sea + amp*noise3(linalg.quaternion_mul_vector3(conj(cr.q), p), 160, 6, world_seed + 31))
+				o.age += share[j]*(r.t - cr.born)
+				o.thick += share[j]*cr.thick
 				if share[j] > share[most] do most = j
 			}
-			o.row, o.cont = u8(setting_row(int(cells[most]))), g.crust[cells[most]].cont
+			o.row, o.cont, o.plate = u8(setting_row(int(cells[most]))), r.crust[cells[most]].cont, r.crust[cells[most]].plate
 		}
 	})
-	for v in g.volcanoes do if !v.gone && v.built > 0 && km(v.at, g.window) < WINDOW {
+	for v in r.volcanoes do if !v.gone && v.built > 0 && km(v.at, r.window) < WINDOW {
 		append(&k.vents, Known_Vent{at = window_of(v.at), arc = v.arc, spot = v.spot, born = -v.born, last = -v.last, built = v.built, top = v.top})
 	}
-	for h, i in g.hotspots do if g.t >= h.from && g.t < h.until && km(h.at, g.window) < WINDOW do append(&k.hotspots, Known_Hotspot{window_of(h.at), i16(i)})
+	for h, i in r.hotspots do if r.t >= h.from && r.t < h.until && km(h.at, r.window) < WINDOW do append(&k.hotspots, Known_Hotspot{window_of(h.at), i16(i)})
 }
-known_rise: []f32
+
+// The four cells of the regional history round a point of the known world, km east and south of
+// its middle, and their shares.
+square :: proc(e, s: f32) -> (cells: [4]i32, share: [4]f32) {
+	u, v := (e + REGION_SIDE/2)/REGION_KM - 0.5, (s + REGION_SIDE/2)/REGION_KM - 0.5
+	i, j := clamp(int(math.floor(u)), 0, REGION_N - 2), clamp(int(math.floor(v)), 0, REGION_N - 2)
+	fx, fy := clamp(u - f32(i), 0, 1), clamp(v - f32(j), 0, 1)
+	c := i32(j*REGION_N + i)
+	return {c, c + 1, c + REGION_N, c + REGION_N + 1}, {(1 - fx)*(1 - fy), fx*(1 - fy), (1 - fx)*fy, fx*fy}
+}
+
+// How fast the crust at a point of the known world rose over each of the regional history's last
+// PAST steps, newest first, mm/yr.
+past_at :: proc(at: [2]f32) -> (rates: [PAST]f32) {
+	cells, share := square(at.x, at.y)
+	for c, j in cells do rates += share[j]*known.past[c]
+	return
+}
 
 // What is made from the samples once they are read: the land masses, how far each place lies
 // behind the coast of land larger than a region, and the hotspots' tracks.
@@ -205,7 +222,7 @@ known_at :: proc(at: [2]f32) -> (o: Known_Sample, inland: f32) {
 	if over.z > 0.5 do o.front, o.setback = over.x/over.z, over.y/over.z
 	o.slab = slab.x/slab.z if slab.z > 0.5 else 1e4
 	near := known.samples[at[int(fx > 0.5) + 2*int(fy > 0.5)]]
-	o.row, o.cont = near.row, near.cont
+	o.row, o.cont, o.plate = near.row, near.cont, near.plate
 	return
 }
 
@@ -224,14 +241,22 @@ track_at :: proc(at: [2]f32) -> f32 {
 
 // Myr since the land at a point was made: on a volcano's foot, since it was built over its
 // hotspot, or since an arc's vent last erupted, and half a million years more, the young cone's
-// own, which the history's steps of 2 Myr cannot tell; elsewhere the crust's age.
-age_at :: proc(at: [2]f32, crust: f32) -> f32 {
-	best, age := f32(1), crust
+// own, which the regional history's steps of 0.5 Myr cannot tell; elsewhere the crust's age. And
+// Myr since the volcano whose foot it lies on began, 1e4 on none.
+age_at :: proc(at: [2]f32, crust: f32) -> (age, vent: f32) {
+	v, on := vent_under(at)
+	if !on do return crust, 1e4
+	return v.last + 0.5 if v.arc else v.born, v.born
+}
+
+// The volcano whose foot a point of the known world lies on, the nearest its top by its foot's reach.
+vent_under :: proc(at: [2]f32) -> (v: Known_Vent, on: bool) {
+	best := f32(1)
 	if q := vent_square(at); q.x >= 0 && q.y >= 0 && q.x < VENT_N && q.y < VENT_N do for i in known.feet[q.y*VENT_N + q.x] {
-		v := known.vents[i]
-		if d := linalg.length(v.at - at)/foot(v); d < best do best, age = d, v.last + 0.5 if v.arc else v.born
+		w := known.vents[i]
+		if d := linalg.length(w.at - at)/foot(w); d < best do best, v, on = d, w, true
 	}
-	return age
+	return
 }
 
 // Where the known world of the world's seed is kept: beside the game, named by the seed and by what
@@ -243,17 +268,18 @@ known_path :: proc() -> string {
 	return fmt.tprintf("%s/worlds/known-%d-%08x.bin", os.dir(os.args[0]), world_seed, u32(PLATES_SOURCE) ~ u32(KNOWN_SOURCE) ~ helpers*16777619)
 }
 
-Known_Header :: struct { magic, seed: u32, samples, vents, hotspots: i32, centre, east, north: [3]f32 }
+Known_Header :: struct { magic, seed: u32, samples, vents, hotspots, past: i32, centre, east, north: [3]f32 }
 KNOWN_MAGIC :: 0x4b4e5730   // "0WNK"
 
 known_save :: proc(path: string) {
 	k := &known
-	h := Known_Header{KNOWN_MAGIC, k.seed, i32(len(k.samples)), i32(len(k.vents)), i32(len(k.hotspots)), k.centre, k.east, k.north}
+	h := Known_Header{KNOWN_MAGIC, k.seed, i32(len(k.samples)), i32(len(k.vents)), i32(len(k.hotspots)), i32(len(k.past)), k.centre, k.east, k.north}
 	out := make([dynamic]u8, context.temp_allocator)
 	append(&out, ..mem.ptr_to_bytes(&h))
 	append(&out, ..mem.slice_to_bytes(k.samples))
 	append(&out, ..mem.slice_to_bytes(k.vents[:]))
 	append(&out, ..mem.slice_to_bytes(k.hotspots[:]))
+	append(&out, ..mem.slice_to_bytes(k.past))
 	_ = os.make_directory(os.dir(path))
 	// Written whole under another name and then renamed, so a game reading it never sees half.
 	temp := fmt.tprintf("%s.%d", path, os.get_pid())
@@ -265,15 +291,17 @@ known_load :: proc(path: string) -> bool {
 	if err != nil || len(data) < size_of(Known_Header) do return false
 	h := (^Known_Header)(raw_data(data))^
 	body := data[size_of(Known_Header):]
-	sizes := [3]int{int(h.samples)*size_of(Known_Sample), int(h.vents)*size_of(Known_Vent), int(h.hotspots)*size_of(Known_Hotspot)}
-	if h.magic != KNOWN_MAGIC || h.seed != world_seed || int(h.samples) != KNOWN_N*KNOWN_N || len(body) != sizes[0] + sizes[1] + sizes[2] do return false
+	sizes := [4]int{int(h.samples)*size_of(Known_Sample), int(h.vents)*size_of(Known_Vent), int(h.hotspots)*size_of(Known_Hotspot), int(h.past)*size_of([PAST]f32)}
+	if h.magic != KNOWN_MAGIC || h.seed != world_seed || int(h.samples) != KNOWN_N*KNOWN_N || int(h.past) != REGION_N*REGION_N || len(body) != sizes[0] + sizes[1] + sizes[2] + sizes[3] do return false
 	k := &known
 	k^ = {seed = h.seed, centre = h.centre, east = h.east, north = h.north, samples = make([]Known_Sample, h.samples)}
 	copy(mem.slice_to_bytes(k.samples), body[:sizes[0]])
 	resize_dynamic_array(&k.vents, int(h.vents))
 	copy(mem.slice_to_bytes(k.vents[:]), body[sizes[0]:][:sizes[1]])
 	resize_dynamic_array(&k.hotspots, int(h.hotspots))
-	copy(mem.slice_to_bytes(k.hotspots[:]), body[sizes[0] + sizes[1]:])
+	copy(mem.slice_to_bytes(k.hotspots[:]), body[sizes[0] + sizes[1]:][:sizes[2]])
+	k.past = make([][PAST]f32, h.past)
+	copy(mem.slice_to_bytes(k.past), body[sizes[0] + sizes[1] + sizes[2]:])
 	return true
 }
 
@@ -283,25 +311,31 @@ known_make :: proc() {
 	if !known_load(known_path()) {
 		started := time.now()
 		crew_init()
+		regional_wanted = true
 		plates_history(nil, "")
+		regional_wanted = false
 		window_choose()
+		took := regional_history()
 		known_read()
+		regional_say()
 		crew_end()
 		globe_free()
-		known.took = time.duration_seconds(time.since(started))
+		known.took, known.regional_took = time.duration_seconds(time.since(started)), took
 		known_save(known_path())   // made again: the history frees the temporary memory as it runs
 	}
 	known_finish()
 }
 
-// Let the history's grids go once the known world is read from them.
+// Let the histories' grids go once the known world is read from them.
 globe_free :: proc() {
-	g := &globe
-	delete(g.centre); delete(g.area); delete(g.nbr); delete(g.block); delete(g.near); delete(g.masks)
-	delete(g.crust); delete(g.next); delete(g.h); delete(g.sank); delete(g.src); delete(g.before); delete(g.setback)
-	delete(g.bound); delete(g.collide); delete(g.fresh); delete(g.worn); delete(g.flow)
-	for f in Globe_Field { delete(g.dist[f]); delete(g.from[f]) }
-	delete(g.volcanoes); delete(g.hotspots); delete(g.events)
+	for g in ([2]^Globe{&planet, &regional}) {
+		delete(g.centre); delete(g.area); delete(g.nbr); delete(g.block); delete(g.near); delete(g.masks)
+		delete(g.crust); delete(g.next); delete(g.h); delete(g.sank); delete(g.src); delete(g.before); delete(g.setback)
+		delete(g.bound); delete(g.collide); delete(g.fresh); delete(g.worn); delete(g.flow); delete(g.incoming); delete(g.rose)
+		for f in Globe_Field { delete(g.dist[f]); delete(g.from[f]) }
+		delete(g.volcanoes); delete(g.hotspots); delete(g.events)
+		g^ = {}
+	}
 	for &f in spread_buckets do for &b in f { delete(b); b = nil }
-	g^ = {}
+	globe = &planet
 }

@@ -4,10 +4,10 @@ This is a map for someone opening the code for the first time. The design reason
 
 ## Shape of the program
 
-`src/` is a single Odin package (about 11,900 lines including `shaders.metal`). The one executable does two jobs:
+`src/` is a single Odin package (about 13,200 lines including `shaders.metal`). The one executable does two jobs:
 
 1. **The game.** It reads the known world from the plate history, forms the islands near the start, opens a window, streams chunks around the camera and simulates water near the player.
-2. **Offline tools behind flags.** These print or draw what the generator made, then exit: `--map`, `--archipelago`, `--why`, `--survey`, `--plates`, `--plates-why`. They share every line of the generator with the game, which is the point. A picture or an explanation of the land is always the land the game would show.
+2. **Offline tools behind flags.** These print or draw what the generator made, then exit: `--map`, `--archipelago`, `--known`, `--why`, `--survey`, `--plates`, `--plates-why`. They share every line of the generator with the game, which is the point. A picture or an explanation of the land is always the land the game would show.
 
 Everything random is keyed from one seed through `hash`/`hash01` (`gen.odin`). There is no global RNG state, so any value can be recomputed anywhere, on any thread, in any order.
 
@@ -16,7 +16,7 @@ Everything random is keyed from one seed through `hash`/`hash01` (`gen.odin`). T
 | Area | Files | What it owns |
 |---|---|---|
 | Entry | `main.odin`, `options.odin` | Start-up order, the frame loop, input, `--bench` report; command-line parsing |
-| World layout | `known.odin`, `archipelago.odin`, `arrivals.odin`, `regions.odin` | The known world, resampled from the plate history every 2 km and kept in `build/worlds/`; the archipelago as records (`Island`: origin, size, kind, seed) read from it; which animals reached which island; `Formed`, the per-island record, and `bind`, which points a thread's subsystem names at one island |
+| World layout | `known.odin`, `archipelago.odin`, `arrivals.odin`, `regions.odin` | The known world, resampled every 2 km from the regional history and kept in `build/worlds/` with how fast each place rose over its last 4 Myr; the archipelago as records (`Island`: origin, size, kind, seed) read from it, the start among them, and each island's `Record`; which animals reached which island; `Formed`, the per-island record, and `bind`, which points a thread's subsystem names at one island |
 | Land forming | `rock.odin`, `land.odin`, `erosion.odin` | Rock as a function of position: each island's story (`STORIES`), read from its setting, its beds, faults, dikes, plugs, plutons and any cover; island *kinds* (`KINDS`) and the coarse-to-fine forming driver (`land_form`); the grid simulation (priority-flood routing, uplift, stream-power erosion, creep, coast and coral reef, refine) |
 | Water features | `rivers.odin`, `events.odin` | Rivers traced from the simulated drainage and cut by design ([ADR 0003](docs/adr/0003-rivers-are-traced-from-the-simulation-and-cut-by-design.md)); events and the features they leave (landslide, lakes, ponds, sea notches, shelters, caves, falls, springs, stacks) |
 | Living things | `fields.odin`, `communities.odin`, `trees.odin`, `plants.odin`, `trails.odin`, `creatures.odin`, `places.odin` | The named fields every rule is written in; soil and plant communities; tree species, stands and the tree grower; ground plants; deer trails and fords; birds and fish posed from the clock; landmarks and their names |
@@ -24,14 +24,14 @@ Everything random is keyed from one seed through `hash`/`hash01` (`gen.odin`). T
 | Engine | `world.odin`, `mesh.odin`, `water.odin`, `player.odin` | 9 LOD rings of chunks built on worker threads; 20-byte instanced quads; per-column water depth near the player ([ADR 0004](docs/adr/0004-water-near-the-player-is-a-depth-in-every-column.md)); walking/flying collision |
 | Drawing | `render.odin`, `shaders.metal` | SDL3 GPU pipeline: 4 sun shadow cascades, half-size cloud layer, terrain, sky and water into a 4× MSAA target; lighting, fog, curvature and tone mapping in Metal |
 | Reporting | `land_report.odin` | Start-up figures measured the same way as on real islands; `--map` |
-| Plate history | `plates.odin`, `plates_report.odin`, `tools/plates_compare.py` | A 350 Myr plate-tectonics history on a cube-sphere and the choice of the known world, which the game runs once per seed; its frames, the comparison grids and `--plates-why` (`plates_report.odin`), and the comparison with the real Earth's |
+| Plate history | `plates.odin`, `plates_report.odin`, `tools/plates_compare.py` | A 350 Myr plate-tectonics history on a cube-sphere and the choice of the known world, then its last 20 Myr again with a regional history of the known world on 6 km cells beside it (the same step on a second grid), which the game runs once per seed; its frames, the comparison grids and `--plates-why` (`plates_report.odin`), and the comparison with the real Earth's |
 | Assets | `assets/`, `tools/blocks.py` | Texture atlases built from CC BY-SA tiles and embedded with `#load` |
 
 ## Data flow
 
 ```mermaid
 flowchart LR
-  seed([world seed]) --> known["known_make<br/>plate history → known world<br/>(kept in build/worlds/)"]
+  seed([world seed]) --> known["known_make<br/>plate history → regional history<br/>→ known world (kept in build/worlds/)"]
   known --> arch["archipelago_make<br/>island records"]
   arch --> arrivals["arrivals_make<br/>who reached which island"]
   arch --> F1["Formed: start island"]
@@ -60,7 +60,7 @@ flowchart LR
 ### Start-up (`main`)
 
 1. Parse options. `--plates` branches off here, because it needs no island.
-2. Bind a `Formed` for the start island and draw its record (`region_init`). Read the known world (`known_make`: from `build/worlds/`, or by running the plate history, about 2 s, on a seed's first run), make the archipelago records from it (`archipelago_make`; `--plates-why` answers here and exits), and decide which animals reached each island (`arrivals_make`).
+2. Draw a record at the start's place, for the swell and any `--kind`. Read the known world (`known_make`: from `build/worlds/`, or by running the plate history and its regional history, about 2.5 to 3 s, on a seed's first run), make the archipelago records from it, the start island's among them (`archipelago_make`; `--plates-why` and `--known` answer here and exit), and decide which animals reached each island (`arrivals_make`).
 3. Form the islands within `--near` km (default 64) on all cores but one, in the background. At the same time, form the start island on the main thread (`gen_init`).
 4. `--map`, `--why` and `--survey` act on the start island and exit.
 5. Wait for the near islands. Pick the weather. Open the window, or don't, for `--shot`/`--bench`, so scripts never steal focus. Initialise the world and water. Put the player on the bank of the largest river, or near the shore of an island with none (`find_start`).
