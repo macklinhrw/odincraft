@@ -105,8 +105,8 @@ Kind :: struct {
 	name:    string,
 	after:   []string, // the real islands it stands for (REAL); none is a guess
 	weight:  f32,      // how often the seed draws this kind, against the other rows' weights
-	story:   string,   // what the start island's rock is, until its uplift is read from the plates too; the others' is read from their setting (story_for, rock.odin)
-	hosts:   [][]Window, // where the world's plates put it, on the world's fields (archipelago.odin; a stand-in until step 22): it takes the best of them
+	story:   string,   // what an island's rock is where no story's host holds at its middle (story_for, rock.odin)
+	hosts:   [][]Window, // where the world's plates put it, on the world's fields (archipelago.odin): it takes the best of them
 	shape:   Shape([2]f64),
 	history: []Phase([2]f32),
 }

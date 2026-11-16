@@ -26,7 +26,8 @@ import "core:strings"
 //                   the start island at the origin); it says all its start-up lines
 //   near=km         the islands within this many km of that one are formed beside it before entering (default 64);
 //                   the rest form in the background, nearest first, and the world waits for each
-//   kind=name       which kind of island that one is, whatever the seed would pick (names in KINDS, land.odin)
+//   kind=name       which kind of island that one is, whatever the history would make (names in KINDS,
+//                   land.odin); the start island of that kind is put where its host holds best
 //   origin=x,z      where island 0's middle lies in the world, in whole metres (default 0,0); the
 //                   islands near it and the stand-in's plates move with it
 //   map=file.png    save a map of the island's land and exit

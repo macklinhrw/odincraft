@@ -317,6 +317,7 @@ known_make :: proc() {
 		window_choose()
 		took := regional_history()
 		known_read()
+		regional_say()
 		crew_end()
 		globe_free()
 		known.took, known.regional_took = time.duration_seconds(time.since(started)), took

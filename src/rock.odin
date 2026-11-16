@@ -377,13 +377,9 @@ story_read :: proc(k: ^Kind) -> (story: ^Story, passed: [dynamic]^Story) {
 	return nil, passed
 }
 
-// The story an island's rock tells, and whether it was read from the island's setting. The start
-// island keeps the one its kind names, with no bodies, no cover and its rock in two forms, until its
-// uplift is read from the plates too (open-decisions.md, 2026-11-15): reading it then changes the
-// default island once. Removing the first line here is that change. Where no row's host holds, the
-// one its kind names.
+// The story an island's rock tells, read from its setting (true); where no row's host holds, the one
+// its kind names.
 story_for :: proc(island: Island) -> (story: ^Story, read: bool) {
-	if island.id == 0 do return region.story, false
 	if s, _ := story_read(&KINDS[island.kind]); s != nil do return s, true
 	return region.story, true
 }
@@ -680,12 +676,6 @@ story_words :: proc() {
 	kind := &KINDS[here.island.kind]
 	read, passed := story_read(kind)
 	fmt.printf("the rock tells the story %s, after %s", s.name, s.after)
-	if !rocks.full {
-		fmt.printf(", which the %s kind names: the start island keeps it, with no faults, dikes or cover, until its uplift is read from the plates as well", kind.name)
-		if read != nil do fmt.printf("; read from its setting it would be %s%s", read.name, ", with its bodies" if read == s else "")
-		fmt.println(".")
-		return
-	}
 	LAID := [Laid]string{.Plates = "the plates laid it before and as the island rose", .Runny_Lava = "its vents poured it out as runny lava", .Stiff_Lava = "its vents pushed it up as stiff lava", .Coral = "coral built it as the island rose"}
 	fmt.printf(". %s; of the stories so laid, it is the first whose host holds at the island's middle", LAID[laid_by(kind)])
 	p := Point{cell = 2000}

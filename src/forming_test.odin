@@ -11,7 +11,7 @@ import "core:thread"
 // island and its nearest neighbour and hash what forming leaves. A change that alters the land on
 // purpose updates GOLDEN, and says so in its commit; any other change must leave it as it is.
 
-GOLDEN :: [2]u64{0xf48f867a7a20ab61, 0x87a402412babddc0}   // seed 7: the start island, island 1 (since step 32's history an inlets island, its rock read from its setting since step 24: layered on the forearc since step 24 met that history)
+GOLDEN :: [2]u64{0xb892350caba20284, 0x7b22ea07b4ecb1b8}   // seed 7: the start island and island 1, both read from the regional history since step 32's second half (an inlets island of old arc lavas, and a ridge island)
 
 @(private="file")
 land_hash :: proc() -> u64 {

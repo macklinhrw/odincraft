@@ -1546,3 +1546,22 @@ regional_past :: proc() -> [][PAST]f32 {
 	return out
 }
 
+
+// What the regional history made in the known world, as its first run says: its plates, the
+// length of their boundaries against the planet's in the same square (each a count of the edges
+// between cells of two plates, times a cell and π/4 for lines at any angle), and the basins opened.
+regional_say :: proc() {
+	r := &regional
+	inside :: proc(p: [3]f32) -> bool { w := window_of(p); return abs(w.x) < WINDOW/2 && abs(w.y) < WINDOW/2 }
+	plates: [MAX_PLATES]bool
+	edges, coarse: int
+	for c in 0..<len(r.crust) do if inside(r.centre[c]) {
+		plates[r.crust[c].plate] = true
+		for n in ([2]i32{r.nbr[c][0], r.nbr[c][2]}) do edges += int(r.crust[n].plate != r.crust[c].plate)   // east and south
+	}
+	for c in 0..<GLOBE_CELLS do if inside(planet.centre[c]) do for n in ([2]i32{planet.nbr[c][0], planet.nbr[c][2]}) do coarse += int(planet.crust[n].plate != planet.crust[c].plate)
+	n, own := 0, 0
+	for p, i in plates do if p { n += 1; own += int(i >= MICRO) }
+	fmt.printfln("the regional history: %d plates in the known world, %d of them its own; %.0f km of boundary between them, against %.0f km on the planet's cells; %d basins opened behind arcs in %.0f Myr",
+		n, own, f32(edges)*REGION_KM*math.PI/4, f32(coarse)*CELL_KM*math.PI/4, r.splits, REGION_SPAN)
+}

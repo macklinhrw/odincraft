@@ -1470,6 +1470,88 @@ Weak points:
 - Entering is about 0.05 s under the bar on this machine under load.
 - Every time was taken under load from other agents' work, which reached 37 during the step. Parts were compared on each thread's own clock while it was heaviest.
 
+### Step 32, second half, part one, as built
+
+Built 2026-11-16 by Claude on the branch `t3/regional-plate-history`, from `main` at da086f9 with `main` at cbf6c03 (step 33, Yakushima, the owner's decision on the default island) merged in: a regional history of the plates fine enough to tell one island from its neighbour, and every island near the start read from it, the start island too, by the owner's decision of the same day. The owner has not looked at it. The design is `foundations/plates.md`, D1's alternative (c) and section 6; the choices are Claude's call of 2026-11-16 in `open-decisions.md`.
+
+![The islands near the start on seed 7, before (left, the planet's 36 km cells read with the outer high's guessed relief) and after (right, the regional history): the islands on the forearc's outer high to the north-west, a crater and domes on the live vents of the volcanic front to the south-east, the start, 0, an inlets island of old arc lavas](interesting-world/real/regional-history-islands-seed7.jpg)
+
+![The known world, 1,000 km, as the regional history leaves it, on seeds 7 (left) and 1 (right): ground and sea, trenches, volcanic fronts with live and dead vents, the forearc's outer high, the boundaries between plates, the square of the islands near the start](interesting-world/real/regional-history-known-worlds.jpg)
+
+**The regional history** (`plates.odin`, its last section). The planet is kept as it stands 20 Myr before today (`planet_save`), run to the end, and its known world chosen; then its last 20 Myr are run again, and beside each of its steps a square 1,200 km across (the known world and 100 km round it) takes four steps of 0.5 Myr on cells of 6 km (`regional_history`). It is the same `globe_step` on a second `Globe` (`patch`): `globe` is now a pointer to the planet or the square, a step's length, a cell's size and the number of cells are the grid's own, and `cell_of` finds a point's cell on either.
+
+- **What it takes from the planet.** Its plates are the planet's, turning as the planet's turn (`regional_before`), and they join and split as the planet's do (`regional_after`, from the planet's `changes`); a plate the planet lost without a join takes the planet's plate under it. Crust coming in from beyond the square is the planet's as it stood when the planet's step began, of the plate whose crust it is (`planet_crust`); so is the square's crust at its start. Both take the plate and kind of crust most of the four planet cells round the point have, with thickness and age blended over those cells by plain bilinear shares: taken whole from the cell a point lies in, the square inherited the planet's 36 km stairs in its coasts and ocean floor. Its sea is the planet's. Its hotspots are the planet's, and the seamounts the planet's plates carry into it come with them.
+- **What it adds**, each a row or a constant in the step, used only on the square:
+  - *Small plates* (`REGION_SPLITS`): behind 400 km or more of trench over slab 60 Myr old or more, an arc rifts off the plate behind it, one chance in 20 a Myr, and moves off it at 40 mm/yr, slowing to a stop over 10 Myr (`regional_spins`), opening a basin behind it (the Japan Sea, the Shikoku basin, the Mariana trough). Its plates take the slots from `MICRO` (112) up; the planet's take those under it. On seeds 1 to 10, basins opened on 3 (seeds 4, 5 twice, 9).
+  - *An arc grows only over a slab that has gone down*: each crust keeps the km of slab gone down under its edge (`went`, in the padding of `Crust`), and a trench seeds the volcanic front only once that is as long as the front lies behind it; where the slab stops it breaks off at 40 km a Myr (`SLAB_GOES`). Without it a single converging cell drew a whole circle of front round itself.
+  - *A boundary is told by the way it runs over 36 km* (`toward`), not by the step of the cell beside it, and a converging boundary stays so while it closes at all (a fifth of the motion), so that fronts hold still. A boundary cell takes the plate most cells within 18 km ride (`rounded`), which rounds the planet's stairs.
+  - *Thickened continent spreads as far on 6 km cells as on 36* (`flow`, nine times a step), or collisions piled 6 km peaks.
+  - *Vents* open on the front where no live one stands within 20 to 60 km, build to their height in their first step, and erupt for 0.3 to 2 Myr, the longer the higher they may build, then die where they stand (`VENT_APART`, `VENT_LIFE`).
+  - *The forearc's outer high rises* (`OUTER`, `outer_lift`): two fifths of the way from the trench to the front, at up to 2.3 mm/yr over a slab 20 Myr old or younger, nothing over one 100 Myr or older (Uyeda & Kanamori 1979, from memory). What it lifts nearer the sea than 200 m the waves plane, so the straits between its islands stay deeper than any kind's sea ever fell, as the owner's call on the reading's guessed high kept them; the rock goes on rising under it, and that is the rise its islands read. It replaces the reading's `OUTER_HIGH`, whose relief and rising stretches were drawn from the seed.
+- **What it keeps of each place**: how fast the crust now there rose over each of the last 8 steps, followed back along where it came from (`regional_past`), kept with the known world in `build/worlds/` (9.3 MB a world, from 8).
+
+**The known world is read from it** (`known_read`): the 2 km samples blend the square's cells, its vents and its plates (each sample now names its plate). `--known=file.png` draws it, 1,000 km at 1 km a pixel, without forming anything.
+
+**Where islands stand** (`SITES`): on the history's live vents of the volcanic front whose top stands within 200 m of the sea (not every 20 to 45 km of the front line), and on its dead volcanoes whose top still stands over it; on the forearc's outer high, 50 to 90 km apart (the Bonin groups stand 50 to 70 km apart, Kikaijima alone), where they were 30 to 60; on shelves and the history's own land as before. Back-arc and shelf islands stand where those rows find a back-arc's or a shelf's ground; no new row was needed.
+
+**The kinds by cause** (item 7): the cone is a young vent on the front over thin arc crust (the new field `vent`, Myr since the volcano under the point began, under 1; crust under 22 km); the crater a vent long at work (0.6 Myr or more); domes a vent over crust 20 km or more, which melts to stiff lava. The others' hosts were already on the record (rising, age, depth, front).
+
+**Each island's record** (`record_of`, `record_phases`), every island's, the start's too: its uplift at the heart is placed within its kind's range by how fast its crust rose on average over the last 4 Myr, against the window on rising its kind's host reads; on a volcano, how high it builds by how high the history's vent built, and how long the sea has cut it by the vent's age. Its rock is read from its setting, with its faults, dikes and plutons, the broken rock under its soil and the gravel of the rock upstream (`story_for` no longer sets the start apart). Its phases' lengths, cells and sea stay its kind's, for the reasons below.
+
+**The start island is read from the history like the others** (the owner, 2026-11-16): it stands where some kind's host holds best (to 0.02), ties broken as before toward a forearc 60 km from the front, 30 km off land larger than a region and the known world's middle; its kind is the one whose host holds best there, its size drawn by Korčák's law. `--kind=` still makes the start of a kind and puts it where that kind's host holds best.
+
+![The default island before (left, a raised island 8.2 km across, layered rock) and after (right, an inlets island 10.2 km across of old arc lavas with 15 dikes and a plug, on the forearc 56 km from the volcanic front): maps at the same pixel size, and from 7 km south, 120 m up](interesting-world/real/default-island-regional-history.jpg)
+
+**What changed for the player.** Every seed's islands near the start are new, the default island with them: seed 7's start is an inlets island 10.2 km across, 491 m high, of old arc lavas cut by 15 dolerite dikes and a plug, its southern valleys long drowned inlets, against Tsushima and Chichijima no figure far (the raised island before had three far against Kikaijima). The forest-flank bench in `AGENTS.md` starts at `--above=-2500,60,-600`, on the flank of its range. It has 15 neighbours where it had 20. The continent's coast is 176 km off, so neither ayu nor deer reach it; the black kite does, against a chance of 0.93.
+
+**Against the real islands**, every island near the start on seeds 1 to 10 formed alone, the start included (figures far):
+
+| | `main`, 131 islands | this, 91 islands |
+|---|---|---|
+| All figures | 21.4% | 23.6% |
+| cone | 0 (11 islands) | 15.6 (4) |
+| crater | 17.9 (7) | 27.1 (6) |
+| domes | 21.9 (16) | 12.5 (4) |
+| inlets | 4.2 (27) | 5.1 (22) |
+| raised | 71.1 (19) | 64.1 (16) |
+| reef | 1.6 (8) | 0 (9) |
+| ridge | 19.2 (30) | 26.0 (13) |
+| worn | 0 (13) | 0 (17) |
+| Kinds a seed | 5.7 (4 to 8) | 4.4 (2 to 7) |
+| Stories a seed | 4.4 | 3.7 |
+| Stories in use | 9 | 10 |
+| Islands a seed | 5 to 21 | 2 to 18 |
+
+The bar was no kind further from its real islands and at least as varied: it is met by raised, reef, worn and domes, and missed by cone, crater, inlets and ridge, and on variety. On the same 106 islands of an earlier run, the record was neutral: 21.2% far with every island's record drawn from its seed, 21.0% with its rate and volcano read from the history (cone 5.4 and 10.7, crater 25.0 and 22.9, domes 31.2 and 28.1, ridge 20.3 and 21.9, raised 68.0 and 64.1). What moved the kinds is which islands stand where: volcanic islands now stand on the history's own vents, cones on 4 to 7 islands a run, so one island's figures move the kind by 3 to 10 points; inlets' excess is the hard cap over weak rock, on 5 inlets islands (3.7% far without them), whose lava caps stand as faces over 60° on 3 to 7% of the land against 0 to 0.8, a row step 24 tuned on two islands. Granite against sediments, flat-bedded and the limestone platform are in use again, on shelves and quiet margins; the metamorphic shield was in use in an earlier run (two islands) and not the last; the granite massif in none. Variety falls because seeds whose start stands on a deep young arc (4), across a continent's coast (5) or on open sea (6) hold 2 to 4 islands, and seed 9's square is one shelf of 18 inlets and worn islands. Real groups within 200 km hold 3 to 8 islands of one to three kinds.
+
+Tried and dropped:
+
+- **The world's sea in every island's phases** (item 6): each phase the mean of the last ice ages' sea over its span (from memory, after Spratt & Lisiecki 2016: 125 m down 20,000 years ago, near today's 125,000 and 400,000 years ago; about 25 m down on average before 450,000). It moved every kind away from its real islands: 33.1% far against 23.2 on the same islands (ridge 42.2, inlets 18.1, raised 83.6, cone 25.0). The forming's few long phases hold the sea at one level each, and the kinds' own seas are stand-ins for where it lingered; the inlets kind's 115 to 120 m rise is the drowning of its valleys, which a phase's mean of 55 m does not give. So no one sea for the world yet: the record does not give it.
+- **Each phase's share of the uplift by how fast the crust rose over it** (the whole kept): 23.9% far against 21.0 with the rate alone (ridge 25.0, raised 78.1). The regional history's steps are 0.5 Myr, so the forming's last three phases, its last 400,000 years, all fall in its last step, and the long first phase takes the rest; the rate over a step is too coarse to shape them.
+- **The outer high standing up to 300 m over the sea**: it made ridges of land 200 km long, larger than a region, which counted as continent and left the square no room for islands (seeds 1 and 10 held one or two).
+- **Vents building at the planet's 1.5 km a Myr**: a vent younger than about a Myr stood 1 to 3 km down, so most live vents near the starts were seamounts. **Front seeds from every converging cell**: fronts drawn as circles round one to five cells, and a quarter to two fifths of the vents lived a single step. **4 km cells**: the regional history took 0.8 s; 6 km cells tell islands 20 km apart by three cells and take 0.25 s.
+
+**Cost.** The regional history, the planet's last 20 Myr run again included, takes 0.24 to 0.28 s (seeds 7, 1 and 3, three rounds); making a seed's known world on its first start 2.51 to 2.97 s against the parent's 2.15 to 2.63 (the planet's history 2.2 to 2.6 s of it), run alternately under a load of 6 to 9 from other sessions. Entering seed 7 with a warm cache (`--bench=1`, wall time, five rounds alternating): 2.40 to 2.42 s against the parent's 2.75 to 2.77 (the parent is `main` with step 33); the islands within 64 km are five, the largest 12.3 km. Benches against the parent, alternating, frames over 12.5 ms and our work median, each on its own default island's forest flank: 34 and 39, 1.59 and 1.57 ms, against 36 and 18, 1.52 and 1.54 ms; down through cloud 8 and 17, 1.47 and 1.51 ms, against 11 and 13, 1.31 and 1.19 ms. The new default island is larger and wooded: 1.25 million faces drawn on the flank against 1.04. Neither meets "none over 12.5 ms" with other sessions running.
+
+**Checked.** The planet is the same bit for bit: its 26 frames and its `history.csv` are the parent's byte for byte on seeds 1 to 10 and 12, so its comparison with the real Earth stands. The known world comes out byte for byte the same when made again. `./build.sh test` passes with both hashes in `GOLDEN` changed on purpose: the start island and island 1 are read from the regional history. `odin check src -vet-unused` is clean. `src/` grew by 558 lines: `plates.odin` by 408 (the design guessed it would double, 1,159), `archipelago.odin` by 84, `known.odin` by 34, `land.odin` by 26.
+
+What the design had wrong:
+
+- **That a finer history answers the boundaries' length.** Its plates are the planet's, so its boundaries are the planet's lines drawn on finer cells, and on them they run as long or longer: 1,000 to 5,300 km in the known world against 800 to 4,400 on the planet's cells, the more where it opens a basin. Its own small plates are 0 to 2 in the known world. The planet's lobed outlines and its plates over a million km² are what make the length; a regional history inherits them.
+- **That the history's rates can drive the forming.** The forming's uplift rates are its own, set with its erosion law and span so that its relief is the real islands'; the history says which island rises faster, not how fast the forming should lift it. The record places a rate within its kind's range.
+- **That the forearc's rise is a property of the forearc.** In a smooth history a high that rises reaches its level and stops; what keeps it rising is a cause that changes (a young slab, a ridge arriving), and only rock uplift, not the surface, is what an island reads.
+- **That arcs follow from converging boundaries.** A step of a boundary that closes for a step drew a front; an arc needs a slab that has gone down.
+
+Not done:
+
+- **One sea for the world**, and the sea of each phase: the record does not give it (above).
+- **The fine phases' uplift through time**: the history's steps of 0.5 Myr cannot tell the last 400,000 years apart.
+- **A young hotspot shield**, and islands on a hotspot's track: the squares near the start hold none.
+- **Back-arc islands near the start**: basins opened on 3 seeds of 10, none within a start's square in the last run.
+- **The planet's stairs where its crust comes in**: plate boundaries and the sea floor's depth still step at 36 km where crust comes into the square late, as the archipelago map shows to the east of seed 7's start.
+
+Weak points: every new constant is a guess or from memory (the slab's length before an arc, a vent's life and spacing, the basin's opening, the outer high's rate and its slab ages); the start stands on a forearc on 9 seeds of 10 (an inlets island on 6), since the tie-break prefers one; the hard cap row is far on most islands it holds; the judge of every picture was Claude.
+
 ### Phase 3: the mainland and the known lands
 
 Starts when the seam test has passed and the archipelago is accepted.

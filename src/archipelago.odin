@@ -98,8 +98,12 @@ known_point :: proc(x, z: f64) -> [2]f32 {
 	return world_frame.start + [2]f32{f32(x - world_frame.origin.x), f32(z - world_frame.origin.y)}/1000
 }
 
-// The world's fields at a point in the world.
+// The world's fields at a point in the world. A host reads several at one point, so the last point
+// read on each thread is kept.
 world_at :: proc(x, z: f64) -> (w: World_Point) {
+	@(thread_local) last: struct { x, z: f64, start: [2]f32, w: World_Point, ok: bool }
+	if last.ok && last.x == x && last.z == z && last.start == world_frame.start do return last.w
+	defer last = {x, z, world_frame.start, w, true}
 	at := known_point(x, z)
 	k, inland := known_at(at)
 	over := k.front < 1e3   // on a plate over a sinking slab, within reach of its trench
@@ -143,20 +147,25 @@ world_of :: proc(at: [2]f32) -> [2]f64 {
 	return world_frame.origin + [2]f64{f64(at.x - world_frame.start.x), f64(at.y - world_frame.start.y)}*1000
 }
 
-// Read the islands near the start from the known world. The start island's kind is the seed's, as it
-// always was, and the start is put where the history makes that kind of island; the others stand
-// where the rows of SITES put them round it, each the kind whose host it holds best, no two nearest
-// neighbours alike. It reads the start island's record (`region`), so call it after `region_init`
-// and `known_make`. With `say`, print what was left out.
-archipelago_make :: proc(say := false) {
-	world_frame = {origin = {f64(region.origin.x), f64(region.origin.y)}, wind = region.shape.swell}   // the start island's own swell, so it forms as it always has
-	start := 0
-	for k, i in KINDS do if k.name == region.kind do start = i
+// Read the islands near the start from the known world. The start is put where the history makes an
+// island; the others stand where the rows of SITES put them round it; each is the kind whose host it
+// holds best, no two nearest neighbours alike. It reads the record drawn at the start's place
+// (`region`: its origin, the swell, and any kind asked for), so call it after `region_init`
+// and `known_make`. With `say`, print what was left out. With a kind `forced` (--kind=), the start is
+// of that kind and stands where its host holds best.
+archipelago_make :: proc(say := false, forced := -1) {
+	world_frame = {origin = {f64(region.origin.x), f64(region.origin.y)}, wind = region.shape.swell}   // the swell the seed draws for its own kind
 	o := world_frame.origin
-	// The start: where its kind's host holds best in the known world, 6 km or more off land larger
-	// than a region; where it holds as well, where most islands would stand round it, on the forearc
-	// 60 km from the volcanic front, 30 km or more off land larger than a region, nearer the middle
-	// of the known world, which was chosen for its islands.
+	// The start: where some kind's host holds best in the known world (or the forced kind's), 6 km
+	// or more off land larger than a region; where one holds as well, where most islands would stand
+	// round it, on the forearc 60 km from the volcanic front, 30 km or more off land larger than a
+	// region, nearer the middle of the known world, which was chosen for its islands. It is then an
+	// island like the others: its size drawn, its kind the one whose host holds best there.
+	holds_any :: proc(p: [2]f64, forced: int) -> (s: f32) {
+		if forced >= 0 do return holds(forced, p)
+		for _, k in KINDS do s = max(s, holds(k, p))
+		return
+	}
 	best, chosen := f32(-1), [2]f32{}
 	for j in -80..=80 do for i in -80..=80 {
 		c := [2]f32{f32(i), f32(j)}*5
@@ -165,23 +174,15 @@ archipelago_make :: proc(say := false) {
 		if w.inland > -6 do continue
 		k, _ := known_at(c)
 		rich := math.exp(-math.pow((k.front + 60)/70, 2)) + 0.5*smoothstep(10, 30, -w.inland) - linalg.length(c)/800
-		if s := 100*math.floor(holds(start, p)*50)/50 + 0.2*rich + 0.01*hash01(i32(i), i32(j), world_seed + 1701); s > best do best, chosen = s, c   // the host first, to 0.02
+		if s := 100*math.floor(holds_any(p, forced)*50)/50 + 0.2*rich + 0.01*hash01(i32(i), i32(j), world_seed + 1701); s > best do best, chosen = s, c   // the host first, to 0.02
 	}
 	world_frame.start = chosen
 
 	Site :: struct { at: [2]f64, size: f64 }
 	sites := make([dynamic]Site, context.temp_allocator)
-	append(&sites, Site{o, REFERENCE})
 	// A site takes a size drawn by Korčák's law, as large as fits beside those already placed, within the
 	// square round the start and off land larger than a region. One no kind's host holds is left out.
-	place :: proc(sites: ^[dynamic]Site, at: [2]f64, key: i32, say: bool, why: string) -> bool {
-		some := false
-		for _, k in KINDS do some ||= holds(k, at) > 0
-		if w := world_at(at.x, at.y); !some {
-			if say do fmt.printfln("  left out %s at %.1f, %.1f km (%s, %.1f Myr, rising %.2f mm/yr, %.0f m deep): %s", why, at.x/1000, at.y/1000, SETTINGS[w.setting], w.age, w.rising, w.depth,
-				"a young hotspot shield would stand here, and no kind makes one" if w.track < 10 && w.age < 1 else "no kind's host holds here")
-			return false
-		}
+	sized :: proc(sites: []Site, at: [2]f64, key: i32) -> f64 {
 		u := f64(hash01(key, 1, world_seed + 1702))
 		size := SIDES[0]*math.pow(1 - u*(1 - math.pow(SIDES[1]/SIDES[0], -2*KORCAK)), -0.5/KORCAK)
 		for s in sites do size = min(size, 2*max(abs(at.x - s.at.x), abs(at.y - s.at.y)) - s.size)
@@ -191,6 +192,18 @@ archipelago_make :: proc(say := false) {
 			for c in ([8][2]f64{{-1, -1}, {0, -1}, {1, -1}, {1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}}) do ashore ||= world_at(at.x + c.x*size/2, at.y + c.y*size/2).inland > 0
 			if !ashore do break
 		}
+		return size
+	}
+	append(&sites, Site{o, max(sized(nil, o, -1), SIDES[0])})   // the start, 6 km or more off land larger than a region, which a region of 8 km clears
+	place :: proc(sites: ^[dynamic]Site, at: [2]f64, key: i32, say: bool, why: string) -> bool {
+		some := false
+		for _, k in KINDS do some ||= holds(k, at) > 0
+		if w := world_at(at.x, at.y); !some {
+			if say do fmt.printfln("  left out %s at %.1f, %.1f km (%s, %.1f Myr, rising %.2f mm/yr, %.0f m deep): %s", why, at.x/1000, at.y/1000, SETTINGS[w.setting], w.age, w.rising, w.depth,
+				"a young hotspot shield would stand here, and no kind makes one" if w.track < 10 && w.age < 1 else "no kind's host holds here")
+			return false
+		}
+		size := sized(sites[:], at, key)
 		o := world_frame.origin
 		if size < SIDES[0] || max(abs(at.x - o.x), abs(at.y - o.y)) + size/2 > NEAR_SIDE/2 do return false
 		append(sites, Site{at, size})
@@ -245,7 +258,7 @@ archipelago_make :: proc(say := false) {
 	kind := make([]int, len(sites), context.temp_allocator)
 	kept := make([]bool, len(sites), context.temp_allocator)
 	for &k in kept do k = true
-	kind[0] = start
+	kind[0] = forced
 	nearest :: proc(sites: []Site, kept: []bool, i: int) -> (n: int) {
 		n = -1
 		for s, j in sites do if kept[j] && j != i && (n < 0 || math.hypot(s.at.x - sites[i].at.x, s.at.y - sites[i].at.y) < math.hypot(sites[n].at.x - sites[i].at.x, sites[n].at.y - sites[i].at.y)) do n = j
@@ -253,7 +266,7 @@ archipelago_make :: proc(say := false) {
 	}
 	for again := true; again; {
 		again = false
-		for i in 1..<len(sites) do if kept[i] {
+		for i in (1 if forced >= 0 else 0)..<len(sites) do if kept[i] {
 			s, best, key := sites[i], f32(0), f32(-1)
 			kind[i] = -1
 			for k, r in KINDS {
@@ -263,7 +276,9 @@ archipelago_make :: proc(say := false) {
 				u := math.pow(hash01(i32(i), i32(fnv.fnv32a(transmute([]u8)k.name)), world_seed + 1704), 1/k.weight)
 				if h > 0 && !taken && (h > best + 1e-4 || h > best - 1e-4 && u > key) do kind[i], best, key = r, h, u
 			}
-			if kind[i] < 0 {
+			if kind[i] < 0 && i == 0 {   // the start stands whatever holds; where none does, the seed's own kind
+				for k, r in KINDS do if k.name == region.kind do kind[0] = r
+			} else if kind[i] < 0 {
 				kept[i], again = false, true
 				if say do fmt.printfln("  left out at %.1f, %.1f km: its neighbours took every kind its setting holds", s.at.x/1000, s.at.y/1000)
 				break
@@ -287,8 +302,8 @@ archipelago_make :: proc(say := false) {
 	for n, k in by_kind do if n > 0 do fmt.sbprintf(&names, "%s %d, ", KINDS[k].name, n)
 	for n, s in by_setting do if n > 0 do fmt.sbprintf(&names, "%d on the %s, ", n, SETTINGS[s])
 	strings.pop_rune(&names); strings.pop_rune(&names)
-	fmt.printfln("near the start: %d islands (%s), off land whose coast is %.0f km away; this one stands on the %s, %s, where its kind's host holds %.2f; the wind from %.0f°",
-		len(archipelago), strings.to_string(names), ashore/1000, SETTINGS[archipelago[0].setting], fmt.tprintf("%.0f km from the volcanic front", w.front) if w.front < 1e3 else "with no volcanic front within reach", holds(start, o), world_frame.wind)
+	fmt.printfln("near the start: %d islands (%s), off land whose coast is %.0f km away; this one, %s, %.1f km across, stands on the %s, %s, where its kind's host holds %.2f; the wind from %.0f°",
+		len(archipelago), strings.to_string(names), ashore/1000, KINDS[archipelago[0].kind].name, archipelago[0].size/1000, SETTINGS[archipelago[0].setting], fmt.tprintf("%.0f km from the volcanic front", w.front) if w.front < 1e3 else "with no volcanic front within reach", holds(archipelago[0].kind, o), world_frame.wind)
 	lat := math.to_degrees(math.asin(linalg.normalize(known.centre + (world_frame.start.x*known.east - world_frame.start.y*known.north)/PLANET).z))
 	fmt.printfln("the known world: 1,000 km at %.1f° N, read from the plates' history%s; the start %.0f km east and %.0f km south of its middle, at %.1f° N",
 		math.to_degrees(math.asin(known.centre.z)), fmt.tprintf(", which ran in %.2f s (its regional history %.2f s of it)", known.took, known.regional_took) if known.took > 0 else ", kept from an earlier run", world_frame.start.x, world_frame.start.y, lat)
@@ -311,7 +326,7 @@ plates_words :: proc() {
 	start := -1
 	for r, i in KINDS do if r.name == region.kind do start = i
 	fmt.printf(". It is the %s kind", region.kind)
-	if here.island.id == 0 do fmt.printf(", the seed's, and the start was put where that kind's host holds best")
+	if here.island.id == 0 do fmt.printf(", the start, put where some kind's host holds best")
 	if start >= 0 && len(KINDS[start].hosts) > 0 {
 		fmt.printf(": its host holds %.2f here, on", holds(start, o))
 		p := Point{cell = 2000}
@@ -320,9 +335,7 @@ plates_words :: proc() {
 			fmt.printf("%s %s %.4g%s (%s)", "," if i > 0 else "", f.name, f.at(&p), f.unit, fmt.tprintf("over %.4g", win.lo) if win.hi >= ANY else fmt.tprintf("up to %.4g", win.hi) if win.lo <= -ANY else fmt.tprintf("%.4g to %.4g", win.lo, win.hi))
 		}
 	}
-	if here.island.id == 0 {
-		fmt.printf(". Its record is its kind's, drawn from the seed, until the start is read from the history")
-	} else {
+	{
 		r := record_of(here.island)
 		fmt.printf(". Its record is read from the regional history: its crust rose")
 		for v, k in r.past do fmt.printf("%s %.2f", "," if k > 0 else "", v)
