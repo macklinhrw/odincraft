@@ -90,6 +90,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **One sea for the whole world comes with that change**, not before: real sea level is the world's, but each kind's own rises and falls of the sea are part of the default island's history, so it changes the default island's land.
 - **The islands near the start stay in a 200 km square** (about 11 islands a seed; real groups that size hold 3 to 8).
 - **Rerun the comparison with the real Earth** now that the arc front is smooth, with `pygplates` in an environment of its own.
+- **The plate history is not left at step 22.** On reading the rerun comparison (seed 7 ends with one plate over 55% of the planet; too little high land, too few plates, old ocean surviving, continents that hold level) and learning that no step returned to it, the owner agreed to step 32 in `foundations.md` section 8: first the history nearer the real Earth, then a regional history down to each island, so that its uplift and sea come from it. **Steps 24 (rock stories) and 32 start in parallel.**
 
 **2026-11-15, Claude's call** (the reef kind; `foundations.md` section 8, "The reef kind, as built")
 
