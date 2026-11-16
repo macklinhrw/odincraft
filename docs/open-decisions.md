@@ -119,6 +119,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **RimWorld is the second source of inspiration, after Dwarf Fortress.** Dwarf Fortress will always be the primary; there is still plenty to learn from RimWorld.
 - **The plan is `plan.md`**, written at the owner's word after the first proposal was checked against the makers' own words (`interesting-world/notes/df-rimworld-ideas.md`). Its section 8 lists four decisions ahead; none blocks its first step.
 - **Start P1 "and so forth"**: the play track goes ahead in the plan's order, each step as it is ready, beside the natural track. Said on reading the merge of steps 25 and 27. The plan's decisions ahead that the owner did not answer are taken as recommended until the owner says otherwise (Claude's call): a dwarf stands under one and a half blocks, and the first hold is on the default island. The stream beds stay at step 34's width.
+- **The interface is part of the early play steps**: the menus, the player's interface, expedition planning, and what is built on the camera from above to manage the expedition and the dwarves, with build menus and the rest. "This needs a lot of effort and attention to detail and overall well-founded plan, and UI that is purposeful and thought has gone into where everything lands." So the interface gets a design of its own before it is built, and expedition planning moves from late in the play track to early.
 
 **2026-11-16, Claude's call** (merging step 25)
 
