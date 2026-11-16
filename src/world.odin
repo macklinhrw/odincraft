@@ -176,13 +176,13 @@ build :: proc(job: Job) -> (b: Built) {
 // The block volume for a nearest-level chunk: the generated world, then the player's edits.
 build_volume :: proc(key: Key, c: ^Columns, edits: []Edit) -> (blocks: []Mat, y_base, h: i32) {
 	lo, hi := max(i32), min(i32)
-	for e in edits {
+	for e in edits do if !is(e.mat, RINGS) {
 		lo = min(lo, e.y)
 		hi = max(hi, e.y + 1)
 	}
-	blocks, y_base, h = gen_volume(key.x, key.z, c, lo, hi)
+	blocks, y_base, h = gen_volume(key.x, key.z, c, lo, hi, edits)
 	ox, oz := key.x*CHUNK - 1, key.z*CHUNK - 1
-	for e in edits {
+	for e in edits do if !is(e.mat, RINGS) {   // rings at a tree's foot are a felled tree, which gen_volume left out
 		blocks[int(e.x - ox) + int(e.z - oz)*P + int(e.y - y_base)*P*P] = e.mat
 	}
 	return
@@ -433,17 +433,18 @@ world_set :: proc(w: ^World, x, y, z: i32, m: Mat, tell := true) {
 	if tell do hold_block(x, y, z, m)   // the dwarves walk the same blocks
 
 	// Collision should not wait for the rebuild.
-	if c := w.chunks[key] or_else nil; c != nil && c.ready {
+	if c := w.chunks[key] or_else nil; c != nil && c.ready && !is(m, RINGS) {
 		if ly := y - c.y_base; ly >= 0 && ly < c.h {
 			c.blocks[int(x & (CHUNK - 1) + 1) + int(z & (CHUNK - 1) + 1)*P + int(ly)*P*P] = m
 			w.volume += 1
 			water_refloor(&w.water, x, z)
 		}
 	}
-	// This chunk, and any neighbour whose border includes the block.
-	for dz in i32(-1)..=1 {
-		for dx in i32(-1)..=1 {
-			k := Key{0, (x + dx) >> CHUNK_SHIFT, (z + dz) >> CHUNK_SHIFT}
+	// This chunk, and any neighbour whose border includes the block, or that a felled tree's crown reached.
+	r := i32(TREE_REACH + 2) if is(m, RINGS) else 1
+	for cz in (z - r) >> CHUNK_SHIFT..=(z + r) >> CHUNK_SHIFT {
+		for cx in (x - r) >> CHUNK_SHIFT..=(x + r) >> CHUNK_SHIFT {
+			k := Key{0, cx, cz}
 			if c := w.chunks[k] or_else nil; c != nil && !c.dirty {
 				c.dirty = true
 				append(&w.dirty, k)
@@ -460,9 +461,7 @@ edits_near :: proc(w: ^World, key: Key) -> []Edit {
 	for dz in i32(-1)..=1 {
 		for dx in i32(-1)..=1 {
 			list := w.edits[Key{0, key.x + dx, key.z + dz}] or_else nil
-			for e in list {
-				if e.x >= x0 && e.x < x0 + P && e.z >= z0 && e.z < z0 + P do append(&out, e)
-			}
+			for e in list do if edit_reaches(e, x0, z0) do append(&out, e)
 		}
 	}
 	return out[:]

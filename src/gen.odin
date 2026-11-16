@@ -199,12 +199,14 @@ Trait :: enum u8 {
 	Passes,   // a rock water passes through, so a spring rises where it lies on one that holds it (rivers.odin)
 	Sinks,    // a rock the rain sinks into rather than running off it, so few streams cut it (SOAKS, rock.odin)
 	Pebbles,  // a river's gravel, which lies two blocks deep on its bed (block_below)
+	Ring,     // a trunk cut across. No block is one: as an edit at a tree's foot it says the tree is felled to a stump (gen_volume)
 	Grass, Litter, Susuki, Dune, Silt, Sand, Rubble,   // the grounds a ground plant grows on (GROUND_PLANTS.on)
 }
 @(rodata) TRAITS := #partial [Mat]bit_set[Trait]{
 	.Grass = {.Cover, .Grass}, .Litter = {.Cover, .Litter}, .Susuki = {.Cover, .Susuki}, .Dune = {.Cover, .Dune}, .Dirt = {.Cover},   // the dirt is the earth of a trail
 	.Sand = {.Sand}, .Silt = {.Silt},
 	.Wood = {.Bark}, .Shii_Bark = {.Bark}, .Grey_Bark = {.Bark}, .Pine_Bark = {.Bark},
+	.Wood_End = {.Ring}, .Shii_End = {.Ring}, .Grey_End = {.Ring}, .Pine_End = {.Ring},
 	.Leaves = {.Leaf}, .Shii_Leaves = {.Leaf}, .Camellia_Leaves = {.Leaf}, .Hisakaki_Leaves = {.Leaf}, .Pine_Needles = {.Leaf}, .Scrub_Leaves = {.Leaf},
 	.Sandstone = {.Passes}, .Grit = {.Passes}, .Limestone = {.Passes}, .Basalt = {.Passes}, .Scoria = {.Passes}, .Tuff = {.Passes}, .Reef = {.Passes, .Sinks},
 	.Red_Sandstone = {.Passes}, .Chalk = {.Passes}, .Granite = {.Passes}, .Gneiss = {.Passes}, .Quartzite = {.Passes}, .Marble = {.Passes},   // through their pores, or the cracks of the hard ones
@@ -227,6 +229,7 @@ LEAVES       :: bit_set[Trait]{.Leaf}
 PLANT_BLOCKS :: bit_set[Trait]{.Bark, .Leaf}
 COVERS       :: bit_set[Trait]{.Cover}
 PEBBLES      :: bit_set[Trait]{.Pebbles}
+RINGS        :: bit_set[Trait]{.Ring}
 
 CHUNK       :: 32               // cells along a chunk side
 CHUNK_SHIFT :: 5
@@ -772,8 +775,8 @@ block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, 
 // The blocks of a nearest-level chunk and its border, in layers from y_base up. `lo` and
 // `hi` widen the vertical range, for edits that reach outside the generated ground. They are
 // the island's under the chunk's middle, which stays bound for meshing; a column of the open sea
-// is sand to the bottom.
-gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []Mat, y_base, h: i32) {
+// is sand to the bottom. A tree with an edit of rings at its foot has been felled, and only its stump stands.
+gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32, edits: []Edit = nil) -> (blocks: []Mat, y_base, h: i32) {
 	trees := make([dynamic]Tree, context.temp_allocator)
 	sea := !bind_at(f64(cx*CHUNK + CHUNK/2), f64(cz*CHUNK + CHUNK/2))
 	x0, z0 := cx*CHUNK - 1 - region.origin.x, cz*CHUNK - 1 - region.origin.y
@@ -811,6 +814,12 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32) -> (blocks: []Mat, y_b
 			if x < 0 || x >= P || z < 0 || z >= P || y < 0 do return   // below y is this chunk's solid ground: a tree at a cliff's foot
 			k := int(x) + int(z)*P + int(y)*P*P
 			if replace || blocks[k] == .Air do blocks[k] = m
+		}
+		felled := false   // an edit at its foot says so (the dwarves' felling, orders.odin): its stump is left
+		for e in edits do felled ||= is(e.mat, RINGS) && e.x == t.x + region.origin.x && e.z == t.z + region.origin.y
+		if felled {
+			if t.form != .Fallen do put(blocks, t.x - x0, t.base - y_base, t.z - z0, SPECIES[t.kind].bark, false)
+			continue
 		}
 		if t.form != .Fallen {
 			grow(blocks, t, {x0, y_base, z0}, c)
