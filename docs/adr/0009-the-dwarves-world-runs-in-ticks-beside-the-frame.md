@@ -16,16 +16,22 @@ We chose a thread of its own over stepping the hold on the frame thread, as the 
 
 Through the generator, as everything does (ADR 0001): a chunk's blocks are made by `gen_columns` and `build_volume`, the calls the world's workers make, with the session's edits laid over them, and read once into a patch of floors and the steps between them (`paths.odin`). The hold never reads the world the frame streams, which holds only what is near the camera and loads in an order that depends on the machine. It keeps its own list of the session's edits, each of which came to it as an order with a tick.
 
-It never reads the simulated water (ADR 0004) either: a dwarf wades by the level the land gives a column, not by the depth standing there in this frame.
+It never reads the simulated water (ADR 0004) either: a dwarf wades by the level the land gives a column, not by the depth standing there in this frame. The land wets only the columns it made wet, so a pit dug in dry ground is dry to a dwarf, as it is in the world drawn.
+
+## Floors are taken up, and a floor can go
+
+A dwarf takes up the floor it stands on or is stepping onto, and no other steps onto it. A walker's way goes round those who stand; it follows one walking ahead; it steps round one in its way by a free floor beside it, and where there is none the two change floors, squeezing past, which takes longer. Whoever is held up moves within a few ticks of the other standing still, and the dwarves act in their order in the party, so no two wait on each other for ever and the same orders still give the same log. We chose floors over bodies that push each other apart: the ways are made of floors, and a rule on floors needs no positions between them.
+
+A changed block may take a dwarf's floor. The dwarf then falls to the first ground below, or is moved out of a block laid where it stood to the nearest free floor, and takes orders again where it comes to rest. One with no floor near stays as it is, says so, and is settled again whenever a block changes or an order comes. An order is asked of one dwarf from each stretch of joined ground the party stands on.
 
 ## Consequences
 
-- A change to a block reaches the hold as an order, `block x y z Material`, sent from `world_set`. Anything that changes blocks by another road is invisible to the dwarves.
-- A dwarf can wade water the simulation has since drained, and walk dry through a pit the player has flooded. The two agree wherever nothing has been dug.
+- A change to a block reaches the hold as an order, `block x y z Material`, sent from `world_set`. Anything that changes blocks by another road is invisible to the dwarves. A block order that came from a file and not from the frame is passed out to the frame, which changes the world it draws.
+- A dwarf can wade water the simulation has since drained, and walk dry through a pit the player has flooded. A fall does not hurt until dwarves can be hurt (`plan.md`, P4). The two agree wherever nothing has been dug.
 - Whatever the hold prints with a time in front is in the log and its hash. Timings are not: they are printed in brackets without a time, and are not the same twice.
 - The hold's ground is read chunk by chunk and never let go: about 39 KB a chunk walked or searched, 8.2 MB for the 210 chunks of the run in `plan.md`. A changed block forgets the up to four patches that read it, and their floors are not given back.
 - The frame draws a dwarf one tick late, a tenth of a second, so that it always has two ticks to draw between.
-- `./build.sh test` runs the hold twice on the start island, once beside a thread that reads it and moves its clock in fits, and compares the logs. It keeps no golden hash: what the dwarves do follows the land, which changes on purpose. It runs inside the forming test, because the test runner frees what a test made when the test ends, so only one test can form the world.
+- `./build.sh test` plays a game on the start island a stretch at a time, giving orders from where the dwarves have come to, then plays its orders again from a file, alone and beside a thread that reads the hold and moves its clock in fits, and compares the three logs. It keeps no golden hash: what the dwarves do follows the land, which changes on purpose. It runs inside the forming test, because the test runner frees what a test made when the test ends, so only one test can form the world.
 - **Nothing counts on seven.** The party, the dwarves and what is shown are lists of any length, and who a dwarf is travels in `Shown` with where it stands, so one can join or die without the frame reading the hold's own record. A tick costs about 10 ns a dwarf (1.0 µs for a hundred, measured). The cost that grows is the looking for ways: an order is tried by one dwarf, which reads the ground the others will cross, and each of the others looks when its turn in the file comes, 0.8 s after the one before, so the searches never fall in one tick.
 - Dwarves pause and run at the clock's speeds with everything else, and the log is the same at any speed.
 - The log is the hold's own and the frame cannot read it. An interface that shows what happened as messages (`foundations/interface.md`, I5) needs the new lines passed out as `Shown` is.

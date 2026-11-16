@@ -356,18 +356,76 @@ Asked with `--why` where one stands, 1:55 in: "Bramik Tuffelbow, a weaver of 45 
 **Weak points**
 
 - **Pathless ground is slow, as the trails' cost says.** 570 m with 60 m of climb through young wood and scrub takes the party 21 minutes, five at the clock's fastest. It is what Naismith's rule gives a walker with a load.
-- **Dwarves pass through each other** and through the player. They walk in file because each sets out 0.8 s after the one before, and nothing else keeps them apart. A hundred sent together take 80 s to set out.
+- **Dwarves pass through the player**, though no longer through each other (below). A hundred sent together take 80 s to set out, each 0.8 s after the one before.
 - **A way is the best through the rooms the first search chose**, not the best there is. A cheaper way through rooms off the line is missed.
 - **Ground cut off behind more than 24 rooms costs a full search** (400 chunks, a second or more) before it is refused. The frame does not wait for it, but every dwarf stands still meanwhile.
 - **A dwarf's own way over 600 m costs 13 to 25 ms**, though the ground is read: the second search looks at most of the floors of its rooms. A hundred dwarves sent far cost 2 s of the hold's thread, spread over the 80 s they take to set out.
-- **The hold wades by the land's water, not the simulated water** (`adr/0009`): a dug channel or a drained pool is not seen.
-- **A block placed on a dwarf, or dug from under one that stands, is not noticed** until it is next sent.
+- **The hold wades by the land's water, not the simulated water** (`adr/0009`): a drained pool is still waded, and water let into a dug pit is not seen. A pit dug in dry ground is dry (below).
 - **The boat stays where it grounded** and seats seven; `--party` puts the rest in the same seats.
 - **The landing is a boulder shore**, because the row's fields are read on 16 m cells and the stream's mouth it liked best is one the floods have laid with blocks. A dwarf climbs them a block at a time.
 - **From above the cut can hide a dwarf**: it stands 3 blocks over the ground under the view's middle, and a dwarf on higher ground at the picture's edge is cut with the hill it stands on.
 - **Selecting and ordering by the pointer were checked with no window only as far as `--cursor --send` goes**: the order from a picked block. The clicks themselves (a right click that is not a drag, a left click on a dwarf) have not been tried by hand.
 - **What a dwarf says is in the terminal and the title**, as there is no text on screen yet (step I-1).
 - **Past about 500 dwarves the boxes run out**: each is sixteen of the 8,192 a frame draws.
+
+**Two faults, found by the owner playing, and their fixes** (2026-11-16)
+
+*A dwarf did not fall, and was then stuck for good.* The owner broke the block under a standing dwarf: it stayed in the air and took no order after. A changed block reached the hold, but only dwarves whose way passed it looked again; a standing dwarf kept a floor that was gone, every way looked for from it failed, and where it was the first of the party it let every order through unchecked.
+
+- A dwarf whose floor is gone, standing or in mid-step, **falls to the first ground below**, faster as it goes, and lands (`settle`, `hold.odin`). One on an errand looks for its way again from where it landed. **A fall of any height is only a fall**: hurt comes with needs in P4.
+- **A block laid where a dwarf stands moves it** to the nearest floor no dwarf holds, the block's own top if that is free.
+- **A dwarf with no floor within six steps** stays, says so on its card and in the log, and is settled again whenever a block changes or an order comes.
+- **An order is asked of one dwarf from each stretch of joined ground the party stands on**, so a dwarf in a pit neither refuses an order for the rest nor lets one through. It takes the order and says it has no way.
+- **A pit dug in dry ground is dry to the dwarves**, as it is in the world drawn. The first pit of the test, dug by the stream, had "deep water" in it by the stream's level and no floor to land on.
+
+*Dwarves got stuck on each other.* They had no bodies: they walked through one another, and where the ground had too few standing places the rest were sent to one block.
+
+- **A dwarf takes up its floor**: the one it stands on or is stepping onto, which no other steps onto (`held`, `held_off`).
+- **A walker's way goes round those who stand**; it follows one walking ahead; it steps round one in its way by a free floor beside it; and where there is none, in a passage one block wide, **the two change floors, each keeping to its right, and take two and a half times as long**. Whoever is held up moves within eight ticks of the other standing still, so no two wait on each other for ever.
+- **No two end on one floor**: standing places are always different floors, in water, in plants or side by side where the ground is short of better, and one whose place is taken ends on the nearest free floor.
+- **What is seen matches**: the frame draws where the hold says, and two that squeeze past are drawn side by side.
+
+*Tried and dropped:* a walker set back by one squeezing past it looking for its way again. A hundred sent together looked for 1,326 ways where 252 had served; its way now begins with the floor it gave up, and they look for 344.
+
+*Checked.* `./build.sh test` plays the game the blocks can spoil, a stretch at a time, giving each order from where the dwarves have come to, then plays its orders again from the file, alone and beside a reader: three logs with one hash, and at the end every dwarf waiting on a floor of its own. Its orders are left in `build/hold_test_orders.txt` and run with no window (`--dwarves=900 --orders=build/hold_test_orders.txt`), which prints the test's hash. `GOLDEN` is unchanged; `odin check src -vet-unused` passes. From that run:
+
+```
+[2:10.0] The hold says "block 2693 2 -1747 Air": the ground is changed there.
+[2:10.7] Bramik Tuffelbow falls 3 m and lands on susuki grass and scrub.
+[2:15.0] The hold says "block 2691 3 -1747 Sandstone": the ground is changed there.
+[2:15.0] Jorris Chalkheel is in the way of a block laid where it stood, and is moved to the nearest ground.
+[2:30.0] The hold says "go 2705 2 -1738": the party is sent to the blocks at a mouth a short walk south of the landing.
+[2:30.0] Bramik Tuffelbow stops: no way leads to the blocks at a mouth a short walk south of the landing: water too deep to wade, or a drop or a rise of more than a block, lies all round it or all round the walker.
+[2:38.7] Ardet Sootboot falls 3 m and lands on blocks at a mouth.
+[3:08.5] 5 of the seven stand at the blocks at a mouth a short walk south of the landing; 2 found no way.
+```
+
+The pits are then filled under the two, which lifts each out, and the seven are sent to the shut end of a passage one block wide and nine long, and then to its mouth: four stood in it, and they squeezed past each other five times on the way back.
+
+*Costs*, the machine at a load of 11 to 17 from other agents throughout:
+
+| What | Parent | With the fixes |
+|---|---|---|
+| A tick of seven, and of a hundred, with no window | 0.2 µs; 1.6 µs | 0.3 µs; 2.0 µs |
+| A hundred sent 100 m and back, 15 minutes of their time: ways looked for | 252 | 344; they went round each other 845 times and squeezed past 1,521 times, and all arrive 53 s later (12:16 against 11:23) |
+| The bench at the landing, the seven sent 5 s in, 40 s, three rounds alternating: our work's median, worst, frames over 12.5 ms | 0.82, 17.0 ms, 1; 0.87, 8.8, 0; 1.29, 43.9, 19 | 0.82, 8.6 ms, 0; 0.97, 17.9, 5; 1.33, 34.6, 11 |
+| The same with a hundred on screen | 1.49, 46.0 ms, 15 | 1.39, 33.5 ms, 14 |
+
+No difference shows between the builds; at this load both lose frames, in every part of the frame at once, and the bench should be run again on a quiet machine.
+
+![Before: the block under a dwarf is broken, and it stands in the air over the hole](interesting-world/real/p2-fall-before.jpg)
+
+![After: it has fallen a block and stands in the hole](interesting-world/real/p2-fall-after.jpg)
+
+![Before: the seven turn back in a trench one block wide, and three walk through each other](interesting-world/real/p2-pass-before.jpg)
+
+![After, the same orders at the same moment: two squeeze past side by side, and the rest stand apart](interesting-world/real/p2-pass-after.jpg)
+
+![The party standing at the trench's end: three in it on floors of their own, the rest at its mouth](interesting-world/real/p2-apart.jpg)
+
+The trench's orders are `interesting-world/real/p2-trench-orders.txt`.
+
+*Weak points.* A dwarf that is squeezed past is left a floor from where it stood. A file on a narrow way moves at the pace of its slowest. A dwarf in a pit deeper than one block cannot leave it until a way is dug or laid: orders (P3) are what will let it out. A dwarf adrift is drawn where it last stood, which may be inside a block. The player still walks through dwarves. Nobody has watched any of this in a window.
 
 **For the interface's design** (`foundations/interface.md`)
 

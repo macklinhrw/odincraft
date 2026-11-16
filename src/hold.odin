@@ -26,6 +26,13 @@ import sdl "vendor:sdl3"
 // place and each dwarf finds its own way (paths.odin). One order exists in this step, "go", and
 // one notice, "block", which tells the hold that a block was changed.
 //
+// A dwarf takes up the floor it stands on or is stepping onto (`held`): no other steps onto it. A
+// walker plans its way round those who stand, follows one walking ahead of it, steps round one in
+// its way by a free floor beside it, and where there is none the two change floors, squeezing
+// past, which takes longer (held_off). One whose place at the end is taken ends on the nearest
+// free floor. A dwarf whose floor a changed block took away falls to the first ground below, or
+// is pushed out of a block laid where it stood, and takes orders again where it lands (settle).
+//
 // An orders file has a line for each: the time, in seconds or as the log prints it, then
 //   go x z          send the party to the ground at that column
 //   go x y z        send it to stand on that block
@@ -41,6 +48,10 @@ STEP_OUT  :: 15      // ticks between one dwarf stepping ashore and the next
 IN_FILE   :: 8       // ticks between one dwarf setting out and the next, so a party walks in file and looks for its ways one at a time
 ASKING    :: 64      // patches the hold may make to answer one order, before any way is looked for
 AIM_REACH :: 160.0   // metres off a block can be aimed at in first person to send the party to it, or a dwarf asked
+PATIENCE  :: 8       // ticks a walker waits behind one that stands in a file or waits its turn, before it goes round or squeezes past
+SQUEEZE   :: 2.5     // how many times longer a step takes two dwarves who squeeze past each other
+ASIDE     :: 0.22    // metres each keeps to its right as they do
+ADRIFT    :: 6       // steps round a dwarf with no floor that ground is looked for
 
 Doing :: enum u8 { Aboard, Ashore, Walking, Waiting, Stopped }
 Dwarf :: struct {
@@ -55,6 +66,10 @@ Dwarf :: struct {
 	stride:      f64,                 // metres walked since landing
 	facing:      f32,                 // radians from north
 	said:        string,              // why it stopped
+	fall:        bool,                // the step it is in is a fall
+	pass:        bool,                // or a squeeze past another, keeping to its right
+	adrift:      bool,                // it has no floor, and none is near: it looks again when a block changes or an order comes
+	stuck:       int,                 // ticks it has waited for the floor ahead
 }
 Order_Kind :: enum u8 { Go, Block }
 Order :: struct {
@@ -63,6 +78,7 @@ Order :: struct {
 	at:     [3]i32,
 	column: bool,   // go: only the column was given, and its ground is meant
 	mat:    Mat,
+	frame:  bool,   // block: the frame changed it and told the hold; otherwise the frame is to be told (Hold.out)
 }
 
 // What the frame may know: who each dwarf is, where it stood at a tick and at the tick before, and what it was doing.
@@ -74,6 +90,7 @@ Seen :: struct {
 	doing:          Doing,
 	left, of:       int,      // floors of its way still to walk, and in all
 	said:           string,
+	fall:           bool,
 }
 Shown :: struct {
 	tick:      int,
@@ -97,6 +114,7 @@ Hold :: struct {
 	party:    [dynamic]Facts, // who each dwarf is
 	dwarves:  [dynamic]Dwarf,
 	spots:    [dynamic][3]i32, // where each stands when the errand is done
+	held:     map[[3]i32]int, // the floor each dwarf ashore takes up, and whose it is: the one it stands on, or is stepping onto
 	errand:   int,            // orders to go obeyed so far; none while the party gathers above the landing
 	place:    string,         // where the errand leads, in words
 	summed:   bool,           // its end has been said
@@ -104,11 +122,12 @@ Hold :: struct {
 	taken:    int,
 	log:      [dynamic]string,
 	showing:  [dynamic]Seen,  // the next tick's picture, as it is laid out
-	work:     struct { ways, patches: int, walking, finding, worst_tick, worst_way: time.Duration },
+	work:     struct { ways, patches, round, squeezed, fell: int, walking, finding, worst_tick, worst_way: time.Duration },
 	// Shared with the frame thread, under the mutex.
 	mutex:    sync.Mutex,
 	wake:     sync.Cond,
 	inbox:    [dynamic]Order,
+	out:      [dynamic]Edit,  // blocks the hold was told of by an orders file, for the frame to change in the world it draws
 	shown:    Shown,
 	target:   int,            // the tick the game's clock has reached (atomic)
 	until:    int,            // the tick to stop at
@@ -168,7 +187,8 @@ spots_take :: proc(h: ^Hold, at: [3]i32) {
 	h.walk.budget = ASKING
 	n := 0
 	if f := walk_floor(&h.walk, at.x, at.y, at.z); f >= 0 do n = walk_spots(&h.walk, f, h.spots[:])
-	for i in n..<len(h.spots) do h.spots[i] = at   // no room to spread: they crowd
+	for i in n..<len(h.spots) do h.spots[i] = at   // no ground joined to it for so many: each such ends where it finds a free floor (ends_elsewhere)
+	if !h.quiet && h.walk.roomy < len(h.spots) do fmt.printfln("    (little room there: %d places to stand clear of each other, of water and of tall plants, so the rest stand in them or side by side)", h.walk.roomy)
 }
 
 orders_read :: proc(h: ^Hold, path: string) {
@@ -178,9 +198,17 @@ orders_read :: proc(h: ^Hold, path: string) {
 		fmt.eprintln("cannot read the orders in", path)
 		os.exit(2)
 	}
-	for line in strings.split_lines(string(data), context.temp_allocator) {
+	for line in strings.split_lines(string(data), context.temp_allocator) do if !order_read(h, line) {
+		fmt.eprintfln("bad order in %s: %s", path, line)
+		os.exit(2)
+	}
+}
+
+// One line of an orders file, put among the hold's orders by its time; false if it is not an order.
+order_read :: proc(h: ^Hold, line: string) -> bool {
+	{
 		words := strings.fields(strings.trim_space(line), context.temp_allocator)
-		if len(words) == 0 || strings.has_prefix(words[0], "#") do continue
+		if len(words) == 0 || strings.has_prefix(words[0], "#") do return true
 		o: Order
 		when_, rest := strings.trim(words[0], "[]"), words[2:] if len(words) > 2 else nil
 		seconds := 0.0
@@ -203,15 +231,13 @@ orders_read :: proc(h: ^Hold, path: string) {
 		case:
 			ok = false
 		}
-		if !ok {
-			fmt.eprintfln("bad order in %s: %s", path, line)
-			os.exit(2)
-		}
+		if !ok do return false
 		o.tick = int(seconds/TICK + 0.5)
 		at := len(h.orders)
 		for at > 0 && h.orders[at - 1].tick > o.tick do at -= 1
 		inject_at(&h.orders, at, o)
 	}
+	return true
 }
 
 // ---- running it -----------------------------------------------------------------------------
@@ -239,7 +265,19 @@ feet_of :: proc(h: ^Hold, i: int) -> [3]f64 {
 		return {p.x, SEA_SURFACE + 0.1, p.y}
 	}
 	if d.takes == 0 do return feet_on(d.cell)
-	return math.lerp(d.from, feet_on(d.cell), f64(d.into)/f64(d.takes))
+	f, to := f64(d.into)/f64(d.takes), feet_on(d.cell)
+	if d.fall do f *= f   // faster as it goes
+	at := math.lerp(d.from, to, f)
+	if d.pass do if way := linalg.normalize0([2]f64{to.x - d.from.x, to.z - d.from.z}); way != 0 do at.xz += [2]f64{-way.y, way.x}*ASIDE*math.sin(math.PI*f)
+	return at
+}
+
+// A dwarf takes up a floor, and gives up the one it had.
+take :: proc(h: ^Hold, i: int, cell: [3]i32) {
+	d := &h.dwarves[i]
+	if o, ok := h.held[d.cell]; ok && o == i do delete_key(&h.held, d.cell)
+	d.cell = cell
+	h.held[cell] = i
 }
 
 // Lay out what the frame may see of the tick in hand, and put it where the frame reads it.
@@ -249,7 +287,7 @@ hold_show :: proc(h: ^Hold) {
 		at := feet_of(h, i)
 		was, trod := at, d.stride
 		if h.tick > 0 && i < len(h.shown.dwarves) do was, trod = h.shown.dwarves[i].at, h.shown.dwarves[i].stride
-		h.showing[i] = {who = h.party[i], was = was, at = at, trod = trod, stride = d.stride, facing = d.facing, doing = d.doing, left = len(d.path) - d.next, of = len(d.path), said = d.said}
+		h.showing[i] = {who = h.party[i], was = was, at = at, trod = trod, stride = d.stride, facing = d.facing, doing = d.doing, left = len(d.path) - d.next, of = len(d.path), said = d.said, fall = d.fall}
 	}
 	boat := boat_at(h, h.tick)
 	sync.lock(&h.mutex)
@@ -283,27 +321,45 @@ hold_tick :: proc(h: ^Hold) {
 	if h.tick == h.boat_ticks do say(h, "The boat grounds at %d, %d, on %s.", h.landed.at.x, h.landed.at.z, ground_words(h.landed.at)[4:])
 	for &d, i in h.dwarves {
 		if d.doing == .Aboard && h.tick >= h.boat_ticks + 20 + STEP_OUT*i {   // over the bow, one at a time
-			d.from = feet_of(h, i)
-			d.doing, d.cell, d.takes, d.into = .Ashore, h.landed.at, 1500, 0
+			// Onto the landing once the one before has stepped off it; if that one stands there, onto the nearest free floor.
+			to, free := h.landed.at, true
+			if o, taken := h.held[to]; taken {
+				free = false
+				h.walk.budget = ASKING
+				if h.dwarves[o].doing != .Walking do if f := walk_near(&h.walk, to.x, to.y, to.z, 3, false, &h.held); f >= 0 do to, free = floor_block(&h.walk, f), true
+			}
+			if free {
+				d.from = feet_of(h, i)
+				d.doing, d.takes, d.into = .Ashore, 1500, 0
+				take(h, i, to)
+			}
 		}
 		if d.takes == 0 && d.doing == .Walking {
 			if d.wait > 0 do d.wait -= 1
 			else {
 				if d.seek do find(h, i)
-				if d.doing == .Walking && !step_on(h, &d) do arrive(h, i)
+				if d.doing == .Walking && d.takes == 0 && !d.seek && step_on(h, i) == .Ended do arrive(h, i)
 			}
 		}
 		if d.takes == 0 do continue
 		d.into += TICK_MS
 		for d.takes > 0 && d.into >= d.takes {
 			d.into -= d.takes
-			d.takes = 0
+			d.takes, d.pass = 0, false
+			if d.fall {
+				d.fall = false
+				say(h, "%s %s falls %.0f m and lands on %s.", h.party[i].given, h.party[i].byname, max(d.from.y - f64(d.cell.y), 1), ground_words(d.cell)[4:])
+			}
 			if d.doing == .Ashore {
 				say(h, "%s, steps ashore.", dwarf_name(h.party[i]))
 				d.doing, d.seek, d.wait = .Walking, true, 0
 			}
 			if d.doing != .Walking || d.seek do d.into = 0   // it stands, or looks for its way next tick
-			else if !step_on(h, &d) do arrive(h, i)
+			else do switch step_on(h, i) {
+			case .Stepped:
+			case .Held:  d.into = 0
+			case .Ended: arrive(h, i)
+			}
 		}
 	}
 	h.tick += 1
@@ -313,22 +369,164 @@ hold_tick :: proc(h: ^Hold) {
 	h.work.walking += spent - (h.work.finding - found)
 }
 
-// Begin the next step of a dwarf's way; false at its end.
-step_on :: proc(h: ^Hold, d: ^Dwarf) -> bool {
+// Begin the next step of a dwarf's way. At its end the dwarf has arrived; where another holds the
+// floor ahead it goes round, squeezes past or waits (held_off).
+Stepped :: enum u8 { Stepped, Held, Ended }
+step_on :: proc(h: ^Hold, i: int) -> Stepped {
+	d := &h.dwarves[i]
 	if d.next >= len(d.path) {
 		d.into = 0
-		return false
+		return .Ended
 	}
 	to := d.path[d.next]
+	if o, taken := h.held[to]; taken && o != i do return held_off(h, i, o)
+	step_to(h, i, to, 1)
+	d.next += 1
+	return .Stepped
+}
+
+// A dwarf sets off for a floor beside its own, taking `slow` times as long as the ground asks.
+step_to :: proc(h: ^Hold, i: int, to: [3]i32, slow: f32) {
+	d := &h.dwarves[i]
 	h.walk.budget = ASKING
 	a, b := walk_floor(&h.walk, d.cell.x, d.cell.y, d.cell.z), walk_floor(&h.walk, to.x, to.y, to.z)
 	d.from = feet_on(d.cell)
-	d.takes = max(i32(step_seconds(&h.walk, a, b)*1000), 1) if a >= 0 && b >= 0 else 750
+	d.takes = max(i32(slow*step_seconds(&h.walk, a, b)*1000), 1) if a >= 0 && b >= 0 else i32(750*slow)
 	d.stride += math.hypot(f64(to.x - d.cell.x), f64(to.z - d.cell.z))
 	d.facing = f32(math.atan2(f64(to.x - d.cell.x), -f64(to.z - d.cell.z)))
-	d.cell = to
+	d.into, d.stuck = 0, 0
+	take(h, i, to)
+}
+
+// The floor ahead of a walker is another dwarf's. One in a step will be off it or settled on it in
+// a moment, and one walking its own way is followed, for a while. Otherwise the walker goes round
+// by a free floor beside it from which its way goes on; and where there is none, or the other is
+// coming the opposite way, the two change floors, each keeping to its right, and both take longer.
+// Where the floor is the end of its way and the other is not coming through, it ends elsewhere. So
+// whoever is blocked moves within PATIENCE ticks of the other standing still: no two wait on each
+// other for ever.
+held_off :: proc(h: ^Hold, i, o: int) -> Stepped {
+	d, b, w := &h.dwarves[i], &h.dwarves[o], &h.walk
+	d.into = 0
+	d.stuck += 1
+	if b.takes > 0 do return .Held
+	meets := b.doing == .Walking && !b.seek && b.wait == 0 && b.next < len(b.path) && b.path[b.next] == d.cell
+	if b.doing == .Walking && !meets && d.stuck <= PATIENCE do return .Held
+	last := d.next == len(d.path) - 1
+	if last && !meets do return ends_elsewhere(h, i)
+	w.budget = ASKING
+	mine := walk_floor(w, d.cell.x, d.cell.y, d.cell.z)
+	if !last && mine >= 0 do for way in 0..<8 {
+		side := floor_step(w, mine, way)
+		if side < 0 || floor_block(w, side) in h.held do continue
+		for on in 0..<8 do if t := floor_step(w, side, on); t >= 0 && floor_block(w, t) == d.path[d.next + 1] {
+			d.path[d.next] = floor_block(w, side)
+			step_to(h, i, d.path[d.next], 1)
+			d.next += 1
+			h.work.round += 1
+			return .Stepped
+		}
+	}
+	// They squeeze past: each takes the other's floor.
+	x, y := d.cell, b.cell
+	step_to(h, i, y, SQUEEZE)
 	d.next += 1
-	return true
+	step_to(h, o, x, SQUEEZE)
+	h.held[y] = i   // the second gave up the floor the first had just taken
+	d.pass, b.pass = true, true
+	if meets do b.next += 1
+	else if b.doing == .Walking && !b.seek && b.next >= 1 && b.next <= len(b.path) && b.path[b.next - 1] == y do b.next -= 1   // set back a floor, its way begins with the floor it gave up
+	else if b.doing == .Walking {
+		clear(&b.path)
+		b.seek = true
+	}
+	h.work.squeezed += 1
+	return .Stepped
+}
+
+// The floor at the end of a dwarf's way is taken: it ends on the nearest floor joined to it that no
+// dwarf holds and none is bound for, or where it stands if there is none.
+ends_elsewhere :: proc(h: ^Hold, i: int) -> Stepped {
+	d, w := &h.dwarves[i], &h.walk
+	w.budget = ASKING
+	goal := d.path[len(d.path) - 1]
+	f := walk_floor(w, goal.x, goal.y, goal.z)
+	if f < 0 do return .Ended
+	w.stamp += 1
+	queue := make([dynamic]i32, context.temp_allocator)
+	append(&queue, f)
+	w.seen[f] = w.stamp
+	for k := 0; k < len(queue) && k < 400; k += 1 {
+		at := floor_block(w, queue[k])
+		free := at == d.cell || at not_in h.held
+		for spot, j in h.spots do free &&= j == i || spot != at
+		if free {
+			h.spots[i] = at
+			clear(&d.path)
+			if at == d.cell do return .Ended
+			d.seek, d.stuck = true, 0
+			return .Held
+		}
+		for way in 0..<8 do if t := floor_step(w, queue[k], way); t >= 0 && w.seen[t] != w.stamp {
+			w.seen[t] = w.stamp
+			append(&queue, t)
+		}
+	}
+	return .Ended
+}
+
+// A dwarf's floor may be gone: a block was changed in its column. If the ground went from under it,
+// it falls to the first ground below, faster as it goes, and lands; a fall of any height is only a
+// fall until dwarves can be hurt (plan.md, P4). If a block was laid where it stands, or the ground
+// below is deep water or another dwarf's, it is moved to the nearest floor no dwarf holds. With no
+// floor within ADRIFT steps it stays as it is, adrift, says why, and is settled again whenever a
+// block changes or an order comes. One on an errand looks for its way again from where it comes to rest.
+settle :: proc(h: ^Hold, i: int, dropped: bool) {
+	d, w := &h.dwarves[i], &h.walk
+	w.budget = ASKING
+	name := fmt.tprintf("%s %s", h.party[i].given, h.party[i].byname)
+	if walk_floor(w, d.cell.x, d.cell.y, d.cell.z) >= 0 {
+		if d.adrift {
+			d.adrift = false
+			if d.doing == .Stopped do d.doing, d.said = .Waiting, ""
+			say(h, "%s has ground under it again.", name)
+		}
+		return
+	}
+	at := feet_of(h, i)
+	to := i32(-1)
+	if dropped do if p := patch_at(w, d.cell.x >> CHUNK_SHIFT, d.cell.z >> CHUNK_SHIFT); p != nil {
+		col := (d.cell.z & (CHUNK - 1))*CHUNK + d.cell.x & (CHUNK - 1)
+		for k in p.first[col]..<p.first[col + 1] do if i32(w.floors[p.base + i32(k)].y) < d.cell.y do to = p.base + i32(k)   // the highest below
+	}
+	fell := to >= 0 && floor_block(w, to) not_in h.held
+	if !fell {
+		from := floor_block(w, to) if to >= 0 else d.cell
+		to = walk_near(w, from.x, from.y, from.z, ADRIFT, false, &h.held)
+	}
+	clear(&d.path)
+	if to < 0 {
+		if !d.adrift {
+			d.adrift, d.takes, d.into, d.fall, d.pass = true, 0, 0, false, false
+			d.said = fmt.aprintf("there is no ground to stand on within %s steps of it", count_words(ADRIFT))
+			say(h, "%s has no ground under it: %s.", name, d.said)
+			if d.doing == .Walking || d.doing == .Waiting {
+				d.doing = .Stopped
+				errand_sum(h)
+			}
+		}
+		return
+	}
+	d.from = at
+	take(h, i, floor_block(w, to))
+	drop := at.y - f64(d.cell.y)
+	d.fall, d.pass, d.into, d.stuck = fell, false, 0, 0
+	d.takes = max(i32(1000*math.sqrt(2*max(drop, 0)/9.8)), 300) if fell else 800
+	if fell do h.work.fell += 1
+	else do say(h, "%s %s, and is moved to the nearest ground.", name, "has ground near it again" if d.adrift else "is in the way of a block laid where it stood" if !dropped else "has no ground to land on below")
+	if d.adrift && d.doing == .Stopped do d.doing, d.said = .Waiting, ""
+	d.adrift = false
+	if d.doing == .Walking do d.seek, d.wait = true, 0
 }
 
 // A dwarf has come to the end of its way.
@@ -367,11 +565,28 @@ way_timed :: proc(h: ^Hold, from, to: [3]i32, out: ^[dynamic][3]i32) -> (seconds
 	return
 }
 
-// A dwarf looks for its way to its place in the errand, from the floor it stands on, and sets out; or stops, and says why.
+// A dwarf looks for its way to its place in the errand, from the floor it stands on, round the
+// dwarves that stand, and sets out; or stops, and says why.
 find :: proc(h: ^Hold, i: int) {
-	d := &h.dwarves[i]
+	d, w := &h.dwarves[i], &h.walk
 	d.seek, d.next, d.said = false, 1, ""
-	if _, why, _, _ := way_timed(h, d.cell, h.spots[i], &d.path); why != .Way {
+	w.budget = ASKING
+	if d.adrift || walk_floor(w, d.cell.x, d.cell.y, d.cell.z) < 0 {   // its floor is gone, by no order's telling
+		settle(h, i, false)
+		if !d.adrift do d.seek = true   // once it has come to rest
+		else if d.doing == .Walking {
+			d.doing = .Stopped
+			say(h, "%s %s stops: %s.", h.party[i].given, h.party[i].byname, d.said)
+			errand_sum(h)
+		}
+		return
+	}
+	if g := h.spots[i]; walk_floor(w, g.x, g.y, g.z) < 0 do if f := walk_near(w, g.x, g.y, g.z, 3, false, &h.held); f >= 0 do h.spots[i] = floor_block(w, f)   // its place is no longer a floor: the nearest that is
+	clear(&w.shun)
+	for o, j in h.dwarves do if j != i && o.doing != .Aboard && o.doing != .Walking do append(&w.shun, o.cell)
+	_, why, _, _ := way_timed(h, d.cell, h.spots[i], &d.path)
+	clear(&w.shun)
+	if why != .Way {
 		clear(&d.path)
 		d.doing, d.said = .Stopped, no_way(h, why)
 		say(h, "%s %s stops: %s.", h.party[i].given, h.party[i].byname, d.said)
@@ -383,7 +598,7 @@ find :: proc(h: ^Hold, i: int) {
 no_way :: proc(h: ^Hold, why: Found) -> string {
 	switch why {
 	case .Way:
-	case .No_Ground: return "the ground under its feet is gone"
+	case .No_Ground: return fmt.aprintf("the place it was sent to, at %s, is no longer ground to stand on", h.place)
 	case .Cut_Off:   return fmt.aprintf("no way leads to %s: water too deep to wade, or a drop or a rise of more than a block, lies all round it or all round the walker", h.place)
 	case .Too_Far:   return fmt.aprintf("no way to %s was found in the %d chunks of ground a search may read", h.place, BUILDS)
 	}
@@ -400,6 +615,13 @@ obey :: proc(h: ^Hold, o: Order) {
 	case .Block:
 		walk_edit(w, {o.at.x, o.at.y, o.at.z, o.mat})
 		say(h, `The hold says "block %d %d %d %v": the ground is changed there.`, o.at.x, o.at.y, o.at.z, o.mat)
+		if !o.frame {
+			sync.lock(&h.mutex)
+			append(&h.out, Edit{o.at.x, o.at.y, o.at.z, o.mat})
+			sync.unlock(&h.mutex)
+		}
+		// A dwarf in that column may have lost its floor, and one adrift may have gained one.
+		for d, i in h.dwarves do if d.doing != .Aboard && (d.adrift || d.cell.x == o.at.x && d.cell.z == o.at.z) do settle(h, i, o.mat == .Air && o.at.y < d.cell.y)
 		// A way laid over the old ground may not hold: each dwarf whose way still passes the block
 		// stops at the end of its step and looks again, one a tick.
 		turn := 0
@@ -422,18 +644,29 @@ obey :: proc(h: ^Hold, o: Order) {
 		to := floor_block(w, f)
 		was := h.place
 		h.place = place_say(h, to)
-		// The first dwarf ashore looks for a way there, which says whether the order can be obeyed
-		// and reads the ground the others will cross. If there is none, the party stays as it is.
-		for d in h.dwarves do if ashore(d) {
+		// A dwarf ashore looks for a way there, which says whether the order can be obeyed and reads
+		// the ground the others will cross. One shut in where it stands, as in a pit, does not speak
+		// for the rest: one from each stretch of joined ground the party stands on is asked, until a
+		// way is found. If there is none, the party stays as it is.
+		for d, i in h.dwarves do if d.adrift do settle(h, i, false)
+		shut := make([dynamic]i32, context.temp_allocator)   // the rooms no way leads from
+		refused := Found.Way
+		asking: for d in h.dwarves do if ashore(d) && !d.adrift {
+			w.budget = ASKING
+			room := i32(-1)
+			if f := walk_floor(w, d.cell.x, d.cell.y, d.cell.z); f >= 0 do room = floor_room(w, f)
+			for r in shut do if r == room do continue asking
 			way := make([dynamic][3]i32, context.temp_allocator)
 			seconds, why, spent, made := way_timed(h, d.cell, to, &way)
 			if !h.quiet do fmt.printfln("    (a way looked for in %.1f ms, %d chunks of ground read for it; %d floors and %.0f s of walking)", time.duration_milliseconds(spent), made, len(way), seconds)
-			if why == .Cut_Off || why == .Too_Far {
-				say(h, `The hold says "go %d %d %d": %s, so no one sets out.`, at.x, at.y, at.z, no_way(h, why))
-				h.place = was
-				return
-			}
-			break
+			refused = why if why == .Cut_Off || why == .Too_Far else .Way
+			if why != .Cut_Off do break
+			append(&shut, room)
+		}
+		if refused != .Way {
+			say(h, `The hold says "go %d %d %d": %s, so no one sets out.`, at.x, at.y, at.z, no_way(h, refused))
+			h.place = was
+			return
 		}
 		h.errand += 1
 		h.summed = false
@@ -478,7 +711,7 @@ hold_thread :: proc(h: ^Hold) {
 		done := h.quit || h.tick >= h.until
 		for o, k in h.inbox {   // an order from the frame is obeyed at the tick it is taken, and the log keeps that
 			o := o
-			o.tick = h.tick
+			o.tick, o.frame = h.tick, true
 			inject_at(&h.orders, h.taken + k, o)
 		}
 		clear(&h.inbox)
@@ -530,6 +763,7 @@ hold_report :: proc(h: ^Hold) {
 	fmt.printfln("  a tick of %d dwarves took %.1f µs on average, the looking for ways apart, and %.1f ms at worst with it; %d ways looked for, %.2f ms each on average and %.1f ms at worst, %d chunks of ground read for them of %d in all",
 		len(h.dwarves), time.duration_microseconds(h.work.walking)/f64(h.tick), time.duration_milliseconds(h.work.worst_tick), h.work.ways, time.duration_milliseconds(h.work.finding)/f64(max(h.work.ways, 1)),
 		time.duration_milliseconds(h.work.worst_way), h.work.patches, h.walk.made)
+	fmt.printfln("  dwarves went round another %d times and squeezed past one %d times; %d fell", h.work.round, h.work.squeezed, h.work.fell)
 	w := &h.walk
 	fmt.printfln("  the ground read: %d floors in %d rooms of %d chunks, %.1f MB kept", len(w.floors), len(w.rooms), w.made,
 		f64(len(w.floors)*(size_of(Floor) + size_of(^Patch) + 16) + len(w.rooms)*size_of(Room) + w.made*size_of(Patch))/1e6)
@@ -655,7 +889,11 @@ hold_frame :: proc(w: ^World, eye: [3]f64, ray: [3]f32, above: ^Above, passed, d
 			append(&h.inbox, ..watch.pending[:])
 			clear(&watch.pending)
 		}
+		told := make([]Edit, len(h.out), context.temp_allocator)   // blocks an orders file changed: the world drawn changes with them
+		copy(told, h.out[:])
+		clear(&h.out)
 		sync.unlock(&h.mutex)
+		for e in told do world_set(w, e.x, e.y, e.z, e.mat, false)
 	}
 	if watch.live {
 		watch.clock = min(watch.clock + passed, f64(watch.seen.tick + 2)*TICK)   // a hold busy finding a way holds its clock back; it is not hurried after
@@ -739,6 +977,8 @@ dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
 	case .Stopped:
 		c.doing, c.next = fmt.tprintf("Stopped where it stands: %s", d.said), "Waits for word from the hold"
 	}
+	if d.fall do c.doing = "Falling: the ground went from under it"
+
 	return
 }
 
@@ -818,7 +1058,7 @@ hold_pose :: proc(boxes: []Box, eye: [3]f64, dt: f64) -> []Box {
 		watch.feet[i] = at
 		turn := math.mod(d.facing - watch.turned[i] + 3*math.PI, math.TAU) - math.PI   // the short way round
 		watch.turned[i] = d.facing if !watch.drawn || !watch.live else watch.turned[i] + turn*f32(min(10*dt, 1))
-		dwarf_boxes(&out, d.who, rel(at, eye), watch.turned[i], math.lerp(d.trod, d.stride, a), d.doing == .Walking && d.at != d.was, d.doing == .Aboard)
+		dwarf_boxes(&out, d.who, rel(at, eye), watch.turned[i], math.lerp(d.trod, d.stride, a), d.at != d.was && !d.fall && d.doing != .Aboard, d.doing == .Aboard)
 	}
 	watch.drawn = true
 	return out[:]

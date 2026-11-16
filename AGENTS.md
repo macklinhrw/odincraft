@@ -21,7 +21,7 @@ The longer working notes this file replaced are in the history of `CLAUDE.md` (n
 - Rules are rows on named fields (`FIELDS` in `fields.odin`). A new kind of condition becomes a new field, not code in a row.
 - A block is a `Mat`, 16 bits wherever it is kept. A rule asks what a material is through its traits (`TRAITS` in `gen.odin`, `is(m, LEAVES)`); never write a `bit_set[Mat]`, which holds no more than 128 materials.
 - What lives on an island is never a preference: a plant or animal is there because it could reach the island, the island can keep it, and the seed drew it. Give it a row that decides, and print why not.
-- The dwarves' world must stay deterministic (ADR 0009). Only the thread running it touches `Hold`. The frame sends it orders and reads `Shown`. It learns the ground from `gen.odin` and its own list of edits, never from the frame's `World`, the simulated water or a clock. Nothing in it may count on seven dwarves: the hold grows.
+- The dwarves' world must stay deterministic (ADR 0009). Only the thread running it touches `Hold`. The frame sends it orders and reads `Shown`. It learns the ground from `gen.odin` and its own list of edits, never from the frame's `World`, the simulated water or a clock. Nothing in it may count on seven dwarves: the hold grows. A dwarf takes up its floor: whatever moves a dwarf to another floor does it through `take`, and whatever changes a block settles the dwarves in its column (`settle`).
 - Keep it small. Prefer changing a rule to adding a system.
 
 ## Checking work
@@ -50,7 +50,7 @@ The first run of a world's seed runs the plates' history (about 2 s) and keeps t
 
 `--dwarves=seconds` runs the dwarves' world that long and exits. The same seed and orders must print the same hash twice. An orders file has a time and an order on each line: `120 go 2620 -1720` (the ground at a column), `6:40.0 go 2300 76 -1380` (a block to stand on), `300 block 2700 3 -1750 Air` (a block changed). The log prints an order it obeyed in this form, so a played game's log can be played again. Add `--shot` for a picture of that moment, `--why=x,z` to ask a dwarf standing there who it is, `--cursor=x,y --send` with `--bench` and `--over` to send the party to the block under the pointer as a right click does, or `--party=N` to measure a larger hold. Start-up says where the party lands. A bench with the dwarves on screen: `--bench=40 --over=2696,-1760 --span=80 --speed=0 --cut=ground --dwarves=115 --orders=file`.
 
-`./build.sh test` hashes what forming leaves, then runs the dwarves' world twice and compares the logs. A change that alters the land on purpose updates `GOLDEN` in `src/forming_test.odin` and says so in its commit message.
+`./build.sh test` hashes what forming leaves, then plays the dwarves' world, plays its orders again from `build/hold_test_orders.txt` alone and beside a reader, and compares the three logs. A change that alters the land on purpose updates `GOLDEN` in `src/forming_test.odin` and says so in its commit message.
 
 Never open a window unless asked to. Use `--shot` or `--bench`, which draw unseen; the binary refuses to open a window without a terminal. Place cameras with `--above` near the ground, since a camera inside the ground sees sky through it. Put outputs in `out/`, which is ignored.
 
