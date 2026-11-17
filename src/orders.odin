@@ -634,8 +634,14 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 
 // Whether a dwarf standing on a floor can work a block: beside it from a block under its feet to a
 // block over its head, right over its head, or two under or over where the block between is open.
-in_reach :: proc(h: ^Hold, cell, b: [3]i32) -> bool {
+// A tree is felled from beside its stem, or, where its own leaves fill every floor beside it as a
+// bush's do, from the floor beyond them: two off, with leaves or air between at the dwarf's chest.
+in_reach :: proc(h: ^Hold, cell, b: [3]i32, tree := false) -> bool {
 	dx, dy, dz := b.x - cell.x, b.y - cell.y, b.z - cell.z
+	if tree && max(abs(dx), abs(dz)) == 2 {
+		m, _ := walk_block(&h.walk, cell + {clamp(dx, -1, 1), 1, clamp(dz, -1, 1)})
+		return abs(dy) <= 2 && (m == .Air || is(m, PLANT_BLOCKS))
+	}
 	if abs(dx) > 1 || abs(dz) > 1 do return false
 	if dx == 0 && dz == 0 do return dy == 2
 	open :: proc(h: ^Hold, c: [3]i32) -> bool { m, _ := walk_block(&h.walk, c); return m == .Air || is(m, LEAVES) }
@@ -650,16 +656,18 @@ in_reach :: proc(h: ^Hold, cell, b: [3]i32) -> bool {
 // The floors a block can be worked from, that no other dwarf holds or is bound for: to dig, the
 // highest first, so a pit is dug from its rim; to lay, the lowest, so a wall is built from the
 // ground beside it and no mason is left standing on it. Then the nearest the dwarf.
-stands_of :: proc(h: ^Hold, i: int, b: [3]i32, out: ^[dynamic][3]i32, low := false) -> (any: bool) {
+stands_of :: proc(h: ^Hold, i: int, b: [3]i32, out: ^[dynamic][3]i32, low := false, tree := false) -> (any: bool) {
 	w, d := &h.walk, &h.dwarves[i]
-	for dz in i32(-1)..=1 do for dx in i32(-1)..=1 {
+	// The floors beside it; for a tree with none, the floors beyond its leaves (in_reach).
+	for r in i32(1)..=(2 if tree else 1) do for dz in -r..=r do for dx in -r..=r {
+		if r == 2 && (any || max(abs(dx), abs(dz)) < 2) do continue
 		x, z := b.x + dx, b.z + dz
 		p := patch_at(w, x >> CHUNK_SHIFT, z >> CHUNK_SHIFT)
 		if p == nil do continue
 		col := (z & (CHUNK - 1))*CHUNK + x & (CHUNK - 1)
 		for k in p.first[col]..<p.first[col + 1] {
 			cell := [3]i32{x, i32(w.floors[p.base + i32(k)].y), z}
-			if !in_reach(h, cell, b) do continue
+			if !in_reach(h, cell, b, tree) do continue
 			any = true
 			if o, held := h.held[cell]; held && o != i {
 				if b := &h.dwarves[o]; !b.job && (b.doing == .Waiting || b.doing == .Stopped) do b.rest = 0   // an idle dwarf stands where the work is done from: it looks at once, and the work is its own
@@ -766,7 +774,7 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 			}
 		}
 		clear(&stands)
-		if any := stands_of(h, i, m.at, &stands, m.work == .Build); len(stands) == 0 {
+		if any := stands_of(h, i, m.at, &stands, m.work == .Build, m.work == .Fell); len(stands) == 0 {
 			mark_waits(h, k, .No_Room if any else .Front, i if any else -1)
 			continue
 		}
@@ -831,7 +839,7 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 work_begin :: proc(h: ^Hold, i: int) {
 	d := &h.dwarves[i]
 	k, ok := h.marked[d.job_at]
-	if !ok || h.marks[k].taker != i || !in_reach(h, d.cell, d.job_at) {
+	if !ok || h.marks[k].taker != i || !in_reach(h, d.cell, d.job_at, h.marks[k].work == .Fell) {
 		job_drop(h, i, 10)
 		d.doing = .Waiting
 		return
@@ -880,7 +888,7 @@ work_tick :: proc(h: ^Hold, i: int) {
 		d.doing = .Waiting
 		return
 	}
-	if !in_reach(h, d.cell, d.job_at) {   // moved off its place, by a fall or by one squeezing past: it goes back
+	if !in_reach(h, d.cell, d.job_at, h.marks[k].work == .Fell) {   // moved off its place, by a fall or by one squeezing past: it goes back
 		h.spots[i] = d.stand
 		d.doing, d.seek, d.wait = .Walking, true, 0
 		return
