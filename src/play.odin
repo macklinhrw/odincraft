@@ -1565,7 +1565,7 @@ places_build :: proc() {
 			group = e.group
 			n := 0
 			for o in rows do n += int(o.group == group)
-			name := "Named places" if group == 0 else fmt.tprintf("%s%s", sentence(PLACE_ROWS[Place_Kind(group - 1)].what)[:len(PLACE_ROWS[Place_Kind(group - 1)].what)], "es" if strings.has_suffix(PLACE_ROWS[Place_Kind(group - 1)].what, "s") else "s")
+			name := "Named places" if group == 0 else fmt.tprintf("%s%s", sentence(PLACE_ROWS[Place_Kind(group - 1)].what)[:len(PLACE_ROWS[Place_Kind(group - 1)].what)], "es" if strings.has_suffix(PLACE_ROWS[Place_Kind(group - 1)].what, "s") || strings.has_suffix(PLACE_ROWS[Place_Kind(group - 1)].what, "ch") else "s")   // passes, sea notches
 			part(.Head, {box.x, cy, box.w, head_high}, act = .Fold, arg = group, id = "list.group", tip = "Fold this group to its count, or open it.")
 			part(.Text, {x, cy + px(3), inner, line_of(.Body)}, name, .Body, L.ash, id = "list.group.name")
 			part(.Text, {x, cy + px(3), inner, line_of(.Body)}, fmt.tprintf("%d", n), .Body, L.ash, {.Right})

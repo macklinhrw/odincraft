@@ -579,6 +579,7 @@ goods_show :: proc(h: ^Hold) {
 	s.store, s.loose, s.unhoused, s.untaken = {}, {}, {}, {}
 	h.store = {}
 	room := room_read(h)
+	lying: [Takes]i32   // what lies loose, by its class
 	for g, k in h.goods {
 		in_store := stored(h, g)
 		s.piles[k] = {g.at, g.kind, g.n, in_store, g.left}
@@ -587,12 +588,23 @@ goods_show :: proc(h: ^Hold) {
 			h.store[g.kind] += g.n
 		} else {
 			s.loose[g.kind] += g.n
-			if !room_fits(&room, g.kind) {   // loose, and no stockpile has room for it: the stores say so, by its class
-				class := takes_of(g.kind)
-				s.unhoused[class] += g.n
-				s.untaken[class] = !room.takes[class] && !room.takes[.All]
-			}
+			lying[takes_of(g.kind)] += g.n
 		}
+	}
+	// What lies loose beyond what the stockpiles have room for, by its class: the stores say so. The room is counted in
+	// things: a free place holds a heap, a heap that is not full the rest of one. (A stockpile that takes everything is
+	// counted toward each class, so where one stands the figure errs toward "on its way in".)
+	free: [Takes]i32
+	for c, cell in h.zoned {
+		z := h.zones[cell.zone]
+		if z.sleep do continue
+		if k, lies := h.lying[c]; !lies do for class in ([3]Takes{.Stone, .Timber, .Food}) {
+			if z.takes == class || z.takes == .All do free[class] += HEAP if class != .Food else BASKET
+		} else if g := h.goods[k]; takes_kind(z.takes, g.kind) do free[takes_of(g.kind)] += max(heap_of(g.kind) - g.n, 0)
+	}
+	for class in ([3]Takes{.Stone, .Timber, .Food}) {
+		s.unhoused[class] = max(lying[class] - free[class], 0)
+		s.untaken[class] = !room.takes[class] && !room.takes[.All]
 	}
 	for d in h.dwarves do if d.carrying > 0 && d.doing != .Dead do s.loose[d.carry] += d.carrying   // what is in a dwarf's arms is the hold's as what lies loose is: marking a stockpile for the sacks dropped the stores from four days of food to one while they were carried to it
 	clear(&s.zones)

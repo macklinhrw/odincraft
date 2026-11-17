@@ -772,7 +772,7 @@ Frame times, our own work, each bench once on the finished build:
 
 **What still feels wrong**
 
-- **Thirty idle dwarves gather in a knot beside the stockpile** they last carried to. Nothing sends an idle dwarf anywhere.
+- **Thirty idle dwarves gather in a knot beside the stockpile** they last carried to. Nothing sends an idle dwarf anywhere. *(Mended on playing a first year: "A first year, as played", below.)*
 - **Taking a wall down is slow**: 50 s for six blocks of basalt, each cut as rock is. A built block should come down faster than rock is dug.
 - **A heap in shadow is dark on dark rock.** Stone on stone reads from the stockpile's tint more than from the stones.
 - **The alert "idle: no stone or timber lies anywhere" stands a moment too long** after stone begins to lie about, until the dwarf it counts looks again.
@@ -1109,7 +1109,7 @@ The interface listed in 0.04 to 0.06 ms a frame. The six late frames of the fore
 - **The party brings no stores.** By the first evening it is hungry. It was asked not to invent a food that is not the island's; provisions come with what an expedition brings (E-1 with P5). *Changed on merging, the same day: the party brings provisions for four days, since played through the owner's cases a party that forages from its first afternoon does little else, and neither game starts so (`open-decisions.md`).*
 - **Left alone the party survives a year on the start island.** It forages well enough to live, badly, and does no other work. Whether neglect should kill sooner is the owner's (asked).
 - **The sea has no fish and the shore no shellfish**, since the world has no rows for them: the osprey "fishes the sea round it" and nothing swims there. That is the natural track's.
-- **Sleepers lie where they stood**, in a heap by the stockpile, and a sleeping body differs from a dead one only by its colour. Beds and a place to sleep come with shelter.
+- **Sleepers lie where they stood**, in a heap by the stockpile, and a sleeping body differs from a dead one only by its colour. Beds and a place to sleep come with shelter. *(Mended on playing a first year: "A first year, as played", below.)*
 - **Hunger and thirst cost nothing until they kill.** A starving dwarf works and walks as fast as a fed one.
 - **A plant gathered looks as it did**: only its mark goes. The tool then says "What was here has been taken".
 - **Fish are a draw on each square metre of water**, by the creature's own density, not the fish the eye sees swimming.
@@ -1189,7 +1189,7 @@ Twelve degrees was chosen because the start island is mild: 9.8 °C in its colde
 - **Indoors needs no door**, since there are none: a doorway a block wide leaves a room indoors, and so does a wall with one block out of it.
 - **Rain is drawn over everything**, cut rooms as well; from above an overcast day with no rain is as sunny as a clear one, since the cloud's shade is not drawn there.
 - **The wind's bearing never changes**, and its strength changes only with the spell.
-- **The dwarves lie in a heap** in a sleeping place, nearest the door first, and tall grass grows on through a hut's floor.
+- **The dwarves lie in a heap** in a sleeping place, nearest the door first, and tall grass grows on through a hut's floor. *(Mended on playing a first year: "A first year, as played", below.)*
 - **A fire is walked round only where there is room**; a dwarf may still step through one.
 - **Firelight passes through walls**, and a fire inside lights the ground outside.
 - **A fire burns three logs a day whether or not anyone is cold.** The player lets it go out in summer by hand.
@@ -1277,17 +1277,17 @@ Two days for a fish is RimWorld's. Five for shoots is shorter than its berries, 
 
 **Weak points**
 
-- **Kept and fresh food look alike in a stockpile.** A heap is small boxes in its food's colour; dried bracken, dried bamboo and fresh bamboo shoots are all browns. Only a heap with under a day left is greyer. The card and the stores say which is which; the land does not.
-- **A stockpile takes food or it does not**: there is no stockpile for kept food apart from fresh, no priority, and a full one says so only as "lie loose". In the careful year 572 things, most of them shii nuts, lay loose in midwinter beside a stockpile with no room, uncounted.
+- **Kept and fresh food look alike in a stockpile.** A heap is small boxes in its food's colour; dried bracken, dried bamboo and fresh bamboo shoots are all browns. Only a heap with under a day left is greyer. The card and the stores say which is which; the land does not. *(Mended on playing a first year: "A first year, as played", below.)*
+- **A stockpile takes food or it does not**: there is no stockpile for kept food apart from fresh, no priority, and a full one says so only as "lie loose". In the careful year 572 things, most of them shii nuts, lay loose in midwinter beside a stockpile with no room, uncounted. *(That it is full is now said, in the stores: "A first year, as played", below.)*
 - **The rack has no bill.** It dries whatever will spoil soonest, and the player's only say is to leave one empty. A hold cannot say "dry the fish and eat the shoots".
 - **A rack is loaded even when the hold has little to eat**, so its last fresh food may stand two days on a rack while the dwarves eat the kept food or forage. It never starved anyone in the years played.
 - **Gathering is slower than it was**, since the gatherer walks in with each armful: the first day's wood of 55 bracken takes about half as long again. And the wood by the camp is picked clean by the third day; shoots come again only next year, which makes the fourth and fifth days lean before the bamboo comes up.
 - **A building's stuff now comes before all other marked work**, so a large wall stops a dig until its stone is carried.
 - **The lean season is measured where the party gathered**, not where the hold has since gone, and against the whole of its days, not the share the land will not bear.
 - **Dried food never spoils**, in rain or out of it, and a rack by a fire in pouring rain still dries at the pace of a dry day.
-- **A fire by the racks is fed like any other**, three logs a day, and the careful year's went out more than once for want of timber; its racks then dry at the open's pace and nothing but the rack's card says why.
+- **A fire by the racks is fed like any other**, three logs a day, and the careful year's went out more than once for want of timber; its racks then dry at the open's pace and nothing but the rack's card says why. *(Mended on playing a first year: "A first year, as played", below.)*
 - **The drying times are from memory** of the real practice; the ways are checked (`colony-sim-reference.md`, section 16).
-- **Marks no dwarf has a way to are tried again every two seconds for ever**, as before this step: a few plants on ledges in the careful year's wider gathering cost three million cheap searches for a way in the year, and an alert that stands. Found here, not mended.
+- **Marks no dwarf has a way to are tried again every two seconds for ever**, as before this step: a few plants on ledges in the careful year's wider gathering cost three million cheap searches for a way in the year, and an alert that stands. Found here, not mended. *(Mended on playing a first year: "A first year, as played", below.)*
 - **The hold that dries nothing mostly lives**, on gobies: the island's own rows.
 - **Nothing here was played by a hand in a window.**
 
@@ -1308,3 +1308,104 @@ Benches, one round at the end, the machine at a load of 6 from other work. Our w
 | Over fourteen loaded racks and a full food stockpile, the careful hold on the 12th of spring, 20 s | 0.68 / 2.84 / 7.26, 0 over |
 
 The interface listed in 0.04 to 0.08 ms a frame. The one frame of 14.2 ms from above was not chased, as agreed.
+
+
+### A first year, as played (2026-11-17)
+
+No new feature. One hold was played from the front door through a whole year with everything the game has, as a new player of Dwarf Fortress or RimWorld would, and what was wrong with it was put right, the worst first (`open-decisions.md`, 2026-11-17). What such a player expects at each moment was written down before anything was run: `interesting-world/real/play/year-expected.md`. Every picture and every line the screen said was then read against it.
+
+**How it was played** (`interesting-world/real/play/`; every picture looked at)
+
+- `year-door.txt`, with `--door`: the front door on its first frame, Worlds, the world's map, the start island taken by its row and its card read, an expedition planned on it with the landing the game offers, set out, the boat in and the party ashore (`year-01` to `year-11`).
+- `year-days.txt`: the first two days from the player's seat, five minutes to play. The world paused on landing; three stockpiles, a wood felled and a room dug two deep into the rise by the landing; the clock let go at its fastest; a fire and a place to sleep in the room, a wall across its open side, a roof over the strip the dig laid open, thirteen racks, Gather across the grass and Fish along the stream; the afternoon, the evening, the night and a sleeper's card; dawn; the Shelter lens; the fire, the sleeping place, a stockpile, a heap and a rack each taken in the hand; a second fire by the racks; the second night and the third dawn (`year-20` to `year-53`).
+- `year-orders.txt`, with no window: the same hold for the year. Its first lines are the script's own orders as its log printed them; after them, what a player does who looks in each morning and reads the screen: the land gathered every other day and fished every fourth, a wood felled before the timber runs out, another stockpile when the stores say there is no room. Pictures of its moments with what the screen says: the first rain (`year-60`, `year-61`), late spring (`year-62`), midsummer (`year-63`, `year-64`), the first cold night (`year-65`) and its day (`year-66`), the worst of winter by night and by day (`year-67` to `year-69`), the next spring (`year-70`), and the heaps of a full stockpile from close by (`year-71`).
+
+**The year as it went, as first played** (before anything was changed)
+
+| Season | What happened | What a player would have seen |
+|---|---|---|
+| The first morning | Stockpiles dragged with the world paused showed nothing at all. A wood dragged to the foot of the screen marked one tree. | Orders that seem not to be taken; a tool that stops at a panel's edge |
+| The first day | The room dug, 91 blocks in 82 s. Fire, sleeping place, wall and racks ordered with three logs in the hold: "Six dwarves are idle: no stone or timber lies anywhere", "No timber anywhere for the racks", "A fire is out and no timber lies anywhere", and the lean season, four alerts at once, two of them untrue | A wall of alerts on the first afternoon |
+| The first night | Five of the seven asleep in a heap on the two places by the door of a room of forty; two more outside. From above at night the stockpiles glowed, the brightest thing in the picture | A heap that could be bodies; a yard that cannot be read |
+| Spring | Racks dried 24 at a time and the stores filled. On the 6th the food stockpile was full: "22 lie loose", then 162, 345. The fire by the racks burnt out on the night of the 10th, in rain, with timber stored, and both fires on the 11th and 12th with none | "lie loose" with no cause given; racks drying at the open's pace |
+| Summer | From the 5th a wood of 36 trees lay where it fell: 193 logs loose beside a timber stockpile with room, and the seven idle. Both fires out for want of timber "anywhere" | A hold that will not carry its own timber |
+| Autumn | 1,047 things of food loose by the 5th, most of them shii nuts. "No dwarf has a way to two orders" from the 9th of autumn, for a few shoots on ledges | An alert nothing can answer |
+| Winter | Seven alive, fed and indoors. By day "Seven dwarves are idle: no way leads to the work that is marked" beside "No dwarf has a way to two orders", every day; 644 logs loose | The same alert twice, all winter |
+| The next spring | Seven of seven alive, never starving: 16 days of kept food. 17 marks still waiting; 2.2 million searches for a way in the year | |
+
+Nobody died, and a careful hold was never in danger. Every fault was one of the hold seeming not to do what it was told, or the screen saying something that was not so.
+
+**The faults, ranked by how much each would spoil a first hour**, with what shows it and what was done. *Left* means found before this step and listed by an earlier one.
+
+| | The fault, as a player meets it | What showed it | Now |
+|---|---|---|---|
+| 1 | **An order given while paused does nothing until the clock runs.** No tint, no message, no count. Both games are played by pausing to order | `year-days.txt` paused: the stores still said "68 loose: no stockpile" after three stockpiles were dragged | Obeyed at once, at the tick in hand (`hold_heed`): `year-21`, taken paused, shows the three stockpiles and their three messages |
+| 2 | **A drag with a tool stops at the edge of a panel.** A wood dragged down to the orders bar was one tree | The log: `fell 2676 4 -1762 2676 4 -1762`, "1 tree is marked" | The box follows the pointer over a panel, as the play screen's own rule said it did |
+| 3 | **The dwarves stop carrying beside a full stockpile.** With the food stockpiles full, the six nearest loose heaps a dwarf tries were all food, so timber farther off was never looked at | The year's summary: 644 logs loose, a timber stockpile with room; `year-69` as first taken, seven idle in the yard | Only a heap some stockpile has room for is a try (`room_read`). The timber stockpiles fill to the last place |
+| 4 | **A full stockpile is said only as "lie loose".** *Left by winter's food* | "965 lie loose, not counted" in midwinter | "No room for 312 of timber", "No stockpile for food: 30", in brass, each with a tip that says what to do: what lies loose beyond what the stockpiles of its class have room for. The rest, on its way in, is "lie loose" as before |
+| 5 | **Sleepers lie in a heap, and the idle stand in a knot.** *Left by P4 and by the goods* | `year-36` as first taken: five on two places by the door | A place with nobody beside it is taken first (`sleep_find`): `year-36`, seven places apart. The idle step apart (`idle_apart`). The dawn says "seven slept indoors" on 47 of the 48 nights, where it said "five indoors, two under a roof" |
+| 6 | **A sleeper is told from the dead by colour alone**, and at night by nothing. *Left by P4* | The same picture | A small z over each sleeper, where its body is drawn |
+| 7 | **The first afternoon raises four alerts, two untrue.** "Six dwarves are idle: no stone or timber lies anywhere" while timber lay and was being carried; the same cause said by the orders' alert and by the dwarves' | `year-days.txt`, as first played: the four lines above | Stuff that lies and is only still to be brought is no lack; one cause is one alert. The two days now play with no alert at all |
+| 8 | **Messages are cut in the middle of a word.** "Provisions for about four days. Food within a walk: t…"; the dawn's line; every list of what was felled | `year-days.txt`'s `say` | A message takes two lines where its words want them |
+| 9 | **A fire goes out beside the racks while timber lies in the hold.** *Left by winter's food.* Nobody wakes to feed it, and a night of rain burns three logs | The log: "burnt out: no timber was brought to it in time", on the 10th of spring; on `main` three times in this year, and the room's fire toward dawn in winter's food's careful year | From 19:00 a fire is made up for the night before other work: to four logs in the open, two under a roof. Never out in the year while timber lies |
+| 10 | **Marks no dwarf can reach are tried for ever**, and their alert stands. *Left by winter's food* | 2.2 million ways looked for; "No dwarf has a way to two orders" from autumn to spring | A dwarf that found no way to a mark leaves it two minutes, or until the ground beside it changes. Once every dwarf that could work has found none, a plant, a place of water or a tree is given up and its order ends, saying "2 left, no way to them"; a block to dig or to lay is kept. 12,700 ways in the year, no mark left |
+| 11 | **The lean season's alert stands from the landing.** *Left by winter's food* | Ten days of the first spring | It stands from six days off. The dawn's line and the stores' brass say it before |
+| 12 | **At night a stockpile glows and hides the fire's light**; the one in the hand is hard to tell. *Left by the zones and by P4* | `year-38` as first taken | Tints are lit as the land is; the one in the hand is brighter, tint and line (`year-44`) |
+| 13 | **The night is too dark to read on basalt.** *Left by P4* | The same | A quarter lighter (`year-51`, `year-68`) |
+| 14 | **The stores fall to "Food for a day" when a stockpile is marked for the sacks**, while they are carried to it | `year-days.txt`: 68 loose, then 16 | What is in a dwarf's arms is counted with what lies loose |
+| 15 | **Racks are built in the stream.** A drag across the water's edge stood a rack where the dwarves drink | The summary: "a drying rack at 2699, 0, -1766"; `year-32` | A rack and a fire are laid on dry ground only, by the rule the preview asks too |
+| 16 | **A fisher says it is "Digging goby".** | The Dwarves list, `year-33` as first taken | "Catching gobies", "Gathering bracken shoots" |
+| 17 | **Kept and fresh food look alike in a stockpile.** *Left by winter's food* | `year-62` | What keeps lies as bundles tied with a dark band (`year-71`); fresh food as the low heaps it was |
+| 18 | **An order's card stays after its order is done**, as the card of a block that is dug away. *Left* | A script: Dig, a click on the mark, wait | The hand is put down |
+| 19 | **The Places list says "Sea notchs".** | `year-48` as first taken | "Sea notches" |
+| 20 | `i2-world.txt` asked for four parts E-1 renamed | Its own log | The script plays to its end |
+
+**The year as it goes now** (`year-orders.txt`; the same seed and orders give the same log)
+
+| Season | |
+|---|---|
+| Spring | The room, the fires, thirteen racks and three stockpiles by the first evening; no alert. Rain on the evening of the 4th: the room dry, the fire by the racks burning through it. A second food stockpile and a second for timber on the 6th, a third for food on the 9th, each when the stores said "No room". Food for twelve days on the 11th, all of it kept; the lean season's alert stands its last two days, at "11 of its 12 days" |
+| Summer | Gobies dried as they are caught; a wood felled on the 2nd and carried in. Food for 18 days on the 6th, all of it kept |
+| Autumn | Wild rice and shii nuts; a fourth food stockpile on the 2nd. Food for 30 days on the 9th |
+| Winter | Seven indoors by the fire every night, 8 °C outside. Food for 25 days on the 7th. The only brass on the screen: "No room for 312 of timber" |
+| The next spring | Seven of seven alive, never starving, numb with cold or parched. Food for 22 days, all kept. No order left, no mark left, no alert. Neither fire went out, and nothing spoiled |
+
+**What is left, and what each would need**
+
+- **Rain is drawn inside a room the cut has opened** (`year-61`, `year-65`). Rain is laid over the finished picture. It wants the rain's pass to know which pixels lie under a roof: the terrain already carries each face's share of the sky, and would have to write it where the rain can read it. A change to drawing, not to a rule.
+- **Firelight passes through walls.** The glow is a distance from the fire. It wants the cells a fire's light reaches flooded through open air and given to the shader as the marks' map is.
+- **The foot of a cliff is "under a roof".** That is the rule as written (a block within sixteen over the head), and whether it should be is the owner's: asked below.
+- **What is dug or built is not drawn from far off.** The far ground is made from the generator alone, as it was for felled trees before they were given to it.
+- **A room dug into a slope is open to the sky where the hill is lower than the room is high**, and the Dig tool's line does not say so. Played, a strip along two sides had to be roofed by hand. The line could count the blocks that will lie open; not done.
+- **A roof is dragged on a level, and from above the level under the pointer is hard to know**: the script found the hill's top with `under`.
+- **Plants grow on through a stockpile's floor and a hut's**, and a heap under bracken is half hidden (`year-71`).
+- **A hold needs four food stockpiles of twenty-five places and three for timber to hold a year**, each marked by hand when the stores say so. A stockpile has no priority and no finer filter (P5).
+- **Timber lies where it fell while anything else is marked.** Carrying is the last thing a dwarf does, so in a season of gathering and fishing every day a wood felled on the 2nd of summer was still lying on the 6th, 385 logs beside two empty stockpiles (`year-63`), and was carried in once the marks ran out. Fires are fed from it where it lies. It wants work to have a rank the player sets (P5); nothing was changed.
+- **The game does not open paused**, though the interface's design says it does (`foundations/interface.md`, section 5). Asked below.
+- **The Dwarves list cuts a long line** ("Walking to the gathering at the susuki grass and scrub a…"); the whole is beside the pointer.
+- **A dwarf working in winter rain can be chilled to "numb with cold" before it leaves its work**: seen once in an earlier run of this year, on the 2nd of winter, a woodcutter felling in the rain. It warmed itself and lived.
+- **Nothing here was played by a hand in a window.**
+
+**What it cost, before and after** (`main` at 4b6a085 built the same way and run in the same minutes, one after the other; a year is 576,000 ticks)
+
+| A year, with no window | `main` | This step |
+|---|---|---|
+| With no orders | 8.5 s; a tick of seven 6.7 µs | 7.6 s; 4.8 µs |
+| The careful year of winter's food (`wf-care-orders.txt`) | 13.4 s; 6.6 µs; 2,857,064 ways looked for | 6.7 s; 4.9 µs; about 13,000 ways |
+| A room and a fire, nothing dried (`p4-winter-room-orders.txt`) | 8.9 s; 4.9 µs; six of seven alive | 8.6 s; 4.4 µs; seven of seven |
+| This year (`year-orders.txt`) | 13.1 s; 8.8 µs; 1,289,143 ways; a fire out three times; 17 marks left | 9.7 s; 7.6 µs; 12,690 ways; no fire out; no mark left |
+
+The year with no orders ran in about 5 s before needs had cold and spoiling, and a tick of seven cost 3 to 5 µs; it is back inside that. Where the time went was measured once, by sampling the hold's thread through a year: three quarters of it in the search for ways and what that asks of the ground. Three things were waste and are taken back: the searches for marks out of reach; the patch of floors last asked for, which was looked up in a map again at every floor (a sixth of a year with no orders); and the weather's first fair day, which was worked out again at every call of the weather though it is the seed's. The heaps that spoil ask the air once between them. The log of a year is the same before and after each of the last three.
+
+Benches, one round at the end, `main` and then this step, the machine at a load of 6 to 8 from other work. Our work in ms, median / 99% / worst, and frames of it over 12.5 ms:
+
+| Bench | `main` | This step |
+|---|---|---|
+| Forest flank, first person | 1.01 / 3.18 / 5.01, 0 over | 1.06 / 3.31 / 5.24, 0 over |
+| Down through cloud, first person | 0.82 / 3.79 / 5.31, 0 over | 0.94 / 2.82 / 3.47, 0 over |
+| From above, the cut following the ground | 1.92 / 6.42 / 9.10, 0 over | 1.49 / 4.21 / 5.82, 0 over |
+| From above over the landing, the seven digging a room, 40 s | 0.64 / 2.33 / 2.85, 0 over; a tick 10.1 µs | 0.57 / 3.64 / 5.59, 0 over; a tick 9.3 µs |
+
+The interface listed in 0.02 to 0.05 ms a frame on both. Nothing was run twice.
+
+**Checked.** `odin check src -vet-unused`; `./build.sh`; `./build.sh test`, with `GOLDEN` unchanged: forming was not touched. The dwarves' logs agree three ways, 137792e92a2f583d (it changes on purpose: dwarves carry, sleep, feed fires and give up marks otherwise, and the test's game is longer by an order given while the clock stands and a fifth night). The hold's test now gives an order with the clock standing and asks that it is obeyed with no tick passed, that the sleepers of the fifth night lie apart, and that no plant, water or tree stays marked that every try found no way to. The screen's test reads the stores' "No room for 30 of food" and "No stockpile for food: 30", a message of two lines whole, and the lean season's alert gone at nine days off and back at five. Every script of `interesting-world/real/play/` was played once at the end, on the tree merged with today's `main` (4b6a085): `year-days`, `p3-play`, `goods-play`, `zones-play`, `p4-play`, `p4-shelter-play`, `wf-play`, and from the front door `year-door`, `i2-door`, `i2-world`, `i2-new`, `e1-plan` and `n1-new`. No script asks for a part the screen does not have; seven of seven alive in each; nobody shut in, fallen or dead. `p3-play`: 24 orders given and none left. `p4-play`: its last dig is done, where it ended a block short before. `p4-shelter-play`: 8 orders and none left. `goods-play` ends on a stair just marked and `wf-play` in the middle of its last wide gathering, as each was written. The year by `year-orders.txt` gives the same log twice (2c7e1920b9c4c3d4).
