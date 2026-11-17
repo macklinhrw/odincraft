@@ -827,10 +827,15 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 	// can mend, it says which: a way, something in store, softer rock. Work others are at, or that
 	// waits its turn, is no lack.
 	lacks: [Waits]int
-	for m in h.marks do if m.taker < 0 do lacks[m.wait if m.by < 0 || m.by == i else .None] += 1
+	in_hand := false
+	for m in h.marks {
+		if m.taker < 0 do lacks[m.wait if m.by < 0 || m.by == i else .None] += 1
+		else do in_hand = true
+	}
 	d.lack = .None
 	if lacks[.None] + lacks[.No_Room] + lacks[.Stood_On] + lacks[.Loose] + lacks[.Rooted] + lacks[.Shuts_In] == 0 {
-		d.lack = .No_Way if lacks[.No_Way] > 0 else .No_Stuff if lacks[.No_Stuff] > 0 else .Too_Hard if lacks[.Too_Hard] > 0 else .None
+		// Blocks no floor reaches wait for those in front of them; with none of those in anyone's hand, nothing will bring a floor to them.
+		d.lack = .No_Way if lacks[.No_Way] > 0 || !in_hand && lacks[.Front] > 0 else .No_Stuff if lacks[.No_Stuff] > 0 else .Too_Hard if lacks[.Too_Hard] > 0 else .None
 	}
 	return false
 }
