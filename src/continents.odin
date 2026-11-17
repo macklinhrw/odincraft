@@ -5,7 +5,6 @@ import "core:math"
 import "core:os"
 import "core:math/linalg"
 import "core:sync"
-import "core:thread"
 import "core:time"
 import "core:slice"
 
@@ -203,7 +202,11 @@ form_phases :: proc(g: ^Grid, from, upto: int, level: Leveller = nil, data: rawp
 		if region.mass != nil && g.holding == nil do was = make([]f32, g.n*g.n)
 		defer delete(was)
 		for _ in 0..<int(p.steps) {
-			if was != nil do copy(was, g.z)
+			if was != nil {   // the landmass's coarse stage: how far it has come, and whether it is to be left where it stands
+				if sync.atomic_load(&mainland_state.leave) do return g
+				sync.atomic_add(&mainland_state.step, 1)
+				copy(was, g.z)
+			}
 			if g.holding != nil {
 				held_values(g)
 				held_stage(g, 0)
@@ -716,6 +719,10 @@ Mainland_State :: struct {
 	why:    string,       // why the landmass is not formed, where it is not
 	seconds, pass_seconds: f64,
 	formable: bool,
+	ready:    bool,       // its pieces are regions in `formed`: set once they are, and read by every thread that asks whose ground a point is
+	step, steps: i32,     // how far the coarse stage has come, of how many steps of the history: for the eye (making.odin)
+	leave:    bool,       // the coarse stage is to be left where it stands, and the landmass a record
+	kept:     bool,       // the coarse stage was read back from where an earlier run kept it
 }
 mainland_state: Mainland_State
 
@@ -724,6 +731,7 @@ mainland_state: Mainland_State
 mainland_make :: proc() {
 	ms := &mainland_state
 	mainland = {}
+	ms.why, ms.formable = "", false
 	start, by := -1, f32(1e9)
 	for _, i in known.samples do if m := known.mass[i]; m > 0 && known.masses[m - 1].large {
 		at := [2]f32{f32(i%KNOWN_N) + 0.5, f32(i/KNOWN_N) + 0.5}*KNOWN_STEP - WINDOW/2
@@ -787,11 +795,23 @@ mainland_pass :: proc() {
 	for p, i in region.history do if p.cell >= 64 do from = i + 1
 	g := grid_make(int(mainland.side)/64)
 	for p in region.history do g.left += p.steps*p.years*p.uplift
+	steps := f32(0)
+	for p in region.history[:from] do steps += p.steps
+	sync.atomic_store(&ms.step, 0)
+	sync.atomic_store(&ms.steps, i32(steps))
 	kept := pass_load(g)
 	if !kept {
 		g = form_phases(g, 0, from)
+		if sync.atomic_load(&ms.leave) {   // left where it stood: nothing of it is kept, and the landmass stays a record
+			grid_free(g)
+			ms.why = "its coarse stage was stopped before it had run, so it is left as the plates' history has it until this world is opened again"
+			fmt.println("the landmass's coarse stage: left before it had run; the landmass stays a record")
+			return
+		}
 		pass_save(g)
 	}
+	ms.kept = kept
+	sync.atomic_store(&ms.step, i32(steps))
 	ms.pass = g
 	ms.cut = cut_make(g, PIECE_KM2*1e6/4096)
 	count := len(ms.cut.size)
@@ -820,7 +840,7 @@ mainland_pass :: proc() {
 // The piece a point in the world lies in, or -1: off the landmass's lattice or out on the open sea.
 mainland_piece :: proc(x, z: f64) -> int {
 	ms := &mainland_state
-	if ms.pass == nil do return -1
+	if !sync.atomic_load_explicit(&ms.ready, .Acquire) do return -1
 	g := ms.pass
 	u, v := int(math.floor((x - f64(mainland.origin.x))/64 + f64(g.n)/2)), int(math.floor((z - f64(mainland.origin.y))/64 + f64(g.n)/2))
 	if u < 0 || v < 0 || u >= g.n || v >= g.n do return -1
@@ -947,24 +967,27 @@ mainland_order :: proc(at: [2]f64) -> []i32 {
 	return order
 }
 
-// The rest of the landmass's pieces, nearest a point first, on one thread of low priority beside play.
-mainland_background :: proc(at: [2]f64) {
-	Data :: struct { at: [2]f64 }
-	d := new(Data)
-	d.at = at
-	worker :: proc(d: ^Data) {
-		alone, quiet = true, true
-		order := slice.clone(mainland_order(d.at))   // its own memory: forming frees the temporary as it goes
-		formed_ := 0
-		for p in order do if mainland_off(p, d.at) <= BACKGROUND_REACH {
-			mainland_form(p)
-			formed_ += 1
-			free_all(context.temp_allocator)
+// Put the landmass down with its world: its coarse stage, its cut and the bands between its pieces.
+// The pieces formed stay where they lie, as formed islands do (making.odin). No thread is forming.
+mainland_drop :: proc() {
+	ms := &mainland_state
+	sync.atomic_store_explicit(&ms.ready, false, .Release)
+	if ms.pass != nil do grid_free(ms.pass)
+	c := &ms.cut
+	delete(c.owner); delete(c.down); delete(c.depth); delete(c.rank); delete(c.size); delete(c.box)
+	for l in c.near do delete(l)
+	delete(c.near)
+	for l in ms.all.bands {
+		for b in l {
+			for v in b.vals do delete(v)
+			delete(b.vals); delete(b.cells); delete(b.place)
+			free(b)
 		}
-		quiet = false
-		fmt.printfln("the landmass: its %d pieces within %.0f km formed, in %.0f s of forming", formed_, f64(BACKGROUND_REACH)/1000, mainland_state.seconds)
+		delete(l)
 	}
-	thread.create_and_start_with_poly_data(d, worker, priority = .Low, self_cleanup = true)
+	delete(ms.all.bands); delete(ms.all.formed)
+	ms^ = {}
+	mainland = {}
 }
 
 PASS_VERSION :: 3   // raised whenever what this file does to form the coarse stage (mass_cell, form_phases) changes

@@ -92,6 +92,22 @@ import "core:strings"
 //   play=file       play the game with no window by a script of what a player's hand does: pointer moves, presses,
 //                   drags and keys, through the code a real pointer and keyboard go through, with pictures taken
 //                   where it asks (script.odin)
+//
+// Before play (door.odin, chart.odin). With none of these, and nothing that names where to go (over, pos,
+// above, look, fly, first, place, island, kind, origin, bench, shot, enter, or a tool that exits), the game
+// opens at the front door, which makes the world of seed (default: the world last entered) while it is looked at.
+//   enter           go straight in, as every option that names where to go does
+//   door[=screen]   the front door, or one of its screens: worlds, new, settings, or world, the world's map.
+//                   With shot or bench it is drawn unseen. find=digits is the seed typed for a new world
+//   when=state      with door and shot: take the picture when the world being made has come so far: plates or
+//                   region (half way through that stage), islands:N (N of those near the start formed), ready
+//                   (it can be entered and its pictures are drawn: the default), all (every island formed), now
+//   focus=N         the front door's Nth choice, or the Nth world of the list, in focus, from 1
+//   pick=N          on the world's map: island N in the hand (0 the start; -2 the mainland); tab=land, rock,
+//                   climate, life or places chooses its card's depth; lens=name puts a lens of the world on
+//                   (setting, depth, rain, temperature, age, rising, front, crust); over=x,z and span=metres place it
+//   press=id[,id]   press these parts one after another, each by its name as say prints it, and then take the
+//                   picture: door.enter goes from the front door into play, menu.leave.world out of play to the world's map
 
 Options :: struct {
 	pos:           [3]f64,
@@ -154,6 +170,10 @@ Options :: struct {
 	tab, list, lens, tell, alert, group, find: string,
 	who, keep:     [dynamic]int,
 	play:          string,
+	door, at_when: string,
+	has_door, enter, has_seed, has_pick: bool,
+	focus, pick:   int,
+	press:         [dynamic]string,
 	}
 
 options :: proc() -> Options {
@@ -171,7 +191,7 @@ options :: proc() -> Options {
 		switch name {
 		case "pos":   ok = numbers(value, ",", v[:]); o.pos, o.has_pos = v, true
 		case "above": ok = numbers(value, ",", v[:]); o.pos, o.has_pos, o.above = v, true, true   // the ground is added once the land is formed
-		case "seed":  ok = numbers(value, ",", v[:1]); world_seed = u32(v.x)
+		case "seed":  ok = numbers(value, ",", v[:1]); world_seed, o.has_seed = u32(v.x), true
 		case "overlay": o.overlay = value
 		case "kind":  o.kind = value
 		case "origin": ok = numbers(value, ",", v[:2]); o.origin = {i32(v.x), i32(v.y)}
@@ -259,6 +279,12 @@ options :: proc() -> Options {
 		case "tell":  o.tell = value
 		case "play":  o.play = value
 		case "alert": o.alert = value
+		case "enter": o.enter = true
+		case "door":  o.door, o.has_door, ok = value, true, value == "" || value == "worlds" || value == "new" || value == "settings" || value == "world"
+		case "when":  o.at_when = value
+		case "focus": ok = numbers(value, ",", v[:1]) && v.x >= 1; o.focus = int(v.x)
+		case "pick":  ok = numbers(value, ",", v[:1]); o.pick, o.has_pick = int(v.x), true
+		case "press": for id in strings.split(value, ",") do append(&o.press, id)
 		case:         ok = false
 		}
 		if !ok {

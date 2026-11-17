@@ -556,11 +556,10 @@ outside :: proc(planes: [4][3]f32, lo, hi: [3]f32, reach := [4]f32{}) -> bool {
 }
 
 // Draw one frame. With `shot` set, also write the frame to that PNG file.
-render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
-	islands_upload(g)
-	cmd := sdl.AcquireGPUCommandBuffer(g.dev)
-	swap: ^sdl.GPUTexture
-	sw, sh: u32
+// Begin a frame: the commands it is drawn by and the window's picture to draw it to, which is nil
+// where the window is hidden and the frame is drawn unseen. False where there is nothing to draw to.
+frame_begin :: proc(g: ^Gpu, shot: string) -> (cmd: ^sdl.GPUCommandBuffer, swap: ^sdl.GPUTexture, sw, sh: u32, ok: bool) {
+	cmd = sdl.AcquireGPUCommandBuffer(g.dev)
 	wait_from := sdl.GetPerformanceCounter()
 	if !sdl.WaitAndAcquireGPUSwapchainTexture(cmd, g.window, &swap, &sw, &sh) do swap = nil
 	g.waited = f64(sdl.GetPerformanceCounter() - wait_from)/f64(sdl.GetPerformanceFrequency())
@@ -575,6 +574,13 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		sw, sh = u32(pw), u32(ph)
 	}
 	resize(g, sw, sh)
+	return cmd, swap, sw, sh, true
+}
+
+render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
+	islands_upload(g)
+	cmd, swap, sw, sh, ok := frame_begin(g, shot)
+	if !ok do return
 	g.quads_drawn, g.plants_drawn, g.water_drawn = 0, 0, 0
 	g.boxes_drawn = min(len(v.boxes), BOX_MAX)
 	if g.boxes_drawn > 0 {
@@ -886,10 +892,15 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.EndGPURenderPass(pass)
 	g.quads_drawn -= shadow_quads
 	ui_render(g, cmd)   // the interface, over the finished picture of the world (ui.odin)
+	frame_end(g, cmd, swap, sw, sh, shot)
+}
 
+// End a frame: the finished picture goes to the window, where there is one, and to a file where a
+// picture was asked for; a frame drawn unseen is paced as a display would pace it.
+frame_end :: proc(g: ^Gpu, cmd: ^sdl.GPUCommandBuffer, swap: ^sdl.GPUTexture, sw, sh: u32, shot: string) {
 	if swap != nil {
 		to_window := sdl.GPUColorTargetInfo{texture = swap, load_op = .DONT_CARE, store_op = .STORE}
-		pass = sdl.BeginGPURenderPass(cmd, &to_window, 1, nil)
+		pass := sdl.BeginGPURenderPass(cmd, &to_window, 1, nil)
 		sdl.BindGPUGraphicsPipeline(pass, g.present)
 		scene_binding := sdl.GPUTextureSamplerBinding{g.scene, g.linear}
 		sdl.BindGPUFragmentSamplers(pass, 0, &scene_binding, 1)
@@ -902,7 +913,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		// one must be drawn before the next is begun, and the GPU draws this one while the next is made.
 		// A frame goes up at the first refresh after that, and the refreshes come every 1/120 s whether
 		// or not a frame is ready, so one that misses a refresh waits for the next, as on screen.
-		wait_from = sdl.GetPerformanceCounter()
+		wait_from := sdl.GetPerformanceCounter()
 		fence := sdl.SubmitGPUCommandBufferAndAcquireFence(cmd)
 		if g.drawing != nil {
 			_ = sdl.WaitForGPUFences(g.dev, true, &g.drawing, 1)
