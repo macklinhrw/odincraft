@@ -91,6 +91,7 @@ Seen :: struct {
 	left, of:       int,      // floors of its way still to walk, and in all
 	said:           string,
 	fall:           bool,
+	plight:         Plight,   // what is wrong with where it stands, for the screen to say who needs the player (plight_of)
 }
 Shown :: struct {
 	tick:      int,
@@ -248,7 +249,10 @@ say :: proc(h: ^Hold, format: string, args: ..any) {
 	line := fmt.aprintf("[%d:%02d.%d] %s", s/60, s%60, h.tick%10, fmt.tprintf(format, ..args))
 	append(&h.log, line)
 	if !h.quiet do fmt.println(line)
-	if !h.quiet do tell_log(line)   // and to the screen's messages (play.odin)
+	if !h.quiet {   // and to the screen's messages (play.odin), with where it happened and to whom
+		at, who := about(h, line)
+		tell_log(line, at, who)
+	}
 }
 
 feet_on :: proc(b: [3]i32) -> [3]f64 { return {f64(b.x) + 0.5, f64(b.y), f64(b.z) + 0.5} }
@@ -289,6 +293,7 @@ hold_show :: proc(h: ^Hold) {
 		was, trod := at, d.stride
 		if h.tick > 0 && i < len(h.shown.dwarves) do was, trod = h.shown.dwarves[i].at, h.shown.dwarves[i].stride
 		h.showing[i] = {who = h.party[i], was = was, at = at, trod = trod, stride = d.stride, facing = d.facing, doing = d.doing, left = len(d.path) - d.next, of = len(d.path), said = d.said, fall = d.fall}
+		h.showing[i].plight = plight_of(h, i)
 	}
 	boat := boat_at(h, h.tick)
 	sync.lock(&h.mutex)
@@ -876,9 +881,8 @@ sight :: proc(w: ^World, origin: [3]f64, dir: [3]f32, reach: f64) -> (hit: [3]i3
 // `ray` runs from the eye through the crosshair, or from above through the pointer; `above` is the
 // view from above, or nil in first person.
 //   G             send the party to the block aimed at, or under the pointer
-//   E             in first person, select the dwarf aimed at, which says who it is
-//   left click    from above, on a dwarf: select it, and it says who it is
 //   right click   from above: send the party to the block under the pointer (a drag still turns the view)
+// Selecting a dwarf is the interface's (play.odin): a click from above, and E in first person, a row of BINDS.
 hold_frame :: proc(w: ^World, eye: [3]f64, ray: [3]f32, above: ^Above, passed, dt: f64) {
 	h := &hold
 	if !h.found do return
@@ -903,10 +907,9 @@ hold_frame :: proc(w: ^World, eye: [3]f64, ray: [3]f32, above: ^Above, passed, d
 	}
 	// The block an order would send the party to, and how far a dwarf can be picked out.
 	target: [3]i32
-	aimed, reach := false, AIM_REACH
+	aimed := false
 	if above == nil do target, _, aimed = sight(w, eye, ray, AIM_REACH)
 	else if above.shown {
-		reach = 4*linalg.length(above.at - eye) + 600
 		under := above.under
 		if !under.ok do under = pick_far(eye, ray, above_level(above))
 		target, aimed = under.block, under.ok
@@ -915,34 +918,18 @@ hold_frame :: proc(w: ^World, eye: [3]f64, ray: [3]f32, above: ^Above, passed, d
 		hold_send(target.x, target.y, target.z)
 		watch.send = false
 	}
-	say_card :: proc(h: ^Hold, who: int) {
-		hold_select(who)
-		if who < 0 do return
-		watch.answer, watch.until = dwarf_words(&watch.seen, who), watch.wall + 8
-		fmt.println(watch.answer)
-	}
 	keys := sdl.GetKeyboardState(nil)
-	down := [2]bool{keys[int(sdl.Scancode.G)], keys[int(sdl.Scancode.E)]}
+	down := [2]bool{keys[int(sdl.Scancode.G)], false}
 	if typing do down = {}   // the keys are a field's (play.odin)
 	if down[0] && !watch.keys[0] {
 		if aimed do hold_send(target.x, target.y, target.z)
 		else do fmt.println("no block is aimed at to send the party to")
-	}
-	if above == nil && down[1] && !watch.keys[1] {
-		say_card(h, hold_aimed(w, eye, ray, reach, nil))
-		if hold_selected() < 0 do fmt.println("no dwarf is aimed at")
 	}
 	watch.keys = down
 	if above != nil {
 		mx, my: f32
 		flags := sdl.GetMouseState(&mx, &my)
 		buttons := [2]bool{flags & sdl.BUTTON_LMASK != {}, flags & sdl.BUTTON_RMASK != {}}
-		if buttons[0] && !watch.buttons[0] && above.shown {
-			if who := hold_aimed(w, eye, ray, reach, above); who >= 0 {   // a click on a dwarf is the dwarf's, not the block's behind it
-				say_card(h, who)
-				mark_clear(above)
-			} else do hold_select(-1)
-		}
 		if buttons[1] && !watch.buttons[1] do watch.pressed = {mx, my}
 		if !buttons[1] && watch.buttons[1] && above.shown && aimed && abs(mx - watch.pressed.x) + abs(my - watch.pressed.y) < 4 do hold_send(target.x, target.y, target.z)
 		watch.buttons = buttons
@@ -1081,4 +1068,70 @@ hold_words :: proc(x, z: f64) {
 		c := dwarf_card(s, i)
 		fmt.printfln("a dwarf stands here, %d:%02d after the boat stood off: %s.\n  %s.\n  %s.", s.tick/600, s.tick/10%60, c.who, c.doing, c.next)
 	}
+}
+
+// ---- for the screen's top and its alerts (foundations/interface.md, I14) ---------------------------
+
+// What is wrong with where a dwarf stands, as far as the hold can say before dwarves have needs
+// (plan.md, P4): it has no ground under it; or it has stopped, and the ground it stands on is closed
+// all round, a pit or a ledge it cannot leave; or it has stopped with open ground about it, and found
+// no way to where it was sent. The screen makes a row of each (NEEDS, crowd.odin).
+Plight  :: enum u8 { None, No_Ground, Shut_In, No_Way }
+SHUT_IN :: 64   // floors of joined ground, at most, that count as being shut in
+
+// A stopped dwarf's ground is followed out from its floor over what has been read, making no patch:
+// ground that ends before SHUT_IN floors is closed. It is asked again every sixteenth tick, since a
+// block laid or dug may have opened it.
+plight_of :: proc(h: ^Hold, i: int) -> Plight {
+	d, w := &h.dwarves[i], &h.walk
+	if d.adrift do return .No_Ground
+	if d.doing != .Stopped do return .None
+	if h.tick > 0 && i < len(h.shown.dwarves) && (h.tick + i)%16 != 0 {
+		if was := h.shown.dwarves[i]; was.plight > .No_Ground && raw_data(was.said) == raw_data(d.said) do return was.plight
+	}
+	f := walk_floor(w, d.cell.x, d.cell.y, d.cell.z, false)
+	if f < 0 do return .No_Way
+	w.stamp += 1
+	queue := make([dynamic]i32, context.temp_allocator)
+	append(&queue, f)
+	w.seen[f] = w.stamp
+	for k := 0; k < len(queue); k += 1 {
+		if len(queue) > SHUT_IN do return .No_Way
+		for way in 0..<8 {
+			t := floor_step(w, queue[k], way, false)
+			if t < 0 {
+				if (w.floors[queue[k]].links >> u16(2*way)) & 3 != 0 do return .No_Way   // a step onto ground not yet read: it is not known to be closed
+				continue
+			}
+			if w.seen[t] != w.stamp {
+				w.seen[t] = w.stamp
+				append(&queue, t)
+			}
+		}
+	}
+	return .Shut_In
+}
+
+// Where a line of the log happened, and to whom, for a message to lead there (I4): the block of the
+// order it gives; or where the dwarf it begins with stands; or else where the errand leads, and
+// before anyone is ashore the landing.
+about :: proc(h: ^Hold, line: string) -> (at: [3]f64, who: int) {
+	who = -1
+	text := line
+	if i := strings.index(text, "] "); i >= 0 do text = text[i + 2:]
+	for f, i in h.party do if strings.has_prefix(text, f.given) && strings.has_prefix(text[len(f.given):], " ") && strings.has_prefix(text[len(f.given) + 1:], f.byname) {
+		return feet_of(h, i), i
+	}
+	if strings.has_prefix(text, `The hold says "`) {
+		words := strings.fields(text[len(`The hold says "`):], context.temp_allocator)
+		v: [3]i32
+		ok := len(words) >= 4
+		if ok do for k in 0..<3 {
+			n, good := strconv.parse_int(strings.trim_right(words[k + 1], `":`))
+			v[k], ok = i32(n), ok && good
+		}
+		if ok do return feet_on(v), -1
+	}
+	for d in h.dwarves do if ashore(d) do return feet_on(h.spots[0]), -1
+	return feet_on(h.landed.at), -1
 }

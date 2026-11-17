@@ -74,6 +74,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 | P1 (built) | **The view from above.** The primary camera: over the land, cut at a chosen level so the ground under trees and inside hills shows; a cursor on blocks; pause and speed. First person stays, a key away | Looks down on the default island and into a hillside | |
 | I-1 (built) | **The interface's ground and the play screen's frame** (`foundations/interface.md`). Text and panels; the screen's four fixed regions; the clock and speeds; the hand, which answers what any block, tree, stream or place is and why; messages; the cut's level, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there | |
 | P2 (built) | **Seven dwarves.** Named, drawn simply, walking the block ground by a path they find. Any one can be asked who it is and what it is doing | Watches them come ashore and follow where they are sent | |
+| The dwarves on screen (built) | **Their place at the top, their list, and several in the hand** (`foundations/interface.md`, I14). Who needs you first, then who you keep in view, then the count of all; a list that finds, groups and folds; alerts that count; messages that lead to their place. Made for a hold that grows | Clicks a dwarf's picture and is taken to her | |
 | I-2 | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
 | E-1 | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
 | P3 | **Orders.** Mark ground to dig, trees to fell, blocks to build. Dwarves take the work themselves. Goods go to a store without being carried at first, as RimWorld's first version did; carrying follows in P5, since Bellwright's makers found that work done in the abstract "didn't feel inspiring" | Has a first room dug and roofed | 2 |
@@ -506,3 +507,107 @@ Pictures: `interesting-world/real/i1-*.jpg` (the bed and the Places list at 2,56
 - **A system that has news** calls `tell(words, place)`; one with a standing problem calls `alert_raise` and `alert_clear`.
 - **A new screen** (the front door, expedition planning) is a procedure that lists parts, as `play_frame` does.
 
+### The dwarves on screen, as built (2026-11-16)
+
+**What can now happen that could not before:** the owner sees at the top of the screen which dwarves need them and why, clicks a dwarf's picture and is taken to it, keeps the ones they care about in view, opens the list of all of them and finds one by name, trade or place, takes several in the hand at once, and follows an alert or a message to where it is about. It is the same screen for seven dwarves, thirty-four or a hundred.
+
+Pictures, each 2,560 × 1,440: `interesting-world/real/crowd-*.jpg`. `crowd-beside-drawing.jpg` puts the built screen beside the design's drawing. The pit and the ditch in them are dug by `interesting-world/real/crowd-orders.txt`.
+
+**What the owner sees and does**
+
+- **Top middle.** The seven of the first boat stand there as small busts, with the count of all beside them. A dwarf that needs you moves to the front with a sign on its corner: a red diamond for one with no ground or one shut in, a brass triangle for one that found no way. Click a bust: the dwarf is in the hand and edged in brass. Click it again: the view goes to it. Enter follows it as it walks. Shift and a click adds it to the hand, or takes it out. The count opens the list.
+- **Top right.** An alert for each thing that is wrong: "Yrsa Coalsleeve is shut in: no way leads out of where it stands", or "Nine dwarves are stopped: they found no way to where they were sent". A click takes those dwarves in the hand and the view to them. It goes when it stops being true.
+- **On the land.** The sign stands over the dwarf that needs you, and a brass square round each dwarf in the hand. A box dragged over dwarves takes them all.
+- **F1, the Dwarves list**, down the right side. A row each: bust, name, trade, what it is doing, a word for how it is, and Keep. Type to find by name, trade, place or need. Group by need, by trade or by place; show only those kept in view. A group over eight shows five and "Twenty-nine more, show all". A click on a row takes the view to its dwarf and puts it in the hand; with Shift it is added to the hand.
+- **K** keeps the dwarf in the hand in view at the top, or lets it go. It is on the card's button and on each row.
+- **The card** of one dwarf: its name, "woodcutter, twenty-six", what it is doing and why, what it waits for, and under Trade and Self what its trade does, who shares it, its age and height and how far it has walked. Of several: how many and of what trades, a bust of each, their names, and what they share.
+- **Messages** under the top left can be clicked: "Jorris Chalkheel is there" takes the view to where that was and Jorris in the hand.
+- **In first person**, E takes the dwarf aimed at in the hand.
+
+**What was built**
+
+- **Who needs you, as rows** (`NEEDS`, `crowd.odin`): three causes today, each with its word, its sentences, what the dwarf waits for and its sign. The hold says which holds for a dwarf (`Plight`, `plight_of`, `hold.odin`), by following its joined ground out from where it stands: ground that ends within 64 floors is shut. P4 adds hunger and hurt as rows.
+- **The top-middle panel** (`crowd_build`): those in need, worst first; then those kept; then the count. Ten places at most, fewer where the picture is narrow; where more need you or are kept than there is room, the last place counts the rest and opens the list on them. Those kept hold a third of the places.
+- **Busts** (`bust`): eight by eight, a rectangle for each run of one colour. Hood, skin and beard are the dwarf's own colours, the shoulders its trade's cloth, and one of three hoods and four beards comes of its name, so a bust is the same at the top, in a row and on the card.
+- **The Dwarves list** (`dwarves_build`), on the same head, scroll and fold as the Places list (`list_head`, `list_top`, `list_foot`, which the Places list now uses too). Only the rows in view are listed.
+- **Several in the hand** (`dwarves_take`, `dwarf_take`, `several_build`): one dwarf is the card as before; several are a group.
+- **Alerts that count** (`crowd_read`): one a cause, raised through `alert_raise` and cleared through `alert_clear`, and raised again only when those it counts change.
+- **Messages with a place** (`about`, `hold.odin`): each line of the hold's log reaches the screen with where it happened and which dwarf it is about.
+- **Keys as rows**: F1, K, and E in first person. `BINDS` has a fourth kind of row, one that holds only on foot.
+- **Without a window**: `--list=dwarves`, `--group=`, `--find=`, `--who=`, `--keep=` (`AGENTS.md`). `src/play_test.odin` puts a hold of seven, thirty-four and a hundred on the screen, presses the pictures, the rows, the alerts and a message, drags a box, and checks every panel at every scale.
+
+**Keys.** F1 the Dwarves list; K keep in view; Enter follow the dwarf in the hand, or go to the middle of several; Shift with a click or a drag adds to the hand; E in first person takes the dwarf aimed at. G and the right click still send the party, and are P3's to move.
+
+**How it holds at thirty-four and a hundred.** With the pit and the ditch of the pictures and thirty-four dwarves, ten need you: the top shows six and "+4", two of the five others kept and "+3", and "34". With a hundred, fourteen need you: six and "+8", two and "+3", and "100", one figure wider. The alerts are two at every size: one names the dwarf in the pit, the other counts the rest. The list by need shows the first five who need you and "Nine more", five of the seventy-three walking and "Sixty-eight more", then those waiting. The test holds the panels inside the picture and off each other at six scales for each size, with a fifth of the hold in need and thirty kept.
+
+**What was tried and dropped**
+
+- *The hold's own sentence on a row and at the head of a card.* "Stopped where it stands: no way leads to the blocks at a mouth a short walk south of the landing: water too deep to wade, or a drop or a rise of more than a block, lies all round it or all round the walker." A row cut it after ten words. The need's own sentence leads, and the card adds where the dwarf was sent.
+- *The count in the names' typeface.* A hundred read "IOO".
+- *Every place at the top to those in need.* At thirty-four with ten in need, none of the dwarves kept in view was left.
+- *A brass "Kept" on every row.* Seven brass boxes down a list of seven. It is the word alone, in brass.
+- *P2's click on a dwarf, read inside `hold_frame`.* It let go of the selection on every press over the world. The hand takes the click.
+- *"Put it down" beside Follow and Keep in view.* The three do not fit the card; with a dwarf in the hand it reads "Put down".
+- *An alert a dwarf.* Never built: the design said one that counts.
+
+**Costs**
+
+- **The interface's own work**, listing the parts and making the rectangles, with seven dwarves and nothing open: 0.02 to 0.04 ms a frame at the median and 0.05 to 0.11 ms at the 99th hundredth (the parent 0.01 to 0.03 and 0.03 to 0.08). The seven busts at the top are most of the parts: 189 parts and 686 rectangles in first person where the parent had 12 and 485, and 212 and 817 from above against 35 and 616. **With a hundred dwarves, their list open and ten places at the top**: 0.07 to 0.08 ms at the median, 0.18 to 0.29 at the 99th hundredth, 584 parts and 2,438 rectangles; the parent with a hundred and its Places list open took 0.11 and 0.26 to 0.29 ms for 68 parts and 1,470 rectangles. Only the rows in view are listed, so the list costs the same at a hundred as at thirty-four.
+- **Benches**, alternating with the parent (`main` at 95e14dd), three rounds, our work in ms as median / 99% / worst, and frames over 12.5 ms. Other agents kept the machine's load between 6.6 and 11.4 throughout.
+
+| Bench | Parent | This step |
+|---|---|---|
+| Forest flank, first person | 1.37 / 5.0 / 8.0 (0), 1.92 / 6.7 / 12.3 (0), 1.25 / 4.9 / 6.9 (0) | 1.51 / 5.0 / 8.8 (0), 1.32 / 5.1 / 12.6 (1), 1.32 / 4.4 / 12.3 (0) |
+| Down through cloud, first person | 1.24 / 3.7 / 7.2 (0), 2.46 / 11.6 / 22.3 (6), 1.23 / 3.4 / 5.9 (0) | 1.65 / 5.7 / 8.9 (0), 1.39 / 4.1 / 4.5 (0), 1.20 / 3.2 / 3.6 (0) |
+| From above, cut following the ground | 1.85 / 5.9 / 9.8 (0), 1.87 / 7.1 / 17.3 (1), 1.69 / 5.1 / 22.4 (1) | 1.80 / 6.3 / 21.2 (1), 1.61 / 5.2 / 12.3 (0), 1.76 / 5.2 / 7.3 (0) |
+| Over the landing, still, 25 s, a hundred dwarves, a list open (the parent's: Places) | 0.98 / 3.8 / 8.3 (0), 0.94 / 3.7 / 7.8 (0), 0.87 / 3.0 / 6.3 (0) | 0.95 / 3.7 / 9.7 (0), 0.87 / 3.1 / 6.2 (0), 0.86 / 3.0 / 4.9 (0) |
+
+  No difference shows between the builds. Each lost a frame or more to the load in some run: the parent seven in one run through cloud and one in each of two runs from above, this step one on the forest flank (12.6 ms) and one from above. The interface's own share was never over 0.6 ms in a frame, but for one of 3.0 ms in the first run with a hundred. The benches should be run again on a quiet machine, as before.
+
+- **The hold**: asking what is wrong with where a dwarf stands costs a stopped dwarf one walk over at most 64 floors every sixteenth tick, and the rest a glance. The run of `--dwarves=900 --orders=build/hold_test_orders.txt` prints the parent's hash, `2aecf46ead36c677`, and `./build.sh test` gives it three times.
+- **The atlas**: the new text style takes 30 more rows at the standard scale (377 of 2,048).
+- The step is 590 lines in `crowd.odin`, 120 more in `play.odin`, 50 more in `hold.odin`, and 240 of test.
+- `odin check src -vet-unused` passes; `./build.sh test` passes with `GOLDEN` unchanged; P2's long run (`p2-orders.txt`, 70 minutes) prints the parent's hash, `373694d348ebf2b3`; the start island's map is the parent's byte for byte.
+
+**Weak points**
+
+- **Nobody has used it.** No window was opened. The clicks, Shift, the drag and the keys were run by the test through the procedure the window's events go through, and Shift there is a field the test sets: `sdl.GetModState` has never been asked in a window.
+- **The look has not been judged**, and beside the drawing (`crowd-beside-drawing.jpg`) it falls short in these ways: the busts are flatter than the drawing's, with no shading, and at 52 pixels seven of them are told apart by hood and beard colour more than by face; the top right has alerts and no stores, so it is a narrower, barer panel; the hand stands a third shorter than the drawing's, with two short tabs where the drawing has six and a row of chips; the orders bar's place under it is still empty; the messages are the hold's log, plain and repetitive ("is there", five times), where the drawing's are a story; and the ground's panel is I-1's, deeper than the drawing's.
+- **The three causes are thin.** They are what a block dug or laid can do to a dwarf. Until P3 and P4 nothing else can be wrong, and on untouched ground the panel never shows a sign.
+- **"Shut in" is a count of floors**, 64. A dwarf walled into a yard of 65 floors has "no way". A dwarf on ground not yet read beyond its own chunk is called "no way" until it is read.
+- **A block changed near a stopped dwarf can turn "shut in" to "no way"** until something walks or searches there again: the hold lets go of what it read of a chunk when a block in it changes, and asking what is wrong reads nothing anew, so that it can never change what the dwarves do.
+- **A dwarf in a pit is hidden by the pit** from above: its sign stands over the hole and the dwarf cannot be seen or clicked on the land. Its picture at the top and its row can.
+- **The brass square and the sign are drawn over the land, not in it**: they show through a hill and through a tree.
+- **Alerts go when a list opens.** On a screen 2,560 wide the top is whole up to 150%. At 175% with an alert standing it is the count alone; at 200% with two alerts it is gone and so is the ground's panel, until they clear; and at both with a list open the dwarves have no place at the top. F1 and the lists' button still lead to them (measured with `--scale=175` and `--scale=200`).
+- **The list by place groups by the nearest named place**, which on the default island puts the whole party under one name. It will mean more when the hold has rooms.
+- **A box dragged over dwarves cannot take the blocks under them**, and a dwarf in a pit under the box's lower corner is missed if it stands more than two blocks under it.
+- **Kept in view is kept for the session only**, and a message's dwarf is taken in the hand even when the player held something else.
+- **`hold_said` and `dwarf_words` in `hold.odin` are now unused**, left alone because P3 is changing that file.
+- **Frame times were measured on a loaded machine**, as before.
+
+**For the steps that follow**
+
+- **A new cause** (hunger, hurt, nothing to do) is a row of `NEEDS` with a test on what the hold shows of a dwarf. The top, the list, the card, the alert and the sign on the land follow from the row.
+- **Orders for several** (P3): the dwarves in the hand are `play.several`, in the party's order, one or more. The group's card has room under what they share.
+- **Another list** (Work, Stores) is a procedure that calls `list_head`, lists its rows between `list_top` and `list_foot`, and has a row in `BINDS` and in `lists_build`.
+- **A message with a place** is `tell(words, place, dwarf)`.
+
+**Pictures**
+
+![The play screen at the landing: the seven at the top with the woodcutter in the hand, edged in brass, and its card at the lower left](interesting-world/real/crowd-play.jpg)
+
+![The same ground with one dwarf in a pit and one cut off by a ditch: the two lead the top with a diamond and a triangle, an alert names each, their signs stand over them on the land, and the card of the one in the pit says what it waits for](interesting-world/real/crowd-needs.jpg)
+
+![The Dwarves list, grouped by need](interesting-world/real/crowd-list.jpg)
+
+![A hold of thirty-four, with "mason" typed in the list's field](interesting-world/real/crowd-find.jpg)
+
+![A hold of thirty-four, ten of whom need you: six and "+4", two kept and "+3", the count, and two alerts, one of which counts nine](interesting-world/real/crowd-34.jpg)
+
+![The same thirty-four by trade, those in need first in each](interesting-world/real/crowd-trade.jpg)
+
+![A hold of a hundred with the list open: fourteen need you, seventy-three are walking](interesting-world/real/crowd-100.jpg)
+
+![Three dwarves in the hand](interesting-world/real/crowd-three.jpg)
+
+![The built screen beside the design's drawing](interesting-world/real/crowd-beside-drawing.jpg)

@@ -19,10 +19,12 @@ import sdl "vendor:sdl3"
 //   Tab              walk / the view from above   Esc      close the topmost thing; then the menu
 //   P                pause the world              Y        why: take what is under the pointer, or
 //   [ ]              turn the clock back / forward         aimed at, in the hand, which says what it is
-//   \                save a screenshot            F4       the list of places
+//   \                save a screenshot            F1, F4   the lists of dwarves and of places
+//   Enter            go to what is in the hand, or follow a dwarf   K   keep the dwarf in the hand in view at the top
 //   G                send the dwarves to the block under the pointer, or aimed at (hold.odin)
-//   from above: right click sends them there too; left click on a dwarf selects it, and it says who it is
-//   in first person: E selects the dwarf aimed at
+//   from above: right click sends them there too; a click on a dwarf takes it in the hand, a drag over several
+//   takes them all, and Shift adds to the hand (crowd.odin)
+//   in first person: E takes the dwarf aimed at in the hand
 //
 // Controls in first person
 //   click            capture the mouse
