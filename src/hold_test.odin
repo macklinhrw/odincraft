@@ -127,8 +127,8 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 			seconds += 10
 			hold_run(played, f64(seconds))
 		}
-		testing.expect(t, played.work.squeezed > squeezed, "dwarves squeezed past each other in the passage")
-		fmt.printfln("the passage runs east from %d, %d, %d: %d stood in it, and they squeezed past each other %d times on the way back", at.x, at.y, at.z, inside, played.work.squeezed - squeezed)
+		testing.expect(t, played.work.squeezed == squeezed, "dwarves held each other up in the passage, where they should go by")
+		fmt.printfln("the passage runs east from %d, %d, %d: %d stood in it, and they went by each other on the way back", at.x, at.y, at.z, inside)
 	}
 	hold_run(played, 900)
 	testing.expect(t, played.summed, "the last errand ends")
@@ -144,8 +144,9 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 		}
 	}
 	idle :: proc(h: ^Hold) -> bool {   // every order is done, or waits on something no dwarf is doing
-		for d in h.dwarves do if d.job do return false
-		for m in h.marks do if m.wait == .None do return false
+		for d in h.dwarves do if d.job || d.haul.on do return false
+		for m in h.marks do if m.wait == .None || m.wait == .No_Stuff do return false   // a block whose stuff is still to be brought is not done with
+		for id in 0..<len(h.sites) do if h.sites[id].coming > 0 do return false
 		return true
 	}
 	if room, ok := hillside(played); testing.expect(t, ok, "a hillside to dig a room into lies within 120 m of the camp") {
@@ -161,10 +162,19 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 			order(t, played, &text, now, "fell %d %d %d %d %d %d", wood.x + ox - 8, wood.base, wood.z + oz - 8, wood.x + ox + 8, wood.base, wood.z + oz + 8)
 		}
 		order(t, played, &text, now, "dig out %d %d %d %d %d %d", lo.x, floor, lo.z, hi.x, floor + 1, hi.z)
+		// A stockpile on the open ground before the door: what is dug is carried to it, and counted.
+		yard := [2][2]i32{room.front - room.into*4 - room.across, room.front - room.into*2 + room.across*5}
+		order(t, played, &text, now, "store all %d %d %d %d %d %d", yard[0].x, floor - 1, yard[0].y, yard[1].x, floor - 1, yard[1].y)
 		run_until(played, &now, 6000, idle)
+		kept := 0
+		for n in played.store do kept += int(n)
+		testing.expectf(t, len(played.zoned) >= 12 && kept >= 16, "a stockpile of %d places holds %d things carried to it", len(played.zoned), kept)
 		for m in played.marks do testing.expectf(t, m.work == .Fell, "every block of the room is dug: %v is left, waiting because %s", m.at, WAITS[m.wait])
-		stone, _ := store_of(&played.store, .Stone)
-		timber, _ := store_of(&played.store, .Timber)
+		stone, timber := 0, 0   // what lies anywhere, loose or stored: a block marked to be laid is built of the nearest
+		for g in played.goods {
+			stone += int(g.n) if is_stuff(g.kind, .Stone) else 0
+			timber += int(g.n) if is_stuff(g.kind, .Timber) else 0
+		}
 		// The roof: one layer over the whole room, laid wherever the hill is not there already.
 		open := make([dynamic][3]i32, context.temp_allocator)
 		cells_of(.Build, .Floor, {lo.x, floor + 2, lo.z}, {hi.x, floor + 2, hi.z}, hold_blocks(played), &open)

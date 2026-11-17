@@ -6,6 +6,8 @@ It is a plan, not a decision. Section 8 holds what is the owner's. Pictures of f
 
 **Step I-1 is built** (`../plan.md`, section 10, "I-1, as built"): the ground and the play screen's frame. Section 10 below says what building it changed in this design. The drawings beside this file are still the design's; pictures of the built screen are in `../interesting-world/real/i1-*.jpg`.
 
+**Goods are built** (`../plan.md`, section 10, "Goods you can see, as built"; `../adr/0012`): things lying in the world, the Store order, the stores at the top right. Section 13 below says what building them settled. Pictures: `../interesting-world/real/play/g-*.jpg`.
+
 **The dwarves on screen are built** (`../plan.md`, section 10, "The dwarves on screen, as built"): their place at the top, their list, several in the hand, and the alerts that count them. Section 11 below says what building them changed. Pictures: `../interesting-world/real/crowd-*.jpg`.
 
 Revised the same day after the owner's two criticisms of the first pass: a hold will grow past seven dwarves, and the first drawings were ugly and immature. The placement and the grammar stand. The look is redone (I10), and the design now grows with the hold (I14).
@@ -153,7 +155,7 @@ At 2560 × 1440, standard scale. `interface-wireframes.html` draws it, with a no
 
 - **Top left: the hold and the clock.** The hold's name, the date in words, and one control for the clock: paused at its hour, or running at one of three speeds. Clicking the date opens the chronicle at today.
 - **Top middle: the dwarves.** Those in trouble first, each with a mark on its picture (a diamond for trouble, a triangle for caution); then those the player keeps in view; then the count of all, which opens the list (I14). Click selects, a second click goes there, and with Shift a click adds to the hand. *Built; section 11.*
-- **Top right: the stores, then what is wrong.** What the hold is living on, in a few words, each beside a block of the thing. Under it the alerts, worst first, each saying the problem and going to its cause.
+- **Top right: the stores, then what is wrong.** What the hold is living on, in a few words, each beside a block of the thing. Under it the alerts, worst first, each saying the problem and going to its cause. *Built; section 13.*
 - **Left, under the hold: messages.** The last few things that happened, newest lowest, each one short line, fading after a while. The whole of it is said beside the pointer that rests on it, and a click leads to where it happened.
 - **Left, lower: the hand.** The selected thing in a line, its card when asked for, or the tool's choices (I2). Above the orders bar, so an order and its target are a short reach apart.
 - **Bottom left: the orders bar.** Dig, Fell, Gather, Build, Store, Remove. Each shows its key. Choosing one puts its tool in the hand: its name, its few choices as buttons, and one live line. The world shows what will be marked, under the pointer before the press and through the drag. Escape puts it down. *Built and put right; section 12.*
@@ -295,6 +297,20 @@ The owner played P3 on 2026-11-16 and called it terrible (`../open-decisions.md`
 - **The cut draws a dwarf whole or not at all** (ADR 0007): one whose feet stand under the level keeps its head, one standing at the level or over it is not drawn, and its picture at the top still leads to it.
 - **The clock's speeds are 1, 3 and 6 times**, the buttons' names as they were.
 - **The key I** asks for the card and shuts it. It is a row of `BINDS`.
+
+## 13. What building the goods settled
+
+The owner asked for a place for what is gathered, and to see it (`../open-decisions.md`, 2026-11-16). Section 4 gave the stores the top right and the bar a Store order; these are the places where building them settled what was open, and why.
+
+- **The stores say what lies in stockpiles, and say that what lies loose is not counted.** A row a kind, each beside a block of itself: the stones by their rock, the timber together, the five there are most of. Under them one small line: "21 lie loose, not counted", or, with no stockpile marked, "21 lie loose: no stockpile yet". RimWorld counts only what is in storage and says nothing of the rest; here the line is the way a new player learns that a stockpile is wanted. The panel is not drawn while there is nothing dug, nothing stored and no stockpile.
+- **Store (S) is a tool like the others**: its name, what it takes (Everything, Stone, Timber) as buttons, and one live line ("4 by 3: 12 places for stone."). The drag is a rectangle on the ground, and takes the places a dwarf can stand in it near the level it began on, so on a slope it follows the slope. Over a stockpile the line says what it takes and how full it is. Dragging beside one that takes the same makes it larger.
+- **A stockpile's ground is tinted verdigris**, the colour of what is well, where marked work is brass.
+- **Things are drawn as what they are**: stone as a heap of small pale stones of its rock's colour, up to eight in a cell; timber as logs laid across each other. A dwarf carrying holds a stone or a log over its head.
+- **A click on a heap says what and how many, and whether it is counted**: "Basalt  8, in a stockpile" or "Basalt  3, lying loose: not counted". A click on a stockpile's bare ground says "Stockpile  stone and timber; 3 of 12 full". A click on a block the dwarves laid says what it was laid as: "Wall of basalt  built by the hold".
+- **Remove (X) does the first of three things that applies** where it is dragged, and its line says which before the button is let go: marks are taken back; with none there, built blocks are taken down, and what they are of lies where they stood; with none, the ground is taken out of its stockpile, and what lies there lies loose. Both games give each its own tool; one tool keeps the bar short, and the line keeps it from surprising.
+- **A block marked to be laid shows which of three states it is in**: a small block of its stuff while that is still to be brought, nearly a whole block once it lies at the order, and the block itself once laid. An order's card says how much is left and what it waits for; "their stone or timber has not been brought" is no trouble, and only "no stone anywhere" is an alert.
+- **A stair the tool would mark says how deep it goes**: a figure on the ground over each step, "-1" to "-4".
+- **The Build tool's buttons count what lies anywhere**, stored or loose, since a block is laid of the nearest.
 
 ## Sources
 

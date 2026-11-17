@@ -30,7 +30,7 @@ import sdl "vendor:sdl3"
 //   wait seconds            let that much of the player's time pass
 //   run seconds             let that much of the dwarves' time pass, at whatever speed the clock is running
 //   timer                   note the dwarves' time
-//   until done [seconds]    wait until nothing is marked and no dwarf has work in hand, or so many seconds of
+//   until done [seconds]    wait until nothing is marked and no dwarf has work in hand or carries anything, or so many seconds of
 //                           the dwarves' time; say how long it took since the timer, in their time and the player's
 //   shot file.png           wait for the world to be drawn whole, and save the picture
 //   say                     print what the screen says, area by area
@@ -275,7 +275,7 @@ script_frame :: proc(events: ^[dynamic]sdl.Event, a: ^Above, p: ^Player, afoot: 
 			s.hurry = true
 			if s.began < 0 do s.began = watch.clock
 			busy := watch.seen.marks > 0
-			for d in watch.seen.dwarves do busy ||= d.job
+			for d in watch.seen.dwarves do busy ||= d.job || d.carrying > 0 || d.fetching
 			if watch.clock - s.began < 1 || busy && watch.clock - s.began < step.v[0] do return   // an order just given takes a tick to be the hold's
 			took := watch.clock - s.timer
 			pace := speeds[play.clock.speed]

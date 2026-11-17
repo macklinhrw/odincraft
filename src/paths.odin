@@ -31,7 +31,7 @@ THICK  :: 2.1    // how many times slower the wettest, thickest ground is at mos
 WADING :: 4.6    // how much slower a metre of water over a floor makes it: 3.3 times at half a metre, RimWorld's shallow water (path cost 30)
 BUILDS :: 400    // patches one search may make before it gives up
 FOLLOW :: 24     // rooms the goal's ground is followed through to learn whether it is closed off
-ROUND  :: 3.0    // seconds a way is longer for each floor a dwarf stands on: it goes round one where that is quicker, and squeezes past where it is not
+ROUND  :: 0.5    // seconds a way is longer for each floor a dwarf stands on: it goes round one where there is room, and by it where there is none
 
 Floor :: struct {
 	y:     i16,   // the block its feet are in

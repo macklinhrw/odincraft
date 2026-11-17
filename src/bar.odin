@@ -25,15 +25,16 @@ import "core:strings"
 //
 // Everything here is the frame thread's, and reads the hold only through what it shows (Shown).
 
-Tool :: enum u8 { None, Dig, Fell, Build, Send, Remove }
+Tool :: enum u8 { None, Dig, Fell, Build, Store, Send, Remove }
 Tool_Row :: struct { name, says, id: string }
 TOOL_ROWS := [Tool]Tool_Row{
 	.None   = {},
 	.Dig    = {"Dig", "Mark ground to be dug.", "orders.dig"},
 	.Fell   = {"Fell", "Mark trees to be felled for timber.", "orders.fell"},
-	.Build  = {"Build", "Mark blocks to be laid, of what is in store.", "orders.build"},
+	.Build  = {"Build", "Mark blocks to be laid. Their stone or timber is brought to them.", "orders.build"},
+	.Store  = {"Store", "Mark ground as a stockpile: what is dug and felled is carried there, and counted.", "orders.store"},
 	.Send   = {"Send", "Send the party to stand somewhere.", "orders.send"},
-	.Remove = {"Remove", "Take marks back.", "orders.remove"},
+	.Remove = {"Remove", "Take marks back; or take built blocks down; or take ground out of a stockpile.", "orders.remove"},
 }
 Choice :: struct { plan: Plan, name, says: string, line: bool }   // line: it is dragged as a line, not a rectangle
 DIG_CHOICES := [?]Choice{
@@ -53,6 +54,7 @@ Bar :: struct {
 	dig:      Plan,
 	build:    Plan,
 	stuff:    Stuff,
+	takes:    Takes,        // what a stockpile marked now takes
 	deep:     i32,          // blocks an order to dig out goes down
 	high:     i32,          // blocks a wall stands
 	job:      int,          // the order whose card is in the hand, or -1
@@ -69,9 +71,12 @@ Bar :: struct {
 	boxes:    [dynamic][2][3]i32,   // and those to dig, as boxes
 	trees:    [dynamic]Tree,
 	way:      int,          // blocks of them that are a way in
+	built:    map[[3]i32]Plan,   // the blocks the dwarves laid that stand, and what each was laid as: told by the hold as they are laid and dug
+	undo:     enum u8 { Marks, Built, Zone },   // what Remove would take away here
+	lost:     bool,         // no way in was found for the ground the tool would mark
 	said:     [3]string,    // the alerts as last raised
 }
-Preview_Key :: struct { tool: Tool, dig, build: Plan, stuff: Stuff, deep, high: i32, a, b: [3]i32, press: [3]i32, dragged, pressed: bool, volume: int, marks: int }
+Preview_Key :: struct { tool: Tool, dig, build: Plan, stuff: Stuff, takes: Takes, deep, high: i32, a, b: [3]i32, press: [3]i32, dragged, pressed: bool, volume: int, marks: int }
 bar := Bar{dig = .Out, build = .Wall, deep = 2, high = 2, job = -1}
 
 // Take a tool in the hand, or put it down; the same tool again puts it down. In first person Send
@@ -107,7 +112,7 @@ tool_point :: proc(a: ^Above, w: ^World, eye: [3]f64, ray: [3]f32) {
 	o := a.mark[0]
 	b := a.mark[1]
 	switch {
-	case bar.tool == .Fell || bar.tool == .Send:
+	case bar.tool == .Fell || bar.tool == .Send || bar.tool == .Remove:   // the column under the pointer, whatever stands in it: a wall is taken down by dragging along its top
 		if bar.aim.ok do b = bar.aim.block
 	case ray.y < -1e-3:
 		t := (f64(o.y) + 0.5 - eye.y)/f64(ray.y)
@@ -160,6 +165,7 @@ tool_order :: proc(a: ^Above, m0, m1: [3]i32, press: Pick, dragged: bool) -> (o:
 			if far == m0 do far = m0 + ahead(a)*2
 			return {kind = .Build, shape = .Stair, stuff = bar.stuff, at = m0, to = far}, true
 		}
+	case .Store:  return {kind = .Store, at = m0, to = m1, takes = bar.takes}, true
 	case .Send:   return {kind = .Go, at = m1}, true
 	case .Remove: return {kind = .Unmark, at = m0, to = m1}, true
 	}
@@ -236,7 +242,7 @@ preview :: proc() {
 	m0, m1 := bar.aim.block, bar.aim.block
 	press, dragged := a.under, false
 	if pressed do m0, m1, press, dragged = a.mark[0], a.mark[1], bar.press, bar.dragged || bar.posed
-	key := Preview_Key{bar.tool, bar.dig, bar.build, bar.stuff, bar.deep, bar.high, m0, m1, press.block, dragged, pressed, u.w.volume, watch.seen.marks}
+	key := Preview_Key{bar.tool, bar.dig, bar.build, bar.stuff, bar.takes, bar.deep, bar.high, m0, m1, press.block, dragged, pressed, u.w.volume, watch.seen.marks}
 	if key == bar.seen do return
 	bar.seen = key
 	clear(&bar.cells); clear(&bar.boxes); clear(&bar.trees)
@@ -247,7 +253,8 @@ preview :: proc() {
 	lo, hi := box_of(o.at, o.to)
 	#partial switch o.kind {
 	case .Dig:
-		cells_of(.Dig, o.shape, o.at, o.to, world_blocks(u.w), &bar.cells)
+		bar.lost = false
+		cells_of(.Dig, o.shape, o.at, o.to, world_blocks(u.w), &bar.cells, &bar.lost)
 		boxes_of(bar.cells[:], &bar.boxes)
 		if o.shape == .Out do for c in bar.cells do bar.way += int(c.x < lo.x || c.x > hi.x || c.z < lo.z || c.z > hi.z || c.y < lo.y || c.y > hi.y)
 	case .Build:
@@ -264,12 +271,28 @@ preview :: proc() {
 			bound(here)
 		}
 		if dragged do append(&bar.boxes, [2][3]i32{{lo.x, -500, lo.z}, {hi.x, 3000, hi.z}})   // the ground dragged over, whatever its height
-	case .Unmark:
+	case .Store:   // the ground a dwarf can stand on in the rectangle, near the level it began on
+		zone_cells(o.at, o.to, world_blocks(u.w), &bar.cells)
+		floor := make([dynamic][3]i32, context.temp_allocator)
+		for c in bar.cells do append(&floor, c - {0, 1, 0})
+		boxes_of(floor[:], &bar.boxes)
+	case .Unmark:   // marks first; with none, built blocks; with none, a stockpile's ground: what the hold will do (mark_obey)
 		append(&bar.boxes, [2][3]i32{{lo.x, -500, lo.z}, {hi.x, 3000, hi.z}})
-		for t in watch.seen.tints do if t.lo.x <= hi.x && t.hi.x >= lo.x && t.lo.z <= hi.z && t.hi.z >= lo.z {
-			bar.way += int(min(t.hi.x, hi.x) - max(t.lo.x, lo.x) + 1)*int(min(t.hi.z, hi.z) - max(t.lo.z, lo.z) + 1)*int(t.hi.y - t.lo.y + 1)
+		overlap :: proc(t: Tint, lo, hi: [3]i32) -> int {
+			if t.lo.x > hi.x || t.hi.x < lo.x || t.lo.z > hi.z || t.hi.z < lo.z do return 0
+			return int(min(t.hi.x, hi.x) - max(t.lo.x, lo.x) + 1)*int(min(t.hi.z, hi.z) - max(t.lo.z, lo.z) + 1)*int(t.hi.y - t.lo.y + 1)
 		}
+		bar.undo = .Marks
+		for t in watch.seen.tints do bar.way += overlap(t, lo, hi)
 		for g in watch.seen.ghosts do bar.way += int(g.at.x >= lo.x && g.at.x <= hi.x && g.at.z >= lo.z && g.at.z <= hi.z)
+		if bar.way == 0 {
+			bar.undo = .Built
+			for c in bar.built do bar.way += int(c.x >= lo.x && c.x <= hi.x && c.z >= lo.z && c.z <= hi.z)
+		}
+		if bar.way == 0 {
+			bar.undo = .Zone
+			for t in watch.seen.zone_boxes do bar.way += overlap(t, lo, hi)
+		}
 	}
 }
 
@@ -293,7 +316,7 @@ alerts_keep :: proc() {
 			if reach == 0 do first[0] = site
 			reach += 1
 		}
-		if site.waits[.No_Stuff] > 0 && site.busy == 0 {
+		if site.waits[.No_Stuff] > 0 && site.busy == 0 && site.have + site.coming == 0 && stuff_lying(site.stuff) == 0 {   // none to be had anywhere: what is only waiting to be brought is no trouble
 			if stuff == 0 do first[1] = site
 			stuff += 1
 		}
@@ -305,7 +328,7 @@ alerts_keep :: proc() {
 	middle :: proc(site: Site_Seen) -> [3]f64 { return {f64(site.lo.x + site.hi.x + 1)/2, f64(site.hi.y), f64(site.lo.z + site.hi.z + 1)/2} }
 	if reach == 1 do texts[0] = fmt.tprintf("No dwarf has a way to the %s.", site_word(first[0]))
 	else if reach > 1 do texts[0] = fmt.tprintf("No dwarf has a way to %s orders.", count_words(reach))
-	if stuff >= 1 do texts[1] = fmt.tprintf("No %s in store for the %s.", STUFFS[first[1].stuff], site_word(first[1]))
+	if stuff >= 1 do texts[1] = fmt.tprintf("No %s anywhere for the %s: %s.", STUFFS[first[1].stuff], site_word(first[1]), "dig rock" if first[1].stuff == .Stone else "fell trees")
 	if hard >= 1 do texts[1] = fmt.tprintf("%s%sRock too hard for the picks.", texts[1], " " if texts[1] != "" else "")
 	places[0], places[1] = middle(first[0]), middle(first[1] if stuff > 0 else first[2])
 	ids := [3]string{"orders.reach", "orders.store", ""}   // a dwarf shut in is the dwarves' own alert (NEEDS, crowd.odin)
@@ -322,6 +345,7 @@ alerts_keep :: proc() {
 // and a small block for each block to lay.
 marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 	s, a := &watch.seen, play.a
+	boxes := piles_view(boxes, eye, a.at if !play.afoot^ else eye)
 	if play.afoot^ && len(s.ghosts) == 0 do return boxes
 	n := 0
 	put :: proc(v: ^View, n: ^int, lo, hi: [3]i32, kind: f32, eye: [3]f64) {
@@ -346,6 +370,7 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 	if len(near) > TINTS - n do for i in 1..<len(near) do for k := i; k > 0 && far(near[k].lo, near[k].hi, a.at) < far(near[k - 1].lo, near[k - 1].hi, a.at); k -= 1 do near[k], near[k - 1] = near[k - 1], near[k]
 	for t in near do put(v, &n, t.lo, t.hi, 4 if t.site == bar.job else 1, eye)
 	for site in s.sites do if site.work == .Dig do put(v, &n, {site.lo.x, site.hi.y + 1, site.lo.z}, {site.hi.x, 3000, site.hi.z}, 6, eye)   // faintly, the ground over each
+	for t in s.zone_boxes do put(v, &n, t.lo, t.hi, 7, eye)   // the stockpiles' ground, in the colour of what is well
 	v.tint_count = n
 
 	out := make([dynamic]Box, 0, len(boxes) + len(s.ghosts) + len(bar.cells) + len(bar.trees), context.temp_allocator)
@@ -363,6 +388,7 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 		return u32(math.pow(c.r, 1/2.2)*255) << 16 | u32(math.pow(c.g, 1/2.2)*255) << 8 | u32(math.pow(c.b, 1/2.2)*255)
 	}
 	brass := rgb(LOOK.brass)
+	framed := make(map[int]int, context.temp_allocator)   // of each order to build, the blocks drawn as holding their stuff
 	for g in s.ghosts {
 		if len(out) >= BOX_MAX - 64 do break
 		at := rel({f64(g.at.x) + 0.5, f64(g.at.y) + 0.5, f64(g.at.z) + 0.5}, eye)
@@ -371,7 +397,12 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 		case .Fell:   // a band round the stem, at a dwarf's shoulder, and a cap on the crown, which is what shows from above
 			cube(&out, at + {0, 0.6, 0}, {0.62, 0.14 if chosen else 0.09, 0.62}, brass, brass)
 			cube(&out, at + {0, f32(g.tall) + 0.1, 0}, {0.6, 0.14, 0.6} if chosen else {0.5, 0.1, 0.5}, brass, brass)
-		case .Build: cube(&out, at, {0.3, 0.3, 0.3} if chosen else {0.24, 0.24, 0.24}, stuff_colour(g.stuff, &s.store), brass)
+		case .Build:   // a small block while its stuff is still to be brought, and nearly whole once it lies at the order: marked, brought, and then built
+			site, _ := site_seen(g.site)
+			brought := framed[g.site] < site.have
+			framed[g.site] += 1
+			half := [3]f32{0.42, 0.42, 0.42} if brought else {0.3, 0.3, 0.3} if chosen else {0.2, 0.2, 0.2}
+			cube(&out, at, half, stuff_colour(g.stuff, &s.store), stuff_colour(g.stuff, &s.store) if brought else brass)
 		case .Dig:
 		}
 	}
@@ -414,6 +445,7 @@ tool_says :: proc() -> string {
 			return fmt.tprintf("%d steps %s, heading %s: %d %s.%s", steps, "down" if o.shape == .Down else "up", COMPASS[heading(o)], n, blocks, more)
 		}
 		if bar.way > 0 do more = fmt.tprintf("%s With the way in, %d of them.", more, bar.way)
+		if bar.lost do more = fmt.tprintf("%s No way in found: dig a stair or a passage to it first.", more)
 		if !pressed do return fmt.tprintf("%s: %s, %.0f s a block. Here: %d %s.%s", name, cut_words(under), dig_seconds(under), n, blocks, more)
 		return fmt.tprintf("%d by %d, %d deep: %d %s.%s", wide, long, hi.y - lo.y + 1, n, blocks, more)
 	case .Fell:
@@ -428,8 +460,8 @@ tool_says :: proc() -> string {
 		}
 		return fmt.tprintf("%d trees: %d timber.", k, timber)
 	case .Build:
-		have, _ := store_of(&watch.seen.store, bar.stuff)
-		short := "" if have >= n else fmt.tprintf(" %d in store: the rest waits.", have)
+		have := stuff_lying(bar.stuff)
+		short := "" if have >= n else fmt.tprintf(" %d to be had: the rest waits.", have)
 		if n == 0 do return "Nothing to lay here: a floor fills what is open at this level." if o.shape == .Floor else "Nothing to lay here."
 		switch o.shape {
 		case .Out, .Down, .Up:
@@ -439,11 +471,19 @@ tool_says :: proc() -> string {
 			_, _, steps := stair_run(o.at, o.to)
 			return fmt.tprintf("%d steps up, heading %s: %d %s of %s.%s", steps, COMPASS[heading(o)], n, blocks, STUFFS[bar.stuff], short)
 		}
+	case .Store:
+		if !pressed do if z, on := zone_under(bar.aim.block + {0, 1, 0}); on do return fmt.tprintf("A stockpile for %s: %d of %d places hold something. Drag beside it to make it larger.", TAKES_SAYS[z.takes], z.full, z.cells)
+		if n == 0 do return "No ground to store on here."
+		return fmt.tprintf("%d by %d: %d %s for %s.", wide, long, n, "place" if n == 1 else "places", TAKES_SAYS[bar.takes])
 	case .Send:
 		return "Click where the party should stand."
 	case .Remove:
-		if bar.way == 0 do return "Nothing is marked here."
-		return fmt.tprintf("%d %s taken back.", bar.way, "mark" if bar.way == 1 else "marks")
+		if bar.way == 0 do return "Nothing here to take back, take down or take out of a stockpile."
+		switch bar.undo {
+		case .Marks: return fmt.tprintf("%d %s taken back.", bar.way, "mark" if bar.way == 1 else "marks")
+		case .Built: return fmt.tprintf("%d built %s taken down; what they are of lies there.", bar.way, "block" if bar.way == 1 else "blocks")
+		case .Zone:  return fmt.tprintf("%d %s taken out of the stockpile.", bar.way, "place" if bar.way == 1 else "places")
+		}
 	}
 	return ""
 }
@@ -530,7 +570,7 @@ tool_card :: proc() {
 	inner := w - 2*px(L.pad.x)
 	x := px(L.margin)
 	chip := line_of(.Body) + 2*px(L.chip_pad.y)
-	rows := 2 if bar.tool == .Dig else 3 if bar.tool == .Build else 0
+	rows := 2 if bar.tool == .Dig else 3 if bar.tool == .Build else 1 if bar.tool == .Store else 0
 	high := 2*px(L.pad.y) + line_of(.Title) + f32(rows)*(chip + px(1.5)) + px(1.5) + 2*line_of(.Body)
 	r := Rect{x, screen.h - px(L.hand_foot) - high, w, high}
 	part(.Panel, r, id = "hand")
@@ -542,6 +582,11 @@ tool_card :: proc() {
 	numbers := [DEEPEST]string{"1", "2", "3", "4"}
 	args := [DEEPEST]int{1, 2, 3, 4}
 	#partial switch bar.tool {
+	case .Store:
+		names := [Takes]string{.All = "Everything", .Stone = "Stone", .Timber = "Timber"}
+		takes := [len(Takes)]int{int(Takes.All), int(Takes.Stone), int(Takes.Timber)}
+		chips(cx, y, "Takes", ([]string{names[.All], names[.Stone], names[.Timber]}), int(bar.takes), .Takes, takes[:], "tool.takes")
+		y += chip + px(1.5)
 	case .Dig:
 		names, tips: [len(DIG_CHOICES)]string
 		plans: [len(DIG_CHOICES)]int
@@ -567,8 +612,7 @@ tool_card :: proc() {
 		stuffs: [len(Stuff)]string
 		stuff_args: [len(Stuff)]int
 		for name, stuff in STUFFS {
-			have, _ := store_of(&watch.seen.store, stuff)
-			stuffs[int(stuff)], stuff_args[int(stuff)] = fmt.tprintf("%s %d", sentence(name)[:len(name)], have), int(stuff)
+			stuffs[int(stuff)], stuff_args[int(stuff)] = fmt.tprintf("%s %d", sentence(name)[:len(name)], stuff_lying(stuff)), int(stuff)
 		}
 		chips(cx, y, "Of", stuffs[:], int(bar.stuff), .Stuff, stuff_args[:], "tool.stuff")
 		y += chip + px(1.5)
@@ -581,4 +625,92 @@ tool_card :: proc() {
 	u.clip = {cx, y, inner, 2*line_of(.Body)}
 	words(cx, y, says, .Body, L.brass if pressed else L.chalk, "tool.says", inner)
 	u.clip = {}
+}
+
+// The stockpile a cell of ground belongs to, as the hold last showed it.
+zone_under :: proc(c: [3]i32) -> (z: Zone_Seen, on: bool) {
+	s := &watch.seen
+	b := c - {0, 1, 0}
+	for t in s.zone_boxes do if b.x >= t.lo.x && b.x <= t.hi.x && b.y >= t.lo.y && b.y <= t.hi.y && b.z >= t.lo.z && b.z <= t.hi.z {
+		for zone in s.zones do if zone.id == t.site do return zone, true
+	}
+	return
+}
+
+// A material's colour as the boxes take it, lighter or darker by a share.
+shaded :: proc(m: Mat, by: f32) -> u32 {
+	c := MATERIALS[m].colour*by
+	return u32(clamp(math.pow(c.r, 1/2.2), 0, 1)*255) << 16 | u32(clamp(math.pow(c.g, 1/2.2), 0, 1)*255) << 8 | u32(clamp(math.pow(c.b, 1/2.2), 0, 1)*255)
+}
+
+// A material's colour as the boxes take it.
+mat_rgb :: proc(m: Mat) -> u32 {
+	c := MATERIALS[m].colour
+	return u32(math.pow(c.r, 1/2.2)*255) << 16 | u32(math.pow(c.g, 1/2.2)*255) << 8 | u32(math.pow(c.b, 1/2.2)*255)
+}
+
+// The things that lie in the world, as boxes after the frame's: stone as a heap of small blocks,
+// two by two a layer; timber as logs laid side by side, three a layer, each layer across the one
+// under it. A pile is drawn whole or not at all by the cut, as a dwarf is.
+PILES_FAR :: 160   // metres from the view's middle past which a pile is not drawn
+piles_view :: proc(boxes: []Box, eye, middle: [3]f64) -> []Box {
+	s := &watch.seen
+	if len(s.piles) == 0 do return boxes
+	out := make([dynamic]Box, 0, len(boxes) + 8*len(s.piles), context.temp_allocator)
+	append(&out, ..boxes)
+	for p in s.piles {
+		if len(out) >= BOX_MAX - 512 do break
+		if abs(f64(p.at.x) - middle.x) > PILES_FAR || abs(f64(p.at.z) - middle.z) > PILES_FAR do continue
+		base := [3]f32{f32(f64(p.at.x) + 0.5 - eye.x), f32(f64(p.at.y) - eye.y), f32(f64(p.at.z) + 0.5 - eye.z)}
+		feet := base.y - 1e-3
+		n := int(min(p.n, HEAP))
+		if is_stuff(p.kind, .Timber) {
+			bark, wood := mat_rgb(p.kind if p.kind != .Timber else .Wood), mat_rgb(.Timber)
+			for k in 0..<n {
+				layer, slot := k/3, f32(k%3) - 1
+				along := layer%2 == 0
+				at := base + {0 if along else slot*0.3, 0.14 + f32(layer)*0.28, slot*0.3 if along else 0}
+				half := [3]f32{0.46, 0.13, 0.13} if along else {0.13, 0.13, 0.46}
+				append(&out, Box{at, f32(bark), {half.x, 0, 0}, f32(wood if k == n - 1 else bark), {0, half.y, 0}, 0, {0, 0, half.z}, feet})
+			}
+			continue
+		}
+		for k in 0..<n {   // stones a little apart and no two of one shade, so a heap reads as stones and not as a block
+			layer, slot := k/4, k%4
+			jog := f32((p.at.x*7 + p.at.z*13 + i32(k)*5)%%5 - 2)*0.03
+			size := f32(0.13) + 0.014*f32((p.at.x + p.at.z*3 + i32(k)*7)%%4)
+			at := base + {(f32(slot%2) - 0.5)*0.5 + jog, size + f32(layer)*0.31, (f32(slot/2) - 0.5)*0.5 - jog}
+			shade := f32(1.0) + 0.22*f32((i32(k)*3 + p.at.x)%%4)   // fresh broken rock is paler than the weathered face it lay under
+			append(&out, Box{at, f32(shaded(p.kind, shade*1.45)), {size, 0, 0}, f32(shaded(p.kind, shade)), {0, size, 0}, 0, {0, 0, size}, feet})
+		}
+	}
+	return out[:]
+}
+
+// How much of a stuff lies anywhere, stored or loose: what a block marked to be laid can be built of.
+stuff_lying :: proc(stuff: Stuff) -> (n: int) {
+	s := &watch.seen
+	for count, m in s.store do if is_stuff(m, stuff) do n += int(count)
+	for count, m in s.loose do if is_stuff(m, stuff) do n += int(count)
+	return
+}
+
+// A stair the tool would mark says how deep it goes: a figure on the ground over each step, the
+// blocks it lies under the level the drag began on, or over it.
+stair_marks :: proc() {
+	L := &LOOK
+	if !tool_marks() || !bar.ready || bar.order.kind != .Dig || bar.order.shape == .Out do return
+	o := bar.order
+	axis, way, steps := stair_run(o.at, o.to)
+	for i in 0..<steps {
+		c := o.at
+		c[axis] += way*i
+		at, ok := project({f64(c.x) + 0.5, f64(o.at.y) + 1.05, f64(c.z) + 0.5})
+		if !ok do continue
+		text := fmt.tprintf("%s%d", "-" if o.shape == .Down else "+", i + 1)
+		w := text_wide(.Small_Bold, text)
+		r := Rect{math.round(at.x - w/2), math.round(at.y - line_of(.Small_Bold)/2), w, line_of(.Small_Bold)}
+		part(.Fill, {r.x - px(1), r.y, r.w + px(2), r.h}, colour = L.basalt)
+		part(.Text, r, text, .Small_Bold, L.brass, id = "tool.step")
+	}
 }

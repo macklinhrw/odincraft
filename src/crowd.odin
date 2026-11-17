@@ -39,7 +39,7 @@ NEEDS := [?]Need{
 	// Orders (orders.odin): a dwarf with nothing to do while work is marked that it cannot take, by what the work waits for.
 	{"no-reach", "cannot reach the work", "idle: no way leads to the work that is marked", "idle: no way leads to the work that is marked",
 		"Waits for a way to it to be dug or built, or for other work", .Caution, proc(d: ^Seen) -> bool { return d.lack == .No_Way }},
-	{"no-stuff", "nothing to build with", "idle: nothing is in store to build what is marked", "idle: nothing is in store to build what is marked",
+	{"no-stuff", "nothing to build with", "idle: no stone or timber lies anywhere to build what is marked", "idle: no stone or timber lies anywhere to build what is marked",
 		"Waits for rock to be dug or trees felled, or for other work", .Caution, proc(d: ^Seen) -> bool { return d.lack == .No_Stuff }},
 	{"too-hard", "rock too hard", "idle: what is marked is rock too hard for the party's picks", "idle: what is marked is rock too hard for the party's picks",
 		"Waits for softer ground to be marked", .Caution, proc(d: ^Seen) -> bool { return d.lack == .Too_Hard }},

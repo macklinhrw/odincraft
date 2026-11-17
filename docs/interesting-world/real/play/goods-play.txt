@@ -1,0 +1,127 @@
+# Goods played from the player's seat (open-decisions.md, 2026-11-16): things that lie where they
+# fall, a place marked for them, carrying, the stores, and building from real things.
+#   build/odincraft --play=docs/interesting-world/real/play/goods-play.txt --dwarves=60
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
+key 3
+
+print 1. a wall ordered with nothing to build it of: it waits, and says for what
+key B
+drag 1060 900 1060 1040
+wait 1.5
+key esc
+shot out/play/g-01-wall-waiting.png
+say
+
+print 2. a dig whose stone lies loose where it was dug; the nearest of it is fetched for the wall
+view over=2695,-1781 span=40 tilt=55 turn=180
+key D
+drag 1280 420 1420 640
+run 46
+key esc
+view cut=2
+shot out/play/g-02-stone-loose.png
+say
+view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
+timer
+until done 300
+shot out/play/g-03-wall-built.png
+click 1062 930
+shot out/play/g-04-click-wall.png
+say
+key esc
+
+print 3. a stockpile dragged on flat ground: the stone is carried to it, and the stores count it
+key S
+part Stone
+move 950 700
+press
+move 1100 760
+move 1200 800
+shot out/play/g-05-store-flat-drag.png
+say
+release
+run 5
+shot out/play/g-06-carrying.png
+timer
+until done 400
+key esc
+shot out/play/g-07-stored.png
+say
+click 1010 735
+shot out/play/g-08-click-pile.png
+say
+click 1160 790
+shot out/play/g-09-click-zone.png
+say
+key esc
+
+print 4. a wood felled: its logs lie where the trees stood, then are carried to a stockpile dragged on the slope
+view over=2658,-1736 span=64 tilt=45
+key T
+drag 500 380 2250 1300
+timer
+until done 400
+key esc
+shot out/play/g-10-logs-loose.png
+say
+key S
+part Timber
+move 1500 900
+press
+move 1750 1000
+move 1900 1060
+shot out/play/g-11-store-slope-drag.png
+say
+release
+run 6
+shot out/play/g-12-logs-carrying.png
+foot 2661,1.7,-1731 90,-14
+shot out/play/g-13-logs-carrying-afoot.png
+view over=2658,-1736 span=64 tilt=45 turn=0
+timer
+until done 600
+key esc
+view over=2667,-1731 span=20 tilt=50
+shot out/play/g-14-logs-stored.png
+say
+
+print 5. Remove on a built wall takes it down and gives the stone back; on a stockpile it takes the ground out, and what lies there lies loose
+view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
+key X
+move 1062 790
+press
+move 1062 900
+move 1062 1000
+shot out/play/g-15-wall-remove-drag.png
+say
+release
+timer
+until done 300
+shot out/play/g-16-wall-down.png
+key space
+move 950 700
+press
+move 1100 760
+move 1200 800
+shot out/play/g-17-zone-remove-drag.png
+say
+release
+key space
+wait 1
+key esc
+shot out/play/g-18-zone-gone.png
+say
+
+print 6. a stair's preview says how deep each step lies
+key D
+part Stair down
+move 1150 880
+press
+move 1150 980
+move 1150 1080
+shot out/play/g-19-stair-depth.png
+say
+release
+key esc

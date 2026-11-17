@@ -25,11 +25,10 @@ import "core:time"
 // place and each dwarf finds its own way (paths.odin). One order exists in this step, "go", and
 // one notice, "block", which tells the hold that a block was changed.
 //
-// A dwarf takes up the floor it stands on or is stepping onto (`held`): no other steps onto it. A
-// walker plans its way round those who stand, follows one walking ahead of it, steps round one in
-// its way by a free floor beside it, and where there is none the two change floors, squeezing
-// past, which takes longer (held_off). One whose place at the end is taken ends on the nearest
-// free floor. A dwarf whose floor a changed block took away falls to the first ground below, or
+// A dwarf takes up the floor it stands still on (`held`): no other comes to rest there. A walker
+// goes by whoever is on its way, as the walkers of RimWorld and Ingnomia do (docs/adr/0012), and
+// plans its way round those who stand where there is room. One whose place at the end is taken
+// ends on the nearest free floor (held_off, ends_elsewhere). A dwarf whose floor a changed block took away falls to the first ground below, or
 // is pushed out of a block laid where it stood, and takes orders again where it lands (settle).
 //
 // An orders file has a line for each: the time, in seconds or as the log prints it, then
@@ -37,6 +36,7 @@ import "core:time"
 //   go x y z        send it to stand on that block
 //   block x y z M   the block there is now the material M (Air for dug out)
 //   dig, fell, build, unmark   mark ground to dig, trees to fell and blocks to lay, or take marks back (orders.odin)
+//   store            mark ground as a stockpile (goods.odin)
 // A line of the log that begins `The hold says "..."` gives the order in this form, with its time
 // before it, so the log of a played game can be played again.
 
@@ -81,10 +81,14 @@ Dwarf :: struct {
 	rest:        int,                 // ticks before it looks for work again
 	gave:        bool,                // it has just left a mark for a dwarf whose trade the work is
 	lack:        Waits,               // why it found no work when it last looked, where all that is marked waits for one thing
+	// What it carries (goods.odin).
+	haul:        Haul,                // the things it fetches or brings
+	carry:       Mat,                 // what it has in its arms
+	carrying:    i32,                 // and how many
 	shut:        bool,                // it stands in a pit with no way out
 	checked:     int,                 // the ground's changes when it last looked to itself
 }
-Order_Kind :: enum u8 { Go, Block, Dig, Fell, Build, Unmark }
+Order_Kind :: enum u8 { Go, Block, Dig, Fell, Build, Unmark, Store }
 Order :: struct {
 	tick:   int,
 	kind:   Order_Kind,
@@ -92,6 +96,7 @@ Order :: struct {
 	to:     [3]i32,   // a mark's box runs from `at`, where the drag began, to here
 	shape:  Plan,
 	stuff:  Stuff,
+	takes:  Takes,  // store: what the stockpile takes
 	column: bool,   // go: only the column was given, and its ground is meant
 	mat:    Mat,
 	frame:  bool,   // block: the frame changed it and told the hold; otherwise the frame is to be told (Hold.out)
@@ -113,6 +118,9 @@ Seen :: struct {
 	toil:           f64,
 	plight:         Plight,   // what is wrong with where it stands, for the screen to say who needs the player (plight_of)
 	lack:           Waits,    // idle with work marked that it cannot take: why (orders.odin); None otherwise
+	carry:          Mat,      // what it carries, and how many: none when it carries nothing (goods.odin)
+	carrying:       i32,
+	fetching:       bool,     // it walks to fetch something
 }
 Shown :: struct {
 	tick:      int,
@@ -125,7 +133,11 @@ Shown :: struct {
 	sites:     [dynamic]Site_Seen,
 	tints:     [dynamic]Tint,
 	ghosts:    [dynamic]Ghost,
-	store:     [Mat]i32,
+	store:     [Mat]i32,      // what lies in stockpiles that take it: what the hold has (goods.odin)
+	loose:     [Mat]i32,      // and what lies anywhere else, which is not counted
+	piles:     [dynamic]Pile_Seen,
+	zones:     [dynamic]Zone_Seen,
+	zone_boxes: [dynamic]Tint,
 	marks:     int,
 }
 
@@ -147,8 +159,13 @@ Hold :: struct {
 	marks:    [dynamic]Mark,  // every block marked and not yet done
 	marked:   map[[3]i32]int, // and which of them is each block's
 	sites:    [dynamic]Site,  // every order to mark, in the order given
-	store:    [Mat]i32,       // what was dug and felled, by kind
-	promised: [Stuff]int,     // blocks of the store that marks taken will use
+	store:    [Mat]i32,       // what lies in stockpiles that take it, by kind
+	goods:    [dynamic]Good,  // every pile of things lying in the world (goods.odin)
+	lying:    map[[3]i32]int, // and which of them lies in each cell
+	zones:    [dynamic]Stockpile,  // the stockpiles
+	zoned:    map[[3]i32]Zone_Cell,   // and the cells of ground that are theirs
+	built:    map[[3]i32]Plan,        // the blocks the dwarves laid, and what each was laid as
+	goods_v, goods_shown: int,        // counts every change to the goods, and the count shown
 	claims:   map[[3]i32]int, // the floors dwarves are bound for to work from
 	ground:   int,            // changes to the blocks so far
 	looked:   int,            // dwarves that have looked for work this tick
@@ -170,6 +187,7 @@ Hold :: struct {
 	wake:     sync.Cond,
 	inbox:    [dynamic]Order,
 	out:      [dynamic]Edit,  // blocks the dwarves changed, or an orders file, for the frame to change in the world it draws
+	out_laid: [dynamic]Laid_Block,  // and which of them were laid as a wall, a floor or a stair, or are such no longer
 	shown:    Shown,
 	target:   int,            // the tick the game's clock has reached (atomic)
 	until:    int,            // the tick to stop at
@@ -257,13 +275,16 @@ order_read :: proc(h: ^Hold, line: string) -> bool {
 		for part in strings.split(when_, ":", context.temp_allocator) do seconds = seconds*60 + (strconv.parse_f64(part) or_else -1e9)
 		v: [3]i32
 		ok := seconds >= 0 && len(words) >= 4
-		marking := len(words) > 1 && (words[1] == "dig" || words[1] == "fell" || words[1] == "build" || words[1] == "unmark")
+		marking := len(words) > 1 && (words[1] == "dig" || words[1] == "fell" || words[1] == "build" || words[1] == "unmark" || words[1] == "store")
 		if ok && marking {   // a mark: its kind, what it is to be, and the six figures of its box
-			o.kind = .Dig if words[1] == "dig" else .Fell if words[1] == "fell" else .Build if words[1] == "build" else .Unmark
+			o.kind = .Dig if words[1] == "dig" else .Fell if words[1] == "fell" else .Build if words[1] == "build" else .Store if words[1] == "store" else .Unmark
 			rest = words[2:]
-			named := 1 if o.kind == .Dig else 2 if o.kind == .Build else 0
+			named := 1 if o.kind == .Dig || o.kind == .Store else 2 if o.kind == .Build else 0
 			ok = len(rest) == named + 6
-			if ok && named > 0 {
+			if ok && o.kind == .Store {
+				ok = false
+				for name, takes in TAKES do if name == rest[0] do o.takes, ok = takes, true
+			} else if ok && named > 0 {
 				ok = false
 				for name, shape in PLANS do if name == rest[0] && (o.kind == .Dig) == (shape <= .Up) do o.shape, ok = shape, true
 			}
@@ -357,7 +378,8 @@ hold_show :: proc(h: ^Hold) {
 		was, trod := at, d.stride
 		if h.tick > 0 && i < len(h.shown.dwarves) do was, trod = h.shown.dwarves[i].at, h.shown.dwarves[i].stride
 		h.showing[i] = {who = h.party[i], was = was, at = at, trod = trod, stride = d.stride, facing = d.facing, doing = d.doing, left = len(d.path) - d.next, of = len(d.path), said = d.said, fall = d.fall,
-			job = d.job, working = d.doing == .Working, shut = d.shut, site = -1, cut = d.cut, toil = d.toil}
+			job = d.job, working = d.doing == .Working, shut = d.shut, site = -1, cut = d.cut, toil = d.toil,
+			carry = d.carry, carrying = d.carrying, fetching = d.haul.on && !d.haul.bringing}
 		if k, ok := h.marked[d.job_at]; ok && d.job do h.showing[i].site = h.marks[k].site
 		h.showing[i].plight = plight_of(h, i)
 		if !d.job && !d.shut && (d.doing == .Waiting || d.doing == .Stopped) && len(h.marks) > 0 do h.showing[i].lack = d.lack
@@ -368,14 +390,24 @@ hold_show :: proc(h: ^Hold) {
 	h.shown.tick, h.shown.errand, h.shown.place, h.shown.grounded = h.tick, h.errand, h.place, h.tick >= h.boat_ticks
 	h.shown.dwarves, h.showing = h.showing, h.shown.dwarves
 	orders_show(h)
+	goods_show(h)
 	sync.unlock(&h.mutex)
 }
 
 // A copy of what the hold shows, into a picture that keeps its own room.
 shown_copy :: proc(to: ^Shown, from: Shown) {
 	dwarves, sites, tints, ghosts := to.dwarves, to.sites, to.tints, to.ghosts
+	piles, zones, zone_boxes := to.piles, to.zones, to.zone_boxes
 	to^ = from
 	to.dwarves, to.sites, to.tints, to.ghosts = dwarves, sites, tints, ghosts
+	to.piles, to.zones, to.zone_boxes = piles, zones, zone_boxes
+	builtin.resize(&to.piles, len(from.piles))
+	copy(to.piles[:], from.piles[:])
+	builtin.resize(&to.zones, len(from.zones))
+	copy(to.zones[:], from.zones[:])
+	builtin.resize(&to.zone_boxes, len(from.zone_boxes))
+	copy(to.zone_boxes[:], from.zone_boxes[:])
+
 	builtin.resize(&to.dwarves, len(from.dwarves))
 	copy(to.dwarves[:], from.dwarves[:])
 	builtin.resize(&to.sites, len(from.sites))
@@ -401,6 +433,14 @@ hold_tick :: proc(h: ^Hold) {
 	if h.tick == h.boat_ticks do say(h, "The boat grounds at %d, %d, on %s.", h.landed.at.x, h.landed.at.z, ground_words(h.landed.at)[4:])
 	h.looked, h.cared = 0, false
 	for &d, i in h.dwarves {
+		if d.takes == 0 && (d.doing == .Waiting || d.doing == .Stopped || d.doing == .Working) do if o, ok := h.held[d.cell]; !ok do h.held[d.cell] = i   // come to rest: the floor is its own,
+		else if o != i {                                                                                                                              // or another's, and it moves to the nearest that is free
+			h.walk.budget = ASKING
+			if f := walk_near(&h.walk, d.cell.x, d.cell.y, d.cell.z, 4, false, &h.held); f >= 0 && !d.job && !d.haul.on {
+				h.spots[i] = floor_block(&h.walk, f)
+				d.doing, d.seek, d.wait, d.errand = .Walking, true, 0, false
+			}
+		}
 		if d.takes == 0 && d.doing == .Working do work_tick(h, i)
 		else if d.takes == 0 && (d.doing == .Waiting || d.doing == .Stopped) && !d.adrift do idle_tick(h, i)
 		if d.doing == .Aboard && h.tick >= h.boat_ticks + 20 + STEP_OUT*i {   // over the bow, one at a time
@@ -431,6 +471,7 @@ hold_tick :: proc(h: ^Hold) {
 			d.takes, d.pass = 0, false
 			if d.fall {
 				d.fall = false
+				h.aside = d.from.y - f64(d.cell.y) < 3   // a drop of a block or two is the log's alone
 				say(h, "%s %s falls %.0f m and lands on %s.", h.party[i].given, h.party[i].byname, max(d.from.y - f64(d.cell.y), 1), ground_words(d.cell)[4:])
 			}
 			if d.doing == .Ashore {
@@ -464,14 +505,15 @@ step_on :: proc(h: ^Hold, i: int) -> Stepped {
 		return .Ended
 	}
 	to := d.path[d.next]
-	if o, taken := h.held[to]; taken && o != i do return held_off(h, i, o)
-	step_to(h, i, to, 1)
+	last := d.next == len(d.path) - 1
+	if o, taken := h.held[to]; taken && o != i && last do return held_off(h, i, o)   // only where it means to stand: on its way it goes by whoever is there
+	step_to(h, i, to, 1, last)
 	d.next += 1
 	return .Stepped
 }
 
 // A dwarf sets off for a floor beside its own, taking `slow` times as long as the ground asks.
-step_to :: proc(h: ^Hold, i: int, to: [3]i32, slow: f32) {
+step_to :: proc(h: ^Hold, i: int, to: [3]i32, slow: f32, stand := true) {
 	d := &h.dwarves[i]
 	h.walk.budget = ASKING
 	a, b := walk_floor(&h.walk, d.cell.x, d.cell.y, d.cell.z), walk_floor(&h.walk, to.x, to.y, to.z)
@@ -480,7 +522,11 @@ step_to :: proc(h: ^Hold, i: int, to: [3]i32, slow: f32) {
 	d.stride += math.hypot(f64(to.x - d.cell.x), f64(to.z - d.cell.z))
 	d.facing = f32(math.atan2(f64(to.x - d.cell.x), -f64(to.z - d.cell.z)))
 	d.into, d.stuck = 0, 0
-	take(h, i, to)
+	if stand do take(h, i, to)
+	else {   // passing over it: it takes up no floor until it stands
+		if o, ok := h.held[d.cell]; ok && o == i do delete_key(&h.held, d.cell)
+		d.cell = to
+	}
 }
 
 // The floor ahead of a walker is another dwarf's. One in a step will be off it or settled on it in
@@ -511,17 +557,6 @@ held_off :: proc(h: ^Hold, i, o: int) -> Stepped {
 			h.work.round += 1
 			return .Stepped
 		}
-	}
-	// One at work keeps its place: the walker goes by it to the floor beyond, taking longer, as two
-	// who squeeze do, and the worker is not set back a floor (colony-sim-reference.md, takeaway 15).
-	if b.doing == .Working && !last {
-		beyond := d.path[d.next + 1]
-		if beyond in h.held do return .Held
-		step_to(h, i, beyond, SQUEEZE)
-		d.next += 2
-		d.pass = true
-		h.work.squeezed += 1
-		return .Stepped
 	}
 	// They squeeze past: each takes the other's floor.
 	x, y := d.cell, b.cell
@@ -555,6 +590,7 @@ ends_elsewhere :: proc(h: ^Hold, i: int) -> Stepped {
 	for k := 0; k < len(queue) && k < 400; k += 1 {
 		at := floor_block(w, queue[k])
 		free := at == d.cell || at not_in h.held
+		if o, claimed := h.claims[at]; claimed && o != i do free = false
 		for spot, j in h.spots do free &&= j == i || spot != at
 		if free {
 			h.spots[i] = at
@@ -620,7 +656,10 @@ settle :: proc(h: ^Hold, i: int, dropped: bool) {
 	d.fall, d.pass, d.into, d.stuck = fell, false, 0, 0
 	d.takes = max(i32(1000*math.sqrt(2*max(drop, 0)/9.8)), 300) if fell else 800
 	if fell do h.work.fell += 1
-	else do say(h, "%s %s, and is moved to the nearest ground.", name, "has ground near it again" if d.adrift else "is in the way of a block laid where it stood" if !dropped else "has no ground to land on below")
+	else {
+		h.aside = true   // the log's alone: it is moved a step, and nothing is asked of the player
+		say(h, "%s %s, and is moved to the nearest ground.", name, "has ground near it again" if d.adrift else "is in the way of a block laid where it stood" if !dropped else "has no ground to land on below")
+	}
 	if d.adrift && d.doing == .Stopped do d.doing, d.said = .Waiting, ""
 	d.adrift = false
 	if d.doing == .Walking do d.seek, d.wait = true, 0
@@ -631,6 +670,10 @@ arrive :: proc(h: ^Hold, i: int) {
 	d := &h.dwarves[i]
 	if d.job {   // it came to work
 		work_begin(h, i)
+		return
+	}
+	if d.haul.on {   // or to fetch or bring something
+		haul_arrive(h, i)
 		return
 	}
 	d.doing = .Waiting
@@ -703,6 +746,7 @@ find :: proc(h: ^Hold, i: int) {
 	_, why, _, _ := way_timed(h, d.cell, h.spots[i], &d.path)
 	clear(&w.shun)
 	if why != .Way && !d.errand {   // on its way to work, or stepping aside: it gives that up
+		haul_drop(h, i)
 		if k, ok := h.marked[d.job_at]; ok && d.job do mark_waits(h, k, .No_Way)
 		clear(&d.path)
 		d.doing, d.rest = .Waiting, REST
@@ -741,6 +785,8 @@ obey :: proc(h: ^Hold, o: Order) {
 		ground_changed(h, o.at, o.mat, o.frame)
 	case .Dig, .Fell, .Build, .Unmark:
 		mark_obey(h, o)
+	case .Store:
+		zone_obey(h, o)
 	case .Go:
 		at := o.at
 		if o.column do at.y = i32(math.round(ground(f64(at.x - region.origin.x) + 0.5, f64(at.z - region.origin.y) + 0.5, 1).h)) - 1
@@ -785,6 +831,7 @@ obey :: proc(h: ^Hold, o: Order) {
 		turn := 0
 		for &d, i in h.dwarves do if ashore(d) {   // each looks for its own way when its turn in the file comes
 			job_drop(h, i, 0)
+			haul_drop(h, i)
 			clear(&d.path)
 			d.doing, d.seek, d.next, d.said, d.errand = .Walking, true, 0, "", true
 			d.wait = 0
@@ -1016,6 +1063,9 @@ hold_frame :: proc(w: ^World, eye: [3]f64, ray: [3]f32, above: ^Above, passed, d
 		told := make([]Edit, len(h.out), context.temp_allocator)   // blocks an orders file changed: the world drawn changes with them
 		copy(told, h.out[:])
 		clear(&h.out)
+		for l in h.out_laid do if l.on do bar.built[l.at] = l.plan   // what a block was laid as, for a click on it to say (bar.odin)
+		else do delete_key(&bar.built, l.at)
+		clear(&h.out_laid)
 		sync.unlock(&h.mutex)
 		for e in told do world_set(w, e.x, e.y, e.z, e.mat, false)
 	}
@@ -1075,6 +1125,8 @@ dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
 		c.next = fmt.tprintf("Will take more of that work while any is left: %d of its %d %s are still to do", site.left, site.total, "trees" if site.work == .Fell else "blocks")
 	}
 	if !d.job && (d.doing == .Waiting || d.doing == .Stopped) && s.marks > 0 && !d.shut do c.next = "Looks for work it can reach among what is marked"
+	if d.carrying > 0 do c.doing, c.next = fmt.tprintf("Carrying %d of %s to where it is wanted", d.carrying, store_words(d.carry)), "Will look for more to carry, or for marked work"
+	else if d.fetching do c.doing, c.next = "Going to fetch something that lies loose", "Will carry it to a stockpile, or to a block marked to be laid"
 	if d.shut do c.doing, c.next = "Shut in: no way leads out of where it stands", "Waits for a stair to be dug or built to it"
 	if d.fall do c.doing = "Falling: the ground went from under it"
 
@@ -1152,7 +1204,7 @@ hold_pose :: proc(boxes: []Box, eye: [3]f64, dt: f64) -> []Box {
 		watch.feet[i] = at
 		turn := math.mod(d.facing - watch.turned[i] + 3*math.PI, math.TAU) - math.PI   // the short way round
 		watch.turned[i] = d.facing if !watch.drawn || !watch.live else watch.turned[i] + turn*f32(min(10*dt, 1))
-		dwarf_boxes(&out, d.who, rel(at, eye), watch.turned[i], math.lerp(d.trod, d.stride, a), d.at != d.was && !d.fall && d.doing != .Aboard, d.doing == .Aboard, f32(d.toil + (watch.clock - f64(s.tick)*TICK if watch.live else 0)) if d.working else -1)
+		dwarf_boxes(&out, d.who, rel(at, eye), watch.turned[i], math.lerp(d.trod, d.stride, a), d.at != d.was && !d.fall && d.doing != .Aboard, d.doing == .Aboard, f32(d.toil + (watch.clock - f64(s.tick)*TICK if watch.live else 0)) if d.working else -1, d.carry, d.carrying)
 	}
 	watch.drawn = true
 	return out[:]

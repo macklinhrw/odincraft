@@ -38,7 +38,7 @@ Act :: enum u8 {
 	Pause, Speed,                                        // the clock
 	Cut, Cut_Move, Cut_Drag, Follow, Bare, Lenses, Lens, Walk,   // the ground here
 	Why, Go, Drop, Depth,                                // the hand
-	Order, Plan, Stuff, Deep, High, Take_Back, More,     // the orders bar, a tool's choices and numbers, an order's card (bar.odin), and the card asked for or shut
+	Order, Plan, Stuff, Takes, Deep, High, Take_Back, More,     // the orders bar, a tool's choices and numbers, an order's card (bar.odin), and the card asked for or shut
 	List, Sort, Fold, Row, Find, Thumb,                  // the lists
 	Who, Lead, Keep, Only, Whole, Crowd,                 // the dwarves: a picture, a row, kept in view, the list's kept alone, a group whole, the list opened on some (crowd.odin)
 	Menu, Back, Quit, Scale, Escape,
@@ -73,6 +73,7 @@ BINDS := [?]Bind{
 	{.F4, "F4", .List, int(List.Places), int(List.Places), .Either, false},
 	{.D, "D", .Order, int(Tool.Dig), int(Tool.Dig), .Above, false}, {.T, "T", .Order, int(Tool.Fell), int(Tool.Fell), .Above, false},
 	{.B, "B", .Order, int(Tool.Build), int(Tool.Build), .Above, false}, {.M, "M", .Order, int(Tool.Send), int(Tool.Send), .Either, false},
+	{.S, "S", .Order, int(Tool.Store), int(Tool.Store), .Above, false},
 	{.X, "X", .Order, int(Tool.Remove), int(Tool.Remove), .Above, false},
 	{.ESCAPE, "Esc", .Back, 0, 0, .Menu, false},
 	{.Q, "Q", .Quit, 0, 0, .Menu, false},
@@ -347,6 +348,13 @@ hand_pick :: proc(pick: Pick, pointer: [2]f32) {
 		return
 	}
 	t := thing_at(u.w, pick)
+	if !u.afoot^ {   // a pile before the ground behind it; a stockpile's ground as the stockpile
+		ray := view_ray(u.yaw, u.pitch, u.fov, u.aspect, pointer)
+		if k := pile_aimed(u.eye, ray, pick); k >= 0 {
+			p := watch.seen.piles[k]
+			t = {kind = .Pile, island = t.island, block = p.at, lo = p.at, hi = p.at, mat = p.kind, feature = int(p.n)}
+		} else if _, on := zone_under(t.block + {0, 1, 0}); on && t.kind == .Ground do t.kind = .Zone
+	}
 	if held_now(t) do u.card_open = !u.card_open
 	else if t.kind == .Ground && job_of(t) < 0 do u.card_open = false
 	hand_take(t)
@@ -424,6 +432,7 @@ play_act :: proc(act: Act, arg: int) {
 		if bar.tool == .Dig do bar.dig = Plan(arg)
 		else do bar.build = Plan(arg)
 	case .Stuff: bar.stuff = Stuff(arg)
+	case .Takes: bar.takes = Takes(arg)
 	case .Deep: bar.deep = i32(clamp(arg, 1, DEEPEST))
 	case .High: bar.high = i32(clamp(arg, 1, 2))
 	case .More: u.card_open, u.card_scroll = !u.card_open, 0
@@ -754,6 +763,7 @@ labels_build :: proc() {
 		part(.Text, r, name, .Name, LOOK.brass if chosen else LOOK.chalk, {}, .Row, p.c, id = "label", tip = sentence(c.why))
 	}
 	crowd_marks()   // the dwarves in the hand, and those who need the player, marked where they stand
+	stair_marks()   // and how deep each step of a stair the tool would mark lies (bar.odin)
 }
 
 // Top left: the place, the date, and the clock.
@@ -814,6 +824,49 @@ said_build :: proc() {
 	}
 }
 
+// Top right: the stores. What the hold has is what lies in its stockpiles: each kind beside a
+// block of itself, the stones by their rock and the timber together. What lies loose is said, and is
+// not counted; with nothing marked to store on, it says how to mark it. Returns where the alerts
+// may begin under it.
+stores_build :: proc() -> (foot: f32) {
+	u, L := &play, &LOOK
+	s := &watch.seen
+	foot = px(L.margin)
+	loose, timber := 0, 0
+	Row :: struct { mat: Mat, name: string, n: int }
+	rows := make([dynamic]Row, context.temp_allocator)
+	for n, m in s.store do if n > 0 {
+		if is_stuff(m, .Timber) do timber += int(n)
+		else do append(&rows, Row{m, sentence(mat_words(m))[:len(mat_words(m))], int(n)})
+	}
+	for n in s.loose do loose += int(n)
+	if timber > 0 do append(&rows, Row{.Timber, "Timber", timber})
+	if len(rows) == 0 && loose == 0 && len(s.zones) == 0 do return
+	slice.sort_by(rows[:], proc(a, b: Row) -> bool { return a.n > b.n })
+	if len(rows) > 5 do builtin.resize(&rows, 5)
+	note := fmt.tprintf("%d lie loose: no stockpile yet", loose) if len(s.zones) == 0 && loose > 0 else "No stockpile yet" if len(s.zones) == 0 else fmt.tprintf("%d lie loose, not counted", loose) if loose > 0 else ""
+	w := px(66)
+	line := line_of(.Body)
+	high := 2*px(L.pad.y) + line_of(.Small) + px(1) + f32(max(len(rows), 1))*line + (px(1) + line_of(.Small) if note != "" else 0)
+	x, y := screen.w - px(L.margin) - w, px(L.margin)
+	part(.Panel, {x, y, w, high}, id = "stores", tip = "What lies in the hold's stockpiles. Things lying anywhere else are not counted until they are carried in.")
+	u.crowd_right = x
+	cx := x + px(L.pad.x)
+	y += px(L.pad.y)
+	y += words(cx, y, "Stores", .Small, L.ash, "stores.title") + px(1)
+	inner := w - 2*px(L.pad.x)
+	if len(rows) == 0 do y += words(cx, y, "Nothing stored", .Body, L.ash, "stores.none")
+	for r in rows {
+		part(.Block, {cx, y + math.round((line - px(L.block))/2), px(L.block), px(L.block)}, id = "stores.block").mat = r.mat
+		words(cx + px(L.block) + px(2.5), y, r.name, .Body, {}, "stores.kind")
+		count := fmt.tprint(r.n)
+		words(cx + inner - text_wide(.Figure, count), y, count, .Figure, {}, "stores.count")
+		y += line
+	}
+	if note != "" do y += px(1) + words(cx, y, note, .Small, L.brass if len(s.zones) == 0 else L.ash, "stores.loose")
+	return px(L.margin) + high + px(2)
+}
+
 // Top right: the stores, when the hold has any, then what is wrong, worst first. Each leads to its cause.
 wrong_build :: proc() {
 	u, L := &play, &LOOK
@@ -823,10 +876,11 @@ wrong_build :: proc() {
 		u.crowd_right = list_rect().x
 		return
 	}
+	top := stores_build()   // the stores first, then what is wrong (I1)
 	if len(u.wrong) == 0 do return
 	w := clamp(screen.w - 2*px(L.margin) - u.place_wide - 2*px(2) - crowd_least(), px(L.wrong_least), px(L.wrong_wide))   // narrower where the picture is, to leave the dwarves their place
-	x, y := screen.w - px(L.margin) - w, px(L.margin)
-	u.crowd_right = x
+	x, y := screen.w - px(L.margin) - w, top
+	u.crowd_right = min(u.crowd_right, x) if top > px(L.margin) + px(L.button) else x   // beside the dwarves only where it stands at their height
 	show := text_wide(.Body, "show")
 	wide := w - 2*px(L.pad.x) - px(L.sign) - px(2.5) - show - px(6)
 	high := 2*px(L.pad.y)
@@ -1421,13 +1475,13 @@ tip_build :: proc() {
 			if u.animal.ok do t = {kind = .Animal, creature = u.animal.row, nest = u.animal.nest}
 			u.tip_block = a.under.block
 			switch t.kind {
-			case .None, .Box, .Dwarf, .Dwarves, .Place: u.tip = strings.clone("")
+			case .None, .Box, .Dwarf, .Dwarves, .Place, .Pile, .Zone: u.tip = strings.clone("")
 			case .Ground: u.tip = strings.clone(mat_words(t.mat))
 			case .Tree:   u.tip = fmt.aprintf("a %s%s, %d m", SPECIES[t.tree.kind].name, "" if t.tree.kind == .Scrub else " tree", t.tree.height)
 			case .Stream: u.tip = strings.clone("a stream")
 			case .Lake:   u.tip = strings.clone("still water")
 			case .Sea:    u.tip = strings.clone("the sea")
-			case .Animal: u.tip = fmt.aprintf("a %s%s", CREATURES[t.creature].name, "'s nest" if t.nest else "")
+			case .Animal: u.tip = fmt.aprintf("%s %s%s", "an" if strings.contains_rune("aeiou", rune(CREATURES[t.creature].name[0])) else "a", CREATURES[t.creature].name, "'s nest" if t.nest else "")
 			}
 		}
 		text = u.tip
@@ -1568,4 +1622,28 @@ play_posed :: proc(opt: ^Options) {
 // What the screen says, area by area, as --say prints it.
 play_say :: proc() {
 	for area in Area do if says := screen_says(&screen, area); says != "" do fmt.printf("[%v]\n%s", area, says)
+}
+
+// The pile a ray from the eye meets, of those the hold last showed, where it lies before the block
+// picked behind it; or -1.
+pile_aimed :: proc(eye: [3]f64, ray: [3]f32, behind: Pick) -> (which: int) {
+	which = -1
+	near := f64(1e9)
+	if behind.ok do near = linalg.length([3]f64{f64(behind.block.x) + 0.5, f64(behind.block.y) + 0.5, f64(behind.block.z) + 0.5} - eye) + 0.9
+	for p, k in watch.seen.piles {
+		lo := [3]f64{f64(p.at.x) + 0.05, f64(p.at.y), f64(p.at.z) + 0.05}
+		hi := lo + {0.9, 0.25 + 0.1*f64(min(p.n, HEAP)), 0.9}
+		t0, t1 := 0.0, near
+		for a in 0..<3 {
+			v := f64(ray[a])
+			if abs(v) < 1e-9 {
+				if eye[a] < lo[a] || eye[a] > hi[a] do t1 = -1
+				continue
+			}
+			a0, a1 := (lo[a] - eye[a])/v, (hi[a] - eye[a])/v
+			t0, t1 = max(t0, min(a0, a1)), min(t1, max(a0, a1))
+		}
+		if t0 <= t1 do which, near = k, t0
+	}
+	return
 }

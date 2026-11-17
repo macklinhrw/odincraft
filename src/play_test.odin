@@ -159,7 +159,7 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	// its tool in the hand, with its choices, what the land says of the ground and, while a box is
 	// dragged, the mark's size in words. Escape puts it down.
 	orders := screen_says(&screen, .Orders)
-	for name in ([5]string{"Dig [D]", "Fell [T]", "Build [B]", "Send [M]", "Remove [X]"}) do testing.expectf(t, strings.contains(orders, name), "the orders bar lacks %s", name)
+	for name in ([6]string{"Dig [D]", "Fell [T]", "Build [B]", "Store [S]", "Send [M]", "Remove [X]"}) do testing.expectf(t, strings.contains(orders, name), "the orders bar lacks %s", name)
 	key(s, .D)
 	testing.expect_value(t, says("tool.title"), "Dig")
 	testing.expect(t, bar.tool == .Dig && play.hand.kind == .None && .Held in screen_find(&screen, "orders.dig").state, "D did not put the digging tool in the hand")
@@ -168,7 +168,7 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	s.a.mark, s.a.marked, s.a.marking = {block, block + {4, 0, 6}}, true, true
 	bar.dragged = true
 	frame(s)
-	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 2 deep: 70 blocks"), says("tool.says"))   // twelve blocks under the ground: too deep for a way in to be found for it
+	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 2 deep: ") && strings.contains(says("tool.says"), "With the way in"), says("tool.says"))   // twelve blocks under the ground: a stair is found for it
 	s.a.mark = {block + {0, 8, 0}, block + {4, 8, 6}}
 	frame(s)
 	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 2 deep: ") && strings.contains(says("tool.says"), "With the way in"), says("tool.says"))   // four under it: the order digs its own way in
