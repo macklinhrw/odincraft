@@ -163,6 +163,8 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - *Asked:* **should a stockpile have a priority and a finer filter (basalt but not breccia)?** *Recommendation: with the Stores list, when there is more than stone and timber to sort.*
 - *Asked:* **one Remove for marks, built blocks and stockpiles, or three tools?** *Recommendation: one, until a player takes down a wall meaning to cancel a mark.*
 - *Asked:* **should earth be a thing too?** Dug earth vanishes, as it did. In Ingnomia soil is a thing and a hold fills with it. *Recommendation: no, until something is made of earth.*
+- **Checked by Claude before merging (1f8f95f)**, by looking at each of the 22 played pictures and playing a click on a stored pile: the stores' note with no stockpile ran past its panel's edge and was shortened to "21 loose: no stockpile"; the script's click on a pile had missed it, and on the pile it says "Basalt 8, in a stockpile". No benches were run again. Still weak, and for the owner's eye: a message's older lines fade until they are hard to read over rock; stones in a heap are small and dark under a canopy; a stockpile fills from its nearest edge and looks untidy half full; a room marked deep has not been played.
+- *Asked of the owner:* **dwarves pass through one another again on the move** (above), which sets aside the walking round one another asked for on playing P2. *Recommendation: keep it, as both games do; say so if it looks wrong.*
 
 **2026-11-16, Claude's call** (P3 put right, part A: what exists made right; `plan.md` section 10, "P3, as put right"; `adr/0011`; `foundations/interface.md` section 12; read against `interesting-world/notes/colony-sim-reference.md` and its sources)
 
