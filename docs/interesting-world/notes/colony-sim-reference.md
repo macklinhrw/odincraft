@@ -313,3 +313,57 @@ Read on 2026-11-16 for step P4's second half, before it was built. Every figure 
 - **A place to sleep is dragged like a stockpile before any bed exists**: RimWorld's sleeping spot and Dwarf Fortress's dormitory. With none, a dwarf looks for a roof or a fire within a short walk, where RimWorld's lies down where it stands.
 - **A fire is laid of one log, holds six, burns three a day and three times that in rain**, where RimWorld's is 20 wood, 10 a day and 4.6 times: a tree here is three to six logs. It is fed from the store without orders, and a toggle on its card stops that, as in RimWorld. Unlike RimWorld's it warms those beside it in the open, two steps round, and four indoors.
 - **A cold dwarf goes to the warm by itself**, as RimWorld's pawn with hypothermia seeks a safe temperature; and the fire's own work is not left for the cold.
+
+## 16. Food that spoils and food that keeps: rot, drying and smoking, the low-food alert, days of food
+
+Read on 2026-11-17 for the step "Winter's food", before it was built. Every figure has its file; "(from memory)" marks what is not in these folders. `Rimworld_Data/Odyssey/` is the 1.6 expansion's data.
+
+### Rot
+
+- **RimWorld gives a thing that rots a count of days, and rots it by the air** (`RW/RimWorld/CompRottable.cs`, `CompProperties_Rottable.cs`). `daysToRotStart` is 2 by default; `rotDestroys` makes the thing vanish when its days are up. Each tick the progress grows by `GenTemperature.RotRateAtTemperature` (`RW/Verse/GenTemperature.cs:403-408`): **nothing under 0 °C, the full pace from 10 °C up, and in between a tenth of it for each degree.** So a freezer stops rot and a cool room slows it. Two stacks joined take the mean of their progress by their counts (`PreAbsorbStack`); a stack split keeps it.
+- **Its figures** (the year is 60 days): raw meat 2 days (`RW/RimWorld/ThingDefGenerator_Meat.cs:42-45`); a fish 2 (`Rimworld_Data/Odyssey/Defs/ThingDefs_Items/Items_Resource_Fish.xml:36-38`); berries 14, agave 25, potatoes and fungus 30, rice 40, corn 60, hay 60 (`RD/ThingDefs_Items/Items_Resource_RawPlant.xml:52,79,102,124,148,168,207`); milk 14 and eggs 15 (`Items_Resource_AnimalProduct.xml:26,132`); a cooked meal 4 and nutrient paste 0.75 (`Items_Food.xml:101,111`); **pemmican 70** (`Items_Food.xml:331`); a packaged survival meal has no rot at all ("While it never rots, it can still deteriorate if left outside", `Items_Food.xml:54-57`).
+- **What the player is told**: a thing's own line says "Fresh", "Rotting" or "Dessicated" and, while fresh, how long it has at the air it lies in, with "(not refrigerated)", "(refrigerated)" or "(frozen)" (`CompRottable.CompInspectStringExtra`). When a stack rots away in a stockpile a message says so, "rotted away in storage", and the game then teaches freezers (`CompRottable.Tick`: `MessageRottedAwayInStorage`, `ConceptDefOf.SpoilageAndFreezers`; `RD/Tutor/Concepts_NotedSelfshow.xml:201-204`: "Most foodstuffs will spoil after a relatively short time... Frozen foods won't ever spoil"). A stack that rots lying loose goes without a word.
+- **Dwarf Fortress keeps a counter on each thing that rots** (`rot_timer` on meat, fish, raw fish, plants, cheese and the rest, `DF/df.item.xml:1124-1460`; the flag `rotten`, `:396`; a material's `ROTS`, `DF/df.d_basics.xml:4261`). **Food does not rot while it lies in a stockpile, in a barrel or a pot** (from memory): what rots is what is left where it fell, a raw fish on the bank above all. A raw fish is not food until it is cleaned at a fishery (`PrepareRawFish`, "Prepare a Raw Fish", `DF/df.job.xml:654-659`; the food stockpile has `fish` and `unprepared_fish` apart, `DF/df.building.xml:604-607`); DFHack's `autofish` exists "to try and prevent collecting too many rotten fish" (`DH/docs/autofish.rst:8-11`). Eating something rotten is an unhappy thought (`DF/df.personality.xml:551-553`).
+- **Ingnomia and Dwarf Corp have no rot**: Ingnomia's `Items` table has no column for it (`IG/content/db/ingnomia.db.sql:498-518`), and Dwarf Corp's resources have none.
+
+### Making food keep
+
+- **RimWorld's pemmican** is a recipe at a stove or a campfire: 0.25 of meat and 0.25 of plant food by nutrition make 16 pemmican of 0.05, 700 ticks of a cook's work, behind a research (`RD/RecipeDefs/Recipes_Food.xml:65-121`). It is ordered as a bill, with a count to keep on hand (`RW/RimWorld/BillRepeatModeDefOf.cs`: so many times, until so many are in store, or for ever).
+- **RimWorld's fermenting barrel is its one thing that works by standing** (`RW/RimWorld/Building_FermentingBarrel.cs`; `RD/ThingDefs_Buildings/Buildings_Production.xml:1583-1637`): 30 wood and 10 steel, 600 ticks to build; it holds 25 wort; **haulers bring wort to it without being asked** (`WorkGiver_FillFermentingBarrel.cs`: the closest wort the pawn can reach, wherever it lies), it stands 360,000 ticks, six days, slower under 7 °C and ruined outside -1 to 32 °C, and **a hauler takes the beer out** and lays it by the barrel (`WorkGiver_TakeBeerOutOfFermentingBarrel.cs`). Wort added to a barrel half done sets it back by the share of the new wort (`AddWort`). Its card says how many it holds, how far it has come, when it will be done and that it is out of its ideal temperature (`GetInspectString`).
+- **RimWorld's recipe is a row**: what goes in, what comes out, the work, the bench (`RW/Verse/RecipeDef.cs:24-52`: `ingredients`, `products`, `workAmount`, `recipeUsers`), and one flag stops work when the ingredient is rotting (`interruptIfIngredientIsRotting`).
+- **Ingnomia smokes food in its kitchen** (`IG/content/db/ingnomia.db.sql:13171-13181`, table `Crafts`; `:12518-12539`, `Crafts_Components`; `:1204`, the Kitchen's list): one fish meat and one piece of wood make one smoked fish in 20 units of work. A craft is a row, its parts are rows, and a workshop names its crafts.
+- **Dwarf Fortress keeps food by where it is put**: the stockpile, the barrel (`StoreItemInBarrel`, `DF/df.job.xml:324`) and the kitchen's prepared meals; there is no drying or smoking (from memory).
+
+### The low-food alert and days of food
+
+- **RimWorld's alert "Low food"** rises when the nutrition people can eat that is in store is under **4 a colonist**, about four and a half meals each, and not in the first two and a half days (`RW/RimWorld/Alert_LowFood.cs`: `NutritionThresholdPerColonist` 4; `TicksGame < 150000`). Its text gives the nutrition, the colonists and the whole meals a head. It counts what is in storage alone (`RW/RimWorld/ResourceCounter.cs:25-37`). **It knows nothing of the season**: nothing in the game says winter is coming.
+- **RimWorld's caravan screen says the days its food is worth and when it will rot** (`RW/RimWorld/Planet/DaysWorthOfFoodCalculator.cs`, `DaysUntilRotCalculator.cs`): the one place it does the sum for the player.
+- **Dwarf Fortress shows counts**: food by kind and drink on its status screen (DFHack's `dfstatus` counts drinks and meals that are not rotten, `DH/gui/dfstatus.lua:115-157`); a starving dwarf is an alert, a short store is not. Dwarf Corp announces "We're out of food!" at none (`DC/World/WorldManager.cs:204-206`).
+- **A hungry pawn is not slowed in RimWorld**, only unhappy ("hungry" -6, "ravenously hungry" -12, `RD/ThoughtDefs/Thoughts_Situation_Needs.xml:11-18`); once it starves, malnutrition takes 5% of its consciousness, then 10, 20 and 30 (`RD/HediffDefs/Hediffs_Global_Needs.xml:12-54`). Its hypothermia slows the hands 20% at the stage called minor (section 15).
+
+### How fish and shoots are truly kept, and what this rests on
+
+Checked on the web on 2026-11-17 for the ways; the day counts are from memory.
+
+- **Small fish are dried whole in the sun**, "spread in the sun on the ground, or on mats, nets, roofs, or on raised racks" (FAO, *Fish drying*, fao.org/4/x5434e/x5434e0f.htm). FAO's training aims at dried fish that keeps six months or more (fao.org/3/i8487en/I8487EN.pdf). A small fish dries in one to three days of sun and wind (from memory).
+- **River fish in Japan are grilled and then dried over the hearth** (yakiboshi): "pre-treated fish is placed on a rack and grilled on a small charcoal grill called shichirin, or at the traditional Japanese hearth called irori, and then dried" (Japan's Ministry of Agriculture, Forestry and Fisheries, *Dried foods*, traditional-foods.maff.go.jp/en/bunrui/kanbutsu). Ayu on the Shimanto were baked on the bank until the water was gone and hung under the eaves; a smoked ayu sold today keeps a year at room warmth (a maker's page).
+- **Mountain shoots are boiled, dried in the sun and kept for winter**: zenmai is boiled, sun-dried and kneaded by hand, "an important winter storage food" of the snow country; bracken is salted or dried (the same Ministry's regional pages; the day counts, two to four days of sun, are from memory).
+- **Nuts keep as they are.** The Jomon stored acorns by the tens of thousands in pits, "picked in season and stored, and eaten in a planned way" (archaeology.jp, the Shofukuji and Higashimyo sites; Habu, *Ancient Jomon of Japan*, chapter 4). Nothing read was of shii nuts in particular.
+
+### What a player expects
+
+- **Fresh food has a clock, and the thing says how long it has.** A fish is a matter of days, a root of weeks. Nobody is surprised: the heap said so.
+- **Cold keeps food.** In RimWorld the first winter project is a freezer; a cool cellar is the same idea.
+- **Food that keeps is made on purpose**, from what would spoil, at a thing the player builds; haulers load it and unload it without being told, and its card says what is in it and when it will be done.
+- **The store is a count with days beside it**, and an alert when it is low.
+- **What rots in the stockpile is said**, once, with what to do about it.
+- **Dwarves eat what will spoil first** (RimWorld's pawns do not, and its players build freezers to make up for it; it is the plain wish).
+
+### For OdinCraft (as built, `plan.md`, "Winter's food, as built")
+
+- **A food keeps its row's days in air of 20 °C, twice as long ten degrees colder and half as long ten warmer, and at freezing for ever** (`FOODS.keeps`, `spoil_rate`). A fish 2 days, shoots and stems 5, shii nuts 30; what is dried and what the party brought do not spoil. RimWorld's rule stops at 10 °C, and this island's winter is 7 to 14 °C, so with it the cold would hardly keep anything. Food spoils wherever it lies, stockpile or none, as in RimWorld and not as in Dwarf Fortress: a stockpile that stopped rot would make the rack pointless.
+- **The drying rack is RimWorld's barrel made the oldest way**: a thing built of a log that holds 24, loaded and unloaded by dwarves with nothing more pressing, standing its row's days (a goby a day and a half, shoots two, bamboo three), not in rain, and twice as fast and rain or none where a fire burns beside it. Its card is the barrel's: what is on it, how far it has come, when it will be done, what stops it.
+- **What is made of what is a row** (`MAKES`), and what it is made at is a row (`BENCHES`), as RimWorld's recipes and Ingnomia's crafts are (`adr/0016`).
+- **The stores say the days of food and, of them, the days of food that keeps**; and what neither game does, **the lean season is said a season ahead**, from the island's own food rows, against the kept food in store.
+- **Dwarves eat what will spoil before what keeps.**
+- **A need that is urgent slows the hands by a fifth** before it harms: sooner than RimWorld's, where hunger costs only mood until it is starvation.

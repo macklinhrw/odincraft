@@ -1,0 +1,169 @@
+# Winter's food played from the player's seat (plan.md, "Winter's food, as built"): what the stores
+# and the alert say on the first morning; racks ordered with no timber; a wood felled and the racks
+# built; fish caught with nowhere to put them, and a heap's card; a stockpile for food; a wood's
+# shoots gathered and carried in by the armful; a rack's card; the second dawn's word; a fire beside
+# the racks; what was dried stored and counted; the land farther off gathered; the first rain on a
+# rack in the open and on one by the fire; a rack left empty and removed. Five days, seven minutes.
+#   build/odincraft --play=docs/interesting-world/real/play/wf-play.txt --dwarves=1
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440. Where a
+# thing is dragged the view looks straight down from over 2695, -1750, 40 pixels to a block: a
+# block's middle is at x = 1300 + 40 (its x - 2695), y = 740 + 40 (its z + 1750).
+
+view over=2695,-1750 span=64 tilt=90 turn=0 cut=off
+key 3
+
+print 1. the party stands ashore on the 1st of spring: the stores say the sacks, and an alert says the lean season ahead
+run 70
+view over=2695,-1750 span=64 tilt=55 turn=0 cut=off
+shot out/play/wf-01-ashore.png
+say
+
+print 2. Build, then Rack, dragged four by four beside the camp, with no timber lying anywhere
+view over=2695,-1750 span=64 tilt=90 turn=0 cut=off
+key B
+part Rack
+move 1380 700
+press
+move 1500 820
+wait 0.3
+shot out/play/wf-02-rack-drag.png
+say
+release
+key esc
+run 20
+shot out/play/wf-03-no-timber.png
+say
+
+print 3. Fell dragged across the wood west of the camp: the first logs are brought to the racks before any more trees are felled
+key T
+drag 60 420 860 1120
+key esc
+run 150
+shot out/play/wf-04-racks-building.png
+say
+timer
+until done 900
+view over=2698,-1749 span=24 tilt=55 turn=0 cut=off
+shot out/play/wf-05-racks-built.png
+say
+
+print 4. Fish dragged along the stream, with no stockpile yet: the fishers bring their catch to the racks by the armful
+view over=2695,-1750 span=64 tilt=90 turn=0 cut=off
+key N
+move 940 1260
+press
+move 1580 140
+wait 0.3
+shot out/play/wf-06-fish-drag.png
+say
+release
+key esc
+run 200
+view over=2698,-1749 span=24 tilt=55 turn=0 cut=off
+shot out/play/wf-07-fish-on-racks.png
+say
+
+print 5. a click on a rack with fish on it: its card says what is on it, how long until it is done, and how it stands
+click 1225 701
+wait 0.3
+shot out/play/wf-08-rack-card.png
+say
+key esc
+
+print 6. Store, then Food, dragged on the ground beside the racks; Gather dragged across the wood and the grass west of the camp
+view over=2695,-1750 span=64 tilt=90 turn=0 cut=off
+key S
+part Food
+drag 1100 740 1340 980
+key esc
+view over=2680,-1750 span=128 tilt=90 turn=0 cut=off
+key G
+move 300 420
+press
+move 1500 1300
+wait 0.3
+shot out/play/wf-09-gather-drag.png
+say
+release
+key esc
+run 90
+view over=2692,-1748 span=36 tilt=55 turn=0 cut=off
+shot out/play/wf-10-carrying-in.png
+say
+
+print 7. the second dawn: one line says the day, the store, what of it keeps, and the lean season ahead
+until hour 6.2
+view over=2695,-1750 span=64 tilt=55 turn=0 cut=off
+shot out/play/wf-11-dawn.png
+say
+
+print 8. Build, then Fire, clicked beside the racks: the racks within two steps of it dry twice as fast, rain or none
+until hour 9
+view over=2698.5,-1749.5 span=32 tilt=90 turn=0 cut=off
+key B
+part Fire
+move 1120 640
+wait 0.3
+under
+click 1120 640
+key esc
+run 60
+click 1200 720
+wait 0.3
+shot out/play/wf-12-rack-by-fire.png
+say
+key esc
+click 1440 720
+wait 0.3
+shot out/play/wf-13-rack-in-the-open.png
+say
+key esc
+
+print 9. the third morning: what the racks dried has been carried to the stockpile, and the stores say what of the food keeps
+until hour 21
+until hour 8.5
+view over=2695,-1749 span=30 tilt=55 turn=0 cut=off
+shot out/play/wf-14-dried-stored.png
+say
+part Dwarves*
+wait 0.2
+key esc
+
+print 10. the third day: the wood by the camp is picked clean, so Gather is dragged across the grass farther west, where the tool says 229 bracken stand
+view over=2640,-1800 span=160 tilt=90 turn=0 cut=off
+key G
+move 300 420
+press
+move 2200 1300
+wait 0.3
+shot out/play/wf-15-gather-west.png
+say
+release
+key esc
+until hour 21
+until hour 9
+
+print 11. the first rain, on the evening of the 4th of spring: the racks by the fire dry on, and a card says so (a rack in the open in rain is wf-35, from the orders file)
+until hour 19
+view over=2698.5,-1749.5 span=32 tilt=90 turn=0 cut=off
+click 1200 720
+wait 0.3
+shot out/play/wf-16-rack-by-fire-in-rain.png
+say
+
+print 12. the rack in the hand is left to stand empty, and then removed: what was on it and its timber lie there
+part Leave it empty
+wait 0.5
+shot out/play/wf-17-rack-left.png
+say
+part Remove
+run 5
+shot out/play/wf-18-rack-removed.png
+say
+
+print 13. the fifth morning: the racks' bracken is dried and stored, and the stores say how many days of the food keeps
+until hour 23
+until hour 9
+view over=2695,-1749 span=30 tilt=55 turn=0 cut=off
+shot out/play/wf-19-kept-food.png
+say

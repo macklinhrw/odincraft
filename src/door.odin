@@ -273,7 +273,7 @@ play_again :: proc() {
 	card_free(&u.card)
 	for m in u.said do delete(m.text)
 	for w in u.wrong { delete(w.id); delete(w.text) }
-	delete(u.said); delete(u.wrong); delete(u.several); delete(u.kept); delete(u.need); delete(u.needing); delete(u.find); delete(u.tip); delete(u.mourned)
+	delete(u.said); delete(u.wrong); delete(u.several); delete(u.kept); delete(u.need); delete(u.needing); delete(u.find); delete(u.tip); delete(u.mourned); delete(u.lean_said)
 	was := u^
 	u^ = {lens = -1, lens_shown = -1, open = {0}}
 	u.scale, u.learned, u.lens_tex = was.scale, was.learned, was.lens_tex

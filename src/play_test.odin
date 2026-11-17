@@ -201,7 +201,7 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 		zs := &watch.seen
 		append(&zs.zones, Zone_Seen{id = 3, takes = .All, cells = 4, full = 2})
 		append(&zs.zone_boxes, Tint{block, block + {1, 0, 1}, 3})
-		append(&zs.piles, Pile_Seen{block + {0, 1, 0}, .Basalt, 8, true}, Pile_Seen{block + {1, 1, 0}, .Basalt, 5, true}, Pile_Seen{block + {1, 1, 1}, .Wood, 3, true})
+		append(&zs.piles, Pile_Seen{block + {0, 1, 0}, .Basalt, 8, true, -1}, Pile_Seen{block + {1, 1, 0}, .Basalt, 5, true, -1}, Pile_Seen{block + {1, 1, 1}, .Wood, 3, true, -1})
 		play.card_open = false
 		hand_take({kind = .Zone, block = block, lo = block, hi = block})
 		frame(s)
@@ -627,6 +627,57 @@ the_dwarves_feel :: proc(t: ^testing.T) {
 		clear(&seen.fires)
 		frame(s)
 		testing.expect(t, play.hand.kind == .None && bar.fire == -1, "a fire that is gone stayed in the hand")
+	}
+	// Winter's food (bench.odin, goods.odin; foundations/interface.md, section 20). The stores say what of the food
+	// keeps and what is about to spoil; an alert says the lean season ahead against the kept food in store; Build
+	// has Rack; and a rack taken in the hand says what is on it, how it stands and what it lacks.
+	{
+		seen.tick, seen.food_days, seen.kept_days, seen.soon = 100, 6.2, 2.1, {36, 0}
+		seen.store[.Bracken_Shoots], seen.store[.Dried_Goby] = 120, 48
+		seen.lean = Lean_Season{on = true, season = 3, off = 5, days = 12, bears = {.Goby}, kept = 2.1}
+		frame(s)
+		testing.expect_value(t, says("stores.food"), "Food for about six days")
+		testing.expect_value(t, says("stores.kept"), "Kept food for about two days")
+		testing.expect_value(t, says("stores.soon"), "36 spoil within a day")
+		wrong := screen_says(&screen, .Wrong)
+		testing.expect(t, strings.contains(wrong, "Winter in 5 days: the land bears gobies alone then. Kept food for 2 of its 12 days: gather, dry and store."), wrong)
+		seen.lean.kept, seen.kept_days = 12.4, 12.4
+		frame(s)
+		testing.expect(t, !strings.contains(screen_says(&screen, .Wrong), "Winter in"), "the lean season's alert stands though the kept food lasts it")
+		seen.lean, seen.store, seen.food_days, seen.kept_days, seen.soon = {}, {}, 0, 0, {}
+		key(s, .B)
+		frame(s)
+		testing.expect(t, click_words(s, "tool.choice", "Rack") && bar.build == .Rack, "Build has no Rack to choose")
+		frame(s)
+		testing.expect(t, screen_find(&screen, "tool.stuff.fire") != nil && screen_find(&screen, "tool.stuff") == nil, "a rack is offered of stone")
+		bar.build = .Wall
+		key(s, .B)
+		at := [3]i32{i32(math.floor(s.a.at.x)) + 4, 4, i32(math.floor(s.a.at.z))}
+		append(&seen.benches, Bench_Seen{at = at, kind = .Rack, make = make_of(.Goby, .Rack), n = 18, used = true, share = 0.5})
+		hand_take({kind = .Rack, block = at, lo = at, hi = at})
+		frame(s)
+		hand := screen_says(&screen, .Hand)
+		testing.expect(t, bar.bench == 0 && says("rack.title") == "Drying rack" && strings.contains(hand, "18 gobies, drying: done in under a day.") && strings.contains(hand, "18 of 24 places") && strings.contains(hand, "In the open: it dries in sun and wind, and not in rain.") && strings.contains(hand, "Leave it empty"), hand)
+		seen.benches[0].rained = true
+		frame(s)
+		testing.expect(t, strings.contains(screen_says(&screen, .Hand), "standing still in the rain") && strings.contains(screen_says(&screen, .Hand), "Rain is falling on it: nothing dries."), screen_says(&screen, .Hand))
+		seen.benches[0].by_fire = true
+		frame(s)
+		testing.expect(t, strings.contains(screen_says(&screen, .Hand), "By a fire, in the rain: it dries on"), screen_says(&screen, .Hand))
+		seen.benches[0].done, seen.benches[0].rained = true, false
+		frame(s)
+		testing.expect(t, strings.contains(screen_says(&screen, .Hand), "Done: 18 dried gobies, to be taken off.") && strings.contains(screen_says(&screen, .Hand), "No stockpile takes food"), screen_says(&screen, .Hand))
+		use := screen_find(&screen, "rack.use")
+		testing.expect(t, use != nil && use.act == .Use && use.arg == 0 && use.text == "Leave it empty" && screen_find(&screen, "rack.remove") != nil, "the rack's card has no button to leave it empty, or none to remove it")
+		clear(&seen.benches)
+		frame(s)
+		testing.expect(t, play.hand.kind == .None && bar.bench == -1, "a rack that is gone stayed in the hand")
+		// A need that is urgent slows the hands, by its row; and the figures of spoiling are the rows'.
+		testing.expect(t, slowed({.Drink = 1, .Food = 1, .Sleep = 0, .Warm = 1}) == 0 && abs(slowed({.Drink = 1, .Food = 0.1, .Sleep = 1, .Warm = 1}) - 0.2) < 1e-6 && abs(slowed({.Drink = 0.1, .Food = 0.1, .Sleep = 1, .Warm = 0.1}) - SLOWEST) < 1e-6, "a need that is urgent does not slow the hands by its row")
+		testing.expect(t, spoil_rate(MILD) == 1 && abs(spoil_rate(MILD - 10) - 0.5) < 1e-6 && spoil_rate(-3) == 0 && spoil_rate(MILD + 10) > 1.9, "food does not spoil by the air it lies in")
+		testing.expect(t, abs(keeps_left(.Goby, 1, 1) - 1) < 1e-6 && keeps_left(.Dried_Goby, 100, 1) < 0 && keeps_left(.Basalt, 0, 1) < 0 && keeps_well(.Shii_Nuts) && keeps_well(.Provisions) && !keeps_well(.Ayu), "a food's days are not its row's")
+		for row in MAKES do testing.expectf(t, FOODS[food_of(row.of)].keeps > 0 && FOODS[food_of(row.gives)].from == .Made && FOODS[food_of(row.gives)].feeds == FOODS[food_of(row.of)].feeds, "what is made of %v is no food that keeps, or feeds otherwise", row.of)
+		testing.expect(t, bench_pace(&BENCHES[.Rack], false, false) == 1 && bench_pace(&BENCHES[.Rack], false, true) == 0 && bench_pace(&BENCHES[.Rack], true, false) == 2 && bench_pace(&BENCHES[.Rack], true, true) == 1, "a rack does not dry by the sun, the rain and the fire")
 	}
 	// The date is the clock's: a day is DAY seconds, the year YEAR_DAYS days, and it begins at LANDS_AT on the 1st of spring.
 	testing.expect_value(t, date_words(date_at(0)), "1st of spring")

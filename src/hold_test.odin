@@ -223,6 +223,9 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 	order(t, played, &text, now, "gather %d %d %d %d %d %d", camp.x - 30, camp.y, camp.z - 30, camp.x + 30, camp.y, camp.z + 30)
 	order(t, played, &text, now, "fish %d %d %d %d %d %d", camp.x - 30, camp.y, camp.z - 30, camp.x + 30, camp.y, camp.z + 30)
 	order(t, played, &text, now, "store food %d %d %d %d %d %d", camp.x - 3, camp.y - 1, camp.z - 3, camp.x + 3, camp.y - 1, camp.z + 3)
+	// Winter's food (bench.odin): drying racks are ordered beside the camp, of the timber felled; what is gathered and
+	// caught is carried in by those who took it, to the racks first, and what the racks dry is taken to the stockpile.
+	order(t, played, &text, now, "build rack timber %d %d %d %d %d %d", camp.x + 4, camp.y - 1, camp.z - 2, camp.x + 6, camp.y - 1, camp.z + 1)
 	now = max(now + 600, 2400)   // past the second day's dawn, which is 1,100 s in, and its noon
 	hold_run(played, f64(now))
 	testing.expect_value(t, said(played, "The 2nd of spring."), 1)
@@ -246,8 +249,29 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 		for w in Want do testing.expectf(t, d.want[w] >= 0 && d.want[w] <= 1, "%s's %s is a share of the whole: %.2f", played.party[i].given, WANTS[w].name, d.want[w])
 	}
 	{
-		days, loose := food_days(played)
+		days, _, loose := food_days(played)
 		fmt.printfln("needs: on the %s the seven are alive; food for %.1f days lies in the stockpile and %d things loose; %d columns gathered or fished; %d places to drink known", date_words(date_tick(played.tick)), days, loose, len(played.picked), len(played.wells))
+	}
+	// On to the fifth day's afternoon: the racks stand and have dried what was laid on them; nothing lies past its days;
+	// the dawn has said the lean season ahead, by the island's own food rows; and the party is alive.
+	now = int(4.3*DAY)
+	hold_run(played, f64(now))
+	{
+		on_racks, dried := 0, 0
+		for b in played.benches do on_racks += int(b.n)
+		for g in played.goods {
+			row := FOODS[food_of(g.kind)]
+			if is(g.kind, FOOD) && row.from == .Made do dried += int(g.n)
+			if is(g.kind, FOOD) && row.keeps > 0 do testing.expectf(t, g.age < row.keeps && g.left >= 0, "%d of %s lie past their days: %.1f of %.0f", g.n, row.name, g.age, row.keeps)
+			testing.expectf(t, g.at not_in played.benched && g.n > 0, "a heap of %v lies under a rack, or is empty", g.kind)
+		}
+		ate := said(played, "of dried")   // a dawn that says dried food was eaten
+		testing.expectf(t, len(played.benches) >= 1 && said(played, "build rack timber") == 1, "a rack ordered is built: %d stand", len(played.benches))
+		testing.expectf(t, said(played, "are dried, and will keep") >= 1 && (on_racks + dried > 0 || ate > 0), "the racks have dried something: %d things on them, %d dried lying, eaten at %d dawns", on_racks, dried, ate)
+		lean := lean_of(played)
+		testing.expectf(t, lean.on && lean.season == 1 && lean.off == SEASON_DAYS - date_tick(played.tick).nth + 1 && lean.days == SEASON_DAYS && said(played, "Summer is") >= 1, "the lean season ahead is summer, said at dawn: %v", lean)
+		for d, i in played.dwarves do testing.expectf(t, d.doing != .Dead && d.carrying >= 0 && (d.carrying == 0 || d.haul.on || d.job), "%s is alive on the fifth day, and carries nothing it is not taking somewhere", played.party[i].given)
+		fmt.printfln("winter's food: on the %s %d racks stand with %d things on them; %d things dried lie; %s", date_words(date_tick(played.tick)), len(played.benches), on_racks, dried, lean_words(lean))
 	}
 	SECONDS := now + 60
 	hold_run(played, f64(SECONDS))

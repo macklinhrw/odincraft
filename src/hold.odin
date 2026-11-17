@@ -117,7 +117,7 @@ Dwarf :: struct {
 	felt_any:    bool,
 	slept:       Slept,               // how it lay down last night, for the dawn's word
 }
-Order_Kind :: enum u8 { Go, Block, Dig, Fell, Build, Unmark, Store, Unstore, Takes, Gather, Fish, Sleep, Tend }   // Unstore: the whole stockpile or sleeping place at a block is removed; Takes: it takes something else from now (goods.odin); Sleep: ground is a place to sleep; Tend: a fire is kept fed, or let go out (shelter.odin)
+Order_Kind :: enum u8 { Go, Block, Dig, Fell, Build, Unmark, Store, Unstore, Takes, Gather, Fish, Sleep, Tend, Use }   // Unstore: the whole stockpile or sleeping place at a block is removed; Takes: it takes something else from now (goods.odin); Sleep: ground is a place to sleep; Tend: a fire is kept fed, or let go out (shelter.odin); Use: a bench is kept loaded, or left to stand empty (bench.odin)
 Order :: struct {
 	tick:   int,
 	kind:   Order_Kind,
@@ -129,7 +129,7 @@ Order :: struct {
 	column: bool,   // go: only the column was given, and its ground is meant
 	mat:    Mat,
 	frame:  bool,   // block: the frame changed it and told the hold; otherwise the frame is to be told (Hold.out)
-	on:     bool,   // tend: the fire is kept fed
+	on:     bool,   // tend: the fire is kept fed; use: the bench is kept loaded
 }
 
 // What the frame may know: who each dwarf is, where it stood at a tick and at the tick before, and what it was doing.
@@ -181,7 +181,11 @@ Shown :: struct {
 	zone_boxes: [dynamic]Tint,
 	marks:     int,
 	foraging:  bool,            // a hungry dwarf marked food for itself today or yesterday: the hold has none lying
-	food_days: f32,             // days the food in the stockpiles feeds those alive
+	food_days: f32,             // days the food in the stockpiles feeds those alive,
+	kept_days: f32,             // and of them, the days of food that keeps (keeps_well, goods.odin)
+	soon:      [2]i32,          // things of food about to spoil: in the stockpiles, and lying loose
+	lean:      Lean_Season,            // the lean season ahead or in hand, and how the store stands against it (needs.odin)
+	benches:   [dynamic]Bench_Seen,   // the racks, and what stands on each (bench.odin)
 	taken:     [dynamic]Taken,  // the plants, trees and water gathered and fished, and on which day (food.odin)
 	taken_v:   int,             // counts every change to them
 	fires:     [dynamic]Fire_Seen,   // the fires, burning and out (shelter.odin)
@@ -241,6 +245,18 @@ Hold :: struct {
 	chilled_on: int,             // and the day one last did
 	bedless:  bool,              // a dwarf found no way to a sleeping place,
 	bedless_on: int,             // and the day one last did
+	// Making and keeping (bench.odin, goods.odin).
+	benches:  [dynamic]Bench,    // every bench: the drying racks
+	benched:  map[[3]i32]int,    // and which of them stands in each cell
+	benches_v, benches_shown: int,   // counts every change to them, and the count shown
+	spoiled:  int,               // things of food that have spoiled since the last dawn
+	gone:     [2][Food_Kind]int, // what has spoiled and is not yet said: in the stockpiles, and lying loose;
+	gone_at:  [2][3]i32,         // where the first of it lay,
+	gone_since: [2]int,          // and when it went
+	spoilt:   [2]bool,           // food has been said to have spoiled,
+	spoilt_on: [2]int,           // and the day it last was
+	dried:    bool,              // a rack has been said to be done,
+	dried_on: int,               // and the day one last was
 	ground:   int,            // changes to the blocks so far
 	looked:   int,            // dwarves that have looked for work this tick
 	cared:    bool,           // an idle dwarf has looked to itself this tick
@@ -408,14 +424,16 @@ order_read :: proc(h: ^Hold, line: string) -> bool {
 		}
 		v: [3]i32
 		ok := seconds >= 0 && len(words) >= 4
-		marking := len(words) > 1 && (words[1] == "dig" || words[1] == "fell" || words[1] == "build" || words[1] == "unmark" || words[1] == "store" || words[1] == "unstore" || words[1] == "takes" || words[1] == "gather" || words[1] == "fish" || words[1] == "sleep" || words[1] == "fire")
+		marking := len(words) > 1 && (words[1] == "dig" || words[1] == "fell" || words[1] == "build" || words[1] == "unmark" || words[1] == "store" || words[1] == "unstore" || words[1] == "takes" || words[1] == "gather" || words[1] == "fish" || words[1] == "sleep" || words[1] == "fire" || words[1] == "rack")
 		if ok && marking {   // a mark: its kind, what it is to be, and the six figures of its box
-			o.kind = .Dig if words[1] == "dig" else .Fell if words[1] == "fell" else .Build if words[1] == "build" else .Store if words[1] == "store" else .Unstore if words[1] == "unstore" else .Takes if words[1] == "takes" else .Gather if words[1] == "gather" else .Fish if words[1] == "fish" else .Sleep if words[1] == "sleep" else .Tend if words[1] == "fire" else .Unmark
+			o.kind = .Dig if words[1] == "dig" else .Fell if words[1] == "fell" else .Build if words[1] == "build" else .Store if words[1] == "store" else .Unstore if words[1] == "unstore" else .Takes if words[1] == "takes" else .Gather if words[1] == "gather" else .Fish if words[1] == "fish" else .Sleep if words[1] == "sleep" else .Tend if words[1] == "fire" else .Use if words[1] == "rack" else .Unmark
 			rest = words[2:]
-			named := 1 if o.kind == .Dig || o.kind == .Store || o.kind == .Takes || o.kind == .Tend else 2 if o.kind == .Build else 0
+			named := 1 if o.kind == .Dig || o.kind == .Store || o.kind == .Takes || o.kind == .Tend || o.kind == .Use else 2 if o.kind == .Build else 0
 			ok = len(rest) == named + 6
 			if ok && o.kind == .Tend {   // fire feed, fire leave
 				o.on, ok = rest[0] == "feed", rest[0] == "feed" || rest[0] == "leave"
+			} else if ok && o.kind == .Use {   // rack load, rack leave
+				o.on, ok = rest[0] == "load", rest[0] == "load" || rest[0] == "leave"
 			} else if ok && (o.kind == .Store || o.kind == .Takes) {
 				ok = false
 				for name, takes in TAKES do if name == rest[0] do o.takes, ok = takes, true
@@ -531,7 +549,12 @@ hold_show :: proc(h: ^Hold) {
 	h.shown.boat_was, h.shown.boat = h.shown.boat if h.tick > 0 else boat, boat
 	h.shown.tick, h.shown.errand, h.shown.place, h.shown.grounded = h.tick, h.errand, h.place, h.tick >= h.boat_ticks
 	h.shown.foraging = h.forages > 0 && date_tick(h.tick).day - h.foraged_on <= 1
-	if h.tick%16 == 0 || h.goods_shown != h.goods_v do h.shown.food_days, _ = food_days(h)
+	if h.tick%16 == 0 || h.goods_shown != h.goods_v {
+		h.shown.food_days, h.shown.kept_days, _ = food_days(h)
+		h.shown.lean = lean_of(h) if h.errand > 0 || h.summed else {}   // once the party stands ashore
+		h.shown.soon = {}
+		for g in h.goods do if g.left >= 0 && g.left < SOON do h.shown.soon[int(!stored(h, g))] += g.n
+	}
 	if h.picked_shown != h.picked_v {
 		h.picked_shown, h.shown.taken_v = h.picked_v, h.picked_v
 		clear(&h.shown.taken)
@@ -541,6 +564,7 @@ hold_show :: proc(h: ^Hold) {
 	orders_show(h)
 	goods_show(h)
 	fires_show(h)
+	benches_show(h)
 	sync.unlock(&h.mutex)
 }
 
@@ -549,11 +573,13 @@ shown_copy :: proc(to: ^Shown, from: Shown) {
 	dwarves, sites, tints, ghosts := to.dwarves, to.sites, to.tints, to.ghosts
 	piles, zones, zone_boxes := to.piles, to.zones, to.zone_boxes
 	taken, taken_v := to.taken, to.taken_v
-	fires := to.fires
+	fires, benches := to.fires, to.benches
 	to^ = from
-	to.fires = fires
+	to.fires, to.benches = fires, benches
 	builtin.resize(&to.fires, len(from.fires))
 	copy(to.fires[:], from.fires[:])
+	builtin.resize(&to.benches, len(from.benches))
+	copy(to.benches[:], from.benches[:])
 	to.dwarves, to.sites, to.tints, to.ghosts = dwarves, sites, tints, ghosts
 	to.piles, to.zones, to.zone_boxes = piles, zones, zone_boxes
 	to.taken = taken
@@ -602,6 +628,8 @@ hold_tick :: proc(h: ^Hold) {
 	h.looked, h.cared = 0, false
 	day_tick(h)
 	fires_tick(h)
+	goods_spoil(h)
+	benches_tick(h)
 	for &d, i in h.dwarves {
 		if d.doing == .Dead do continue
 		if ashore(d) {   // its needs: thirst, hunger and sleep (needs.odin)
@@ -928,6 +956,7 @@ find :: proc(h: ^Hold, i: int) {
 	clear(&w.shun)
 	for o, j in h.dwarves do if j != i && o.doing != .Aboard && o.doing != .Walking && o.doing != .Dead do append(&w.shun, o.cell)
 	for f in h.fires do append(&w.shun, f.at)   // and round a fire, where there is room
+	for b in h.benches do append(&w.shun, b.at)
 	_, why, _, _ := way_timed(h, d.cell, h.spots[i], &d.path)
 	clear(&w.shun)
 	if why != .Way && !d.errand {   // on its way to work, or stepping aside: it gives that up
@@ -983,6 +1012,8 @@ obey :: proc(h: ^Hold, o: Order) {
 		zone_change(h, o)
 	case .Tend:
 		fire_tend(h, o)
+	case .Use:
+		bench_tend(h, o)
 	case .Go:
 		at := o.at
 		if o.column do at.y = i32(math.round(ground(f64(at.x - region.origin.x) + 0.5, f64(at.z - region.origin.y) + 0.5, 1).h)) - 1
@@ -1121,8 +1152,9 @@ hold_report :: proc(h: ^Hold) {
 	fmt.printfln("  dwarves went round another %d times and squeezed past one %d times; %d fell", h.work.round, h.work.squeezed, h.work.fell)
 	{   // the day, and how each dwarf is (needs.odin)
 		date := date_tick(h.tick)
-		days, loose := food_days(h)
-		fmt.printfln("  it is the %s, %02d:%02d; %d of %d alive; food in the stockpiles for %.1f days, %d things of food loose; %d places to drink known", date_words(date), int(date.hour), int(date.hour*60)%%60, living(h), len(h.dwarves), days, loose, len(h.wells))
+		days, kept, loose := food_days(h)
+		fmt.printfln("  it is the %s, %02d:%02d; %d of %d alive; food in the stockpiles for %.1f days, %.1f of them of food that keeps; %d things of food loose; %d places to drink known", date_words(date), int(date.hour), int(date.hour*60)%%60, living(h), len(h.dwarves), days, kept, loose, len(h.wells))
+		if lean := lean_of(h); lean.on do fmt.printfln("    %s", lean_words(lean))
 		for well in h.wells do fmt.printfln("    a place to drink at %d, %d, %d: %s", well.x, well.y, well.z, place_say(h, well))
 		for d, i in h.dwarves {
 			if d.doing == .Dead do fmt.printfln("    %s: dead of %s since the %s", who(h, i), WANTS[d.died].of, date_words(date_tick(d.died_on)))
@@ -1134,6 +1166,8 @@ hold_report :: proc(h: ^Hold) {
 		now := weather(f64(h.tick)*TICK, at)
 		fmt.printfln("  the weather where the party gathered: %s. %s", weather_line(now), weather_why(now, at, date))
 		for f in h.fires do fmt.printfln("    a fire at %d, %d, %d: %s, %.1f logs, %s%s%s", f.at.x, f.at.y, f.at.z, "burning" if f.lit else "out", f.fuel, "indoors" if f.roof && f.walled else "under a roof" if f.roof else "in the open", ", in the rain" if f.rained else "", "" if f.fed else ", let go out")
+		for b in h.benches do fmt.printfln("    a %s at %d, %d, %d, %s%s: %s", BENCHES[b.kind].name, b.at.x, b.at.y, b.at.z, "by a fire" if b.by_fire else "under a roof" if b.roof else "in the open", ", in the rain" if b.rained else "",
+			bench_words({b.at, b.kind, b.make, b.n, b.done, b.used, b.roof, b.by_fire, b.rained, b.share}))
 		sleeping, roofed, walled := 0, 0, 0
 		for c, cell in h.zoned do if h.zones[cell.zone].sleep {
 			s := shelter_of(hold_blocks(h), c)
@@ -1359,7 +1393,8 @@ dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
 		c.next = fmt.tprintf("Will take more of that work while any is left: %d of its %d %s are still to do", site.left, site.total, "trees" if site.work == .Fell else "blocks")
 	}
 	if !d.job && (d.doing == .Waiting || d.doing == .Stopped) && s.marks > 0 && !d.shut do c.next = "Looks for work it can reach among what is marked"
-	if d.carrying > 0 do c.doing, c.next = fmt.tprintf("Carrying %d of %s to where it is wanted", d.carrying, store_words(d.carry)), "Will look for more to carry, or for marked work"
+	if d.carrying > 0 && d.job && is(d.carry, FOOD) do c.doing = fmt.tprintf("%s, with %d of %s in its arms", c.doing, d.carrying, store_words(d.carry))   // a gatherer keeps what it takes, and carries it in by the armful
+	else if d.carrying > 0 do c.doing, c.next = fmt.tprintf("Carrying %d of %s to where it is wanted", d.carrying, store_words(d.carry)), "Will look for more to carry, or for marked work"
 	else if d.fetching do c.doing, c.next = "Going to fetch something that lies loose", "Will carry it to a stockpile, or to a block marked to be laid"
 	// Its needs (needs.odin): what it is doing for itself, and what it lacks.
 	if d.caring do switch d.care {
@@ -1372,6 +1407,7 @@ dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
 		at := "by a fire" if d.by_fire else "indoors" if indoors({d.roof, d.walls}) else "under a roof" if d.roof else "out of the wind"
 		c.doing, c.next = fmt.tprintf("Warming itself %s", at) if d.doing == .Warming else "Going to where it can warm itself", "Will go back to what the hold wants done when it is warm"
 	}
+	if slow := slow_words(d.want); slow != "" && d.working do c.doing = fmt.tprintf("%s, %s", c.doing, slow)   // a need that is urgent slows its hands, and says which (WANTS.slows)
 	if d.shut do c.doing, c.next = "Shut in: no way leads out of where it stands", "Waits for a stair to be dug or built to it"
 	if d.fall do c.doing = "Falling: the ground went from under it"
 	if d.doing == .Dead do c.doing, c.next = fmt.tprintf("Dead of %s since the %s; the body lies where it fell", WANTS[d.died].of, date_words(date_tick(d.died_on))), ""

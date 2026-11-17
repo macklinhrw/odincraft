@@ -175,7 +175,7 @@ far_of :: proc(a, b: [3]i32) -> i32 { return abs(a.x - b.x) + abs(a.z - b.z) + 2
 // other's, not marked, not a stockpile's and not a fire's.
 rests_well :: proc(h: ^Hold, c: [3]i32, i: int) -> bool {
 	f := walk_floor(&h.walk, c.x, c.y, c.z)
-	if f < 0 || h.walk.floors[f].wet > 0 || on_mark(h, c) || c in h.burning do return false
+	if f < 0 || h.walk.floors[f].wet > 0 || on_mark(h, c) || c in h.burning || c in h.benched do return false
 	if o, held := h.held[c]; held && o != i do return false
 	if o, claimed := h.claims[c]; claimed && o != i do return false
 	return true
@@ -432,11 +432,18 @@ fire_feed :: proc(h: ^Hold, i: int, dying: bool) -> bool {
 	return false
 }
 
-// What comes before any marked work: a fire about to go out is fed, and the log a fire is to be
-// laid of is brought. True if the dwarf has set out for either.
+// What comes before any marked work: a fire about to go out is fed, and what a thing is to be
+// built of is brought to it: the log a fire is laid of, a rack's, a wall's stone. True if the dwarf
+// has set out for either. Bringing a block's stuff is part of building it, as RimWorld's builder
+// delivers to a frame before it builds (WorkGiver_ConstructDeliverResources is the constructors'
+// own): left to whoever had nothing else marked, racks ordered in a spring of gathering stood
+// unbuilt until summer (plan.md, "Winter's food, as built").
 fire_first :: proc(h: ^Hold, i: int) -> bool {
 	if len(h.fires) > 0 && fire_feed(h, i, true) do return true
-	for s, id in h.sites do if !s.over && s.work == .Build && s.shape == .Fire && site_wants(h, id) > 0 && site_haul(h, i, id) do return true
+	for s, id in h.sites do if !s.over && s.work == .Build && site_wants(h, id) > 0 && site_haul(h, i, id) do return true
+	// And a rack is seen to: what it has dried is taken off, and what will spoil is laid on while it has room. Played
+	// with this left to idle hands, the racks stood done or empty through a spring of gathering while the stockpile's shoots spoiled.
+	if len(h.benches) > 0 && (bench_unload(h, i) || bench_load(h, i)) do return true
 	return false
 }
 

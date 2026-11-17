@@ -125,6 +125,15 @@ crowd_read :: proc() {
 		if hungry do alert_raise("hand-to-mouth", fmt.tprintf("No food in store: the dwarves forage as they hunger. Gather (%s) or fish (%s), and store it.", key_for(.Order, int(Tool.Gather)), key_for(.Order, int(Tool.Fish))), .Caution)
 		else do alert_clear("hand-to-mouth")
 	}
+	// The lean season ahead, or in hand, while the kept food in store falls short of it: one alert, said anew when its figures change (lean_of, needs.odin).
+	lean := watch.seen.lean
+	text := lean_alert(lean) if lean_short(lean) else ""
+	if text != u.lean_said {
+		delete(u.lean_said)
+		u.lean_said = strings.clone(text)
+		if text == "" do alert_clear("lean")
+		else do alert_raise("lean", text, .Trouble if lean.off == 0 && lean.kept < 1 else .Caution)
+	}
 	builtin.resize(&u.need, n)
 	clear(&u.needing)
 	for &d, i in watch.seen.dwarves {
@@ -286,7 +295,10 @@ dwarf_how :: proc(i: int) -> (word: string, grave: int) {
 // and a length, not only a colour). Returns how high they are.
 FEELS := [Want]string{.Drink = "Drink", .Food = "Food", .Sleep = "Sleep", .Warm = "Warmth"}
 feel_high :: proc() -> f32 { return line_of(.Small) + px(0.75) + px(1.25) }
-feels_high :: proc() -> f32 { return 2*feel_high() + px(2) }
+feels_high :: proc(i := -1) -> f32 {
+	slow := i >= 0 && i < hold_count() && watch.seen.dwarves[i].doing != .Dead && slowed(watch.seen.dwarves[i].want) > 0   // a line under them where a need slows its hands
+	return 2*feel_high() + px(2) + (px(1.5) + line_of(.Small) if slow else 0)
+}
 feels_row :: proc(x, y, wide: f32, i: int) -> f32 {
 	L := &LOOK
 	d := &watch.seen.dwarves[i]
@@ -309,6 +321,7 @@ feels_row :: proc(x, y, wide: f32, i: int) -> f32 {
 			tip = fmt.tprintf("It feels %.0f °C where it stands, %s%s%s. A dwarf is chilled under %.0f °C: by the cold, by the wind and by being wet. It warms itself by a fire, or under a roof and inside walls.", math.round(d.felt), at,
 				", by a fire" if d.by_fire else "", ", wet through" if d.wet > 0.7 else ", wet" if d.wet > 0.2 else "", f32(COMFORT))
 		}
+		if row.slows > 0 && d.want[want] < row.urgent do tip = fmt.tprintf("%s While it is %s its hands are a fifth slower at work.", tip, row.how[2] if d.want[want] > 0 else row.how[3])
 		part(.Head, {cx, cy, w, feel_high()}, tip = fmt.tprintf("%s: %s. %s", capital(row.name), word, tip))
 		part(.Text, {cx, cy, w, line_of(.Small)}, FEELS[want], .Small, L.ash, id = "hand.feel.name")
 		part(.Text, {cx, cy, w, line_of(.Small)}, word, .Small, colour if stage > 0 else L.chalk, {.Right}, id = "hand.feel")
@@ -316,7 +329,12 @@ feels_row :: proc(x, y, wide: f32, i: int) -> f32 {
 		part(.Fill, {cx, by, w, px(1.25)}, colour = L.pit)
 		part(.Fill, {cx, by, math.round(w*clamp(d.want[want], 0, 1)), px(1.25)}, colour = L.verdigris if stage == 0 else colour)
 	}
-	return feels_high()
+	if slow := slow_words(d.want); slow != "" && d.doing != .Dead {   // what the needs cost before they harm (WANTS.slows)
+		sy := y + 2*feel_high() + px(2) + px(1.5)
+		part(.Text, {x, sy, wide, line_of(.Small)}, fmt.tprintf("Hands %s", slow), .Small, L.brass, id = "hand.slow")
+		part(.Head, {x, sy, wide, line_of(.Small)}, tip = "Thirst, hunger and cold that will not wait each slow a dwarf's hands by a fifth, at digging, felling, building, gathering and fishing, before they do it any harm.")
+	}
+	return feels_high(i)
 }
 
 // ---- top middle: the dwarves --------------------------------------------------------------------

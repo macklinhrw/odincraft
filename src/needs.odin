@@ -30,6 +30,7 @@ Want_Row :: struct {
 	urgent: f32,         // under this it leaves its work for it
 	kills:  f32,         // days with nothing before it dies of it; 0 for never
 	takes:  f32,         // seconds the act takes: a drink, one thing eaten
+	slows:  f32,         // the share of its hands' speed a dwarf loses while the need is urgent, before it harms
 	how:    [5]string,   // how a dwarf is: met, wanting, urgent, with nothing, and near its death
 	ends:   string,      // what is said of one with nothing left, with how long it has
 }
@@ -44,20 +45,27 @@ Want_Row :: struct {
 // meal. Here a dwarf drinks about three times a day and eats twice; a meal is two or three things,
 // ten seconds each. It dies of thirst a day and a half after it ran dry and of hunger three days
 // after: longer than RimWorld's, since here the remedy may be a walk and an order away.
+//
+// A need that is urgent slows the hands before it harms (slows): a fifth for thirst, hunger and cold,
+// and they add, to a half at most. RimWorld's hungry pawn works as fast as a fed one and only its
+// mood falls; once it starves, malnutrition takes 5% of its consciousness, then 10, 20 and 30
+// (Hediffs_Global_Needs.xml), and its hypothermia takes 20% of its hands at the stage called minor
+// and 50% at serious (Hediffs_Global_Temperature.xml). A tired dwarf is not slowed: it sleeps.
 WANTS := [Want]Want_Row{
-	.Drink = {"thirst", "thirst", 2.0, 0.5, 0.45, 0.2, 1.5, 6, {"not thirsty", "thirsty", "very thirsty", "parched", "dying of thirst"}, "it has had nothing to drink, and will die of thirst in %s unless it does"},
-	.Food  = {"hunger", "hunger", 1.2, 0.6, 0.5, 0.2, 3.0, 10, {"fed", "hungry", "very hungry", "starving", "dying of hunger"}, "it has had nothing to eat, and will die of hunger in %s unless it does"},
-	.Sleep = {"tiredness", "", 1.05, 0, 0.3, 0.1, 0, 0, {"rested", "tired", "worn out", "asleep on its feet", ""}, ""},
+	.Drink = {"thirst", "thirst", 2.0, 0.5, 0.45, 0.2, 1.5, 6, 0.2, {"not thirsty", "thirsty", "very thirsty", "parched", "dying of thirst"}, "it has had nothing to drink, and will die of thirst in %s unless it does"},
+	.Food  = {"hunger", "hunger", 1.2, 0.6, 0.5, 0.2, 3.0, 10, 0.2, {"fed", "hungry", "very hungry", "starving", "dying of hunger"}, "it has had nothing to eat, and will die of hunger in %s unless it does"},
+	.Sleep = {"tiredness", "", 1.05, 0, 0.3, 0.1, 0, 0, 0, {"rested", "tired", "worn out", "asleep on its feet", ""}, ""},
 	// Cold (shelter.odin): it falls by what a dwarf feels, so much of the whole in a day ten degrees under
 	// what is comfortable, and comes back where it is warm; with none left, in cold that harms, a dwarf
 	// dies in a day and a half. RimWorld's hypothermia kills in a day and a third at most.
-	.Warm  = {"cold", "cold", 2.5, 1, 0.5, 0.2, 1.5, 0, {"warm", "chilled", "cold", "numb with cold", "dying of cold"}, "it has been out in the cold and the wet too long, and will die of cold in %s of such cold unless it is warmed"},
+	.Warm  = {"cold", "cold", 2.5, 1, 0.5, 0.2, 1.5, 0, 0.2, {"warm", "chilled", "cold", "numb with cold", "dying of cold"}, "it has been out in the cold and the wet too long, and will die of cold in %s of such cold unless it is warmed"},
 }
 SLEEP_MENDS :: 2.1    // of the whole, in a day asleep: eight hours make good sixteen awake
 SLEEPS_AT   :: 0.75   // at night a dwarf lies down under this (RimWorld's DefaultFallAsleepMaxLevel)
 FULL        :: 0.9    // a dwarf eating stops over this
 PROVISIONS  :: 4      // days of food the party brings in the boat, for each of them. RimWorld's three colonists land with 30 survival meals, five days; a Dwarf Fortress embark's default stores last the seven a season. Four days is the time to find where food grows and set a stockpile, and no more; what a party chooses to bring is expedition planning's, with P5
 RETRY       :: 300    // ticks before a dwarf looks again for what it found no way to
+KEPT_FAR    :: 120    // steps farther off that food which keeps counts as lying, to a dwarf choosing what to eat: so what will spoil is eaten first, and the store is kept for a lean season
 FORAGES     :: 12     // things, at most, a hungry dwarf marks to gather for itself at a time
 FORAGE_CELLS :: 24    // cells of the land, the nearest that bear something first, that it looks over for them; five times as many where those were all taken already
 WELLS       :: 6      // waters round a dwarf, the nearest first, that are tried for a place to drink it has a way to
@@ -69,6 +77,27 @@ Day_Tally :: struct { drank: int, ate: [Food_Kind]int }
 want_stage :: proc(w: Want, level: f32) -> int {
 	row := WANTS[w]
 	return 3 if level <= 0 else 2 if level < row.urgent else 1 if level < row.seeks else 0
+}
+
+// The share of its hands' speed a dwarf loses to the needs that are urgent, by their rows: none to a half.
+SLOWEST :: 0.5
+slowed :: proc(want: [Want]f32) -> (by: f32) {
+	for row, w in WANTS do if want[w] < row.urgent do by += row.slows
+	return min(by, SLOWEST)
+}
+
+// How much slower a dwarf's hands are and for what, in words, or "" where no need is urgent: "a fifth slower: it is very hungry".
+slow_words :: proc(want: [Want]f32) -> string {
+	by := slowed(want)
+	if by <= 0 do return ""
+	b := strings.builder_make(context.temp_allocator)
+	said, n := 0, 0
+	for row, w in WANTS do n += int(want[w] < row.urgent && row.slows > 0)
+	for row, w in WANTS do if want[w] < row.urgent && row.slows > 0 {
+		fmt.sbprintf(&b, "%s%s", "" if said == 0 else " and " if said == n - 1 else ", ", row.how[2] if want[w] > 0 else row.how[3])
+		said += 1
+	}
+	return fmt.tprintf("%s slower: it is %s", "a fifth" if by < 0.3 else "two fifths" if by < 0.5 else "half", strings.to_string(b))
 }
 
 // The dwarves as the boat brings them: watered, fed and rested, each a little differently, and each
@@ -262,6 +291,7 @@ care_begin :: proc(h: ^Hold, i: int, w: Want) -> bool {
 	clear(&walk.shun)
 	for o, j in h.dwarves do if j != i && o.doing != .Aboard && o.doing != .Walking && o.doing != .Dead do append(&walk.shun, o.cell)
 	for f in h.fires do append(&walk.shun, f.at)   // and round a fire, where there is room
+	for b in h.benches do append(&walk.shun, b.at)
 	_, why, _, _ := way_timed(h, d.cell, to, &d.path)
 	clear(&walk.shun)
 	if why != .Way {
@@ -481,7 +511,7 @@ food_find :: proc(h: ^Hold, i: int) -> (pile, stand: [3]i32, lies, ok: bool) {
 	tries: [4]Near
 	count := 0
 	for g, k in h.goods do if is(g.kind, FOOD) && g.n - g.held > 0 {
-		f := far(g.at, d.cell)
+		f := far(g.at, d.cell) + (KEPT_FAR if keeps_well(g.kind) else 0)   // what will spoil is eaten before what keeps, where both are within a short walk
 		at := min(count, len(tries) - 1)
 		if count == len(tries) && f >= tries[at].far do continue
 		for at > 0 && tries[at - 1].far > f {
@@ -585,14 +615,93 @@ forage :: proc(h: ^Hold, i: int) -> bool {
 
 // ---- the day ----------------------------------------------------------------------------------------
 
-// How many days the food that lies in the hold's stockpiles feeds those alive, and how many things of food lie loose.
-food_days :: proc(h: ^Hold) -> (days: f32, loose: int) {
-	feeds := f32(0)
+// How many days the food that lies in the hold's stockpiles feeds those alive, how many of those days
+// are of food that keeps (keeps_well), and how many things of food lie loose.
+food_days :: proc(h: ^Hold) -> (days, kept: f32, loose: int) {
 	for g in h.goods do if is(g.kind, FOOD) {
-		if stored(h, g) do feeds += f32(g.n)*FOODS[food_of(g.kind)].feeds
-		else do loose += int(g.n)
+		if stored(h, g) {
+			feeds := f32(g.n)*FOODS[food_of(g.kind)].feeds
+			days += feeds
+			if keeps_well(g.kind) do kept += feeds
+		} else do loose += int(g.n)
 	}
-	return feeds/(f32(max(living(h), 1))*WANTS[.Food].falls), loose
+	eaten := f32(max(living(h), 1))*WANTS[.Food].falls
+	return days/eaten, kept/eaten, loose
+}
+
+// ---- the lean season ---------------------------------------------------------------------------------
+
+// The lean season a hold lays up for. A season is lean where the land within a walk of where the
+// party gathered bears less in it than twice what those alive eat (larder_round, food.odin): a hold
+// finds and brings in about half of what bears, and the rest of its days it must have in store.
+// It is said a season ahead, when there is still time to gather, dry and store, and while it lasts.
+// On the start island summer and winter are lean: gobies alone.
+// Neither game says it: RimWorld's alert rises when the food in store is under four meals a
+// colonist (Alert_LowFood), whatever the season, and its caravan says the days its food is worth
+// and when it rots (DaysWorthOfFoodCalculator); Dwarf Fortress shows the count and no more.
+LEAN_FOUND :: 0.5   // the share of what the land bears in a season that a hold finds and brings in
+Lean_Season :: struct {
+	on:     bool,
+	season: int,                  // which of SEASONS it is
+	off:    int,                  // days until it begins; none once it has
+	days:   int,                  // days of it ahead, or left
+	bears:  bit_set[Food_Kind],   // what the land within a walk bears in it
+	kept:   f32,                  // days the kept food in the stockpiles feeds those alive,
+	loose:  f32,                  // and days the kept food that lies loose would
+}
+
+lean_of :: proc(h: ^Hold) -> (l: Lean_Season) {
+	alive := living(h)
+	if alive == 0 do return
+	m := h.landed.camp
+	larder := larder_round(land_cell(f64(m.x - region.origin.x) + 0.5, f64(m.z - region.origin.y) + 0.5))
+	date := date_tick(h.tick)
+	lean :: proc(larder: ^Larder, s, alive: int) -> bool { return larder.days[s%4]*LEAN_FOUND < f32(alive)*SEASON_DAYS }
+	left := SEASON_DAYS - date.nth + 1   // days of this season still to come, today among them
+	first := date.season
+	if lean(&larder, first, alive) do l.days = left
+	else if lean(&larder, first + 1, alive) do first, l.off = first + 1, left
+	else do return
+	l.on, l.season, l.bears = true, first%4, larder.foods[first%4]
+	if l.off > 0 do l.days = SEASON_DAYS
+	for s := first + 1; s < first + 4 && lean(&larder, s, alive); s += 1 do l.days += SEASON_DAYS   // and the lean seasons that follow it without a break
+	_, l.kept, _ = food_days(h)
+	for g in h.goods do if is(g.kind, FOOD) && keeps_well(g.kind) && !stored(h, g) do l.loose += f32(g.n)*FOODS[food_of(g.kind)].feeds
+	l.loose /= f32(alive)*WANTS[.Food].falls
+	return
+}
+
+// How a lean season's store stands, in words: the kept food in the stockpiles against its days; and
+// where none is stored, what lies loose, as the stores say it.
+lean_store :: proc(l: Lean_Season, short := false) -> string {
+	kept := min(int(l.kept + 0.25), l.days)
+	if kept <= 0 && l.loose >= 0.75 do return fmt.tprintf("Kept food for %d of %s, lying loose", min(int(l.loose + 0.25), l.days), "them" if short else fmt.tprintf("its %d days", l.days))
+	if short do return fmt.tprintf("Kept food for %d of them", kept)
+	return "No kept food is in store" if kept <= 0 else fmt.tprintf("Kept food in store for %d of them", kept) if kept < l.days else "Kept food in store for all of them"
+}
+
+// Whether the kept food in store falls short of a lean season, by the whole days the screen says.
+lean_short :: proc(l: Lean_Season) -> bool { return l.on && int(l.kept + 0.25) < l.days }
+
+// What a lean season's land bears, in words: "nothing", "gobies alone", "too little: gobies and shii nuts".
+lean_bears :: proc(l: Lean_Season) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	said, kinds := 0, card(l.bears)
+	if kinds == 0 do return "nothing"
+	for food in Food_Kind do if food in l.bears {
+		fmt.sbprintf(&b, "%s%s", "" if said == 0 else " and " if said == kinds - 1 else ", ", FOODS[food].name)
+		said += 1
+	}
+	return fmt.tprintf("%s alone", strings.to_string(b)) if kinds == 1 else fmt.tprintf("too little: %s", strings.to_string(b))
+}
+
+// The lean season in one line, as the dawn's word and the alert say it: "Winter is 12 days off: the
+// land bears gobies alone for its 12 days. Kept food in store for 4 of them."
+lean_words :: proc(l: Lean_Season) -> string {
+	if !l.on do return ""
+	store := lean_store(l)
+	if l.off > 0 do return fmt.tprintf("%s is %d %s off: the land here bears %s for its %d days. %s.", capital(SEASONS[l.season]), l.off, "day" if l.off == 1 else "days", lean_bears(l), l.days, store)
+	return fmt.tprintf("%s has %d %s left: the land here bears %s. %s.", capital(SEASONS[l.season]), l.days, "day" if l.days == 1 else "days", lean_bears(l), store)
 }
 
 // At each dawn after the first the hold says the day, what the dwarves drank and ate the day before,
@@ -620,13 +729,33 @@ day_tick :: proc(h: ^Hold) {
 		}
 		fmt.sbprint(&b, ".")
 	}
-	days, loose := food_days(h)
+	days, kept, loose := food_days(h)
 	store := "no food" if days <= 0 else "food for under a day" if days < 0.75 else fmt.tprintf("food for %s", days_words(days))
-	fmt.sbprintf(&b, " The stockpiles hold %s%s.", store, fmt.tprintf("; %d more things of food lie loose", loose) if loose > 0 else "")
+	keeps := "" if days < 0.75 else ", none of it food that keeps" if kept < 0.25 else ", all of it food that keeps" if kept > days - 0.25 else fmt.tprintf(", kept food for %s", days_words(kept))
+	fmt.sbprintf(&b, " The stockpiles hold %s%s%s.", store, keeps, fmt.tprintf("; %d more things of food lie loose", loose) if loose > 0 else "")
+	if h.spoiled > 0 do fmt.sbprintf(&b, " %d things of food spoiled.", h.spoiled)
+	h.spoiled = 0
 	fmt.sbprint(&b, night_words(h, date.day - 1))   // the weather that was, and how the party slept (shelter.odin)
+	lean := lean_of(h)
 	h.short = fmt.tprintf("The %s: %s in store.", date_words(date), store)
+	if lean_short(lean) && (date.nth == 1 || date.nth == 7 || date.nth == 10 || date.day == 1) {   // the lean season ahead, or in hand, while the store falls short of it: three times a season, and the alert stands between (crowd.odin)
+		fmt.sbprintf(&b, " %s", lean_words(lean))
+		h.short = fmt.tprintf("%s %s", h.short, fmt.tprintf("%s is %d %s off.", capital(SEASONS[lean.season]), lean.off, "day" if lean.off == 1 else "days") if lean.off > 0 else fmt.tprintf("%s has %d %s left.", capital(SEASONS[lean.season]), lean.days, "day" if lean.days == 1 else "days"))
+	}
 	say(h, "%s", strings.to_string(b))
 	h.tally = {}
+}
+
+// The same for the alert at the top right, which is short and says what to do: "Winter in 12 days:
+// the land bears gobies alone then. Kept food for 4 of its 12 days: gather, dry and store."
+lean_alert :: proc(l: Lean_Season) -> string {
+	kept := min(int(l.kept + 0.25), l.days)
+	if kept <= 0 && l.loose >= 0.75 {
+		if l.off > 0 do return fmt.tprintf("%s in %d %s: the land bears %s then. %s: gather, dry and store.", capital(SEASONS[l.season]), l.off, "day" if l.off == 1 else "days", lean_bears(l), lean_store(l))
+		return fmt.tprintf("%s, %d %s left: the land bears %s. %s.", capital(SEASONS[l.season]), l.days, "day" if l.days == 1 else "days", lean_bears(l), lean_store(l, true))
+	}
+	if l.off > 0 do return fmt.tprintf("%s in %d %s: the land bears %s then. Kept food for %d of its %d days: gather, dry and store.", capital(SEASONS[l.season]), l.off, "day" if l.off == 1 else "days", lean_bears(l), kept, l.days)
+	return fmt.tprintf("%s, %d %s left: the land bears %s. Kept food for %d of them.", capital(SEASONS[l.season]), l.days, "day" if l.days == 1 else "days", lean_bears(l), kept)
 }
 
 // What the land round the landing bears, said once when the party stands ashore: the plain word on

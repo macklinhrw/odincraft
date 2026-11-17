@@ -2,6 +2,8 @@ package main
 
 import "base:builtin"
 import "core:fmt"
+import "core:math"
+import "core:strings"
 
 // Goods (plan.md, "Goods you can see", 2026-11-16; docs/adr/0012): what the dwarves' work yields is
 // a thing that lies in the world, where it was dug or felled, and is seen and clicked. The player
@@ -41,6 +43,12 @@ Good :: struct {
 	kind: Mat,      // rock by its kind; timber by its tree's bark, or sawn
 	n:    i32,
 	held: i32,      // of them, promised to dwarves on their way to fetch them
+	// Of food that spoils (goods_spoil):
+	age:  f32,      // days it has lain, counted as days of mild air
+	left: f32,      // days it has left as it lies now
+	walled: bool,   // it lies indoors, where the air is nearer the year's mean,
+	read: int,      // as the ground stood when that was last asked (Hold.ground), from 1
+	tried: int,     // the tick a dwarf last found no way to it for a rack: it is left a while
 }
 Stockpile :: struct { takes: Takes, cells: int, sleep: bool }   // sleep: it is no stockpile but a place to sleep, marked and kept as one is (shelter.odin)
 Zone_Cell :: struct { zone: int, coming: i32 }   // coming: things on their way to it
@@ -53,14 +61,17 @@ Haul :: struct {
 	n:        i32,
 	site:     int,      // the order to build they are for, or -1 for a stockpile
 	fire:     bool,     // they are timber for a fire,
-	hearth:   [3]i32,   // which burns in this cell (shelter.odin)
+	hearth:   [3]i32,   // which burns in this cell (shelter.odin); or the cell of the bench they are for
+	bench:    bool,     // they are for a bench to make something of (bench.odin),
+	off:      bool,     // or are what it made, taken off it
+	age:      f32,      // of food: how long it had lain (Good.age)
 }
 
 // Whether a dwarf standing in a cell of the hold's ground has a roof over it (shelter.odin).
 roofed_at :: proc(h: ^Hold, c: [3]i32) -> bool { return roofed(hold_blocks(h), c) }
 
 // What the frame may know of the goods: every pile, and the stockpiles as boxes of their ground.
-Pile_Seen :: struct { at: [3]i32, kind: Mat, n: i32, stored: bool }
+Pile_Seen :: struct { at: [3]i32, kind: Mat, n: i32, stored: bool, left: f32 }   // left: days before it spoils as it lies; under nothing for what does not
 Zone_Seen :: struct { id: int, takes: Takes, cells, full: int, sleep: bool, roofed, walled: int }   // of a sleeping place: how many of its places are under a roof, and how many of those indoors
 
 takes_kind :: proc(t: Takes, m: Mat) -> bool {
@@ -78,40 +89,42 @@ stored :: proc(h: ^Hold, g: Good) -> bool {
 // Put things into a cell: onto a pile of their kind there while it has room, and the rest into the
 // nearest cells that a dwarf could stand in and that hold none or the same, spreading as a heap
 // does. Where no such cell lies within three steps they stay in the first, over the stack.
-good_put :: proc(h: ^Hold, at: [3]i32, kind: Mat, n: i32) {
+good_put :: proc(h: ^Hold, at: [3]i32, kind: Mat, n: i32, age: f32 = 0) {
 	if n <= 0 do return
 	w := &h.walk
 	left := n
 	h.goods_v += 1
-	fill :: proc(h: ^Hold, c: [3]i32, kind: Mat, left: ^i32, over := false) {
+	fill :: proc(h: ^Hold, c: [3]i32, kind: Mat, left: ^i32, age: f32, over := false) {
 		if k, ok := h.lying[c]; ok {
 			g := &h.goods[k]
 			if g.kind != kind do return
 			room := left^ if over else min(left^, heap_of(kind) - g.n)
 			if room <= 0 do return
+			g.age = (g.age*f32(g.n) + age*f32(room))/f32(g.n + room)   // a heap is as old as its things together: RimWorld's stack takes the mean of the two (CompRottable.PreAbsorbStack)
 			g.n += room
 			left^ -= room
 			return
 		}
+		if !over && (c in h.burning || c in h.benched) do return   // nothing is laid in a fire or under a rack, while there is room beside it
 		room := left^ if over else min(left^, heap_of(kind))
 		h.lying[c] = len(h.goods)
-		append(&h.goods, Good{at = c, kind = kind, n = room})
+		append(&h.goods, Good{at = c, kind = kind, n = room, age = age, left = keeps_left(kind, age, 1)})
 		left^ -= room
 	}
-	fill(h, at, kind, &left)
+	fill(h, at, kind, &left, age)
 	for r in i32(1)..=3 {
 		if left == 0 do return
 		for dz in -r..=r do for dx in -r..=r do if max(abs(dx), abs(dz)) == r do for dy in ([3]i32{0, -1, 1}) {
 			c := at + {dx, dy, dz}
-			if left > 0 && walk_floor(w, c.x, c.y, c.z) >= 0 && (c in h.zoned) == (at in h.zoned) do fill(h, c, kind, &left)   // a heap spreads within its stockpile, or outside every one
+			if left > 0 && walk_floor(w, c.x, c.y, c.z) >= 0 && (c in h.zoned) == (at in h.zoned) do fill(h, c, kind, &left, age)   // a heap spreads within its stockpile, or outside every one
 		}
 	}
-	if left > 0 do fill(h, at, kind, &left, true)
+	if left > 0 do fill(h, at, kind, &left, age, true)
 }
 
 // Things come to lie where a block was: in its cell if there is ground under it, and else on the
 // first ground below.
-good_drop :: proc(h: ^Hold, at: [3]i32, kind: Mat, n: i32) {
+good_drop :: proc(h: ^Hold, at: [3]i32, kind: Mat, n: i32, age: f32 = 0) {
 	w := &h.walk
 	c := at
 	for _ in 0..<64 {
@@ -119,7 +132,7 @@ good_drop :: proc(h: ^Hold, at: [3]i32, kind: Mat, n: i32) {
 		if under != .Air && !is(under, LEAVES) do break
 		c.y -= 1
 	}
-	good_put(h, c, kind, n)
+	good_put(h, c, kind, n, age)
 }
 
 // Take things from a pile; the pile is gone with its last.
@@ -145,8 +158,8 @@ goods_settle :: proc(h: ^Hold, at: [3]i32, mat: Mat) {
 	if !ok do return
 	g := h.goods[k]
 	good_take(h, k, g.n)
-	if mat == .Air do good_drop(h, c, g.kind, g.n)
-	else do good_put(h, at + {0, 1, 0}, g.kind, g.n)
+	if mat == .Air do good_drop(h, c, g.kind, g.n, g.age)
+	else do good_put(h, at + {0, 1, 0}, g.kind, g.n, g.age)
 }
 
 // ---- stockpiles -----------------------------------------------------------------------------
@@ -346,6 +359,8 @@ haul_look :: proc(h: ^Hold, i: int) -> bool {
 	far :: proc(a, b: [3]i32) -> i32 { return abs(a.x - b.x) + abs(a.z - b.z) + 2*abs(a.y - b.y) }
 	// For building.
 	for _, id in h.sites do if site_haul(h, i, id) do return true
+	// To a bench that has room for what it makes something of, and from one that has made it (bench.odin).
+	if len(h.benches) > 0 && (bench_load(h, i) || bench_unload(h, i)) do return true
 	// To a stockpile: the nearest pile that lies loose, or in a stockpile that does not take it.
 	stores := false
 	for z in h.zones do stores ||= !z.sleep && z.cells > 0
@@ -406,16 +421,19 @@ haul_arrive :: proc(h: ^Hold, i: int) {
 	if !haul.bringing {
 		k, ok := h.lying[haul.from]
 		got := i32(0)
-		if ok && h.goods[k].kind == haul.kind {
+		if haul.bench && haul.off do got = bench_take(h, haul.hearth, haul.n)   // off the bench, not from a pile
+		else if ok && h.goods[k].kind == haul.kind {
 			g := &h.goods[k]
 			g.held = max(g.held - haul.n, 0)
 			got = min(haul.n, g.n)
+			d.haul.age = g.age
 			good_take(h, k, got)
 		}
 		if got < haul.n {   // fewer were there than it came for
 			if haul.fire {
 				if k, burns := h.burning[haul.hearth]; burns do h.fires[k].coming = max(h.fires[k].coming - (haul.n - got), 0)
-			} else if haul.site >= 0 do h.sites[haul.site].coming -= int(haul.n - got)
+			} else if haul.bench && !haul.off do bench_unpromise(h, haul.hearth, haul.n - got)
+			else if haul.site >= 0 do h.sites[haul.site].coming -= int(haul.n - got)
 			else if c, zoned := &h.zoned[haul.to]; zoned do c.coming -= haul.n - got
 		}
 		if got == 0 {
@@ -439,6 +457,10 @@ haul_arrive :: proc(h: ^Hold, i: int) {
 		if !fire_fed(h, i, haul.hearth, haul.kind, n) do good_put(h, d.cell, haul.kind, n)
 		return
 	}
+	if haul.bench && !haul.off {   // onto the bench; and what it has no room for, or all if it is gone, down where the dwarf stands
+		if took := bench_put(h, haul.hearth, haul.kind, n); took < n do good_put(h, d.cell, haul.kind, n - took, haul.age)
+		return
+	}
 	if haul.site >= 0 && !h.sites[haul.site].over {
 		s := &h.sites[haul.site]
 		s.coming -= int(n)
@@ -448,7 +470,55 @@ haul_arrive :: proc(h: ^Hold, i: int) {
 		return
 	}
 	if c, zoned := &h.zoned[haul.to]; zoned && haul.site < 0 do c.coming = max(c.coming - n, 0)
-	good_put(h, d.cell if haul.site >= 0 else haul.to, haul.kind, n)
+	good_put(h, d.cell if haul.site >= 0 else haul.to, haul.kind, n, haul.age)
+}
+
+// A gatherer or a fisher with food in its arms carries it in: to a rack that makes something of it
+// and has room, the nearest; or to the nearest place of a stockpile that takes it; and with neither,
+// it lays it down where it stands. Both games drop a harvest where it was cut and leave it to the
+// haulers (RimWorld's JobDriver_PlantHarvest places the yield near the plant; Dwarf Fortress's fish
+// lie on the bank until hauled). Played so here, with carrying the last thing a dwarf does, a
+// spring's gathering lay in the field and spoiled there: so the one who took it brings it.
+basket_home :: proc(h: ^Hold, i: int) {
+	d, w := &h.dwarves[i], &h.walk
+	kind, n, age := d.carry, d.carrying, d.haul.age
+	haul := Haul{on = true, bringing = true, from = d.cell, kind = kind, n = n, site = -1, age = age}
+	found := false
+	best := max(i32)
+	for b in h.benches {   // a rack first: what will spoil is dried
+		k := make_of(kind, b.kind)
+		if !b.used || b.done || k < 0 || b.make >= 0 && k != b.make || BENCHES[b.kind].holds - b.n - b.coming <= 0 do continue
+		if far := far_of(b.at, d.cell) + (0 if b.n + b.coming > 0 else 1000); far < best {   // one that holds some of it already before an empty one: a rack is filled before the next is begun
+			w.budget = ASKING
+			if stand := walk_near(w, b.at.x, b.at.y, b.at.z, 2, false, &h.benched); stand >= 0 do best, found, haul.bench, haul.hearth, haul.to = far, true, true, b.at, floor_block(w, stand)
+		}
+	}
+	if !found do if to, _, ok := store_cell(h, Good{at = d.cell, kind = kind}); ok do found, haul.to = true, to
+	if found && haul.to != d.cell {
+		clear(&w.shun)
+		if _, why, _, _ := way_timed(h, d.cell, haul.to, &d.path); why != .Way do found = false
+	}
+	if !found {   // nowhere to take it, or no way there: it lies where the dwarf stands
+		d.carrying, d.haul = 0, {}
+		good_drop(h, d.cell, kind, n, age)
+		d.doing, d.rest = .Waiting, 0
+		return
+	}
+	if haul.bench {
+		b := &h.benches[h.benched[haul.hearth]]
+		b.coming += n
+		b.make = make_of(kind, b.kind)
+	} else {
+		cell := &h.zoned[haul.to]
+		cell.coming += n
+	}
+	d.haul = haul
+	h.spots[i] = haul.to
+	if haul.to == d.cell {
+		haul_arrive(h, i)
+		return
+	}
+	d.doing, d.seek, d.next, d.wait, d.said, d.errand = .Walking, false, 1, 0, "", false
 }
 
 // A dwarf lets go of what it was carrying or fetching: the things it holds lie where it stands.
@@ -457,13 +527,16 @@ haul_drop :: proc(h: ^Hold, i: int) {
 	if !d.haul.on && d.carrying == 0 do return
 	haul := d.haul
 	if haul.on {
-		if !haul.bringing do if k, ok := h.lying[haul.from]; ok do h.goods[k].held = max(h.goods[k].held - haul.n, 0)
+		taking := haul.bench && haul.off   // what a bench made, to be taken off it: no pile is promised
+		if !haul.bringing && !taking do if k, ok := h.lying[haul.from]; ok do h.goods[k].held = max(h.goods[k].held - haul.n, 0)
+		if !haul.bringing && taking do bench_unpromise(h, haul.hearth, haul.n, true)
 		if haul.fire {
 			if k, burns := h.burning[haul.hearth]; burns do h.fires[k].coming = max(h.fires[k].coming - haul.n, 0)
-		} else if haul.site >= 0 do h.sites[haul.site].coming = max(h.sites[haul.site].coming - int(haul.n), 0)
+		} else if haul.bench && !haul.off do bench_unpromise(h, haul.hearth, haul.n)
+		else if haul.site >= 0 do h.sites[haul.site].coming = max(h.sites[haul.site].coming - int(haul.n), 0)
 		else if c, zoned := &h.zoned[haul.to]; zoned do c.coming = max(c.coming - haul.n, 0)
 	}
-	if d.carrying > 0 do good_drop(h, d.cell, d.carry, d.carrying)
+	if d.carrying > 0 do good_drop(h, d.cell, d.carry, d.carrying, haul.age)
 	d.carrying, d.haul = 0, {}
 	h.goods_v += 1
 }
@@ -481,7 +554,7 @@ goods_show :: proc(h: ^Hold) {
 	h.store = {}
 	for g, k in h.goods {
 		in_store := stored(h, g)
-		s.piles[k] = {g.at, g.kind, g.n, in_store}
+		s.piles[k] = {g.at, g.kind, g.n, in_store, g.left}
 		if in_store {
 			s.store[g.kind] += g.n
 			h.store[g.kind] += g.n
@@ -509,4 +582,84 @@ goods_show :: proc(h: ^Hold) {
 		append(&s.zones, Zone_Seen{id, zone.takes, zone.cells, full, zone.sleep, roofed, walled})
 	}
 	less :: proc(a, b: [3]i32) -> bool { return a.y < b.y || a.y == b.y && (a.z < b.z || a.z == b.z && a.x < b.x) }
+}
+
+// ---- spoiling ---------------------------------------------------------------------------------
+
+// Food spoils (plan.md, "Winter's food"). Each kind lies good for its row's days (FOODS.keeps) in
+// air of MILD degrees; warmer air spoils it faster and colder slower, twice or half as fast for each
+// ten degrees, and at freezing not at all. RimWorld's food rots at its full pace from 10 °C up, more
+// slowly down to 0 °C and not at all under it (GenTemperature.RotRateAtTemperature); on this island,
+// whose winter is 7 to 14 °C, that rule would hardly slow anything, so the pace here follows the
+// warmth all the way (a doubling for ten degrees is the common figure for what spoils food, from
+// memory). The air is the weather's where the heap lies, and indoors halfway to the year's mean, as
+// a dwarf feels it there (feel_at): a room under ground is cool in summer.
+//
+// A heap is as old as its things together. When its days are up it is gone, and the hold says what
+// went and where. Nothing is eaten spoiled.
+MILD        :: 20.0   // °C at which a food's row says how long it keeps
+SPOIL_EVERY :: 100    // ticks between two looks at what lies: ten seconds, 120 times a day
+SOON        :: 1.0    // days left under which food is said to be about to spoil
+SPOIL_SAID  :: 500    // ticks from the first thing spoiled to the line that says it: an hour
+
+spoil_rate :: proc(air: f32) -> f32 { return 0 if air <= 0 else math.pow(2, (air - MILD)/10) }
+
+// Days a heap of a kind and an age has left, lying where what spoils goes at a pace: under nothing for what does not spoil.
+keeps_left :: proc(kind: Mat, age, rate: f32) -> f32 {
+	if !is(kind, FOOD) do return -1
+	keeps := FOODS[food_of(kind)].keeps
+	return -1 if keeps <= 0 else 99 if rate <= 0 else min(max(keeps - age, 0)/rate, 99)
+}
+
+// Whether a food is one a hold lays up for a lean season: it does not spoil, or keeps a season or more.
+keeps_well :: proc(kind: Mat) -> bool {
+	keeps := FOODS[food_of(kind)].keeps
+	return keeps <= 0 || keeps >= SEASON_DAYS
+}
+
+// The air a thing lying in a cell lies in.
+air_at :: proc(h: ^Hold, c: [3]i32, walled: bool) -> f32 {
+	air := weather(f64(h.tick)*TICK, stand_of(c)).air
+	return math.lerp(air, region.climate.mean - LAPSE*f32(max(c.y, 0)), f32(WALLED)) if walled else air
+}
+
+// Every SPOIL_EVERY ticks: each heap of food that spoils ages by the air it lies in, and one whose
+// days are up is gone. What went is said in one line, the stockpiles' apart from what lay loose.
+goods_spoil :: proc(h: ^Hold) {
+	if h.tick%SPOIL_EVERY != 0 || len(h.goods) == 0 && h.gone == {} do return
+	blocks := hold_blocks(h)
+	for k := len(h.goods) - 1; k >= 0; k -= 1 {
+		g := &h.goods[k]
+		if !is(g.kind, FOOD) || FOODS[food_of(g.kind)].keeps <= 0 do continue
+		if g.read != h.ground + 1 do g.walled, g.read = indoors(shelter_of(blocks, g.at)), h.ground + 1
+		rate := spoil_rate(air_at(h, g.at, g.walled))
+		g.age += rate*SPOIL_EVERY*TICK/DAY
+		left := keeps_left(g.kind, g.age, rate)
+		if (left < SOON) != (g.left < SOON) || abs(left - g.left) >= 0.25 do h.goods_v += 1   // shown again when it has changed enough to be said otherwise
+		g.left = left
+		if g.age < FOODS[food_of(g.kind)].keeps do continue
+		loose := int(!stored(h, g^))
+		if h.gone[loose] == {} do h.gone_at[loose], h.gone_since[loose] = g.at, h.tick
+		h.gone[loose][food_of(g.kind)] += int(g.n)
+		good_take(h, k, g.n)
+	}
+	// What went is said an hour after the first of it, all of the hour together: heaps gathered over a morning spoil over a morning.
+	for loose in 0..<2 do if h.gone[loose] != {} && h.tick - h.gone_since[loose] >= SPOIL_SAID {
+		b := strings.builder_make(context.temp_allocator)
+		kinds, said, n := 0, 0, 0
+		for count in h.gone[loose] do kinds += int(count > 0)
+		for count, food in h.gone[loose] do if count > 0 {
+			fmt.sbprintf(&b, "%s%d of %s", "" if said == 0 else " and " if said == kinds - 1 else ", ", count, FOODS[food].name)
+			said, n = said + 1, n + count
+		}
+		today := date_tick(h.tick).day
+		h.at = feet_on(h.gone_at[loose])
+		h.aside = h.spoilt[loose] && h.spoilt_on[loose] == today   // on the screen once a day: after that the log has it, and the dawn says the day's sum
+		h.spoilt[loose], h.spoilt_on[loose] = true, today
+		h.spoiled += n
+		h.short = fmt.tprintf("Spoiled in the stockpiles: %s.", strings.to_string(b)) if loose == 0 else fmt.tprintf("Spoiled where it lay: %s.", strings.to_string(b))
+		if loose == 0 do say(h, "Food has spoiled in the stockpiles, at %s: %s. Fresh food keeps a few days, less in the heat; what is to be kept is dried on a rack (Build, then Rack).", place_say(h, h.gone_at[loose]), strings.to_string(b))
+		else do say(h, "Food left lying has spoiled, at %s: %s.", place_say(h, h.gone_at[loose]), strings.to_string(b))
+		h.gone[loose] = {}
+	}
 }

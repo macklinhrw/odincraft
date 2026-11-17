@@ -41,6 +41,7 @@ Act :: enum u8 {
 	Order, Plan, Stuff, Takes, Deep, High, Take_Back, More,     // the orders bar, a tool's choices and numbers, an order's card (bar.odin), and the card asked for or shut
 	Zone_Takes, Zone_Grow, Zone_Remove,                  // a stockpile in the hand: what it takes, the Store tool taken up to make it larger, and the whole of it removed (bar.odin)
 	Tend, Fire_Remove,                                   // a fire in the hand: kept fed or let go out, and put out and taken up (shelter_view.odin)
+	Use, Rack_Remove,                                    // a rack in the hand: kept loaded or left empty, and taken down (bench_view.odin)
 	List, Sort, Fold, Row, Find, Thumb,                  // the lists
 	Who, Lead, Keep, Only, Whole, Crowd,                 // the dwarves: a picture, a row, kept in view, the list's kept alone, a group whole, the list opened on some (crowd.odin)
 	Menu, Back, Quit, Scale, Escape,
@@ -195,6 +196,7 @@ Play :: struct {
 	greeted:  bool,            // the first boat's were kept in view, once
 	mourned:  [dynamic]bool,   // the dwarves whose deaths were told
 	foraging: bool,            // the alert that the hold lives from hand to mouth stands
+	lean_said: string,         // the lean season's alert as last raised
 	need:     [dynamic]i8,     // for each dwarf its row of NEEDS, or -1
 	needing:  [dynamic]int,    // the dwarves who need the player, worst first
 	alerted:  [len(NEEDS)]u64, // those each need's alert was last raised for
@@ -384,6 +386,9 @@ hand_pick :: proc(pick: Pick, pointer: [2]f32) {
 		if k := fire_aimed(u.eye, ray, pick); k >= 0 {   // a fire before what lies or stands behind it
 			at := watch.seen.fires[k].at
 			t = {kind = .Fire, island = t.island, block = at, lo = at, hi = at, feature = -1}
+		} else if k := bench_aimed(u.eye, ray, pick); k >= 0 {   // and a rack
+			at := watch.seen.benches[k].at
+			t = {kind = .Rack, island = t.island, block = at, lo = at, hi = at, feature = -1}
 		} else if k := pile_aimed(u.eye, ray, pick); k >= 0 {
 			p := watch.seen.piles[k]
 			t = {kind = .Pile, island = t.island, block = p.at, lo = p.at, hi = p.at, mat = p.kind, feature = int(p.n)}
@@ -491,6 +496,11 @@ play_act :: proc(act: Act, arg: int) {
 		if u.hand.kind == .Fire do hold_order({kind = .Tend, at = u.hand.block - {0, 1, 0}, to = u.hand.block - {0, 1, 0}, on = arg != 0})
 	case .Fire_Remove:
 		if u.hand.kind == .Fire do hold_order({kind = .Unmark, at = u.hand.block - {0, 1, 0}, to = u.hand.block - {0, 1, 0}})
+		hand_drop()
+	case .Use:
+		if u.hand.kind == .Rack do hold_order({kind = .Use, at = u.hand.block - {0, 1, 0}, to = u.hand.block - {0, 1, 0}, on = arg != 0})
+	case .Rack_Remove:
+		if u.hand.kind == .Rack do hold_order({kind = .Unmark, at = u.hand.block - {0, 1, 0}, to = u.hand.block - {0, 1, 0}})
 		hand_drop()
 	case .List:
 		u.list = .None if u.list == List(arg) else List(arg)
@@ -922,9 +932,14 @@ stores_build :: proc() -> (foot: f32) {
 	loose_only := days <= 0 && lying >= 0.75
 	if loose_only do lasts = fmt.tprintf("Food for %s, loose", days_words(lying))
 	fed := hold_living() > 0 && s.tick > 0
+	// Of it, what keeps: the figure a lean season is planned by; and what is about to spoil (goods_spoil, goods.odin).
+	keeps := "" if days < 0.75 else "None of it keeps" if s.kept_days < 0.25 else "All of it keeps" if s.kept_days > days - 0.25 else fmt.tprintf("Kept food for %s", days_words(s.kept_days))
+	short := lean_short(s.lean)   // the lean season ahead is longer than the kept food lasts
+	soon := fmt.tprintf("%d spoil within a day", s.soon[0]) if s.soon[0] > 0 else fmt.tprintf("%d loose spoil within a day", s.soon[1]) if s.soon[1] > 0 else ""
 	w := px(78)
 	line := line_of(.Body)
 	high := 2*px(L.pad.y) + line_of(.Small) + px(1) + f32(max(len(rows) + len(food), 1))*line + (px(1.5) + line_of(.Small) + px(0.5) if fed else 0) + (px(1) + line_of(.Small) if note != "" else 0)
+	if fed do high += (line_of(.Small) if keeps != "" else 0) + (line_of(.Small) if soon != "" else 0)
 	x, y := screen.w - px(L.margin) - w, px(L.margin)
 	part(.Panel, {x, y, w, high}, id = "stores", tip = "What lies in the hold's stockpiles. Things lying anywhere else are not counted until they are carried in.")
 	u.crowd_right = x
@@ -946,8 +961,17 @@ stores_build :: proc() -> (foot: f32) {
 	}
 	if fed {   // the food, under its own line
 		y += px(1.5)
-		y += words(cx, y, lasts, .Small, L.brass if loose_only else L.cinnabar if days <= 0 else L.brass if days < 1.5 else L.ash, "stores.food") + px(0.5)
-		part(.Head, {cx, y - line_of(.Small) - px(0.5), inner, line_of(.Small)}, tip = "How long the food in the stockpiles feeds the dwarves alive: each eats about twice a day. Food lying loose is eaten too, and is not counted here.")
+		y += words(cx, y, lasts, .Small, L.brass if loose_only else L.cinnabar if days <= 0 else L.brass if days < 1.5 else L.ash, "stores.food")
+		part(.Head, {cx, y - line_of(.Small), inner, line_of(.Small)}, tip = "How long the food in the stockpiles feeds the dwarves alive: each eats about twice a day. Food lying loose is eaten too, and is not counted here.")
+		if keeps != "" {
+			y += words(cx, y, keeps, .Small, L.brass if short else L.ash, "stores.kept")
+			part(.Head, {cx, y - line_of(.Small), inner, line_of(.Small)}, tip = fmt.tprintf("Of the food in store, what keeps: what was dried on a rack, nuts, and the party's provisions. Fresh fish spoils in two days and shoots in five, sooner in the heat.%s", fmt.tprintf(" %s", lean_words(s.lean)) if s.lean.on else ""))
+		}
+		if soon != "" {
+			y += words(cx, y, soon, .Small, L.brass, "stores.soon")
+			part(.Head, {cx, y - line_of(.Small), inner, line_of(.Small)}, tip = "Fresh food that has under a day left as it lies. It is eaten first; what is not eaten is lost. A rack dries what is brought to it in time (Build, then Rack).")
+		}
+		y += px(0.5)
 	}
 	for r in food {
 		put(cx, y, inner, line, r)
@@ -1246,7 +1270,7 @@ hand_build :: proc() {
 	text_wide_here := inner - head - px(4)
 	head = max(head, line_of(.Title) + text_high(.Body, sub, text_wide_here) + (line_of(.Body) if need >= 0 else 0))
 	feels := t.kind == .Dwarf && watch.seen.dwarves[t.dwarf].doing != .Dead   // a living dwarf's needs, as meters (crowd.odin)
-	line_high := text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high() if feels else 0)
+	line_high := text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high(t.dwarf) if feels else 0)
 	tabs_high := line_of(.Body) + px(1.5) + px(2.5) if count > 0 else 0
 	fixed := 2*px(L.pad.y) + head + px(L.space) + line_high + (px(L.space) + tabs_high if count > 0 else 0) + px(4) + px(L.button)
 	// A card is as deep as its longest tab needs, within limits, so that changing tabs moves nothing.
@@ -1351,7 +1375,7 @@ hand_short :: proc(t: Thing, title, sub, line, next: string, need: int) {
 	text_wide_here := inner - head - px(4)
 	head = max(head, line_of(.Title) + text_high(.Body, sub, text_wide_here) + (line_of(.Body) if need >= 0 else 0))
 	feels := watch.seen.dwarves[t.dwarf].doing != .Dead
-	high := 2*px(L.pad.y) + head + px(L.space) + text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high() if feels else 0) + px(3) + px(L.button)
+	high := 2*px(L.pad.y) + head + px(L.space) + text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high(t.dwarf) if feels else 0) + px(3) + px(L.button)
 	r := Rect{x, foot - high, w, high}
 	part(.Panel, r, id = "hand")
 	cx, y := x + px(L.pad.x), r.y + px(L.pad.y)
@@ -1577,7 +1601,7 @@ tip_build :: proc() {
 			if u.animal.ok do t = {kind = .Animal, creature = u.animal.row, nest = u.animal.nest}
 			u.tip_block = a.under.block
 			switch t.kind {
-			case .None, .Box, .Dwarf, .Dwarves, .Place, .Pile, .Zone, .Fire: u.tip = strings.clone("")
+			case .None, .Box, .Dwarf, .Dwarves, .Place, .Pile, .Zone, .Fire, .Rack: u.tip = strings.clone("")
 			case .Ground: u.tip = strings.clone(mat_words(t.mat))
 			case .Tree:   u.tip = fmt.aprintf("a %s%s, %d m", SPECIES[t.tree.kind].name, "" if t.tree.kind == .Scrub else " tree", t.tree.height)
 			case .Stream: u.tip = strings.clone("a stream")
