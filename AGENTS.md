@@ -8,6 +8,7 @@ Odincraft is a block game in Odin, SDL3 GPU and Metal (macOS, Apple Silicon): a 
 - `docs/plan.md`: the plan from 2026-11-16 on, in two tracks, the natural world (N) and play (P), with the stories it is for and its rules.
 - `docs/foundations.md`: the foundations, and the steps built so far with what each taught. Read sections 3 and 8 before adding to land, rock, water, plants or living things.
 - `docs/foundations/interface.md`: where everything on the screen goes and why. Read it before adding anything the player sees or clicks.
+- `docs/interesting-world/notes/colony-sim-reference.md`: how RimWorld, Dwarf Fortress, Ingnomia and Dwarf Corp really do marking, digging, hauling, stockpiles, building and speed, from their code and data in `~/reference-games/`. Read it, and the sources it points at, before building or changing anything the dwarves do or the player orders. Copy no code from them.
 - `docs/adr/`: read before changing level of detail, lighting, threading, water, the view from above and its cut, the clock, or the dwarves' world.
 - `docs/interesting-world/notes/real-islands.md`: the real islands the land is measured against. Judge a change to the land by those figures.
 - `docs/lessons.md`: why earlier attempts stalled. Read it before proposing architecture or a way of working.

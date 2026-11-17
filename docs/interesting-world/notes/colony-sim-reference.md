@@ -1,0 +1,136 @@
+# How real colony games do it: marking, digging, hauling, speed
+
+The material is five folders under `~/reference-games/`, read on 2026-11-16 and not run. `RimWorld1.5.4409Decompiled/` is RimWorld 1.5 decompiled to C#: its README says "only personal use allowed" and "most of the code is under full copyright by Ludeon Studios", and its `Licenses.txt` covers only third-party parts (LibNoise.Unity, LGPL). It is copyrighted by its maker and was read only to understand it. `Rimworld_Data/` is RimWorld's shipped Defs, of version 1.6 (it holds Odyssey), so data and code are one version apart; it has no licence file. `Ingnomia/LICENSE` is the GNU Affero General Public License version 3. `dwarfcorp/LICENSE.txt` is a "Modified MIT License" (Completely Fair Games, 2015) that keeps images, models, sounds and music proprietary. `df-structures/` and `scripts/` are DFHack's description of Dwarf Fortress's memory and its Lua scripts; neither folder holds a licence file. No code from any of them is copied into OdinCraft; this note describes mechanisms and figures only.
+
+Paths are shortened: `RW/` = `RimWorld1.5.4409Decompiled/Assembly-CSharp/`, `RD/` = `Rimworld_Data/Core/Defs/`, `DF/` = `df-structures/`, `DH/` = `scripts/`, `IG/` = `Ingnomia/`, `DC/` = `dwarfcorp/DwarfCorp/`, `DCC/` = `dwarfcorp/DwarfCorpContent/`. "(inference)" marks what was reasoned and not read.
+
+## Key takeaways
+
+1. **Work that cannot be reached is never handed out.** RimWorld offers a mine cell only if one of its 8 neighbours is walkable and the pawn can reach it (`RW/RimWorld/WorkGiver_Miner.cs`); Ingnomia asks whether the worker's region connects to a work position (`IG/src/game/jobmanager.cpp`, `isReachable`); dwarfcorp calls a dig infeasible when the voxel is "completely surrounded" (`KillVoxelTask.ComputeFeasible`). The mark stays and is tried again.
+2. **A worker stands beside the cell, never in it.** RimWorld: any of 8 neighbours, a diagonal only if one of the two cells between is walkable (`RW/Verse/AI/TouchPathEndModeUtility.cs`). Ingnomia: the 4 cardinal neighbours on the same level (`WorkPosition` `'-1 0 0|0 -1 0|1 0 0|0 1 0'` in table `Jobs`). dwarfcorp: within radius 2.0.
+3. **Walkers cross a cell in about a quarter of a second.** RimWorld human 4.6 cells/s, Ingnomia 4.4, dwarfcorp 3.75 (section 5).
+4. **A block of rock takes 6 to 20 seconds, soil a third of that.** RimWorld granite 20 s, sandstone 8.3 s at skill 8; Ingnomia wall 11.9 s falling to 6.25 s; dwarfcorp dirt 3 swings against stone's 10.
+5. **An idle worker looks again within about 3 seconds, and at once on finishing a job.** RimWorld's idle wait lasts 125 to 200 ticks (`RW/RimWorld/JobGiver_WanderColony.cs`); Ingnomia waits 100 ticks, 2.5 s, after a search that found nothing (`IG/src/game/gnomeactions.cpp:669`).
+6. **A mark is data on the cell, apart from the job.** DF keeps 3 bits per tile (`dig` in `tile_designation`); RimWorld a `Designation` per cell or thing; Ingnomia tile flags `TF_JOB_WALL`, `TF_JOB_FLOOR`. Workers scan the marks.
+7. **A drag is a rectangle on one level, tested cell by cell by the same rule that later commits it.** Cells that fail are left out without complaint; one message appears only if none passed (`RW/Verse/Designator.cs`, `Finalize`).
+8. **Digging down always makes the way out.** Ingnomia's hole builds ramps in the hole and its 4 neighbours; DF pairs stair shapes level by level.
+9. **Cancel is a tool of its own, first in every menu**, dragged like any other (`Designator_Cancel` heads all twelve lists in `RD/Misc/Designations/DesignationCategories.xml`).
+10. **Each dig kind is a row of tile requirements**, not code: Ingnomia's `Actions_Tiles` gives, per offset, what is `Required`, what is `Forbidden` and the preview sprite.
+11. **Goods are things lying in cells; a stockpile is a dragged zone with a filter and a priority; hauling arises from goods not in their best storage.** RimWorld's readout counts only what lies in storage.
+12. **Building has three states**: a blueprint that needs nothing, a frame that holds delivered materials, the built thing. Delivering is one job, finishing another.
+13. **A built block remembers it was built**: DF keeps the item and `original_tile`; Ingnomia sets `WT_CONSTRUCTED`; dwarfcorp `IsPlayerBuilt`.
+14. **A click selects a thing, never the ground.** RimWorld shows the ground under the pointer as text at the bottom left with no click.
+15. **Workers pass through one another.** RimWorld pawns collide only when hostiles are near; Ingnomia gnomes are blocked only by monsters.
+
+## 1. Marking work by dragging
+
+| Game | A drag | Levels | Shown | Cancel |
+|---|---|---|---|---|
+| RimWorld | Press, hold, release. Rectangle from start cell to mouse cell (`DesignationDragger.DragRect`); `DraggableDimensions` 0 = click only, 1 = line, 2 = rectangle | one | While held: a highlight on each accepted cell, an outline (RGBA 109,139,79,100), side lengths from 3 cells, the count from 5×5. After: the designation's icon on each cell (`Designation.DesignationDraw`, textures `Designations/Mine` ...) | Right click or the cancel key drops the tool and the drag (`DesignatorManager.ProcessInputEvents`) |
+| Dwarf Fortress | Two corners; `dig` holds `No, Default, UpDownStair, Channel, Ramp, DownStair, UpStair` (`DF/df.d_basics.xml:11026`) | The second corner may be on another level and the shape repeats on each between (`DH/gui/design.lua:1412`) | Marker-only bit `dig_marked`; priority 1 to 7, default 4, per tile (`DF/df.block.xml:207`, `DH/internal/quickfort/dig.lua:598,627`). How the game draws marks: not found | `x` clears the bits (`do_remove_designation`) |
+| Ingnomia | Two clicks, not a hold. Second click's level is forced to the first's (`IG/src/base/selection.cpp:213`) | Only actions with `MultiZ` (FellTree, Forage, HarvestTree, BuildScaffold) span the levels between | Every cell carries valid or not (`testTileForJobSelection`); size text "W x H"; Ctrl gives the outline only | Right click drops the first corner, again drops the tool |
+| dwarfcorp | Hold from the first voxel under the pointer to the current one, found by a screen ray of 150 (`DC/Player/VoxelSelector.cs`) | Box between the two voxels; Alt+wheel grows it up or down | Box drawn; voxels with no visible face are dropped unless Alt is held | Right drag with the same tool cancels (`DigTool`) |
+
+A RimWorld click with a rectangle tool is a 1×1 drag. dwarfcorp caps dig marks at `MaxVoxelDesignations` and says "Too many dig designations!".
+
+**For OdinCraft.** Drag a rectangle on the cut level and keep the level of the first corner. Run the commit rule every frame for the preview and skip failing cells silently. Make cancel a dragged tool.
+
+## 2. The kinds of digging and what each leaves
+
+Dwarf Fortress (job types `DF/df.job.xml:121-160`; where each applies, `DH/internal/quickfort/dig.lua:171-300`):
+
+| Mark | Job | Applies to | Leaves |
+|---|---|---|---|
+| Default | `Dig` | wall | floor; walkable (shape attributes, `tiletype_shape`) |
+| Channel | `DigChannel` | wall, floor, ramp, down stair | open space here (inference: and a ramp below) |
+| UpStair | `CarveUpwardStaircase` | wall | `STAIR_UP`: `walkable_up` |
+| DownStair | `CarveDownwardStaircase` | wall or floor | `STAIR_DOWN`: `passable_low` |
+| UpDownStair | `CarveUpDownStaircase` | wall, up stair | both |
+| Ramp | `CarveRamp` | wall | `RAMP`, `walkable_up` (inference: opens the tile above as `RAMP_TOP`) |
+| Default on ramp or stair | `RemoveStairs` | ramp, stair | floor |
+| smooth 1, 2 | `SmoothWall`/`SmoothFloor`, `DetailWall`/`DetailFloor` | hard natural rock | smoothed, engraved |
+
+Also `CarveFortification`, `CarveTrack`. A stair column is up stair at the bottom, up/down between, down stair on top (`DH/gui/design.lua:1345-1375`).
+
+Ingnomia (tables `Actions`, `Actions_Tiles`, `Jobs_Tasks`; code `IG/src/game/canwork.cpp:715-1050`): `Mine` removes the wall and keeps the floor; `DigHole` removes the floor, mines the wall below and makes ramps there and in its 4 neighbours; `MineStairsUp` clears wall and floor above and builds stairs here from the mined material; `DigStairsDown` and `DigRampDown` do the same one level down; `RemoveFloor`, `RemoveRamp`; `ExplorativeMine` follows ore. `DigHole`, `RemoveFloor` and `BuildWall` jobs are taken fewest walkable neighbours first and skipped when "enclosed by same type"; a job flagged `MayTrapGnome` is worked from the position with the most walkable neighbours (`jobmanager.cpp:558`, `gnomeactions.cpp:575`). dwarfcorp has one kind: the voxel goes; its dwarves climb out by jumping one voxel up or by ladder.
+
+**For OdinCraft.** A level here is two blocks of air over a floor, so "mine" removes two blocks and "channel" three. Offer mine, dig down with a ramp or stair, stair up; never a bare pit.
+
+## 3. Felling and gathering
+
+- RimWorld: trees are things; drag selects the plants in the cells (`RW/RimWorld/Designator_Plants.cs`). `harvestWork` 800 (base tree, poplar), 710 (pine), 1400 (oak); yield 25 to 27 wood, oak 46 (`RD/ThingDefs_Plants/`). Work per tick is `PlantWorkSpeed` × 1 at full growth: 13.3 s, 11.8 s, 23.3 s at skill 8. Wood drops by the worker as one stack.
+- Ingnomia: `FellTree` needs `Floor|Tree`, duration 10 (2.4 s); one `RawWood` per cell of the tree's layout, dropped under that cell, plus 1 to 3 seeds (`IG/src/game/plant.cpp:452`).
+- Dwarf Fortress: the Default mark on the trunk; job `FellTree`, skill `WOODCUTTING`, item `WOOD`. Count and time: not found.
+- dwarfcorp: trees are entities picked by a screen rectangle; health 100 × size, 2 × size wood (`DC/Entities/Plants/Tree.cs`); up to 3 choppers.
+
+**For OdinCraft.** Mark the tree, not its blocks: any trunk block in the dragged rectangle marks the whole tree. Yield follows trunk blocks.
+
+## 4. How work is found and taken
+
+- RimWorld: each pawn orders its work givers by its priority 1 to 4, then by the type's `naturalPriority` (Construction 900, Mining 600, PlantCutting 500, Hauling 300; `RD/WorkTypeDefs/WorkTypes.xml`, `RW/RimWorld/Pawn_WorkSettings.cs:198`). `JobGiver_Work` takes the first giver with a target and, within it, the closest reachable one. `Reserve` gives a target to one pawn (`ReservationManager`).
+- Ingnomia: one list. The gnome passes its skills in order; the manager walks priority 9 to 0 and nearest first, checks tool, items and region, and returns a job. Failed jobs sit in `m_returnedJobQueue` and are re-tested every tick within 3 ms.
+- Dwarf Fortress: a linked list of `job` with `job_postingst` and `job_applicationst`; some 177 entries in `unit_labor` (`MINE`, `CUTWOOD`, `HAUL_STONE` ...). A haul job with no worker counts `expire_timer` up once per 50 ticks and is deleted at 20 (`DF/df.job.xml:1749`). Adjacency: not found.
+- dwarfcorp: highest priority, then least cost; dig cost is distance² + 10 × depth below the top, so digging goes top down; `MaxAssignable = 3`.
+
+**For OdinCraft.** Filter by reach before handing out, and print why a mark is waiting. Work positions are the 4 neighbours on the floor beside or one step above or below (inference).
+
+## 5. Speed, in real numbers
+
+RimWorld runs 60 ticks/s; speeds ×1, ×3, ×6 (`RW/Verse/TickManager.cs:58`). A day is 60,000 ticks, 16.7 minutes.
+
+| Thing | Figures | Seconds at ×1 |
+|---|---|---|
+| Walk | `MoveSpeed` 4.6 c/s: 13 ticks a cell, ×1.414 diagonal, + terrain `pathCost` (soil 2, sand 4, mud 14) | 0.25 a cell on soil |
+| Mine | a hit every 100 ticks ÷ `MiningSpeed`; 80 damage to natural rock; speed 0.04 + 0.12 × skill (`RW/Verse/AI/JobDriver_Mine.cs`). Hit points: sandstone 400, slate 500, limestone 700, granite 900, ore 1500 | skill 8: 8.3, 11.7, 15, 20, 31.7 |
+| Wall | `WorkToBuild` 135, 5 of a material; wood ×0.7; stone blocks ×6 + 140; 1.7 work a tick × `ConstructionSpeed` (0.3 + 0.0875 × skill) | wood 0.9; granite 9.3 |
+| Wood floor | 85 work, 3 wood | 0.8 |
+
+Stone drops a chunk 1 time in 4 (`mineableDropChance` 0.25); ore 40.
+
+Ingnomia runs 40 ticks/s (25 ms; fast 5 ms). Duration × 10 ticks, less 5 % per skill level, kept within 10 to 1000 (`gnomeactions.cpp:1829`): mine 50 = 11.9 s, hole 20 = 4.75 s, wall 50, floor 20, stairs 30 = 7.1 s. A cell takes 9 ticks at the lowest speed 30 (delay 250): 4.4 cells/s.
+
+dwarfcorp: walk 0.75 × Dexterity 5 = 3.75 voxels/s, climb half. Voxel health dirt and sand 30, stone 100, granite 300; a swing does 1 + Strength 5 + Size 5 = 11. Seconds a swing: not found. Placing a block: 1.0 s. Dwarf Fortress: not found.
+
+**For OdinCraft.** Walk 4 m/s. A soil block 2 s, a rock block 4 to 6 s, since each cell is two blocks. Give the clock ×1, ×3, ×6.
+
+## 6. Goods and stockpiles
+
+- RimWorld: an item is a `Thing` with `stackCount` in a cell; `stackLimit` 75 for resources, 1 for chunks; a pawn carries 75. `Designator_ZoneAddStockpile` drags a zone over standable cells. Settings are a filter and a priority (`Low, Normal, Preferred, Important, Critical`; default Normal). `ListerHaulables` holds items not in their best storage; haulers take the closest and `StoreUtility` picks the nearest cell in the highest priority zone. `ResourceCounter` sums storage only, every 204 ticks. Chunks need a haul mark.
+- Dwarf Fortress: `stockpile_settings` has 17 group flags (animals, food, furniture, corpses, refuse, stone, ammo, coins, bars_blocks, gems, finished_goods, leather, cloth, wood, weapons, armor, sheet); `max_barrels`, `max_bins`, `max_wheelbarrows`; links `give_to_pile`, `take_from_pile` (`DF/df.building.xml:303,948-996`).
+- Ingnomia: each item is one object; a stockpile cell holds `StackSize` of them (RawWood 1, RawStone 10, RawSoil 20). The stockpile makes its own haul jobs, 50 items a look (`IG/src/game/stockpile.cpp:348`).
+- dwarfcorp: a zone holding 32 resources a voxel, with tag white and black lists.
+
+**For OdinCraft.** Dug blocks become goods on the floor. One stockpile tool, filter by kind, and a count of what is stored.
+
+## 7. Building
+
+RimWorld: a `Blueprint`; `WorkGiver_ConstructDeliverResourcesToBlueprints` hauls to it and it becomes a `Frame`; `WorkGiver_ConstructFinishFrames` works it. Walls drag as lines, floors as rectangles (draw styles `Default1D` and `Default2D`, `RD/DrawStyleCategoryDefs/`). Ingnomia: phases `PENDING`, `HAULING`, `READY`; one item a block (`StoneWall` 1 RawStone, `PlankFloor` 1 Plank, `Scaffold` 2 Plank), so a mined wall builds a wall. `BuildStairs` needs a floor here and nothing above. Dwarf Fortress: `construction_type` FORTIFICATION, WALL, FLOOR, STAIR_UP, STAIR_DOWN, STAIR_UPDOWN, RAMP, tracks; a `construction` record keeps the item and `original_tile` (`DF/df.event.xml:191`). dwarfcorp: one resource a voxel, lowest first.
+
+**For OdinCraft.** One good a block. Show the unbuilt block as a ghost that says what it waits for. Keep built blocks in the list of edits with their origin.
+
+## 8. What a click selects and shows
+
+RimWorld selects things flagged `selectable` (pawns, buildings, items, trees, natural rock) and zones under the pointer, never bare terrain (`RW/RimWorld/Selector.cs:325`). Shift adds; double click takes all alike on screen; at most 200. The inspect pane is 432 × 165 px at the bottom left, with tabs 72 × 30, and opens only when something is selected. Terrain shows with no click: lines 19 px apart from (15, 65) at the bottom left, giving light, terrain with walk speed, zone, things, roof (`RW/Verse/MouseoverReadout.cs`); it hides while any main tab is open, the inspect pane included. Ingnomia's tile info lists wall, floor, embedded, plant, water, items, creatures and the job with worker, priority, required tool and whether it exists (`IG/src/gui/aggregatortileinfo.h`). dwarfcorp shows the voxel's type name on hover.
+
+**For OdinCraft.** Hover reads the block; a click takes a dwarf, good or mark. A marked block's card says who has it or why nobody does.
+
+## 9. The orders menu's structure
+
+RimWorld's categories by `order`: "orders" 900, "zone" 800, "structure" 700, "production", "furniture", "power", "security", "misc", "floors", "recreation", "ship", "temperature". Orders holds Cancel, Deconstruct, Mine, PlantsHarvestWood, PlantsCut, PlantsHarvest, Hunt, Slaughter, Tame, Haul, Unforbid, Forbid, Claim, SmoothSurface, paint and plan tools. Zone holds the two stockpiles, growing zone, ZoneDelete, home, allowed, roof and snow areas. Labels and descriptions of designators: not found (keyed strings are not in the material). The menu is 200 px wide with 32 px buttons.
+
+Ingnomia (`IG/content/JSON/menusettings.json`): Terrain (Mine: "Wall" "Remove wall", "Stairs Up" "Mine the wall into stairs going up"; Dig: "Hole" "Remove floor and section below", "Stairs Down", "Ramp Down"; "Remove Floor", "Remove Ramp"), Agriculture ("Fell Trees" "Cut trees down"), Build, Designate Area ("Stockpile" "Store items"), Job (Suspend, Resume, Cancel, Raise priority, Lower priority). dwarfcorp tools: Dig, Chop, Gather, BuildWall, BuildZone, PlaceObject, CancelTasks.
+
+**For OdinCraft.** Name tools by the verb and the result, each with one line saying what is left behind.
+
+## 10. Walkers in a voxel world with levels
+
+Ingnomia (`IG/src/game/worldgetters.cpp:691`): a cell is a floor with or without a wall and a walker is one cell tall. Moves: 4 neighbours; a diagonal only when both cells between are walkable; a stair or scaffold wall goes straight up and its top straight down; a ramp reaches the 4 neighbours of the cell above. Every tile change updates a region map; the path-finder answers "no connection" from regions before searching. A blocked next step clears the path. dwarfcorp (`DC/Components/AI/CreatureMovement.cs`): the dwarf fills one voxel over a solid one; walks to 4 empty neighbours, diagonals only in the open; jumps one up when the voxel over its head is empty; falls (cost 30); climbs things tagged `Climbable`. Plans stop at 10,000 expansions. RimWorld checks the next 20 path cells each step and plans again.
+
+**For OdinCraft.** Standing needs a floor and two blocks of air; a step up needs three over the start. Keep regions so reach is a lookup.
+
+## 11. Needs, briefly
+
+- RimWorld: `RD/NeedDefs/`, `RW/RimWorld/Need_Food.cs`, `Need_Rest.cs`; Mood, Food, Rest, Joy, Beauty, Comfort, Outdoors.
+- Ingnomia: tables `Needs`, `Needs_States`; Hunger, Thirst, Sleep, Happiness, with thresholds 30, 15, 0.
+- Dwarf Fortress: `hunger_timer`, `thirst_timer`, `sleepiness_timer` (`DF/df.unit.xml:2945`); `need_type` and `stress` (`DF/df.personality.xml:1374,1503`).
+- dwarfcorp: `DC/Components/AI/CreatureStats-Status.cs`; Hunger, Energy, Happiness, Boredom.
