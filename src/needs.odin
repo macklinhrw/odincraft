@@ -737,8 +737,11 @@ day_tick :: proc(h: ^Hold) {
 	h.spoiled = 0
 	fmt.sbprint(&b, night_words(h, date.day - 1))   // the weather that was, and how the party slept (shelter.odin)
 	lean := lean_of(h)
-	if lean_short(lean) && (date.nth == 1 || date.nth == 7 || date.nth == 10 || date.day == 1) do fmt.sbprintf(&b, " %s", lean_words(lean))   // the lean season ahead, or in hand, while the store falls short of it: three times a season, and the alert stands between (crowd.odin)
 	h.short = fmt.tprintf("The %s: %s in store.", date_words(date), store)
+	if lean_short(lean) && (date.nth == 1 || date.nth == 7 || date.nth == 10 || date.day == 1) {   // the lean season ahead, or in hand, while the store falls short of it: three times a season, and the alert stands between (crowd.odin)
+		fmt.sbprintf(&b, " %s", lean_words(lean))
+		h.short = fmt.tprintf("%s %s", h.short, fmt.tprintf("%s is %d %s off.", capital(SEASONS[lean.season]), lean.off, "day" if lean.off == 1 else "days") if lean.off > 0 else fmt.tprintf("%s has %d %s left.", capital(SEASONS[lean.season]), lean.days, "day" if lean.days == 1 else "days"))
+	}
 	say(h, "%s", strings.to_string(b))
 	h.tally = {}
 }
