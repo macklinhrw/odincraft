@@ -143,7 +143,8 @@ bar_frame :: proc() {
 }
 
 // The standing problems of the orders, each one alert that counts (I5, I14): work no dwarf can
-// reach, building with nothing in store, rock too hard for the picks, and a dwarf shut in.
+// reach, building with nothing in store, and rock too hard for the picks. A dwarf shut in, or idle
+// because of one of these, is marked among the dwarves (NEEDS, crowd.odin).
 alerts_keep :: proc() {
 	s := &watch.seen
 	texts: [3]string
@@ -170,16 +171,8 @@ alerts_keep :: proc() {
 	if stuff >= 1 do texts[1] = fmt.tprintf("The %s waits for %s: none is in store.%s", first[1].place, STUFFS[first[1].stuff], "" if stuff == 1 else fmt.tprintf(" So do %s more.", count_words(stuff - 1)))
 	if hard >= 1 do texts[1] = fmt.tprintf("%s%sThe %s is left in rock too hard for the party's picks.", texts[1], " " if texts[1] != "" else "", first[2].place)
 	places[0], places[1] = middle(first[0]), middle(first[1] if stuff > 0 else first[2])
-	shut, who := 0, -1
-	for d, i in s.dwarves do if d.shut {
-		if shut == 0 do who = i
-		shut += 1
-	}
-	if shut == 1 do texts[2] = fmt.tprintf("%s %s is shut in. Dig or build a stair to it.", s.dwarves[who].who.given, s.dwarves[who].who.byname)
-	else if shut > 1 do texts[2] = fmt.tprintf("%s dwarves are shut in. Dig or build a stair to them.", sentence(count_words(shut))[:len(count_words(shut))])
-	if who >= 0 do places[2] = s.dwarves[who].at
-	ids := [3]string{"orders.reach", "orders.store", "hold.shut"}
-	for text, i in texts do if text != bar.said[i] {
+	ids := [3]string{"orders.reach", "orders.store", ""}   // a dwarf shut in is the dwarves' own alert (NEEDS, crowd.odin)
+	for text, i in texts do if text != bar.said[i] && ids[i] != "" {
 		delete(bar.said[i])
 		bar.said[i] = strings.clone(text)
 		if text == "" do alert_clear(ids[i])

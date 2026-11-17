@@ -6,6 +6,8 @@ It is a plan, not a decision. Section 8 holds what is the owner's. Pictures of f
 
 **Step I-1 is built** (`../plan.md`, section 10, "I-1, as built"): the ground and the play screen's frame. Section 10 below says what building it changed in this design. The drawings beside this file are still the design's; pictures of the built screen are in `../interesting-world/real/i1-*.jpg`.
 
+**The dwarves on screen are built** (`../plan.md`, section 10, "The dwarves on screen, as built"): their place at the top, their list, several in the hand, and the alerts that count them. Section 11 below says what building them changed. Pictures: `../interesting-world/real/crowd-*.jpg`.
+
 Revised the same day after the owner's two criticisms of the first pass: a hold will grow past seven dwarves, and the first drawings were ugly and immature. The placement and the grammar stand. The look is redone (I10), and the design now grows with the hold (I14).
 
 The evidence is a survey of Dwarf Fortress's Steam interface, RimWorld's, and what the makers of Factorio, Victoria 3, Crusader Kings 3 and others have written about theirs, made by a research agent on 2026-11-16 that fetched each page. Its sources are listed at the end. Claude did not re-check its quotations. *(Memory)* marks what neither checked.
@@ -148,7 +150,7 @@ At 2560 × 1440, standard scale. `interface-wireframes.html` draws it, with a no
 ![A list open down the right side, and a tool in the hand](interface-list.jpg)
 
 - **Top left: the hold and the clock.** The hold's name, the date in words, and one control for the clock: paused at its hour, or running at one of three speeds. Clicking the date opens the chronicle at today.
-- **Top middle: the dwarves.** Those in trouble first, each with a mark on its picture (a diamond for trouble, a triangle for caution); then those the player keeps in view; then the count of all, which opens the list (I14). Click selects, a second click goes there.
+- **Top middle: the dwarves.** Those in trouble first, each with a mark on its picture (a diamond for trouble, a triangle for caution); then those the player keeps in view; then the count of all, which opens the list (I14). Click selects, a second click goes there, and with Shift a click adds to the hand. *Built; section 11.*
 - **Top right: the stores, then what is wrong.** What the hold is living on, in a few words, each beside a block of the thing. Under it the alerts, worst first, each saying the problem and going to its cause.
 - **Left, under the hold: messages.** The last few things that happened, newest lowest, fading after a while.
 - **Left, lower: the hand.** The selected thing's card, or the tool's choices. Above the orders bar, so an order and its target are a short reach apart.
@@ -202,7 +204,7 @@ The interface steps sit in the play track (`plan.md`, section 5).
 | Step | What is built | The owner does |
 |---|---|---|
 | **I-1. The interface's ground and the play screen's frame** (after P1; built) | Text, panels on the module grid, the pointer shared between the world and the panels, scale, `--shot` with the interface. The four regions. The clock and speeds. The hand, answering what any block, tree, stream or place is and why. Messages. The level control, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there; paints the rain over the island |
-| **After I-1. The dwarves on screen** | Their pictures at the top and the dwarves list. A dwarf's card is built with I-1: a dwarf clicked on the land is in the hand, with its picture, P2's three lines and Follow | Clicks a dwarf's picture and is taken to her |
+| **After I-1. The dwarves on screen** (built) | Their pictures at the top: who needs you, who you keep in view, the count of all. The Dwarves list, which finds, groups and folds. Several in the hand as a group. Alerts that count. Messages that lead to their place. A dwarf's card finished: name, trade and age, what it is doing and what it waits for, and tabs for its trade and itself | Clicks a dwarf's picture and is taken to her |
 | **I-2. The front door and the world** | The front door, a new world with honest progress, the world's map, Walk the world, settings for text size and keys | Makes a world from the menu and walks it |
 | **E-1. Expedition planning** | Where, with the site card; who, with drawing again; set out | Chooses a hard site on purpose |
 | **With P3. Orders** | The orders bar, marking ground by dragging, the build choices, what an order waits for | Has a room dug |
@@ -218,7 +220,7 @@ The interface steps sit in the play track (`plan.md`, section 5).
 - **The view from above and panels share the pointer.** *Built in I-1, as one rule:* a press belongs to what lies under it, and so does everything until that button is let go; the wheel belongs to what the pointer is over. No one has tried it by hand.
 - **Frame time.** The interface is drawn every frame. It must add nothing to notice: the target is still no frame of our own work over 12.5 ms.
 - **The game's sentences are long.** `--why` answers in paragraphs. A card needs the first sentence, with the rest a click away, and some sentences will need rewriting to lead with the point.
-- **A hold of seventy is designed for and not drawn.** I14 says how each part grows. Only the hold of thirty-four is drawn, and none is built.
+- **A hold of seventy is designed for and not drawn.** I14 says how each part grows. Only the hold of thirty-four is drawn. *Built for the dwarves' place at the top, their list, the hand and the alerts, and pictured with thirty-four and a hundred (`../interesting-world/real/crowd-34.jpg`, `crowd-100.jpg`); work by trade is still to come.*
 - **Nobody has used it.** Every placement here is argued, and none is tested. The owner's first hour with it will find what is wrong.
 
 ## 8. Decisions for the owner
@@ -251,6 +253,29 @@ The four regions and the grammar stood. These are the places where the built scr
 - **Lessons can be read again in the menu** (I11), which also holds the interface's size until settings exist (I-2).
 - **A message need not have a place.** The hold's log has none to give yet, so its lines are told and cannot be followed (I4). Anything told with a place leads there.
 - **A picture can leave the interface out** (`--plain`), since pictures of the land are how the natural world is judged, and can say what the screen says (`--say`), which I12 did not name.
+
+## 11. What building the dwarves on screen changed
+
+The design stood: who needs you, then who you keep, then the count; a list that finds, groups and folds; several in the hand; alerts that count. These are the places where the built screen differs from sections 3 and 4, or settles what they left open, and why.
+
+- **"Needs you" is a table of causes** (`NEEDS`, `crowd.odin`), worst first, each with its word, its sentence for one dwarf and for several, what such a dwarf waits for, and its sign. Before needs and wounds exist (P4) there are three, which the hold can tell of where a dwarf stands: it has no ground under it or within six steps (a diamond); it has stopped on ground closed all round, a pit or a ledge of no more than 64 floors (a diamond); it has stopped on open ground with no way to where it was sent (a triangle). Hunger and hurt will be rows. **Idle is not one**: the drawing marks an idle dwarf with a triangle, but until there is work every dwarf that stands is waiting for word, and seven triangles would say nothing.
+- **Those who came in the first boat are kept in view from the start.** The design's top at seven dwarves is "nearly everyone" only if someone keeps them; with nothing wrong and nothing kept it would be a count and no pictures. The player lets any of them go, and keeps others, with K, on a card or on a row.
+- **The top has ten places at most**, fewer where the picture is narrow, and is as wide at a hundred dwarves as at thirty-four. Where more need you than there are places, the last place says how many more and opens the list on them; so does the last of those kept. **Those kept hold a third of the places against a crowd in need**, or a dwarf the player chose to watch would vanish whenever many were in trouble.
+- **The count is set in the reading face**, not the inscription face the design gives a name: Marcellus's 1 and 0 are an I and an O, and a hundred read as "IOO".
+- **A second click on a picture takes the view to the dwarf once; Enter follows it** as it walks, and Enter again lets go. With Shift a click on a picture or a row adds the dwarf to the hand, or takes it out.
+- **A box dragged over dwarves takes the dwarves**, not the blocks under them; over ground with no dwarf it still takes the blocks. When P3 gives orders their tools, a drag with a tool in the hand marks ground, and with none selects.
+- **A row leads with what is wrong.** The hold's own sentence for a stopped dwarf runs to forty words. A row, a card and an alert say it in the table's words, and the card adds where the dwarf was sent and what it waits for.
+- **A row has a word for how the dwarf is and a small Keep.** Until P4 the word is what the dwarf needs, or "well".
+- **The list groups by need as the drawing does**: Need you, then by what they are doing: Walking, Waiting for word, Coming ashore. By trade it is a group a trade, and by place a group for each named place the dwarves are nearest. A group of more than eight shows its first five and folds the rest to their count ("Twenty-nine more, show all"); its head folds it away whole. **Kept in view** beside the three is a switch that leaves only those.
+- **The list finds by what a dwarf needs too**, as well as by name, trade and place.
+- **A dwarf's card has two tabs, Trade and Self**: what its trade does and who shares it; its age, its height, whether it came in the first boat and how far it has walked. The drawing's Needs, Body, Work, Ties and Past name things that do not exist yet. What it needs stands under its name with its sign.
+- **Several in the hand** say how many and of what trades, show a picture of each, name them, and say what they share: what they are doing, and what any of them needs. The orders that fit them all come with P3.
+- **An alert that counts dwarves takes them in the hand and puts the view over them.** For one dwarf it names it. It is raised again only when those it counts change.
+- **A message leads to where it happened and takes the dwarf it is about in the hand.** The hold says where each line of its log happened: the block of an order, the place of the dwarf it names, or where the errand leads.
+- **A sign stands over a dwarf that needs you, on the land**, so the mark at the top can be found in the world, and a brass square round each dwarf in the hand.
+- **A list stands where the alerts do**, so they are not drawn while one is open; the Dwarves list by need says the same. Sections 3 and 4 give both the top right.
+- **The alerts narrow to leave the dwarves their count**, down to a least width. On a screen 2,560 wide that is enough up to 150%. At 175% with an alert standing the top is the count alone, with no pictures; at 200% it has no room at all, and two alerts are deep enough to take the ground's panel's place until they clear, though its keys still work. At 175% and 200% with a list open the top has no room for the dwarves either. The lists' button and F1 lead to them at every size.
+- **E in first person takes the dwarf aimed at in the hand**, and where none is aimed at the block, as Y does. It is a row of `BINDS`. G and the right click are still P2's, for P3.
 
 ## Sources
 

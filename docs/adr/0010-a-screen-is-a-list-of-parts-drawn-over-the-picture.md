@@ -34,4 +34,5 @@ Every colour, typeface, size and spacing is a field of `LOOK` (`ui.odin`), and n
 - Messages may be told from any thread (`tell`); the frame takes them. Alerts are the frame thread's.
 - Text set in a face with no hinting is a little softer than a browser's at 18 pixels and under, which is the 75% scale's body text.
 - Each new typeface or style costs atlas room: eight styles at 200% fill about a quarter of 2,048 pixels square.
+- A list of a hundred rows lists only the rows in view, and a dwarf's picture is about twenty parts, a rectangle for each run of one colour: the play screen with a hundred dwarves, their list open and ten pictures at the top is about 600 parts (`plan.md`, "The dwarves on screen, as built").
 - A screen that is not the play screen (the front door, expedition planning) is another procedure that lists parts. Nothing else is needed for it.

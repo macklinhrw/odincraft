@@ -16,12 +16,13 @@ import sdl "vendor:sdl3"
 // from the game as it stands (ui.odin draws them), and the keys and the pointer come here first.
 //
 //   top left      the place under the view, the date, and the clock's control
+//   top middle    the dwarves: who needs you, who you keep in view, and the count of all (crowd.odin)
 //   left, under   messages: what happened. They fade, and are kept
-//   top right     the stores and what is wrong: nothing raises an alert yet, so nothing is drawn
+//   top right     the stores and what is wrong: an alert for each thing that is, which leads to its cause
 //   right         the ground here: the column of beds under the view's middle with the cut marked
 //                 on it, its controls, the lenses, and the walk
 //   lower left    the hand: the thing selected (hand.odin), or the tool held; the orders bar under it (bar.odin)
-//   bottom right  the lists: Places, and the menu
+//   bottom right  the lists: Dwarves, Places, and the menu
 //
 // Every action is an Act. A key is a row of BINDS that names an act, and a button names its act
 // and shows that row's key, so the key written on a button is always the key that presses it.
@@ -39,12 +40,13 @@ Act :: enum u8 {
 	Why, Go, Drop, Depth,                                // the hand
 	Order, Plan, Stuff, Take_Back, Plain,                // the orders bar, a tool's choices, and an order's card (bar.odin)
 	List, Sort, Fold, Row, Find, Thumb,                  // the lists
+	Who, Lead, Keep, Only, Whole, Crowd,                 // the dwarves: a picture, a row, kept in view, the list's kept alone, a group whole, the list opened on some (crowd.odin)
 	Menu, Back, Quit, Scale, Escape,
 	Said, Wrong,                                         // a message or an alert, which leads to its place
 }
 
 // A key: which act it does and with what, in which view, and whether holding it goes on doing it.
-Views :: enum u8 { Above, Either, Menu }
+Views :: enum u8 { Above, Afoot, Either, Menu }
 Bind :: struct {
 	key:          sdl.Scancode,
 	name:         string,   // as it is written on a button
@@ -63,7 +65,10 @@ BINDS := [?]Bind{
 	{.V, "V", .Bare, 0, 0, .Above, false}, {.L, "L", .Lenses, 0, 0, .Above, false},
 	{.TAB, "Tab", .Walk, 0, 0, .Either, false},
 	{.Y, "Y", .Why, 0, 0, .Either, false},
+	{.E, "E", .Why, 0, 0, .Afoot, false},   // P2's key for the dwarf aimed at; from above E turns the view
 	{.RETURN, "Enter", .Go, 0, 0, .Either, false},
+	{.K, "K", .Keep, -1, -1, .Either, false},
+	{.F1, "F1", .List, int(List.Dwarves), int(List.Dwarves), .Either, false},
 	{.F4, "F4", .List, int(List.Places), int(List.Places), .Either, false},
 	{.D, "D", .Order, int(Tool.Dig), int(Tool.Dig), .Above, false}, {.T, "T", .Order, int(Tool.Fell), int(Tool.Fell), .Above, false},
 	{.B, "B", .Order, int(Tool.Build), int(Tool.Build), .Above, false}, {.M, "M", .Order, int(Tool.Send), int(Tool.Send), .Either, false},
@@ -78,7 +83,7 @@ key_for :: proc(act: Act, arg := 0) -> string {
 	return ""
 }
 
-List :: enum u8 { None, Places }
+List :: enum u8 { None, Dwarves, Places }
 
 // A lens: one of the land's fields painted over the world (fields.odin), as --overlay= paints it on the map.
 Lens_Row :: struct { name: string, field: Field, says: string }
@@ -112,12 +117,12 @@ LESSONS := [Lesson]string{
 }
 
 // A message: something that happened. It is shown for a while and kept.
-Said :: struct { text: string, at: [3]f64, placed: bool, since: f64 }
+Said :: struct { text: string, at: [3]f64, placed: bool, since: f64, who: int }   // who: the dwarf it is about, or -1
 SAID_FOR  :: 14.0   // seconds a message is shown
 SAID_MOST :: 4      // messages shown at once
 
 // An alert: a problem that is still true. It stays until it is cleared.
-Wrong :: struct { id, text: string, sign: Sign, at: [3]f64, placed: bool }
+Wrong :: struct { id, text: string, sign: Sign, at: [3]f64, placed: bool, need: int }   // need: the row of NEEDS it counts dwarves by (crowd.odin), or -1
 
 Play :: struct {
 	// What the game hands it, once.
@@ -141,6 +146,7 @@ Play :: struct {
 	rest:     f64,             // seconds the pointer has rested
 	pointer:  [2]f32,
 	place_foot, place_wide, wrong_foot: f32,
+	crowd_right: f32,          // where the dwarves' place at the top must end: at the alerts, at a list, or at the picture's edge
 	ground:   Rect,            // the ground's panel
 	beds:     Rect,            // its column, for the pointer to drag the cut on
 	walk_row: Rect,
@@ -151,6 +157,18 @@ Play :: struct {
 	tab:      Depth,
 	card_scroll, card_over: f32,   // how far the card's depth is scrolled, and how far it can be
 	following: bool,           // the view follows the dwarf in the hand
+	// The dwarves on screen (crowd.odin).
+	several:  [dynamic]int,    // the dwarves in the hand, one or more, in the party's order
+	kept:     [dynamic]int,    // those kept in view at the top, in the order they were chosen
+	greeted:  bool,            // the first boat's were kept in view, once
+	need:     [dynamic]i8,     // for each dwarf its row of NEEDS, or -1
+	needing:  [dynamic]int,    // the dwarves who need the player, worst first
+	alerted:  [len(NEEDS)]u64, // those each need's alert was last raised for
+	by:       int,             // the Dwarves list is grouped by need, by trade or by place
+	only_kept: bool,           // and holds only those kept in view
+	whole, folded: bit_set[0..<128],   // its groups shown whole, and folded to their count
+	adding:   bool,            // Shift is held: a click adds to the hand
+	posed:    bool,            // the options' dwarves were taken in the hand and kept in view (play_posed)
 	goal:     [2]f64,          // where the view is going
 	going:    bool,
 	list:     List,
@@ -191,31 +209,33 @@ typing: bool   // the keyboard is a field's: nothing else reads the keys
 told: struct { mutex: sync.Mutex, lines: [dynamic]Said }
 
 // Something happened: a message. With a place, a click on it takes the view there (I4).
-tell :: proc(text: string, at: Maybe([3]f64) = nil) {
-	s := Said{text = strings.clone(text)}
+tell :: proc(text: string, at: Maybe([3]f64) = nil, who := -1) {
+	s := Said{text = strings.clone(text), who = who}
 	if place, ok := at.?; ok do s.at, s.placed = place, true
 	sync.guard(&told.mutex)
 	append(&told.lines, s)
 }
 
-// A line of the hold's log (say, hold.odin) as a message: its time and the order's own form are the log's.
-tell_log :: proc(line: string, at: Maybe([3]f64) = nil) {
+// A line of the hold's log (say, hold.odin) as a message, with where it happened and which dwarf it
+// is about (about, hold.odin): its time and the order's own form are the log's.
+tell_log :: proc(line: string, at: [3]f64, who: int) {
 	l := line
 	if i := strings.index(l, "] "); i >= 0 && strings.has_prefix(l, "[") do l = l[i + 2:]
 	if strings.has_prefix(l, `The hold says "`) {
 		if i := strings.index(l, `": `); i >= 0 do l = l[i + 3:]
 	}
-	tell(sentence(l), at)
+	tell(sentence(l), at, who)
 }
 
 // A problem that is still true: it stands at the top right until alert_clear. Raised again under
 // the same id it is the same alert, said anew, so "three dwarves are thirsty" is one that counts (I14).
-alert_raise :: proc(id, text: string, sign := Sign.Trouble, at: Maybe([3]f64) = nil) {
+// With a row of NEEDS, a click on it takes the dwarves it counts in the hand.
+alert_raise :: proc(id, text: string, sign := Sign.Trouble, at: Maybe([3]f64) = nil, need := -1) {
 	alert_clear(id)
-	w := Wrong{id = strings.clone(id), text = strings.clone(text), sign = sign}
+	w := Wrong{id = strings.clone(id), text = strings.clone(text), sign = sign, need = need}
 	if place, ok := at.?; ok do w.at, w.placed = place, true
 	append(&play.wrong, w)
-	slice.sort_by(play.wrong[:], proc(a, b: Wrong) -> bool { return a.sign == .Trouble && b.sign != .Trouble })
+	slice.stable_sort_by(play.wrong[:], proc(a, b: Wrong) -> bool { return a.sign == .Trouble && b.sign != .Trouble || a.sign == b.sign && a.need >= 0 && b.need >= 0 && a.need < b.need })
 }
 alert_clear :: proc(id: string) {
 	for w, i in play.wrong do if w.id == id {
@@ -239,6 +259,10 @@ play_begin :: proc(opt: ^Options, a: ^Above, clock: ^Clock, w: ^World, p: ^Playe
 		}
 	}
 	if opt.list == "places" do u.list = .Places
+	if opt.list == "dwarves" do u.list = .Dwarves
+	for name, i in ([3]string{"need", "trade", "place"}) do if opt.group == name do u.by = i
+	u.only_kept = opt.group == "kept"
+	append(&u.find, opt.find)
 	if opt.tell != "" do tell(opt.tell)
 	if opt.alert != "" do alert_raise("asked", opt.alert, .Caution if strings.has_prefix(opt.alert, "?") else .Trouble, a.at)
 	for l, i in LENSES do if opt.lens != "" && (strings.equal_fold(l.name, opt.lens) || FIELDS[l.field].name == opt.lens) do u.lens = i
@@ -274,11 +298,13 @@ play_backlog :: proc() -> int { return int(play.lens_job != nil) + int(play.goin
 
 hand_take :: proc(t: Thing) {
 	u := &play
-	same := t.kind == u.hand.kind && t.block == u.hand.block && t.lo == u.hand.lo && t.hi == u.hand.hi && t.place == u.hand.place && t.creature == u.hand.creature && t.dwarf == u.hand.dwarf && t.island == u.hand.island
+	same := t.kind != .Dwarves && t.kind == u.hand.kind && t.block == u.hand.block && t.lo == u.hand.lo && t.hi == u.hand.hi && t.place == u.hand.place && t.creature == u.hand.creature && t.dwarf == u.hand.dwarf && t.island == u.hand.island
 	if same do return
 	card_free(&u.card)
 	u.hand, u.tab, u.card_scroll, u.following = t, .Own if t.kind != .Ground else .Rock, 0, false
-	if t.kind != .Dwarf && t.kind != .None do u.card = card_make(u.w, t)
+	if t.kind != .Dwarf && t.kind != .Dwarves && t.kind != .None do u.card = card_make(u.w, t)
+	clear(&u.several)   // one dwarf is the one; several are put there by dwarves_take (crowd.odin)
+	if t.kind == .Dwarf do append(&u.several, t.dwarf)
 	hold_select(t.dwarf if t.kind == .Dwarf else -1)
 	if t.kind != .None do learn(.Select)
 }
@@ -293,7 +319,7 @@ hand_pick :: proc(pick: Pick, pointer: [2]f32) {
 	if !u.afoot^ {
 		ray := view_ray(u.yaw, u.pitch, u.fov, u.aspect, pointer)
 		if who := hold_aimed(u.w, u.eye, ray, 4*linalg.length(u.a.at - u.eye) + 600, u.a); who >= 0 {
-			hand_take({kind = .Dwarf, dwarf = who, feature = -1})
+			dwarf_take(who, u.adding)
 			return
 		}
 		if u.animal.ok {
@@ -360,15 +386,21 @@ play_act :: proc(act: Act, arg: int) {
 		u.lenses, u.going = false, false
 		learn(.Walk)
 	case .Why:
-		if u.afoot^ do hand_pick(u.aim, {0.5, 0.5})
-		else {
+		if u.afoot^ {   // the dwarf aimed at, before the block behind it
+			if who := hold_aimed(u.w, u.eye, look_dir(u.yaw, u.pitch), AIM_REACH, nil); who >= 0 do dwarf_take(who)
+			else do hand_pick(u.aim, {0.5, 0.5})
+		} else {
 			under := a.under
 			if !under.ok do under = pick_far(u.eye, view_ray(u.yaw, u.pitch, u.fov, u.aspect, a.pointer), above_level(a))
 			hand_pick(under, a.pointer)
 		}
 	case .Go:
-		if u.hand.kind == .Dwarf do u.following, u.going = !u.following, false
-		else if u.hand.kind != .None do go_to({f64(u.hand.block.x) + 0.5, f64(u.hand.block.z) + 0.5})
+		if u.hand.kind == .Dwarf {
+			u.following, u.going = !u.following, false
+			if u.following && u.afoot^ do play_act(.Walk, 0)
+		} else if u.hand.kind == .Dwarves {
+			if at, ok := several_middle(); ok do go_to(at)
+		} else if u.hand.kind != .None do go_to({f64(u.hand.block.x) + 0.5, f64(u.hand.block.z) + 0.5})
 	case .Drop: hand_drop()
 	case .Depth: u.tab, u.card_scroll = Depth(arg), 0
 	case .Order: tool_take(Tool(arg))
@@ -383,9 +415,30 @@ play_act :: proc(act: Act, arg: int) {
 	case .List:
 		u.list = .None if u.list == List(arg) else List(arg)
 		u.list_scroll, u.typing = 0, false
-	case .Sort: u.sort, u.list_scroll = arg, 0
-	case .Fold: u.open ~= {arg}
+		clear(&u.find)
+	case .Sort:
+		if u.list == .Dwarves do u.by, u.whole, u.folded = arg, {}, {}
+		else do u.sort = arg
+		u.list_scroll = 0
+	case .Fold:
+		if u.list == .Dwarves do u.folded ~= {arg}
+		else do u.open ~= {arg}
 	case .Row: place_take(arg)
+	case .Who:   // a dwarf's picture: a click takes it in the hand, a second takes the view to it, and with Shift it joins or leaves those in the hand
+		if u.adding do dwarf_take(arg, true)
+		else if u.hand.kind == .Dwarf && u.hand.dwarf == arg {
+			if at, ok := hold_where(arg); ok do go_to(at.xz)
+		} else do dwarf_take(arg)
+	case .Lead:   // a dwarf's row: it is in the hand and the view goes to it
+		dwarf_take(arg, u.adding)
+		if at, ok := hold_where(arg); ok && !u.adding do go_to(at.xz)
+	case .Keep: keep(arg)
+	case .Only: u.only_kept, u.list_scroll = !u.only_kept, 0
+	case .Whole: u.whole ~= {arg}
+	case .Crowd:   // the list, opened on those who need the player, or on those kept in view
+		u.list, u.by, u.only_kept, u.list_scroll, u.typing = .Dwarves, 0, arg == 1, 0, false
+		u.whole, u.folded = {0}, {}
+		clear(&u.find)
 	case .Find:
 		u.typing = true
 		if u.window != nil do _ = sdl.StartTextInput(u.window)
@@ -395,8 +448,21 @@ play_act :: proc(act: Act, arg: int) {
 	case .Scale:
 		u.scale = arg
 		play_keep()
-	case .Said: if arg < len(u.said) && u.said[arg].placed do go_to(u.said[arg].at.xz)
-	case .Wrong: if arg < len(u.wrong) && u.wrong[arg].placed do go_to(u.wrong[arg].at.xz)
+	case .Said:   // a message leads to where it happened, and to the dwarf it is about (I4)
+		if arg < len(u.said) && u.said[arg].placed {
+			if u.said[arg].who >= 0 do dwarf_take(u.said[arg].who)
+			go_to(u.said[arg].at.xz)
+		}
+	case .Wrong:   // an alert leads to its cause; one that counts dwarves takes them in the hand (I14)
+		if arg < len(u.wrong) && u.wrong[arg].placed {
+			m := u.wrong[arg]
+			if m.need >= 0 {
+				who := make([dynamic]int, context.temp_allocator)
+				for v, i in u.need do if int(v) == m.need do append(&who, i)
+				dwarves_take(who[:])
+				if at, ok := several_middle(); ok do go_to(at)
+			} else do go_to(m.at.xz)
+		}
 	case .Escape:   // closes the topmost thing (I6); with nothing open, it opens the menu
 		switch {
 		case u.typing: typing_end()
@@ -425,6 +491,7 @@ play_event :: proc(e: ^sdl.Event) -> bool {
 	u, a := &play, play.a
 	if u.plain do return false
 	held := u.afoot^ && u.captured^   // the mouse turns the head
+	if !u.unseen do u.adding = sdl.GetModState() & sdl.KMOD_SHIFT != {}
 	#partial switch e.type {
 	case .KEY_DOWN:
 		if u.typing {
@@ -434,7 +501,7 @@ play_event :: proc(e: ^sdl.Event) -> bool {
 			}
 			return true
 		}
-		for b in BINDS do if b.key == e.key.scancode && (b.views == .Menu) == u.menu && (b.views != .Above || !u.afoot^) {
+		for b in BINDS do if b.key == e.key.scancode && (b.views == .Menu) == u.menu && (b.views != .Above || !u.afoot^) && (b.views != .Afoot || u.afoot^) {
 			if !e.key.repeat || b.held do play_act(b.act, b.shifted if e.key.mod & sdl.KMOD_SHIFT != {} else b.arg)
 			return true
 		}
@@ -482,7 +549,13 @@ play_event :: proc(e: ^sdl.Event) -> bool {
 		} else if a.marking {   // a block was under the press: a click picks up what it is part of, a drag the box it marked
 			mark_end(a)
 			if lo, hi, _, _ := mark_box(a); lo != hi {
-				hand_take({kind = .Box, island = island_at(f64(lo.x) + 0.5, f64(lo.z) + 0.5), block = lo, lo = lo, hi = hi, feature = -1})
+				if who := dwarves_in(lo, hi); len(who) > 0 {   // a box dragged over dwarves takes them, and with Shift adds them to the hand
+					all := make([dynamic]int, context.temp_allocator)
+					if u.adding && (u.hand.kind == .Dwarf || u.hand.kind == .Dwarves) do append(&all, ..u.several[:])
+					for i in who do if !slice.contains(all[:], i) do append(&all, i)
+					dwarves_take(all[:])
+					mark_clear(a)
+				} else do hand_take({kind = .Box, island = island_at(f64(lo.x) + 0.5, f64(lo.z) + 0.5), block = lo, lo = lo, hi = hi, feature = -1})
 			} else {
 				hand_pick({block = lo, ok = true, exact = true}, at/{screen.w, screen.h})
 			}
@@ -529,27 +602,6 @@ button :: proc(r: Rect, text: string, act: Act, arg := 0, held := false, id := "
 	if held do state += {.Held}
 	if main do state += {.Main}
 	part(.Button, r, text, .Body, {}, state, act, arg, key_for(act, arg), id, tip)
-}
-
-// A dwarf's picture: a small bust of blocks, eight by eight, hood, face and beard.
-bust :: proc(r: Rect, who: Facts) {
-	ROWS := [8]string{".hhhhhh.", "hhhhhhhh", "hssssssh", "hsessesh", "bssnnssb", "bbbbbbbb", ".bbbbbb.", "..bbbb.."}
-	shade :: proc(c: u32, by: f32 = 1) -> Colour { return {u8(f32(c >> 16 & 255)*by), u8(f32(c >> 8 & 255)*by), u8(f32(c & 255)*by), 255} }
-	part(.Fill, r, colour = {0x3b, 0x45, 0x4e, 255})
-	cell := r.w/8
-	for row, y in ROWS do for ch, x in row {
-		c: Colour
-		switch ch {
-		case 'h': c = shade(who.hood)
-		case 's': c = shade(who.skin)
-		case 'n': c = shade(who.skin, 0.86)
-		case 'b': c = shade(who.beard)
-		case 'e': c = {0x1b, 0x17, 0x14, 255}
-		case: continue
-		}
-		part(.Fill, {r.x + math.round(f32(x)*cell), r.y + math.round(f32(y)*cell), math.round(f32(x + 1)*cell) - math.round(f32(x)*cell), math.round(f32(y + 1)*cell) - math.round(f32(y)*cell)}, colour = c)
-	}
-	for k in ([4]Rect{{r.x, r.y, r.w, 1}, {r.x, r.y + r.h - 1, r.w, 1}, {r.x, r.y, 1, r.h}, {r.x + r.w - 1, r.y, 1, r.h}}) do part(.Fill, k, colour = LOOK.brass)
 }
 
 // ---- words of the place and the day ----------------------------------------------------------
@@ -612,7 +664,7 @@ play_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64, hour, day: f32, ey
 
 	// What was told since the last frame, the hold's log among it (say, hold.odin).
 	if sync.try_lock(&told.mutex) {
-		for l in told.lines do append(&u.said, Said{l.text, l.at, l.placed, u.now})
+		for l in told.lines do append(&u.said, Said{l.text, l.at, l.placed, u.now, l.who})
 		clear(&told.lines)
 		sync.unlock(&told.mutex)
 	}
@@ -621,14 +673,14 @@ play_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64, hour, day: f32, ey
 	if who := hold_selected(); who >= 0 && (u.hand.kind != .Dwarf || u.hand.dwarf != who) do hand_take({kind = .Dwarf, dwarf = who, feature = -1})
 	else if who < 0 && u.hand.kind == .Dwarf do hand_take({})
 	if u.following && u.hand.kind == .Dwarf {
-		if at, ok := hold_where(u.hand.dwarf); ok do a.at.xz += (at.xz - a.at.xz)*min(1, 6*dt)
+		if at, ok := hold_where(u.hand.dwarf); ok do a.at.xz += (at.xz - a.at.xz)*(1 if u.unseen else min(1, 6*dt))
 	} else if u.going {
 		a.at.xz += (u.goal - a.at.xz)*min(1, 7*dt)
 		if linalg.length(u.goal - a.at.xz) < 0.5 do u.going = false
 	}
 	if above && !a.marking {   // the hand's thing is what is marked in the world
 		t := u.hand
-		a.marked = t.kind != .None && t.kind != .Place && t.kind != .Animal && t.kind != .Dwarf && t.island != nil
+		a.marked = t.kind != .None && t.kind != .Place && t.kind != .Animal && t.kind != .Dwarf && t.kind != .Dwarves && t.island != nil
 		if a.marked do a.mark = {t.lo, t.hi}
 	}
 	u.animal = {}
@@ -640,10 +692,12 @@ play_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64, hour, day: f32, ey
 	bar_frame()
 
 	u.place_foot, u.wrong_foot, u.ground, u.beds = 0, 0, {}, {}
+	crowd_read()
 	if above do labels_build()
 	place_build()
 	said_build()
 	wrong_build()
+	crowd_build()
 	if above && u.list == .None {
 		ground_build()
 		lenses_build()
@@ -652,6 +706,7 @@ play_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64, hour, day: f32, ey
 	bar_build()
 	lists_build()
 	if u.list == .Places do places_build()
+	if u.list == .Dwarves do dwarves_build()
 	if above do lesson_build()
 	if u.menu do menu_build()
 
@@ -679,16 +734,7 @@ labels_build :: proc() {
 		part(.Fill, {r.x - px(2), r.y, r.w + px(4), r.h}, colour = LOOK.said)
 		part(.Text, r, name, .Name, LOOK.brass if chosen else LOOK.chalk, {}, .Row, p.c, id = "label", tip = sentence(c.why))
 	}
-	// The dwarf in the hand, marked where it stands.
-	if at, ok := hold_where(u.hand.dwarf); ok && u.hand.kind == .Dwarf {
-		tall := f64(watch.seen.dwarves[u.hand.dwarf].who.tall)
-		foot, _ := project(at)
-		head, seen := project(at + {0, tall, 0})
-		if h := max(foot.y - head.y, px(3)) + px(2); seen {
-			x, y, e := math.round(head.x - h/2), math.round(head.y - px(1)), max(2, px(0.5))
-			for k in ([4]Rect{{x, y, h, e}, {x, y + h - e, h, e}, {x, y, e, h}, {x + h - e, y, e, h}}) do part(.Fill, k, colour = LOOK.brass)
-		}
-	}
+	crowd_marks()   // the dwarves in the hand, and those who need the player, marked where they stand
 }
 
 // Top left: the place, the date, and the clock.
@@ -739,7 +785,7 @@ said_build :: proc() {
 		older := 1.0 if i == len(u.said) - first - 1 else 0.72
 		h := text_high(.Body, m.text, wide)
 		it := part(.Text, {x + px(L.pad.x), y, wide, h}, m.text, .Body, {L.chalk.r, L.chalk.g, L.chalk.b, u8(255*left*older)}, {.Wrap, .Shadow}, id = "said")
-		if m.placed do it.act, it.arg, it.tip = .Said, first + i, "Go where this happened."
+		if m.placed do it.act, it.arg, it.tip = .Said, first + i, "Go where this happened, and take the dwarf it is about in the hand." if m.who >= 0 else "Go where this happened."
 		y += h
 	}
 }
@@ -748,9 +794,15 @@ said_build :: proc() {
 wrong_build :: proc() {
 	u, L := &play, &LOOK
 	u.area = .Wrong
+	u.crowd_right = screen.w - px(L.margin)
+	if u.list != .None {   // a list stands where the alerts do; they show again when it is shut
+		u.crowd_right = list_rect().x
+		return
+	}
 	if len(u.wrong) == 0 do return
-	w := px(L.wrong_wide)
+	w := clamp(screen.w - 2*px(L.margin) - u.place_wide - 2*px(2) - crowd_least(), px(L.wrong_least), px(L.wrong_wide))   // narrower where the picture is, to leave the dwarves their place
 	x, y := screen.w - px(L.margin) - w, px(L.margin)
+	u.crowd_right = x
 	show := text_wide(.Body, "show")
 	wide := w - 2*px(L.pad.x) - px(L.sign) - px(2.5) - show - px(6)
 	high := 2*px(L.pad.y)
@@ -761,7 +813,7 @@ wrong_build :: proc() {
 	for m, i in u.wrong {
 		h := text_high(.Body, m.text, wide) + 2*px(1.5)
 		row := part(.Row, {x + 1, y, w - 2, h}, id = "wrong.row")
-		if m.placed do row.act, row.arg, row.tip = .Wrong, i, "Go to its cause."
+		if m.placed do row.act, row.arg, row.tip = .Wrong, i, "Go to them, and take them in the hand." if m.need >= 0 else "Go to its cause."
 		part(.Sign, {x + px(L.pad.x), y + px(1.5) + math.round((line_of(.Body) - px(L.sign))/2), px(L.sign), px(L.sign)}).sign = m.sign
 		part(.Text, {x + px(L.pad.x) + px(L.sign) + px(2.5), y + px(1.5), wide, h}, m.text, .Body, {}, {.Wrap}, id = "wrong.text")
 		if m.placed do part(.Text, {x + w - px(L.pad.x) - show, y + px(1.5), show, line_of(.Body)}, "show", .Body, L.ash)
@@ -837,9 +889,10 @@ ground_build :: proc() {
 	fixed := 2*px(L.pad.y) + head + px(2.5) + px(4) + controls
 	foot := screen.h - px(L.hand_foot)
 	least := max(px(L.margin), u.wrong_foot + px(2))
-	high := clamp(foot - px(L.ground_top) - fixed, px(L.beds_high[0]), px(L.beds_high[1]))
+	room := foot - least - fixed   // what the alerts over it leave the column
+	if room < px(L.beds_high[0])/2 do return   // none worth the name: the alerts have its place until they clear, and its keys still work
+	high := min(clamp(foot - px(L.ground_top) - fixed, px(L.beds_high[0]), px(L.beds_high[1])), room)
 	y := max(least, min(px(L.ground_top), foot - fixed - high))
-	high = clamp(foot - y - fixed, px(L.beds_high[0]), high)
 	r := Rect{screen.w - px(L.margin) - w, y, w, fixed + high}
 	u.ground = r
 	part(.Panel, r, id = "ground")
@@ -988,23 +1041,29 @@ hand_build :: proc() {
 	if bar_hand() do return   // a tool is held, or the thing is marked ground: the order's card (bar.odin)
 	t := u.hand
 	if t.kind == .None do return
+	if t.kind == .Dwarves {
+		several_build()
+		return
+	}
 	w := px(L.hand_wide)
 	inner := w - 2*px(L.pad.x)
 	x := px(L.margin)
 	foot := screen.h - px(L.hand_foot)
 	title, sub, line, next := u.card.title, u.card.sub, u.card.line, ""
-	if t.kind == .Dwarf {
+	says := u.card.says
+	need := -1
+	if t.kind == .Dwarf {   // a dwarf goes on with its day: its card is read afresh (dwarf_says, crowd.odin)
 		if t.dwarf >= hold_count() do return
-		who := watch.seen.dwarves[t.dwarf].who
-		c := hold_card(t.dwarf)
-		title, sub = fmt.tprintf("%s %s", who.given, who.byname), fmt.tprintf("a %s of %d years, who %s", TRADES[who.trade].name, who.age, TRADES[who.trade].does)
-		line, next = fmt.tprintf("%s.", c.doing), fmt.tprintf("%s.", c.next) if c.next != "" else ""
+		c := dwarf_says(t.dwarf)
+		title, sub, line, next = c.title, c.sub, c.line, c.next
+		says[.Own], says[.Self] = c.trade, c.self
+		need = int(u.need[t.dwarf])
 	}
 	// Its depths: the tabs that have anything to say.
 	tabs: [Depth]bool
 	count := 0
 	for d in Depth {
-		tabs[d] = t.kind != .Dwarf && (u.card.says[d] != "" || d == .Rock && u.card.column && t.island != nil)
+		tabs[d] = says[d] != "" || d == .Rock && u.card.column && t.island != nil
 		count += int(tabs[d])
 	}
 	if !tabs[u.tab] do for d in Depth do if tabs[d] {
@@ -1013,20 +1072,20 @@ hand_build :: proc() {
 	}
 	head := px(L.block_large)
 	text_wide_here := inner - head - px(4)
-	head = max(head, line_of(.Title) + text_high(.Body, sub, text_wide_here))
+	head = max(head, line_of(.Title) + text_high(.Body, sub, text_wide_here) + (line_of(.Body) if need >= 0 else 0))
 	line_high := text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0)
 	tabs_high := line_of(.Body) + px(1.5) + px(2.5) if count > 0 else 0
 	fixed := 2*px(L.pad.y) + head + px(L.space) + line_high + (px(L.space) + tabs_high if count > 0 else 0) + px(4) + px(L.button)
 	// A card is as deep as its longest tab needs, within limits, so that changing tabs moves nothing.
 	room := foot - max(u.place_foot + px(4), px(L.said_top)) - fixed
 	longest := px(L.card_high[0])
-	for d in Depth do if tabs[d] do longest = max(longest, text_high(.Small, u.card.says[d], inner - px(3) - (px(L.column_wide) + px(3) + px(34) if d == .Rock && u.card.column else 0)))
+	for d in Depth do if tabs[d] do longest = max(longest, text_high(.Small, says[d], inner - px(3) - (px(L.column_wide) + px(3) + px(34) if d == .Rock && u.card.column else 0)))
 	depth := max(min(longest, px(L.card_high[1]), room), px(8)) if count > 0 else 0
 	r := Rect{x, foot - fixed - depth, w, fixed + depth}
 	part(.Panel, r, id = "hand")
 	cx, y := x + px(L.pad.x), r.y + px(L.pad.y)
 	square := Rect{cx, y, px(L.block_large), px(L.block_large)}
-	if t.kind == .Dwarf do bust(square, watch.seen.dwarves[t.dwarf].who)
+	if t.kind == .Dwarf do bust(square, watch.seen.dwarves[t.dwarf].who, true, sign = need_sign(t.dwarf))
 	else if u.card.mat != .Air do part(.Block, square, state = {.Chosen}, id = "hand.block").mat = u.card.mat
 	else {
 		part(.Fill, square, colour = L.brass)
@@ -1034,7 +1093,13 @@ hand_build :: proc() {
 	}
 	tx := cx + px(L.block_large) + px(4)
 	words(tx, y, title, .Title, id = "hand.title")
-	words(tx, y + line_of(.Title), sub, .Body, L.ash, "hand.sub", text_wide_here)
+	sub_high := words(tx, y + line_of(.Title), sub, .Body, L.ash, "hand.sub", text_wide_here)
+	if need >= 0 {   // how it is, where that needs the player: its sign and the word for it
+		row := NEEDS[need]
+		ny := y + line_of(.Title) + sub_high
+		part(.Sign, {tx, ny + math.round((line_of(.Body) - px(L.sign))/2), px(L.sign), px(L.sign)}).sign = row.sign
+		words(tx + px(L.sign) + px(2), ny, row.word, .Bold, L.cinnabar if row.sign == .Trouble else L.brass, "hand.need")
+	}
 	y += head + px(L.space)
 	y += words(cx, y, line, .Body, {}, "hand.line", inner)
 	if next != "" do y += px(1) + words(cx, y, next, .Body, L.ash, "hand.next", inner)
@@ -1053,7 +1118,7 @@ hand_build :: proc() {
 		// What the tab says, scrolled where it is longer than its room; under Rock, the column it lies in.
 		box := Rect{cx, y, inner, depth}
 		u.clip = box
-		says := u.card.says[u.tab]
+		said := says[u.tab]
 		left := cx
 		if u.tab == .Rock && u.card.column {
 			top, span := column_fit(ground_top(f64(u.card.x) + 0.5, f64(u.card.z) + 0.5), u.card.level)
@@ -1064,21 +1129,42 @@ hand_build :: proc() {
 			left = col.x + col.w + px(3) + px(34)
 		}
 		wide := cx + inner - left - px(3)
-		all := text_high(.Small, says, wide)
+		all := text_high(.Small, said, wide)
 		u.card_over = max(all - depth, 0)
 		u.card_scroll = clamp(u.card_scroll, 0, u.card_over)
 		if u.drag == .Card do u.card_scroll = clamp(u.drag_scroll + (u.pointer.y - u.drag_from)*all/depth, 0, u.card_over)
-		part(.Text, {left, y - u.card_scroll, wide, all}, says, .Small, L.ash, {.Wrap}, id = "hand.says")
+		part(.Text, {left, y - u.card_scroll, wide, all}, said, .Small, L.ash, {.Wrap}, id = "hand.says")
 		u.clip = {}
 		part(.Fill, box, colour = {}, state = {.Solid})   // the wheel over it scrolls it
 		if u.card_over > 0 do part(.Thumb, {cx + inner - px(1.5), y + depth*u.card_scroll/all, px(1.5), depth*depth/all}, act = .Thumb, id = "hand.thumb")
 		y += depth
 	}
 	y += px(4)
-	go := "Follow" if t.kind == .Dwarf else "Go there"
+	if t.kind == .Dwarf do hand_buttons(cx, y, "Follow", "Take the view to this dwarf, and keep it over it as it walks.")
+	else do hand_buttons(cx, y, "Go there", "Put the view over it.")
+}
+
+// What can be done with the thing in the hand: go to it, keep a dwarf in view, and put it down.
+hand_buttons :: proc(x, y: f32, go, tip: string) {
+	u, L := &play, &LOOK
+	x := x
+	dwarves := u.hand.kind == .Dwarf || u.hand.kind == .Dwarves
+	keep, down := "Keep in view", "Put it down" if u.hand.kind != .Dwarves else "Put them down"
+	room := px(L.hand_wide) - 2*px(L.pad.x) - button_wide(go, key_for(.Go)) - px(L.gap) - (px(L.gap) if dwarves else 0)
+	wide :: proc(keep, down: string, dwarves: bool) -> f32 { return button_wide(down, key_for(.Escape)) + (button_wide(keep, key_for(.Keep, -1)) if dwarves else 0) }
+	if wide(keep, down, dwarves) > room do down = "Put down"   // shorter words where the card is too narrow for the three
+	if wide(keep, down, dwarves) > room do keep = "Keep"
 	gw := button_wide(go, key_for(.Go))
-	button({cx, y, gw, px(L.button)}, go, .Go, 0, u.following, "hand.go", "The view keeps over this dwarf as it walks." if t.kind == .Dwarf else "Put the view over it.")
-	button({cx + gw + px(L.gap), y, button_wide("Put it down", key_for(.Escape)), px(L.button)}, "Put it down", .Drop, 0, false, "hand.drop", "Empty the hand.")
+	button({x, y, gw, px(L.button)}, go, .Go, 0, u.following, "hand.go", tip)
+	x += gw + px(L.gap)
+	if dwarves {
+		kept := true
+		for i in u.several do kept &&= slice.contains(u.kept[:], i)
+		kw := button_wide(keep, key_for(.Keep, -1))
+		button({x, y, kw, px(L.button)}, keep, .Keep, -1, kept, "hand.keep", "Keep its picture at the top of the screen, or let it go." if u.hand.kind == .Dwarf else "Keep their pictures at the top of the screen, or let them go.")
+		x += kw + px(L.gap)
+	}
+	button({x, y, button_wide(down, key_for(.Escape)), px(L.button)}, down, .Drop, 0, false, "hand.drop", "Empty the hand.")
 	screen.items[len(screen.items) - 1].key = key_for(.Escape)
 }
 
@@ -1086,20 +1172,74 @@ hand_build :: proc() {
 lists_build :: proc() {
 	u, L := &play, &LOOK
 	u.area = .Lists
-	names := [2]string{"Places", "Menu"}
-	acts := [2]Act{.List, .Menu}
-	keys := [2]string{key_for(.List, int(List.Places)), key_for(.Escape)}
+	Know :: struct { name, id, tip: string, act: Act, arg: int, key: string, open: bool }
+	knows := [3]Know{
+		{"Dwarves", "lists.dwarves", "Every dwarf of the hold: found by name, trade or place, grouped by need, by trade or by place. Each row goes to its dwarf.", .List, int(List.Dwarves), key_for(.List, int(List.Dwarves)), u.list == .Dwarves},
+		{"Places", "lists.places", "The island's named places and what else is remarkable on it. Each row goes there.", .List, int(List.Places), key_for(.List, int(List.Places)), u.list == .Places},
+		{"Menu", "lists.menu", "Back to the game, the interface's size, and quit.", .Menu, 0, key_for(.Escape), u.menu},
+	}
 	wide := f32(0)
-	for n, i in names do wide += button_wide(n, keys[i], .Body, L.know_pad)
+	for k in knows do wide += button_wide(k.name, k.key, .Body, L.know_pad)
 	r := Rect{screen.w - px(L.margin) - wide, screen.h - px(L.margin) - px(L.button), wide, px(L.button)}
 	part(.Panel, r, id = "lists")
 	x := r.x
-	for n, i in names {
-		w := button_wide(n, keys[i], .Body, L.know_pad)
-		part(.Know, {x, r.y, w, r.h}, n, .Body, {}, {.Open} if i == 0 && u.list == .Places || i == 1 && u.menu else {}, acts[i], int(List.Places) if i == 0 else 0, keys[i], "lists.places" if i == 0 else "lists.menu",
-			"The island's named places and what else is remarkable on it. Each row goes there." if i == 0 else "Back to the game, the interface's size, and quit.")
+	for k in knows {
+		w := button_wide(k.name, k.key, .Body, L.know_pad)
+		part(.Know, {x, r.y, w, r.h}, k.name, .Body, {}, {.Open} if k.open else {}, k.act, k.arg, k.key, k.id, k.tip)
 		x += w
 	}
+}
+
+// Where a list stands: down the right side, a third of the screen wide, and never over the hand or the place.
+list_rect :: proc() -> Rect {
+	u, L := &play, &LOOK
+	w := min(px(L.list_wide), screen.w - 3*px(L.margin) - max(px(L.hand_wide), u.place_wide))
+	return {screen.w - px(L.margin) - w, px(L.margin), w, screen.h - px(L.hand_foot) - px(L.margin)}
+}
+
+// The head of a list: its name and how many it holds, the field it finds by, and its choices, one of
+// `sorts` and, where it has one, `only` on or off. Returns the room under them for its rows, where
+// their words begin and how wide they may be.
+list_head :: proc(title, count, hint: string, sorts: []string, sort: int, only := "", only_on := false) -> (box: Rect, x, inner: f32) {
+	u, L := &play, &LOOK
+	r := list_rect()
+	part(.Panel, r, id = "list")
+	x = r.x + px(L.pad.x)
+	y := r.y + px(L.pad.y)
+	inner = r.w - 2*px(L.pad.x)
+	words(x, y, title, .Title, id = "list.title")
+	words(x + inner - text_wide(.Body, count), y + px(1), count, .Body, L.ash, "list.count")
+	y += line_of(.Title) + px(3)
+	field := line_of(.Body) + 2*px(2)
+	found := string(u.find[:])
+	part(.Field, {x, y, inner, field}, found if found != "" || u.typing else hint, .Body, {}, ({.Held} if u.typing else {}) + ({.Faint} if found == "" else {}), .Find, id = "list.find")
+	y += field + px(3)
+	cx, high := x, line_of(.Body) + 2*px(L.chip_pad.y)
+	for k in 0..=len(sorts) {   // the choices, on a second line where one is too narrow for them
+		name := sorts[k] if k < len(sorts) else only
+		if name == "" do continue
+		cw := text_wide(.Body, name) + 2*px(L.chip_pad.x)
+		if cx > x && cx + cw > x + inner do cx, y = x, y + high + px(L.gap)
+		if k < len(sorts) do part(.Chip, {cx, y, cw, high}, name, .Body, {}, {.Chosen} if sort == k else {}, .Sort, k, id = "list.sort")
+		else do part(.Chip, {cx, y, cw, high}, name, .Body, {}, {.Chosen} if only_on else {}, .Only, 0, id = "list.only")
+		cx += cw + px(L.gap)
+	}
+	y += high + px(L.pad.y)
+	part(.Rule, {r.x + 1, y, r.w - 2, 1}, colour = L.edge)
+	return {r.x + 1, y + 1, r.w - 2, r.y + r.h - y - 2}, x, inner
+}
+
+// Where a list's rows begin, scrolled as far as it has been; and, once they are listed, how far it can be.
+list_top :: proc(box: Rect) -> f32 {
+	u := &play
+	if u.drag == .List do u.list_scroll = u.drag_scroll + (u.pointer.y - u.drag_from)*(u.list_over + box.h)/box.h
+	u.list_scroll = clamp(u.list_scroll, 0, u.list_over)
+	return box.y - u.list_scroll
+}
+list_foot :: proc(box: Rect, top, foot: f32) {
+	u := &play
+	u.list_over = max(foot - top - box.h, 0)
+	if all := foot - top; u.list_over > 0 do part(.Thumb, {box.x + box.w - px(1.5), box.y + box.h*u.list_scroll/all, px(1.5), box.h*box.h/all}, act = .Thumb, id = "list.thumb")
 }
 
 // The Places list, down the right side: the island's named places, then what else is remarkable
@@ -1109,29 +1249,10 @@ places_build :: proc() {
 	u, L := &play, &LOOK
 	u.area = .List
 	f := island_near(u.a.at.x, u.a.at.z)
-	w := min(px(L.list_wide), screen.w - 3*px(L.margin) - max(px(L.hand_wide), u.place_wide))   // a third of the screen, and never over the hand or the place
-	r := Rect{screen.w - px(L.margin) - w, px(L.margin), w, screen.h - px(L.hand_foot) - px(L.margin)}
-	part(.Panel, r, id = "list")
-	x, y := r.x + px(L.pad.x), r.y + px(L.pad.y)
-	inner := w - 2*px(L.pad.x)
-	words(x, y, "Places", .Title, id = "list.title")
-	if f == nil do return
-	bound(f)
-	count := fmt.tprintf("%d", len(candidates))
-	words(x + inner - text_wide(.Body, count), y + px(1), count, .Body, L.ash, "list.count")
-	y += line_of(.Title) + px(3)
-	field := line_of(.Body) + 2*px(2)
+	if f != nil do bound(f)
 	found := string(u.find[:])
-	part(.Field, {x, y, inner, field}, found if found != "" || u.typing else "Find by name or kind", .Body, {}, ({.Held} if u.typing else {}) + ({.Faint} if found == "" else {}), .Find, id = "list.find")
-	y += field + px(3)
-	cx := x
-	for n, i in ([2]string{"Named first", "Nearest first"}) {
-		cw := text_wide(.Body, n) + 2*px(L.chip_pad.x)
-		part(.Chip, {cx, y, cw, line_of(.Body) + 2*px(L.chip_pad.y)}, n, .Body, {}, {.Chosen} if u.sort == i else {}, .Sort, i, id = "list.sort")
-		cx += cw + px(L.gap)
-	}
-	y += line_of(.Body) + 2*px(L.chip_pad.y) + px(L.pad.y)
-	part(.Rule, {r.x + 1, y, w - 2, 1}, colour = L.edge)
+	box, x, inner := list_head("Places", fmt.tprint(len(candidates) if f != nil else 0), "Find by name or kind", {"Named first", "Nearest first"}, u.sort)
+	if f == nil do return
 
 	// The rows: each candidate for a place, with the name it was given if it was the one named.
 	Entry :: struct { c, group: int, name, why, far: string, d: f64 }
@@ -1150,13 +1271,10 @@ places_build :: proc() {
 	if u.sort == 1 do slice.sort_by(rows[:], proc(a, b: Entry) -> bool { return a.d < b.d })
 	else do slice.stable_sort_by(rows[:], proc(a, b: Entry) -> bool { return a.group < b.group })
 
-	box := Rect{r.x + 1, y + 1, w - 2, r.y + r.h - y - 2}
 	u.clip = box
 	row_high := 2*line_of(.Body) + 2*px(L.row_pad.y)
 	head_high := line_of(.Body) + px(3) + px(1.5)
-	if u.drag == .List do u.list_scroll = u.drag_scroll + (u.pointer.y - u.drag_from)*(u.list_over + box.h)/box.h
-	u.list_scroll = clamp(u.list_scroll, 0, u.list_over)
-	top := box.y - u.list_scroll
+	top := list_top(box)
 	cy := top
 	group := -1
 	for e in rows {
@@ -1176,18 +1294,12 @@ places_build :: proc() {
 		fw := text_wide(.Body, e.far)
 		part(.Text, {x, cy + px(L.row_pad.y), inner - fw - px(4), line_of(.Body)}, e.name, .Name if e.group == 0 else .Body, id = "list.row.name")
 		part(.Text, {x, cy + px(L.row_pad.y), inner, line_of(.Body)}, e.far, .Body, L.ash, {.Right})
-		why := e.why
-		for text_wide(.Body, why) > inner && len(why) > 4 do why = fmt.tprintf("%s…", strings.trim_right_space(without_last(strings.trim_suffix(why, "…"))))
-		part(.Text, {x, cy + px(L.row_pad.y) + line_of(.Body), inner, line_of(.Body)}, why, .Body, L.ash, id = "list.row.why")
+		part(.Text, {x, cy + px(L.row_pad.y) + line_of(.Body), inner, line_of(.Body)}, fit(.Body, e.why, inner), .Body, L.ash, id = "list.row.why")
 		cy += row_high
 	}
 	if len(rows) == 0 do part(.Text, {x, cy + px(3), inner, line_of(.Body)}, "Nothing on the island answers to that.", .Body, L.ash, id = "list.none")
 	u.clip = {}
-	u.list_over = max(cy - top - box.h, 0)
-	if u.list_over > 0 {
-		all := cy - top
-		part(.Thumb, {box.x + box.w - px(1.5), box.y + box.h*u.list_scroll/all, px(1.5), box.h*box.h/all}, act = .Thumb, id = "list.thumb")
-	}
+	list_foot(box, top, cy)
 }
 
 // One line of advice beside the thing it is about, until the thing has been done once.
@@ -1227,7 +1339,7 @@ tip_build :: proc() {
 			if u.animal.ok do t = {kind = .Animal, creature = u.animal.row, nest = u.animal.nest}
 			u.tip_block = a.under.block
 			switch t.kind {
-			case .None, .Box, .Dwarf, .Place: u.tip = strings.clone("")
+			case .None, .Box, .Dwarf, .Dwarves, .Place: u.tip = strings.clone("")
 			case .Ground: u.tip = strings.clone(mat_words(t.mat))
 			case .Tree:   u.tip = fmt.aprintf("a %s%s, %d m", SPECIES[t.tree.kind].name, "" if t.tree.kind == .Scrub else " tree", t.tree.height)
 			case .Stream: u.tip = strings.clone("a stream")
@@ -1362,6 +1474,13 @@ play_posed :: proc(opt: ^Options) {
 		for d in Depth do if opt.tab != "" && (strings.equal_fold(opt.tab, DEPTHS[d]) || d == .Own && strings.equal_fold(opt.tab, OWN[u.hand.kind])) do u.tab = d
 	}
 	if opt.drag && a.cut do u.drag = .Cut
+	if !u.posed && hold_count() > 0 {   // --keep and --who name dwarves as start-up lists them, from 1
+		u.posed = true
+		for k in opt.keep do if k >= 1 && k <= hold_count() && !slice.contains(u.kept[:], k - 1) do append(&u.kept, k - 1)
+		who := make([dynamic]int, context.temp_allocator)
+		for k in opt.who do if k >= 1 && k <= hold_count() do append(&who, k - 1)
+		if len(who) > 0 do dwarves_take(who[:])
+	}
 }
 
 // What the screen says, area by area, as --say prints it.

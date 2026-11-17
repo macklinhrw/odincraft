@@ -564,8 +564,20 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 			found = true
 			break
 		}
-		if found do return true
+		if found {
+			d.lack = .None
+			return true
+		}
 		mark_waits(h, k, .No_Way)
+	}
+	// It found none. If everything marked and not in hand waits for one of the things only the player
+	// can mend, it says which: a way, something in store, softer rock. Work others are at, or that
+	// waits its turn, is no lack.
+	lacks: [Waits]int
+	for m in h.marks do if m.taker < 0 do lacks[m.wait] += 1
+	d.lack = .None
+	if lacks[.None] + lacks[.No_Room] + lacks[.Stood_On] + lacks[.Loose] + lacks[.Rooted] + lacks[.Shuts_In] == 0 {
+		d.lack = .No_Way if lacks[.No_Way] > 0 else .No_Stuff if lacks[.No_Stuff] > 0 else .Too_Hard if lacks[.Too_Hard] > 0 else .None
 	}
 	return false
 }

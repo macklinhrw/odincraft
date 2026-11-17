@@ -75,7 +75,11 @@ import "core:strings"
 //   plan=words      with tool: what is dug or built, and of what: room, stair, wall, floor, timber
 //   select=x,y      as if that pixel of the picture had been clicked: the thing under it is in the hand
 //   tab=name        with select: the card's depth shown (rock, ground, plants, near, world, or the thing's own)
-//   list=places     that list open; row=N chooses its Nth named place, which takes the view there
+//   list=name       that list open (dwarves, places); row=N chooses the Places list's Nth named place, which takes the view there
+//   group=name      how the Dwarves list is grouped (need, trade, place), or kept for only those kept in view
+//   find=words      what has been typed in the list's field
+//   who=N[,N]       those dwarves in the hand, numbered from 1 as start-up lists them: one, or several as a group
+//   keep=N[,N]      those dwarves kept in view at the top, beside the first boat's
 //   lens=name       a lens on: leaves, or a field (rock, water-table, rain, livable, plants, soil); lenses opens their choices
 //   drag            the cut's mark as it is while the pointer drags it (with cut=level)
 //   menu            the menu open
@@ -138,7 +142,8 @@ Options :: struct {
 	tool, plan:    string,
 	select:        [2]f64,
 	has_select:    bool,
-	tab, list, lens, tell, alert: string,
+	tab, list, lens, tell, alert, group, find: string,
+	who, keep:     [dynamic]int,
 	}
 
 options :: proc() -> Options {
@@ -229,7 +234,15 @@ options :: proc() -> Options {
 		case "tab":   o.tab = value
 		case "tool":  o.tool = value
 		case "plan":  o.plan = value
-		case "list":  o.list, ok = value, value == "places"
+		case "list":  o.list, ok = value, value == "places" || value == "dwarves"
+		case "group": o.group, ok = value, value == "need" || value == "trade" || value == "place" || value == "kept"
+		case "find":  o.find = value
+		case "who", "keep":
+			for n in strings.split(value, ",", context.temp_allocator) {
+				k, good := strconv.parse_int(n)
+				ok &&= good && k >= 1
+				append(&o.who if name == "who" else &o.keep, k)
+			}
 		case "lens":  o.lens = value
 		case "tell":  o.tell = value
 		case "alert": o.alert = value

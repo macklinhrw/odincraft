@@ -23,7 +23,7 @@ import sdl "vendor:sdl3"
 
 Colour :: [4]u8
 Face   :: enum u8 { Name, Text, Bold }
-Style  :: enum u8 { Body, Bold, Small, Small_Bold, Key, Name, Title, Great }
+Style  :: enum u8 { Body, Bold, Small, Small_Bold, Key, Name, Title, Great, Figure }
 Type   :: struct { face: Face, size, line: f32 }   // in modules: the size of its em, and of a line of it
 
 Look :: struct {
@@ -42,6 +42,7 @@ Look :: struct {
 	said:               Colour,   // behind the messages, fading to nothing toward their right
 	dim:                Colour,   // over the world, behind a screen that takes all of it
 	water:              Colour,   // the sea or a stream, where a thing has no block to show
+	niche, eye:         Colour,   // behind a dwarf's picture, and its eyes
 	kinds:              [8]Colour, // a lens that paints kinds of rock: the island's first, second and so on, told apart at a glance
 	faces:              [Face][]u8,
 	type:               [Style]Type,
@@ -59,6 +60,8 @@ Look :: struct {
 	chip_pad:           [2]f32,   // inside a choice among a few
 	block, block_large: f32,      // a material shown as a block of itself, small and at the head of a card
 	sign:               f32,      // a diamond, a triangle or a disc
+	bust:               f32,      // a dwarf's picture at the top of the screen and in a row; at the head of its card it is block_large
+	crowd:              int,      // the most pictures the top of the screen shows: it is as wide at seventy dwarves as at seven (I14)
 	bar:                f32,      // the brass line on a thing chosen, and the cut's mark
 	shadow_fall, shadow_blur: f32,
 	// Where the play screen's parts land (interface.md, section 4).
@@ -72,6 +75,7 @@ Look :: struct {
 	beds_high:          [2]f32,   // the column's least height and its most
 	wrong_wide:         f32,      // the stores and what is wrong, top right
 	said_top, said_wide: f32,     // the messages
+	wrong_least:        f32,      // the narrowest the alerts go to leave the dwarves their place at the top
 	menu_wide:          f32,
 }
 
@@ -81,6 +85,7 @@ LOOK := Look {
 	brass = {0xcd, 0xa8, 0x5f, 255}, verdigris = {0x6d, 0xb3, 0xa2, 255}, cinnabar = {0xd4, 0x51, 0x3b, 255},
 	deep = {0x1a, 0x20, 0x26, 255}, pit = {0x14, 0x18, 0x1c, 255}, held = {0x3a, 0x34, 0x24, 255}, lit = {0x38, 0x43, 0x4d, 255},
 	on_brass = {0x1d, 0x1a, 0x12, 255}, rule = {255, 255, 255, 18}, shadow = {0, 0, 0, 110}, said = {20, 24, 28, 184}, dim = {12, 15, 18, 150}, water = {0x2f, 0x62, 0x82, 255},
+	niche = {0x3b, 0x45, 0x4e, 255}, eye = {0x1b, 0x17, 0x14, 255},
 	kinds = {{0xcd, 0xa8, 0x5f, 255}, {0x6d, 0xb3, 0xa2, 255}, {0xc4, 0x6a, 0x4e, 255}, {0x7f, 0x93, 0xc9, 255}, {0xe6, 0xe0, 0xd0, 255}, {0x9a, 0x6f, 0xa8, 255}, {0x8f, 0xa8, 0x5a, 255}, {0x8a, 0x8f, 0x94, 255}},
 	faces = {
 		.Name = #load("../assets/fonts/Marcellus-Regular.ttf"),
@@ -92,18 +97,19 @@ LOOK := Look {
 		.Small = {.Text, 5, 7}, .Small_Bold = {.Bold, 5, 7},
 		.Key = {.Text, 4.5, 6.5},
 		.Name = {.Name, 6.5, 8}, .Title = {.Name, 7.5, 9}, .Great = {.Name, 10, 11},
+		.Figure = {.Text, 8, 9},                              // a count that stands for a list: the inscription face's figures are too like letters
 	},
 	margin = 4, pad = {5, 4}, gap = 1.5, space = 3.5,
 	button = 11, button_pad = 4,
 	key_min = 7, key_pad = 1.5, key_high = 6.5, key_gap = 2,
 	know_pad = 3.5, row_pad = {5, 2}, tab_gap = 6, chip_pad = {3, 1},
-	block = 5.5, block_large = 18, sign = 4, bar = 0.75,
+	block = 5.5, block_large = 18, sign = 4, bar = 0.75, bust = 13, crowd = 10,
 	shadow_fall = 1, shadow_blur = 6,
 	hand_wide = 150, hand_foot = 21, card_high = {24, 56},
 	list_wide = 200,
 	ground_wide = 78, ground_top = 104, column_wide = 9, beds_high = {40, 120},
 	wrong_wide = 172,
-	said_top = 50, said_wide = 150,
+	said_top = 50, said_wide = 150, wrong_least = 96,
 	menu_wide = 150,
 }
 
@@ -314,6 +320,7 @@ Part_Kind :: enum u8 {
 	Rule,     // a hairline
 	Fill,     // a plain rectangle of its colour
 	Block,    // a material shown as a block of itself
+	Niche,    // the ground a dwarf's picture stands on, with its one edge: brass where that dwarf is in the hand
 	Bed,      // a bed of the column, in its own material
 	Sign,     // a diamond for trouble, a triangle for caution, a disc for well
 	Tip,      // a few words beside the pointer or beside a thing
@@ -327,7 +334,7 @@ State :: enum u8 { Held, Main, Open, Chosen, Wrap, Right, Centre, Faint, Solid, 
 Sign  :: enum u8 { None, Well, Trouble, Caution }   // the shape numbers of ui.metal
 
 // The places of the play screen (interface.md, I1), and what stands over the world itself.
-Area :: enum u8 { Place, Wrong, Said, Hand, Orders, Ground, Lenses, Lists, List, Menu, World, Lesson }
+Area :: enum u8 { Place, Dwarves, Wrong, Said, Hand, Orders, Ground, Lenses, Lists, List, Menu, World, Lesson }
 
 Screen_Part :: struct {
 	part:   Part_Kind,
@@ -428,6 +435,7 @@ screen_draw :: proc(s: ^Screen) {
 			quad_put({r.x, r.y, r.w, 1}, it.colour if it.colour.a > 0 else L.rule)
 		case .Text:
 			c := it.colour if it.colour.a > 0 else L.chalk
+			if hot && it.act != .None do c = {L.brass.r, L.brass.g, L.brass.b, c.a}   // words that lead somewhere, under the pointer
 			if .Shadow in it.state {   // words over the world itself
 				for o in ([4][2]f32{{-1, 0}, {1, 0}, {0, 1}, {0, 2}}) do text_block(it, r.x + o.x*edge, r.y + o.y*edge, {0, 0, 0, 150})
 			}
@@ -449,8 +457,8 @@ screen_draw :: proc(s: ^Screen) {
 			text_put(it.style, it.text, r.x, r.y, L.chalk if on || hot else L.ash)
 			if on do quad_put({r.x, r.y + r.h - 1, r.w, 2*edge}, L.brass)
 		case .Chip:
-			on := .Chosen in it.state
-			box_put(r, L.held if on else L.lit if hot else L.basalt, L.brass if on else L.edge, edge)
+			on, quiet := .Chosen in it.state, .Faint in it.state   // quiet: one of many alike in a list, so its being chosen is said by its word alone
+			box_put(r, L.held if on && !quiet else L.lit if hot else L.basalt, L.brass if on && !quiet else L.edge, edge)
 			text_put(it.style, it.text, r.x + px(L.chip_pad.x), r.y + math.round((r.h - ui.baked[it.style].line)/2), L.brass if on else L.chalk if hot else L.ash)
 			if it.key != "" do key_put(it.key, r.x + r.w - px(L.chip_pad.x), r)
 		case .Row:
@@ -473,11 +481,14 @@ screen_draw :: proc(s: ^Screen) {
 			} else {
 				for k in ([4]Rect{{r.x, r.y, r.w, b}, {r.x, r.y + r.h - b, r.w, b}, {r.x, r.y, b, r.h}, {r.x + r.w - b, r.y, b, r.h}}) do quad_put(k, L.brass if .Chosen in it.state else L.edge)
 			}
+		case .Niche:
+			on := .Chosen in it.state
+			box_put(r, L.niche, L.brass if on else L.chalk if hot else L.edge, 2*edge if on || hot else edge)
 		case .Bed:
 			tile_put(r, it.mat, max(1, math.round(f32(ui.module)/2)), it.colour if it.colour.a > 0 else Colour{255, 255, 255, 255})
 			quad_put({r.x, r.y, r.w, 1}, {0, 0, 0, 90})
 		case .Sign:
-			c := L.cinnabar if it.sign == .Trouble else L.brass if it.sign == .Caution else L.verdigris
+			c := it.colour if it.colour.a > 0 else L.cinnabar if it.sign == .Trouble else L.brass if it.sign == .Caution else L.verdigris
 			quad_put(r, c, WHITE, {0, f32(it.sign), 0, 0})
 		case .Tip:
 			box_put(r, L.pit, L.brass, edge)
