@@ -293,7 +293,9 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 			for o in played.dwarves[:i] do if o.doing == .Sleeping && abs(o.cell.x - d.cell.x) <= 1 && abs(o.cell.z - d.cell.z) <= 1 && abs(o.cell.y - d.cell.y) <= 1 do beside += 1
 		}
 		testing.expectf(t, asleep >= 4 && beside == 0, "the sleepers lie apart in the room: %d asleep, %d pairs side by side", asleep, beside)
-		for m in played.marks do testing.expectf(t, m.fails < NO_WAY_TRIES || m.work == .Dig || m.work == .Build, "a mark at %v that no dwarf has a way to is still tried: %d times", m.at, m.fails)
+		able: u64
+		for d, i in played.dwarves do if ashore(d) && !d.shut && !d.adrift do able |= 1 << u64(i%64)
+		for m in played.marks do testing.expectf(t, m.work == .Dig || m.work == .Build || m.wait != .No_Way || m.who & able != able, "a mark at %v that no dwarf has a way to is still marked", m.at)
 	}
 	SECONDS := now + 60
 	hold_run(played, f64(SECONDS))

@@ -93,8 +93,7 @@ LOOKS      :: 4      // dwarves that may look for work in one tick
 TRIES      :: 24     // marks a dwarf looks at, the nearest first, before it rests
 REST       :: 10     // ticks a dwarf that found no work waits before it looks again
 AGAIN      :: 20     // ticks before a mark that could not be worked is looked at again
-NO_WAY_TRIES :: 3    // times running no way is found to a mark before it is left: a plant, a place of water or a tree is given up, any other waits
-NO_WAY_AGAIN :: 1200 // ticks such a mark waits before a way is looked for again, unless the ground changes first
+NO_WAY_AGAIN :: 1200 // ticks a dwarf that found no way to a mark leaves it before it looks for one again, unless the ground beside the mark changes first
 ORDER_MOST :: 8000   // blocks one order may mark
 
 // Why a mark is not being worked, as the hold last found it.
@@ -123,7 +122,7 @@ Mark :: struct {
 	tried: int,         // the tick it was last found unworkable
 	as_of: int,         // and, of a last step out of a pit, how many changes the ground had seen then (Hold.ground)
 	by:    int,         // and by which dwarf, where the cause is that dwarf's own: no way, or its places taken. Others still try it
-	fails: int,         // how often running no way was found to it
+	who:   u64,         // the dwarves that have found no way to it, a bit each (the dwarf's place among the hold's, modulo 64: past 64 two share a bit, and one is taken to have tried when the other has)
 	tall:  i32,         // a tree's height
 	tree:  Tree_Kind,
 	food:  Food_Kind,   // to gather or to fish: what it gives, and how many (food.odin)
@@ -719,7 +718,8 @@ mark_waits :: proc(h: ^Hold, k: int, why: Waits, by := -1) {
 	m := &h.marks[k]
 	if m.taker >= 0 do job_drop(h, m.taker, 5)
 	if m.wait != why do h.marks_v += 1
-	m.fails = 0 if why != .No_Way else m.fails + 1
+	if why != .No_Way do m.who = 0   // (and when it is taken, or the ground beside it changes: until then each that found no way is remembered)
+	if why == .No_Way && by >= 0 do m.who |= 1 << u64(by%64)
 	m.wait, m.tried, m.by, m.as_of = why, h.tick, by, h.ground
 	// An order with nothing left but the last steps out of its pit, each found so as the ground now
 	// stands, and the blocks no floor reaches while those steps stand, is done: they are left
@@ -752,7 +752,7 @@ work_look :: proc(h: ^Hold, i: int, basket := false) -> bool {   // basket: it h
 	for m, k in h.marks {
 		if m.taker >= 0 || m.wait == .Too_Hard || m.wait == .Front do continue   // rock too hard, and blocks no floor reaches, wait for the ground to change (ground_changed)
 		if m.wait != .None && h.tick - m.tried < AGAIN && (m.by < 0 || m.by == i) do continue   // what one dwarf could not come at, another may
-		if m.wait == .No_Way && m.fails >= NO_WAY_TRIES && m.as_of == h.ground && h.tick - m.tried < NO_WAY_AGAIN do continue   // but not for ever: a mark several found no way to waits for the ground to change
+		if m.wait == .No_Way && m.who & (1 << u64(i%64)) != 0 && h.tick - m.tried < NO_WAY_AGAIN do continue   // but not every two seconds for ever: one that found no way to it leaves it a while, unless the ground beside it changes (ground_changed)
 		dx, dy, dz := f32(m.at.x - d.cell.x), f32(m.at.y - d.cell.y), f32(m.at.z - d.cell.z)
 		if basket && (m.work != .Gather && m.work != .Fish || FOODS[m.food].thing != d.carry || abs(dx) + abs(dz) + 2*abs(dy) > BASKET_REACH) do continue
 		score := (abs(dx) + abs(dz) + 2*abs(dy))*(1 if skilled(h.party[i], m.work, h.sites[m.site].stuff) else 2)
@@ -829,7 +829,7 @@ work_look :: proc(h: ^Hold, i: int, basket := false) -> bool {   // basket: it h
 			}
 			d.gave = false
 			// It is taken.
-			h.marks[k].taker, h.marks[k].wait, h.marks[k].fails = i, .None, 0
+			h.marks[k].taker, h.marks[k].wait, h.marks[k].who = i, .None, 0
 			if m.work == .Build do s.promised += 1
 			d.job, d.job_at, d.stand = true, m.at, stand
 			h.claims[stand] = i
@@ -855,13 +855,16 @@ work_look :: proc(h: ^Hold, i: int, basket := false) -> bool {   // basket: it h
 		}
 		mark_waits(h, k, .No_Way, i)
 	}
-	// A plant or a place of water that no dwarf has a way to is given up: the order was for what the
-	// ground dragged over bears, and a shoot on a ledge is not worth an order that stands all year.
-	// So is a tree of an order to fell, and one of these that no floor reaches at all for as long as such a mark waits.
+	// A plant, a place of water or a tree that no dwarf has a way to is given up: the order was for
+	// what the ground dragged over bears or stands, and a shoot on a ledge is not worth an order that
+	// stands all year. "No dwarf" is every dwarf that could work: alive, ashore and not shut in. So is
+	// one of these that no floor reaches at all for as long as such a mark waits.
+	able: u64
+	for o, j in h.dwarves do if ashore(o) && !o.shut && !o.adrift do able |= 1 << u64(j%64)
 	for j := len(h.marks) - 1; j >= 0; j -= 1 {
 		m := h.marks[j]
 		if m.taker >= 0 || m.work != h.sites[m.site].work || m.work != .Gather && m.work != .Fish && m.work != .Fell do continue
-		if m.wait == .No_Way && m.fails >= NO_WAY_TRIES || m.wait == .Front && h.tick - m.tried >= NO_WAY_AGAIN {
+		if m.wait == .No_Way && able != 0 && m.who & able == able || m.wait == .Front && h.tick - m.tried >= NO_WAY_AGAIN {
 			h.sites[m.site].unreached += 1
 			mark_remove(h, j, true)
 		}
@@ -1124,7 +1127,7 @@ ground_changed :: proc(h: ^Hold, at: [3]i32, mat: Mat, frame: bool) {
 	if len(h.zones) > 0 do h.goods_v += 1   // a sleeping place's roof may have come or gone: it is shown again
 	// The marks beside it may be workable now, and a dwarf resting for want of work looks again soon.
 	for dy in i32(-2)..=2 do for dz in i32(-1)..=1 do for dx in i32(-1)..=1 do if k, ok := h.marked[at + {dx, dy, dz}]; ok && h.marks[k].wait != .Too_Hard && h.marks[k].taker < 0 {
-		h.marks[k].wait, h.marks[k].tried, h.marks[k].by = .None, 0, -1
+		h.marks[k].wait, h.marks[k].tried, h.marks[k].by, h.marks[k].who = .None, 0, -1, 0
 	}
 	for &d in h.dwarves do if !d.job do d.rest = min(d.rest, 2)
 	// A mark on a block the player's own hand dug or laid is done.
