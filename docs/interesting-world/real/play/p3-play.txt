@@ -230,7 +230,7 @@ shot out/play/p3-37-hill-drag.png
 say
 release
 timer
-until done 600
+until done 1500   # a night falls in it since the dwarves sleep (P4): felling goes on at dawn
 shot out/play/p3-38-hill-cleared.png
 move 820 420
 press

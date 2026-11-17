@@ -1105,7 +1105,7 @@ The interface listed in 0.04 to 0.06 ms a frame. The six late frames of the fore
 **Weak points**
 
 - **Nothing spoils.** Shoots gathered in spring are eaten in winter. Spoiling, drying and smoking belong with P5's making; until then a season's food is a matter of labour and stockpile room only.
-- **The party brings no stores.** By the first evening it is hungry. It was asked not to invent a food that is not the island's; provisions come with what an expedition brings (E-1 with P5).
+- **The party brings no stores.** By the first evening it is hungry. It was asked not to invent a food that is not the island's; provisions come with what an expedition brings (E-1 with P5). *Changed on merging, the same day: the party brings provisions for four days, since played through the owner's cases a party that forages from its first afternoon does little else, and neither game starts so (`open-decisions.md`).*
 - **Left alone the party survives a year on the start island.** It forages well enough to live, badly, and does no other work. Whether neglect should kill sooner is the owner's (asked).
 - **The sea has no fish and the shore no shellfish**, since the world has no rows for them: the osprey "fishes the sea round it" and nothing swims there. That is the natural track's.
 - **Sleepers lie where they stood**, in a heap by the stockpile, and a sleeping body differs from a dead one only by its colour. Beds and a place to sleep come with shelter.
