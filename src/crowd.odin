@@ -127,7 +127,7 @@ crowd_read :: proc() {
 	}
 	// The lean season ahead, or in hand, while the kept food in store falls short of it: one alert, said anew when its figures change (lean_of, needs.odin).
 	lean := watch.seen.lean
-	text := lean_alert(lean) if lean.on && lean.kept < f32(lean.days) else ""
+	text := lean_alert(lean) if lean_short(lean) else ""
 	if text != u.lean_said {
 		delete(u.lean_said)
 		u.lean_said = strings.clone(text)
@@ -295,7 +295,10 @@ dwarf_how :: proc(i: int) -> (word: string, grave: int) {
 // and a length, not only a colour). Returns how high they are.
 FEELS := [Want]string{.Drink = "Drink", .Food = "Food", .Sleep = "Sleep", .Warm = "Warmth"}
 feel_high :: proc() -> f32 { return line_of(.Small) + px(0.75) + px(1.25) }
-feels_high :: proc() -> f32 { return 2*feel_high() + px(2) }
+feels_high :: proc(i := -1) -> f32 {
+	slow := i >= 0 && i < hold_count() && watch.seen.dwarves[i].doing != .Dead && slowed(watch.seen.dwarves[i].want) > 0   // a line under them where a need slows its hands
+	return 2*feel_high() + px(2) + (px(1.5) + line_of(.Small) if slow else 0)
+}
 feels_row :: proc(x, y, wide: f32, i: int) -> f32 {
 	L := &LOOK
 	d := &watch.seen.dwarves[i]
@@ -326,7 +329,12 @@ feels_row :: proc(x, y, wide: f32, i: int) -> f32 {
 		part(.Fill, {cx, by, w, px(1.25)}, colour = L.pit)
 		part(.Fill, {cx, by, math.round(w*clamp(d.want[want], 0, 1)), px(1.25)}, colour = L.verdigris if stage == 0 else colour)
 	}
-	return feels_high()
+	if slow := slow_words(d.want); slow != "" && d.doing != .Dead {   // what the needs cost before they harm (WANTS.slows)
+		sy := y + 2*feel_high() + px(2) + px(1.5)
+		part(.Text, {x, sy, wide, line_of(.Small)}, fmt.tprintf("Hands %s", slow), .Small, L.brass, id = "hand.slow")
+		part(.Head, {x, sy, wide, line_of(.Small)}, tip = "Thirst, hunger and cold that will not wait each slow a dwarf's hands by a fifth, at digging, felling, building, gathering and fishing, before they do it any harm.")
+	}
+	return feels_high(i)
 }
 
 // ---- top middle: the dwarves --------------------------------------------------------------------

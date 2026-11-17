@@ -86,6 +86,20 @@ slowed :: proc(want: [Want]f32) -> (by: f32) {
 	return min(by, SLOWEST)
 }
 
+// How much slower a dwarf's hands are and for what, in words, or "" where no need is urgent: "a fifth slower: it is very hungry".
+slow_words :: proc(want: [Want]f32) -> string {
+	by := slowed(want)
+	if by <= 0 do return ""
+	b := strings.builder_make(context.temp_allocator)
+	said, n := 0, 0
+	for row, w in WANTS do n += int(want[w] < row.urgent && row.slows > 0)
+	for row, w in WANTS do if want[w] < row.urgent && row.slows > 0 {
+		fmt.sbprintf(&b, "%s%s", "" if said == 0 else " and " if said == n - 1 else ", ", row.how[2] if want[w] > 0 else row.how[3])
+		said += 1
+	}
+	return fmt.tprintf("%s slower: it is %s", "a fifth" if by < 0.3 else "two fifths" if by < 0.5 else "half", strings.to_string(b))
+}
+
 // The dwarves as the boat brings them: watered, fed and rested, each a little differently, and each
 // with a pace of its own at every need, drawn from who it is.
 needs_init :: proc(h: ^Hold) {
@@ -666,6 +680,9 @@ lean_store :: proc(l: Lean, short := false) -> string {
 	return "No kept food is in store" if kept <= 0 else fmt.tprintf("Kept food in store for %d of them", kept) if kept < l.days else "Kept food in store for all of them"
 }
 
+// Whether the kept food in store falls short of a lean season, by the whole days the screen says.
+lean_short :: proc(l: Lean) -> bool { return l.on && int(l.kept + 0.25) < l.days }
+
 // What a lean season's land bears, in words: "nothing", "gobies alone", "too little: gobies and shii nuts".
 lean_bears :: proc(l: Lean) -> string {
 	b := strings.builder_make(context.temp_allocator)
@@ -720,7 +737,7 @@ day_tick :: proc(h: ^Hold) {
 	h.spoiled = 0
 	fmt.sbprint(&b, night_words(h, date.day - 1))   // the weather that was, and how the party slept (shelter.odin)
 	lean := lean_of(h)
-	if lean.on && lean.kept < f32(lean.days) && (date.nth == 1 || date.nth == 7 || date.nth == 10 || date.day == 1) do fmt.sbprintf(&b, " %s", lean_words(lean))   // the lean season ahead, or in hand, while the store falls short of it: three times a season, and the alert stands between (crowd.odin)
+	if lean_short(lean) && (date.nth == 1 || date.nth == 7 || date.nth == 10 || date.day == 1) do fmt.sbprintf(&b, " %s", lean_words(lean))   // the lean season ahead, or in hand, while the store falls short of it: three times a season, and the alert stands between (crowd.odin)
 	h.short = fmt.tprintf("The %s: %s in store.", date_words(date), store)
 	say(h, "%s", strings.to_string(b))
 	h.tally = {}

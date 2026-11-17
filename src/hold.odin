@@ -1407,16 +1407,7 @@ dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
 		at := "by a fire" if d.by_fire else "indoors" if indoors({d.roof, d.walls}) else "under a roof" if d.roof else "out of the wind"
 		c.doing, c.next = fmt.tprintf("Warming itself %s", at) if d.doing == .Warming else "Going to where it can warm itself", "Will go back to what the hold wants done when it is warm"
 	}
-	if by := slowed(d.want); by > 0 && d.working {   // a need that is urgent slows its hands, and says which (WANTS.slows)
-		b := strings.builder_make(context.temp_allocator)
-		said, n := 0, 0
-		for row, w in WANTS do n += int(d.want[w] < row.urgent && row.slows > 0)
-		for row, w in WANTS do if d.want[w] < row.urgent && row.slows > 0 {
-			fmt.sbprintf(&b, "%s%s", "" if said == 0 else " and " if said == n - 1 else ", ", row.how[2] if d.want[w] > 0 else row.how[3])
-			said += 1
-		}
-		c.doing = fmt.tprintf("%s, %s slower: it is %s", c.doing, "a fifth" if by < 0.3 else "two fifths" if by < 0.5 else "half", strings.to_string(b))
-	}
+	if slow := slow_words(d.want); slow != "" && d.working do c.doing = fmt.tprintf("%s, %s", c.doing, slow)   // a need that is urgent slows its hands, and says which (WANTS.slows)
 	if d.shut do c.doing, c.next = "Shut in: no way leads out of where it stands", "Waits for a stair to be dug or built to it"
 	if d.fall do c.doing = "Falling: the ground went from under it"
 	if d.doing == .Dead do c.doing, c.next = fmt.tprintf("Dead of %s since the %s; the body lies where it fell", WANTS[d.died].of, date_words(date_tick(d.died_on))), ""

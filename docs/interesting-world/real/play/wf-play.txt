@@ -143,32 +143,27 @@ key esc
 until hour 21
 until hour 9
 
-print 11. the first rain, on the evening of the 4th of spring: a rack in the open stands still, and its card says so; one by the fire dries on
+print 11. the first rain, on the evening of the 4th of spring: the racks by the fire dry on, and a card says so (a rack in the open in rain is wf-35, from the orders file)
 until hour 19
 view over=2698.5,-1749.5 span=32 tilt=90 turn=0 cut=off
-click 1440 720
-wait 0.3
-shot out/play/wf-16-rack-in-rain.png
-say
-key esc
 click 1200 720
 wait 0.3
-shot out/play/wf-17-rack-by-fire-in-rain.png
+shot out/play/wf-16-rack-by-fire-in-rain.png
 say
 
 print 12. the rack in the hand is left to stand empty, and then removed: what was on it and its timber lie there
 part Leave it empty
 wait 0.5
-shot out/play/wf-18-rack-left.png
+shot out/play/wf-17-rack-left.png
 say
 part Remove
 run 5
-shot out/play/wf-19-rack-removed.png
+shot out/play/wf-18-rack-removed.png
 say
 
 print 13. the fifth morning: the racks' bracken is dried and stored, and the stores say how many days of the food keeps
 until hour 23
 until hour 9
 view over=2695,-1749 span=30 tilt=55 turn=0 cut=off
-shot out/play/wf-20-kept-food.png
+shot out/play/wf-19-kept-food.png
 say

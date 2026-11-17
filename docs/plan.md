@@ -79,6 +79,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 | E-1 (built, and played) | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
 | P3 (built) | **Orders.** Mark ground to dig, trees to fell, blocks to build. Dwarves take the work themselves. Goods go to a store without being carried at first, as RimWorld's first version did; carrying follows in P5, since Bellwright's makers found that work done in the abstract "didn't feel inspiring" | Has a first room dug and roofed | 2 |
 | P4 (built, and played, in two halves: thirst, hunger, sleep, the day and the year, death; then the weather, cold, roofs, a place to sleep and fire) | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown. Weather that harms what is built is N6's | Gets through a first season, or does not | 1 |
+| Winter's food (built, and played) | **Food that spoils and food that keeps.** Fresh food spoils, by its kind and the air; a drying rack makes fish and shoots keep; the stores say the days of kept food; the lean season is said a season ahead. The first thing made of another, as rows P5's workshops add to (`adr/0016`) | Lays up a winter's food, and gets through it | 1 |
 | P5 | **Materials and making.** What the rock and the woods give is what can be built and made: stone by its kind, timber, clay, a first metal. Goods are carried and stored. A workshop | Builds from the island's own stone | 2 |
 | P6 | **The world is kept.** A world is saved and reopened with what was dug and built. Leaving or losing a hold writes it into the world. A new party can land in the same world and walk into it | Finds the last game's hall | 3 |
 | P7 | **Trouble.** Dangerous animals, then a hostile band, then one great beast with a lair. Fighting and wounds. The pacing rule | Loses a dwarf to something with a name | 4 |
@@ -1212,3 +1213,80 @@ Benches, one round, the machine at a load of 5 to 6.5 from other work. Our work 
 | Over the hut, cut under its roof, the Shelter lens on, 20 s | 0.64 / 2.78 / 3.50, 0 over |
 
 The interface listed in 0.03 to 0.06 ms a frame. The one frame of 11.7 ms under rain was not chased.
+
+
+### Winter's food, as built (2026-11-17)
+
+**What can now happen that could not before:** a party catches more fish than it eats and finds them gone on the third day; the player has racks built by the stream, and from then on shoots and fish are carried to them by the armful and come off dry; the stores say thirteen days of food and seven of it kept; on the first of autumn an alert says winter is twelve days off and bears gobies alone; and a hold that dried its spring and its autumn eats through the winter indoors, where one that stored nothing starves on gobies and one left alone dies of cold.
+
+The design is `adr/0016`; the real games' figures, with their files, are `interesting-world/notes/colony-sim-reference.md`, section 16; where everything stands on the screen is `foundations/interface.md`, section 20. It is a step of its own between P4 and P5, taken up because nothing else killed a careful hold (`open-decisions.md`, 2026-11-17).
+
+**What the owner sees.** A heap of food says how long it has: "fresh for about two days more as it lies". The stores say, under "Food for about 13 days", "Kept food for about seven days", and in brass "72 spoil within a day". What spoils is gone from where it lay, and a message says what and where. Build has a sixth choice, Rack, dragged as a rectangle: a rack of poles on every place, each of a log. Gatherers and fishers walk in with what they took in their arms and lay it on the racks; a rack shows what is drying on it, turning brown; a click on it says "24 bracken shoots, drying: done in under a day." and how it stands: in the open, in the rain, by a fire. What is dried is carried to the food stockpile and does not spoil. From the first morning an alert says the lean season ahead and the kept food in store against it, and the dawn says it three times a season. A dwarf that is very thirsty, very hungry or cold says under its meters that its hands are a fifth slower.
+
+**What was built**
+
+- **Spoiling** (`goods.odin`, `goods_spoil`): a heap of food has an age, counted in days of mild air; every ten seconds it ages by the air it lies in (`spoil_rate`, `air_at`), and is gone when its row's days are up. `FOODS` has a new field, `keeps`. What went is said an hour's worth in a line.
+- **Making** (`bench.odin`): `MAKES`, six rows of what is dried of what and how long it stands; `BENCHES`, one row, the drying rack; a `Bench` in a cell, built by Build as a fire is laid, loaded and unloaded by hauls of their own (`bench_load`, `bench_unload`), sped by a fire beside it and stopped by rain (`bench_pace`), let stand empty and taken down by orders. Six new foods that keep are rows of `FOODS` whose source is `Made`, and six materials that are no blocks.
+- **The gatherer carries** (`basket_home`, `goods.odin`): what a dwarf gathers or catches is in its arms, an armful of one kind, and is carried to a rack with room or to the food stockpile.
+- **What comes before other marked work** (`fire_first`): the stuff of anything to be built, not a fire's alone; and a rack's unloading and loading.
+- **The lean season** (`lean_of`, `needs.odin`): the next season, or the one in hand, in which the land within a walk bears less than twice what those alive eat; its days; what it bears; the kept food in store and lying loose. The dawn's line and the alert are both read from it.
+- **Eating**: what will spoil before what keeps (`food_find`).
+- **Slowing**: `WANTS` has a new field, `slows`; `slowed` and `slow_words`; the work's seconds are longer by it (`work_begin`).
+- **On the screen** (`bench_view.odin`, `play.odin`, `bar.odin`, `crowd.odin`, `hand.odin`): the rack drawn, picked, and its card; Rack among Build's choices with its line and its preview; Remove on a rack; the stores' two new lines; the lean alert; a heap's days on its card and its grey when it turns; the line under a dwarf's meters.
+- **Without a window**: an orders file takes `build rack timber x y z x y z` and `rack load|leave x y z x y z`; `unmark` over a rack takes it down; the summary says the days of food and of kept food, the lean season, and each rack with what stands on it.
+
+**The figures, beside the real games'** (their files are in the reference note)
+
+| | RimWorld | Dwarf Fortress | Ingnomia | Here |
+|---|---|---|---|---|
+| A fish caught keeps | 2 days of 60 | rots on the bank; raw fish is no food until cleaned | for ever | 2 days of 48, in air of 20 °C |
+| Shoots, berries | berries 14 days | | for ever | shoots and stems 5 days |
+| Roots, grain, nuts | potatoes 30, rice 40, corn 60 | | for ever | shii nuts 30 |
+| Food made to keep | pemmican 70 days; a survival meal for ever | whatever is in a stockpile or a barrel | smoked fish, for ever | dried fish and shoots, and the party's provisions, for ever |
+| The air's part | none under 0 °C, full pace from 10 °C, even between | none | none | twice the pace for each 10 °C over 20, half for each 10 under, none at freezing; indoors halfway to the year's mean |
+| What keeps it | a freezer; a cook's bill for pemmican | a stockpile | a kitchen's craft: a fish and a log | a drying rack, of one log |
+| The thing that works by standing | a fermenting barrel: 30 wood and 10 steel, holds 25, six days, slower under 7 °C | | | a rack: one log, holds 24; a goby a day and a half, shoots two days, bamboo three; not in rain; twice as fast by a fire, rain or none |
+| Who loads it | haulers, unasked, the nearest wort | | the crafter | the one who gathered it, by the armful; and anyone with nothing more pressing, what spoils soonest first |
+| The store's days | "Low food" under 4 nutrition a colonist, whatever the season | counts by kind | counts | days of food and days of kept food; the lean season said twelve days ahead |
+| Hungry, thirsty, cold | mood only, until starvation takes 5 to 30% of consciousness; hypothermia 20% of the hands | unhappy thoughts | | a fifth slower hands for each that is urgent, to a half |
+
+Two days for a fish is RimWorld's. Five for shoots is shorter than its berries, because a shoot wilts and because the point is that a spring's gathering is not a winter's food. Thirty for nuts carries autumn's through a winter of twelve days at half pace, which is what a nut is for. The rack's days are from memory of the real practice (the reference note says what was checked and what was not).
+
+**What the start island makes of it** (seed 7): spring within 170 m of the camp bears about 400 bracken and then, from the fifth day, far more bamboo shoots than seven eat; summer gobies alone; autumn wild rice stems and shii nuts; winter gobies alone. In spring air (10 to 25 °C) a fish lasts two to four days and shoots five to ten; in summer (21 to 29 °C) a fish lasts little over a day; in winter (7 to 14 °C) twice its row's days.
+
+**Found by playing, and put right** (each reproduced first from the run's own orders)
+
+- *A spring's gathering lay in the field and spoiled there.* The first year played with racks: 1,068 things of food lying loose on the 9th of spring, and a line of log every ten seconds as they went. Carrying was the last thing a dwarf did, and gathering was always marked. The one who takes food now carries it in.
+- *Racks ordered on the second day were built on the thirteenth.* A block's stuff was fetched only when no other work was marked. It is fetched before other marked work, for anything built: the fire's rule made general.
+- *The racks then stood done and unloaded while the stockpile's shoots spoiled*: 391 things in a day. A rack is unloaded and loaded before other marked work.
+- *Catches were spread over five racks*, four here and two there, each setting the others' drying back. A rack is filled before the next is begun.
+- *A click on a loaded rack took the empty one behind it*, on sloping ground: the block clicked was the far rack's. A rack the pointer's ray meets comes first.
+- *The Rack choice offered stone, and a drag over standing racks marked racks on top of them.* It is of timber, and marks only free ground.
+- *The tool's line ran off its card* with a third sentence. It says two.
+- *The alert said "Kept food for 0 of its 12 days" while four days of sacks lay loose*, and stood at "12 of its 12 days". It says what lies loose where nothing is stored, as the stores do, and goes by the whole days it says.
+- *"Dried bamboo shoots" did not fit its row of the stores.* It is "dried bamboo".
+- *The slowdown was said in a line a starving dwarf's card does not show.* It is said under the meters.
+- *Spoiling was said a heap at a time.* It is said an hour's worth together, the first of a day on the screen.
+
+**Played** (`interesting-world/real/play/`; every picture looked at)
+
+- `wf-play.txt`, from the player's seat, five days at the fastest speed, seven minutes to play: the first morning's stores and alert; Rack dragged with no timber anywhere, and the alert for it; a wood felled and the racks built of its first logs; Fish dragged, and the catch laid on the racks; a rack's card; Store for food; Gather dragged, and gatherers walking in with armfuls; the second dawn's word; a fire lit beside the racks, and the card of a rack by it and of one in the open; the third morning with dried bracken in the stores; the grass farther west gathered when the near wood is picked clean; the first rain and the card of a rack by the fire; a rack left empty and removed; the fifth morning (`wf-01` to `wf-19`).
+- `wf-care-orders.txt`, with no window: a year kept with care. A room dug, roofed and walled on the first day, a fire, a place to sleep, fourteen racks, a stockpile for food; the land within 170 m gathered every other day while it bears and its water fished every fourth; timber felled five times. **Seven of seven alive at the next spring, nobody ever starving**: kept food for 8 days on the 1st of summer, 12 on the 1st of autumn and of winter, 9 at the next spring. Seventeen times in the year food spoiled in the stockpile, nearly all bamboo shoots at the end of spring: more than fourteen racks dry. Pictures: the stockpile and the racks on the 12th of spring in rain, with "72 spoil within a day" (`wf-30`); a rack in the open in that rain, taken in the hand (`wf-35`); the 1st of autumn (`wf-31`); the 7th of winter (`wf-32`).
+- `p4-winter-room-orders.txt`, the second half's room and fire with the near ground gathered every fourth day and nothing dried: six of seven at the next spring, starving said nineteen times, one dead of hunger on the 12th of winter. As before this step, by another road: then nothing bore, now what was gathered does not last.
+- No orders at all: summer starving on gobies, as before; all seven dead of cold on the 5th of winter, the alert for the lean season standing over the alerts for hunger and cold (`wf-33`); a starving dwarf's card in summer, its hands a fifth slower (`wf-34`).
+
+**Weak points**
+
+- **Kept and fresh food look alike in a stockpile.** A heap is small boxes in its food's colour; dried bracken, dried bamboo and fresh bamboo shoots are all browns. Only a heap with under a day left is greyer. The card and the stores say which is which; the land does not.
+- **A stockpile takes food or it does not**: there is no stockpile for kept food apart from fresh, no priority, and a full one says so only as "lie loose". In the careful year 572 things, most of them shii nuts, lay loose in midwinter beside a stockpile with no room, uncounted.
+- **The rack has no bill.** It dries whatever will spoil soonest, and the player's only say is to leave one empty. A hold cannot say "dry the fish and eat the shoots".
+- **A rack is loaded even when the hold has little to eat**, so its last fresh food may stand two days on a rack while the dwarves eat the kept food or forage. It never starved anyone in the years played.
+- **Gathering is slower than it was**, since the gatherer walks in with each armful: the first day's wood of 55 bracken takes about half as long again. And the wood by the camp is picked clean by the third day; shoots come again only next year, which makes the fourth and fifth days lean before the bamboo comes up.
+- **A building's stuff now comes before all other marked work**, so a large wall stops a dig until its stone is carried.
+- **The lean season is measured where the party gathered**, not where the hold has since gone, and against the whole of its days, not the share the land will not bear.
+- **Dried food never spoils**, in rain or out of it, and a rack by a fire in pouring rain still dries at the pace of a dry day.
+- **A fire by the racks is fed like any other**, three logs a day, and the careful year's went out more than once for want of timber; its racks then dry at the open's pace and nothing but the rack's card says why.
+- **The drying times are from memory** of the real practice; the ways are checked (`colony-sim-reference.md`, section 16).
+- **Marks no dwarf has a way to are tried again every two seconds for ever**, as before this step: a few plants on ledges in the careful year's wider gathering cost three million cheap searches for a way in the year, and an alert that stands. Found here, not mended.
+- **The hold that dries nothing mostly lives**, on gobies: the island's own rows.
+- **Nothing here was played by a hand in a window.**

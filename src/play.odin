@@ -934,7 +934,7 @@ stores_build :: proc() -> (foot: f32) {
 	fed := hold_living() > 0 && s.tick > 0
 	// Of it, what keeps: the figure a lean season is planned by; and what is about to spoil (goods_spoil, goods.odin).
 	keeps := "" if days < 0.75 else "None of it keeps" if s.kept_days < 0.25 else "All of it keeps" if s.kept_days > days - 0.25 else fmt.tprintf("Kept food for %s", days_words(s.kept_days))
-	short := s.lean.on && s.kept_days < f32(s.lean.days)   // the lean season ahead is longer than the kept food lasts
+	short := lean_short(s.lean)   // the lean season ahead is longer than the kept food lasts
 	soon := fmt.tprintf("%d spoil within a day", s.soon[0]) if s.soon[0] > 0 else fmt.tprintf("%d loose spoil within a day", s.soon[1]) if s.soon[1] > 0 else ""
 	w := px(78)
 	line := line_of(.Body)
@@ -1270,7 +1270,7 @@ hand_build :: proc() {
 	text_wide_here := inner - head - px(4)
 	head = max(head, line_of(.Title) + text_high(.Body, sub, text_wide_here) + (line_of(.Body) if need >= 0 else 0))
 	feels := t.kind == .Dwarf && watch.seen.dwarves[t.dwarf].doing != .Dead   // a living dwarf's needs, as meters (crowd.odin)
-	line_high := text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high() if feels else 0)
+	line_high := text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high(t.dwarf) if feels else 0)
 	tabs_high := line_of(.Body) + px(1.5) + px(2.5) if count > 0 else 0
 	fixed := 2*px(L.pad.y) + head + px(L.space) + line_high + (px(L.space) + tabs_high if count > 0 else 0) + px(4) + px(L.button)
 	// A card is as deep as its longest tab needs, within limits, so that changing tabs moves nothing.
@@ -1375,7 +1375,7 @@ hand_short :: proc(t: Thing, title, sub, line, next: string, need: int) {
 	text_wide_here := inner - head - px(4)
 	head = max(head, line_of(.Title) + text_high(.Body, sub, text_wide_here) + (line_of(.Body) if need >= 0 else 0))
 	feels := watch.seen.dwarves[t.dwarf].doing != .Dead
-	high := 2*px(L.pad.y) + head + px(L.space) + text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high() if feels else 0) + px(3) + px(L.button)
+	high := 2*px(L.pad.y) + head + px(L.space) + text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high(t.dwarf) if feels else 0) + px(3) + px(L.button)
 	r := Rect{x, foot - high, w, high}
 	part(.Panel, r, id = "hand")
 	cx, y := x + px(L.pad.x), r.y + px(L.pad.y)

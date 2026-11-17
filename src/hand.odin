@@ -336,12 +336,13 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 			// How long it keeps: the one thing a heap of food says that stone does not (goods_spoil, goods.odin).
 			left := f32(-1)
 			for p in watch.seen.piles do if p.at == t.block do left = p.left
-			keeps := "it does not spoil" if row.keeps <= 0 else fmt.tprintf("fresh for %s more as it lies", days_words(left)) if left >= SOON else "it spoils within the day"
-			sub = fmt.tprintf("%s; %s", sub, keeps)
+			// The short card is one line, so its second part is short and says the days first: where it lies is seen.
+			keeps := "does not spoil" if row.keeps <= 0 else "spoils today" if left < SOON else "spoils in a day" if left < 1.5 else fmt.tprintf("spoils in %d days", int(left + 0.5))
+			sub = fmt.tprintf("%d%s; %s", t.feature, "" if in_store else " loose", keeps)
 			if row.keeps > 0 {
 				dries := make_of(t.mat, .Rack) >= 0
-				line = fmt.tprintf("%s. It keeps %s in mild air, longer in the cold and less in the heat%s", line, days_words(row.keeps), "; dried on a rack it does not spoil (Build, then Rack)" if dries else "")
-			}
+				line = fmt.tprintf("%s. As it lies it is good for %s more; it keeps %s in mild air, longer in the cold and less in the heat%s", line, days_words(left) if left >= SOON else "under a day", days_words(row.keeps), "; dried on a rack it does not spoil (Build, then Rack)" if dries else "")
+			} else do line = fmt.tprintf("%s. It does not spoil", line)
 			c.title, c.sub, c.line = strings.clone(sentence(title)[:len(sentence(title)) - 1]), strings.clone(sub), strings.clone(sentence(line))
 			if left >= 0 && left < SOON do c.tint = LOOK.brass
 			return
