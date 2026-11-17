@@ -594,6 +594,7 @@ goods_show :: proc(h: ^Hold) {
 			}
 		}
 	}
+	for d in h.dwarves do if d.carrying > 0 && d.doing != .Dead do s.loose[d.carry] += d.carrying   // what is in a dwarf's arms is the hold's as what lies loose is: marking a stockpile for the sacks dropped the stores from four days of food to one while they were carried to it
 	clear(&s.zones)
 	clear(&s.zone_boxes)
 	cells := make([dynamic][3]i32, context.temp_allocator)

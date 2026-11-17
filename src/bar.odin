@@ -273,7 +273,10 @@ bar_frame :: proc() {
 		bar.for_hand = u.hand.block
 		bar.job = job_of(u.hand)
 	}
-	if _, ok := site_seen(bar.job); !ok do bar.job = -1
+	if _, ok := site_seen(bar.job); !ok {
+		if bar.job >= 0 do hand_drop()   // the order in the hand is done, or taken back: the hand is put down, as it is when a fire or a rack in it is gone. It went on showing the block the order was taken by, which is dug away
+		bar.job = -1
+	}
 	bar.zone, bar.fire, bar.bench = -1, -1, -1
 	if u.hand.kind == .Zone {   // the stockpile in the hand, while the ground it was taken by is still its ground
 		if z, on := zone_under(u.hand.block + {0, 1, 0}); on do bar.zone = z.id
@@ -1036,11 +1039,13 @@ piles_view :: proc(boxes: []Box, eye, middle: [3]f64) -> []Box {
 		if is(p.kind, FOOD) {   // what is eaten: a low heap of small things in its own colour, wider as there is more of it; what is about to spoil has gone grey
 			heaps := clamp(int(p.n + 5)/6, 1, 4)
 			turned := p.left >= 0 && p.left < SOON
+			kept := keeps_well(p.kind)   // what keeps is tied up in bundles, upright with a dark band round each: by its shape, not its brown, it is told from the fresh heaps beside it
 			for k in 0..<heaps {
 				jog := f32((p.at.x*5 + p.at.z*11 + i32(k)*3)%%5 - 2)*0.02
-				size := [3]f32{0.17, 0.07, 0.17} if p.kind != .Ayu else {0.22, 0.045, 0.09}
+				size := [3]f32{0.14, 0.13, 0.14} if kept else {0.17, 0.07, 0.17} if p.kind != .Ayu else {0.22, 0.045, 0.09}
 				at := base + {(f32(k%2) - 0.5)*0.42 + jog, size.y, (f32(k/2) - 0.5)*0.42 - jog}
 				append(&out, Box{at, f32(greyed(p.kind, 1.5) if turned else shaded(p.kind, 1.5)), {size.x, 0, 0}, f32(greyed(p.kind, 1.0) if turned else shaded(p.kind, 1.0)), {0, size.y, 0}, 0, {0, 0, size.z}, feet})
+				if kept do append(&out, Box{at + {0, 0.03, 0}, 0x2a2018, {size.x + 0.012, 0, 0}, 0x2a2018, {0, 0.022, 0}, 0, {0, 0, size.z + 0.012}, feet})
 			}
 			continue
 		}
