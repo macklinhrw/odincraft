@@ -94,7 +94,7 @@ Chart :: struct {
 	brief:   bool,            // the world's panel says less, to leave the island's card its room
 	card_at: Rect,            // where the card stands this frame; no width where there is none
 }
-chart := Chart{pick = -1, lens = -1, lens_on = -1, span = 240_000}
+chart := Chart{pick = -1, lens = -1, lens_on = -1, span = 240_000, card = {of = -1}}
 
 // ---- pictures -------------------------------------------------------------------------------
 
@@ -177,10 +177,19 @@ chart_upload :: proc(g: ^Gpu) {
 	}
 }
 
+// Whether everything formed so far is drawn: the known world by the lens that is on, and every island formed.
+chart_painted :: proc() -> bool {
+	c := &chart
+	if sync.atomic_load(&c.waiting) != 0 || !c.known || c.lens >= 0 && c.lens_on != c.lens do return false
+	for &f, i in formed do if is_formed(&f) && !(i < len(c.shown) && c.shown[i]) do return false
+	return true
+}
+
 // A new world is ordered: nothing of the old one is drawn from here on.
 chart_forget :: proc() {
 	c := &chart
 	c.pick, c.lens, c.scroll, c.homed = -1, -1, 0, false
+	c.card.of = -3   // no island's: the card is written afresh for whatever is taken next
 	sync.guard(&c.mutex)
 	for &s in c.shown do s = false
 	c.known = false
@@ -277,7 +286,8 @@ known_paint :: proc(lens: int) -> []u8 {
 				col = mix(L.seas[0], L.seas[1], math.sqrt(clamp(-h/6000, 0, 1)))*clamp(1 + slope/2500, 0.88, 1.1)
 			}
 			for j in 0..<3 do job.pixels[(py*N + px)*4 + j] = u8(clamp(col[j], 0, 1)*255)
-			job.pixels[(py*N + px)*4 + 3] = 255
+			rim := f32(min(px, py, N - 1 - px, N - 1 - py))   // the known world ends without a line: its last 20 km clear to the sea's dark beyond
+			job.pixels[(py*N + px)*4 + 3] = u8(255*smoothstep(0, 40, rim))
 		}
 	})
 	return job.pixels

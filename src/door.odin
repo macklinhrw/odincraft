@@ -2,6 +2,7 @@ package main
 
 import "base:builtin"
 import "core:fmt"
+import fnv "core:hash"
 import "core:math"
 import "core:os"
 import "core:slice"
@@ -143,7 +144,8 @@ door_run :: proc(opt: ^Options, g_in: ^Gpu, window_in: ^sdl.Window, to: Leave) {
 		door_frame(f32(pw), f32(ph), at, 0 if d.unseen && opt.shot != "" else dt)
 		append(&listing, f32(f64(sdl.GetPerformanceCounter() - listed)/frequency))
 		shot := ""
-		if opt.shot != "" && seconds >= opt.after && door_posed(opt) && pressed_all(opt, door_act) {
+		posed := (opt.shot != "" || len(opt.press) > 0) && seconds >= opt.after && door_posed(opt) && pressed_all(opt, door_act)   // the state the options ask for, and their parts pressed
+		if opt.shot != "" && posed {
 			shot = opt.shot
 			d.running = false
 			if opt.say do play_say()
@@ -188,6 +190,10 @@ making_say :: proc(ran: f64) {
 	fmt.printfln("the world of seed %d in %.1f s: the plates' history %s; the region round the start %.2f s; the islands near the start %d of %d in %.2f s%s; the far islands %d of %d",
 		m.seed, ran, "kept from an earlier run" if m.kept else fmt.tprintf("%.2f s", m.took[.Plates]), m.took[.Region], near_done, near_all, m.took[.Near],
 		", and it could be entered" if world_enterable(0) else "", far_done, far_all)
+	if sync.atomic_load(&m.records) && is_formed(&formed[0]) {   // the start island's land, as the forming test hashes it: the same seed gives the same figure however the world was come to
+		f := &formed[0]
+		fmt.printfln("the start island's land: hash %x", fnv.fnv64a(slice.to_bytes(f.land.z[0])) ~ fnv.fnv64a(slice.to_bytes(f.land.wet)) ~ fnv.fnv64a(slice.to_bytes(f.land.age)) ~ fnv.fnv64a(f.land.community))
+	}
 }
 
 // Into play on the island wished for, with a hold or on foot, until the player leaves it.
@@ -195,7 +201,6 @@ door_play :: proc() -> Leave {
 	d := &door
 	o := d.opt^   // the run's own options, with where to go set by the door taken
 	o.first, o.island = d.wish == .Walk, d.isle
-	o.shot = d.opt.shot if len(d.opt.press) > 0 || d.opt.has_door && d.opt.shot != "" else ""
 	d.wish = .None
 	if making.stopped do world_open(making.seed, making.near_km)   // the far islands go on being made beside play
 	home = &formed[d.isle]
@@ -210,7 +215,7 @@ door_play :: proc() -> Leave {
 	d.last = making.seed
 	if !d.unseen do _ = sdl.StopTextInput(d.window)
 	leave := game(&o, d.g, d.window, d.unseen, nil)
-	d.opt.shot = o.shot if leave != .Quit else ""   // a picture play has taken is not taken again here
+	d.opt.press = o.press   // the parts play pressed are not pressed again here
 	clear(&d.opt.digs)
 	return leave
 }
@@ -232,7 +237,7 @@ play_again :: proc() {
 	u^ = {lens = -1, lens_shown = -1, open = {0}}
 	u.scale, u.learned, u.lens_tex = was.scale, was.learned, was.lens_tex
 	typing = false
-	bar = {}
+	bar = {dig = .Room, build = .Wall, job = -1}
 }
 
 // Go to a screen.
@@ -594,10 +599,10 @@ front_build :: proc() {
 	was_at, was_span := c.at, c.span
 	if sync.atomic_load(&making.records) {
 		is := archipelago[0]
-		c.span = 1.7*is.size
-		reach := 0.06*is.size
+		c.span = 1.2*is.size   // its land fills the picture's height and runs in under the words
+		reach := 0.05*is.size
 		pace := f64(px(L.drift))*c.span/f64(max(screen.w, 1))/reach   // so that the picture moves so many pixels a second at its fastest
-		c.at = {f64(is.origin.x) - 0.17*c.span + reach*math.sin(d.now*pace), f64(is.origin.y) + 0.02*c.span + 0.6*reach*math.sin(0.7*d.now*pace + 1)}
+		c.at = {f64(is.origin.x) - 0.13*c.span + reach*math.sin(d.now*pace), f64(is.origin.y) + 0.02*c.span + 0.6*reach*math.sin(0.7*d.now*pace + 1)}
 	}
 	chart_map(true)
 	c.at, c.span = was_at, was_span
@@ -929,7 +934,7 @@ door_posed :: proc(opt: ^Options) -> bool {
 	n := 2
 	if k, ok := strconv.parse_int(count); ok do n = k
 	stage := making_stage()
-	painted := sync.atomic_load(&c.waiting) == 0 && c.known && (c.lens < 0 || c.lens_on == c.lens)
+	painted := records && chart_painted()
 	late :: proc(what: string) -> bool {
 		if !door.said do fmt.eprintfln("the making was past %s before a picture could be taken of it: this one is of where it had come to", what)
 		door.said = true

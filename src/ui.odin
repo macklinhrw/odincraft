@@ -46,7 +46,7 @@ Look :: struct {
 	kinds:              [8]Colour, // a lens that paints kinds of rock: the island's first, second and so on, told apart at a glance
 	faces:              [Face][]u8,
 	type:               [Style]Type,
-	few:                bit_set[Style],   // the styles made of letters and figures alone: too large for every glyph to have room in the atlas
+	few:                bit_set[Style],   // the styles made of letters alone: too large for every glyph to have room in the atlas
 	// Spacing and sizes, in modules.
 	margin:             f32,      // from the picture's edge to a panel
 	pad:                [2]f32,   // inside a panel, across and down
@@ -218,8 +218,9 @@ ui_bake :: proc(module: int) {
 		font, b := &ui.fonts[t.face], &ui.baked[style]
 		b.scale = math.round(t.size*f32(module))/font.units
 		b.ascent, b.descent, b.line = font.ascent*b.scale, font.descent*b.scale, math.round(t.line*f32(module))
-		for i in 0..<(95 if style in LOOK.few else GLYPH_COUNT) {
+		for i in 0..<GLYPH_COUNT {
 			r := rune(i + 32) if i < 95 else rune(i - 95 + 160) if i < 95 + 96 else extras[i - 95 - 96]
+			if style in LOOK.few && !(r == ' ' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z') do continue
 			g := font_glyph(font, r)
 			clear(&lines)
 			font_outline(font, g, b.scale, &lines)

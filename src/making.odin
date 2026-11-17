@@ -260,6 +260,7 @@ world_open :: proc(seed: u32, near_km: f64) {
 			for i in m.far do if !is_formed(&formed[i]) do append(&left, i)
 			forming_begin(left[:], 3, .Low, false)
 		} else {
+			m.took[.Near] += time.duration_seconds(time.since(m.began))
 			m.stopped = true
 		}
 		show(o, true, false)
