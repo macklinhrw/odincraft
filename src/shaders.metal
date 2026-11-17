@@ -422,6 +422,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
         col = outlined(col, in.rel, N, f.mark, f.mark_size.xyz, float3(1.9, 1.2, 0.25), 0.12);
         for (int i = 0; i < 48 && f.tint[i].w > 0.5; i++) {
             float kind = f.tint[i].w;
+            if (kind > 4.5 && kind < 6.5 && N.y < 0.5) continue;   // the ground over a mark: its outline on the faces that look up, and no block's side, which would read as a block marked
             col = outlined(col, in.rel, N, float4(f.tint[i].xyz, 1.0), f.tint_size[i].xyz, kind > 6.5 ? float3(0.42, 1.25, 1.0) : kind > 2.5 && kind < 3.5 ? f.wrong.rgb : f.live.rgb, kind < 1.5 ? 0.09 : kind > 6.5 ? 0.2 : kind > 5.5 ? 0.035 : kind > 4.5 ? 0.13 : 0.22);
         }
     }

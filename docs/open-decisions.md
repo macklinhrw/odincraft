@@ -413,6 +413,10 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Seed 1's coast is judged against a real low drowned coast before the history is changed**: the three coasts measured (Bōsō, Kii, Muroto) rise fast on a forearc and are the wrong kind to hold an old low margin to. The second part measures a ria coast on an old margin first.
 - *Asked of the owner:* **look at the continent** (`interesting-world/real/continent-seed1-map.jpg`, `-from-summit.jpg`, `-coast.jpg`; in the game, `--seed=1 --site=x,z`). Formed land ends in a straight grey side where the next piece is not formed; the far rings drawn from the coarse stage are to take that away.
 
+**2026-11-16, by the owner, playing** (a picture: the Dig tool, one deep, on one block of a pit's wall, and the blocks over it lit as well; "i have my cursor on a single block and 2 get highlighted")
+
+- **With nothing pressed, the tool lights the blocks it would mark and no other.** The fault: the ground over a mark was tinted too, so that a box dragged under a hillside shows where it lies, and on a pit's wall that tint fell on the sides of the blocks over the one pointed at. It is now drawn only through a drag, and only on faces that look up, never on a block's side (`marks_view`, `shaders.metal`). Played on the old build (a block lit two blocks over the pointer's) and the new (`p3-play.txt`, case 13; `p3-39-one-block-lit.jpg`).
+
 **2026-11-16, Claude's call** (P4 begun, in two halves)
 
 - **P4 is built in two halves, one at a time.** The first: hunger, thirst, sleep, the day and the year passing, death, and what each dwarf feels shown, with food and drink that are real things of the island, gathered, fished, carried and stored. The second: shelter and warmth. A step that large was how five were merged unplayed.

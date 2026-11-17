@@ -240,3 +240,22 @@ wait 0.3
 say
 release
 key esc
+
+print 13. Dig: the pointer on one block of a pit's wall lights that block and no other (the owner's: one block under the pointer and two lit)
+key esc
+view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
+key D
+part tool.deep
+move 1480 880
+press
+move 1540 920
+move 1600 960
+release
+timer
+until done 400
+view over=2693,-1747 span=14 tilt=50
+move 1250 730
+wait 0.4
+shot out/play/p3-39-one-block-lit.png
+say
+key esc
