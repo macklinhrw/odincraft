@@ -289,3 +289,24 @@ view over=2690,-1750 span=30 tilt=55 turn=0 cut=2
 wait 0.4
 shot out/play/p3-45-marks-cut.png
 view cut=off
+
+print 15. a wood felled, and the view pulled back to 1,500 m and 2,600 m across: it stays felled (the owner's: "when i zoom out a bit, the trees reappear")
+view over=2640,-1740 span=130 tilt=55 turn=0 cut=off
+key 3
+key T
+move 300 250
+press
+move 1500 900
+move 2300 1250
+wait 0.3
+release
+timer
+until done 900
+key esc
+key 1
+view over=2640,-1740 span=1500 tilt=55
+wait 4
+shot out/play/p3-46-felled-from-1500.png
+view over=2640,-1740 span=2600 tilt=55
+wait 4
+shot out/play/p3-47-felled-from-2600.png

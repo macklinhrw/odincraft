@@ -56,6 +56,7 @@ Built :: struct {
 World :: struct {
 	chunks:  map[Key]^Chunk,
 	edits:   map[Key][dynamic]Edit,   // by level-0 chunk
+	felled:  [dynamic][2]i32,         // the trees felled, each where its trunk stood: the far ground leaves them out too (edits_near)
 	dirty:   [dynamic]Key,
 	center:  [LEVELS][2]i32,          // chunk under the camera at each level
 	finest:  i32,                     // the finest level any ground is near enough to need
@@ -135,7 +136,7 @@ build :: proc(job: Job) -> (b: Built) {
 	c := new(Columns)
 	defer free(c)
 	defer free_all(context.temp_allocator)
-	gen_columns(job.key.level, job.key.x, job.key.z, c)
+	gen_columns(job.key.level, job.key.x, job.key.z, c, job.edits)
 
 	quads := make([dynamic]Quad, 0, 4096)
 	plants: [dynamic]Quad
@@ -447,6 +448,22 @@ world_set :: proc(w: ^World, x, y, z: i32, m: Mat, tell := true) {
 			water_refloor(&w.water, x, z)
 		}
 	}
+	// A felled tree is left out of the far ground too: every chunk of it the crown reached is made again.
+	if is(m, RINGS) {
+		known := false
+		for t in w.felled do known ||= t == [2]i32{x, z}
+		if !known do append(&w.felled, [2]i32{x, z})
+		for l in 1..<i32(LEVELS) {
+			shift, reach := u32(CHUNK_SHIFT + l), i32(TREE_REACH) + (i32(2) << u32(l))
+			for cz in (z - reach) >> shift..=(z + reach) >> shift do for cx in (x - reach) >> shift..=(x + reach) >> shift {
+				k := Key{l, cx, cz}
+				if c := w.chunks[k] or_else nil; c != nil && !c.dirty {
+					c.dirty = true
+					append(&w.dirty, k)
+				}
+			}
+		}
+	}
 	// This chunk, and any neighbour whose border includes the block, or that a felled tree's crown reached.
 	r := i32(TREE_REACH + 2) if is(m, RINGS) else 1
 	for cz in (z - r) >> CHUNK_SHIFT..=(z + r) >> CHUNK_SHIFT {
@@ -460,9 +477,20 @@ world_set :: proc(w: ^World, x, y, z: i32, m: Mat, tell := true) {
 	}
 }
 
-// The edits that fall inside a level-0 chunk or its border. The caller owns the copy.
+// The edits that fall inside a level-0 chunk or its border; for a chunk of far ground, the trees
+// felled in it or within a crown's reach of it, which it leaves out as the near ground does. The
+// caller owns the copy.
 edits_near :: proc(w: ^World, key: Key) -> []Edit {
-	if key.level != 0 || len(w.edits) == 0 do return nil
+	if key.level != 0 {
+		if len(w.felled) == 0 do return nil
+		s := i32(1) << u32(key.level)
+		lo := [2]i32{(key.x*CHUNK - 1)*s - TREE_REACH, (key.z*CHUNK - 1)*s - TREE_REACH}
+		hi := [2]i32{lo.x + P*s + 2*TREE_REACH, lo.y + P*s + 2*TREE_REACH}
+		far: [dynamic]Edit
+		for t in w.felled do if t.x >= lo.x && t.x <= hi.x && t.y >= lo.y && t.y <= hi.y do append(&far, Edit{t.x, FELLED, t.y, .Wood_End})
+		return far[:]
+	}
+	if len(w.edits) == 0 do return nil
 	out: [dynamic]Edit
 	x0, z0 := key.x*CHUNK - 1, key.z*CHUNK - 1
 	for dz in i32(-1)..=1 {

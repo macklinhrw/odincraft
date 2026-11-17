@@ -670,7 +670,7 @@ open_sea :: proc(key: Key) -> bool {
 // crowns hung over the ground on their trunks while cells are small enough to show them, then
 // a canopy that is part of the columns. Each column is the island's whose region holds it, or
 // the open sea's, whose floor lies level with every region's rim.
-gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
+gen_columns :: proc(level, cx, cz: i32, c: ^Columns, edits: []Edit = nil) {
 	s := i32(1) << u32(level)
 	cell := f64(s)
 	heights: [P*P]f32
@@ -696,7 +696,14 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 			if com, ok := plants.?; ok && s >= 8 {
 				r := hash(i32(math.floor(x/cell)), i32(math.floor(z/cell)), seed + 160 + u32(level))
 				spacing, tall, old := stand(land.age[dithered(x, z, r)])
-				if gap, _, _ := gap_at(x, z, old); !gap && f32(r & 0xFFFF)/65536 < cover(com, spacing) {
+				// Where the trees of a cell have been felled its canopy is not drawn: half of those a
+				// stand of this spacing would have in it, so one tree felled clears a cell of eight
+				// metres and not one of sixty-four.
+				felled := 0
+				x0, z0 := i32(math.floor(x/cell))*s + region.origin.x, i32(math.floor(z/cell))*s + region.origin.y
+				for e in edits do felled += int(is(e.mat, RINGS) && e.x >= x0 && e.x < x0 + s && e.z >= z0 && e.z < z0 + s)
+				cleared := f32(felled)*spacing*spacing >= 0.5*f32(s*s)
+				if gap, _, _ := gap_at(x, z, old); !gap && !cleared && f32(r & 0xFFFF)/65536 < cover(com, spacing) {
 					sp := SPECIES[pick_species(com, f32((r >> 16) & 0xFF)/256)]
 					c.top[k] += i32(f32(sp.height[0] + i32((r >> 24) % u32(sp.height[1] - sp.height[0] + 1)))*tall) - 1
 					c.mat[k] = sp.leaf
@@ -722,6 +729,9 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 		trees_in(x0 - TREE_REACH, z0 - TREE_REACH, x0 + P*s + TREE_REACH, z0 + P*s + TREE_REACH, &trees)
 		for t in trees {
 			if t.form > (.Between if level == 1 else .Canopy) do continue   // past half a kilometre only the canopy trees: the ones between them are smaller than a cell there
+			felled := false   // as the near ground leaves it out (gen_volume)
+			for e in edits do felled ||= is(e.mat, RINGS) && e.x == t.x + region.origin.x && e.z == t.z + region.origin.y
+			if felled do continue
 			mid := crown_at(t)
 			for j in max((t.z - TREE_REACH - z0)/s, 0)..=min((t.z + TREE_REACH - z0)/s, P - 1) {
 				for i in max((t.x - TREE_REACH - x0)/s, 0)..=min((t.x + TREE_REACH - x0)/s, P - 1) {
