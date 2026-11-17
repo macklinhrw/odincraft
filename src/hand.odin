@@ -257,7 +257,8 @@ column_runs :: proc(w: ^World, x, z, top, foot: i32) -> []Run {
 	was := here
 	defer bind(was)
 	if f != nil do bind(f)
-	c := w.chunks[Key{0, x >> CHUNK_SHIFT, z >> CHUNK_SHIFT}] or_else nil
+	c: ^Chunk
+	if w != nil do c = w.chunks[Key{0, x >> CHUNK_SHIFT, z >> CHUNK_SHIFT}] or_else nil   // before play there is no block volume: the generator's ground
 	if c != nil && !c.ready do c = nil
 	k := int(x & (CHUNK - 1) + 1) + int(z & (CHUNK - 1) + 1)*P
 	surface, bed_top, under := Mat.Sand, i32(SEA_BED), Under{}

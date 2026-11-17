@@ -37,6 +37,10 @@ import "core:time"
 //   block x y z M   the block there is now the material M (Air for dug out)
 //   dig, fell, build, unmark   mark ground to dig, trees to fell and blocks to lay, or take marks back (orders.odin)
 //   store            mark ground as a stockpile (goods.odin)
+// and two that say what the expedition set out with (plan.md, E-1), read before anything is drawn
+// or chosen, whatever time they give:
+//   land x z         the boat is brought in at the low shore nearest that column of the world
+//   party n [i ..]   the party is the seed's, drawn again n times, and after that its ith dwarves, from 1, each again
 // A line of the log that begins `The hold says "..."` gives the order in this form, with its time
 // before it, so the log of a played game can be played again.
 
@@ -141,9 +145,20 @@ Shown :: struct {
 	marks:     int,
 }
 
+// What an expedition sets out with (plan.md, E-1): where its boat is brought in, and which draw of
+// the seed's party it is. With nothing chosen the landing is the island's rows' and the party the
+// seed's first, as the game began before there was anything to plan.
+Expedition :: struct {
+	lands: bool,            // a shore was chosen:
+	shore: [2]i32,          // the column of the world the boat is brought in nearest
+	draws: int,             // how often the whole party was drawn again
+	again: [dynamic]int,    // and after the last of those, which of its dwarves were, one at a time, from 0, in order
+}
+
 Hold :: struct {
 	island:   ^Formed,
 	walk:     Walk,
+	set:      Expedition,     // what it set out with
 	landed:   Landed,
 	found:    bool,           // the island has a landing
 	boat_from, boat_to: [2]f64,
@@ -198,17 +213,29 @@ hold: Hold   // the player's hold
 
 // ---- making it ------------------------------------------------------------------------------
 
-// Make the hold on an island: draw the party the boat brings, choose the landing and say both, and read the orders.
-hold_make :: proc(h: ^Hold, island: ^Formed, orders: string, count := LANDING) {
+// Make the hold on an island: draw the party the boat brings, choose the landing and say both, and
+// read the orders. `set` is what an expedition planned before play chose (plan.odin); an orders file
+// may say the same in its own lines, and what the hold set out with it says again in its log.
+hold_make :: proc(h: ^Hold, island: ^Formed, orders: string, count := LANDING, set: ^Expedition = nil) {
 	started := time.now()
 	bound(island)
 	h.island = island
 	walk_init(&h.walk, island)
-	party_draw(world_seed, count, &h.party)
+	if set != nil {
+		h.set = {lands = set.lands, shore = set.shore, draws = set.draws}
+		append(&h.set.again, ..set.again[:])
+	}
+	orders_read(h, orders)
+	party_draw(world_seed, count, &h.party, h.set.draws, h.set.again[:])
 	builtin.resize(&h.dwarves, count)
 	builtin.resize(&h.spots, count)
 	h.walk.budget = ASKING
-	h.landed, h.found = landing_choose(&h.walk)
+	if h.set.lands do h.landed, h.found = landing_near(&h.walk, h.set.shore)
+	if !h.found {
+		if h.set.lands && !h.quiet do fmt.printfln("the hold: no boat can come in to the shore near %d, %d that the expedition chose, so the landing is the island's own", h.set.shore.x, h.set.shore.y)
+		h.walk.budget = ASKING
+		h.landed, h.found = landing_choose(&h.walk)
+	}
 	if !h.found {
 		if !h.quiet do fmt.println("the hold: no boat can come in to any shore of this island, so no dwarves land")
 		return
@@ -219,9 +246,8 @@ hold_make :: proc(h: ^Hold, island: ^Formed, orders: string, count := LANDING) {
 	h.boat_from = h.boat_to + l.out*f64(min(l.run - 6, 60))
 	h.boat_ticks = int(math.hypot(h.boat_from.x - h.boat_to.x, h.boat_from.y - h.boat_to.y)/ROWING/TICK)
 	spots_take(h, l.camp)
-	h.place = "ground above the landing"
+	h.place = "ground above the landing" if !l.shut else "the shore it landed on"
 	for &d in h.dwarves do d.facing = f32(math.atan2(-l.out.x, l.out.y))
-	orders_read(h, orders)
 	hold_show(h)
 	if h.quiet do return
 	fmt.printfln("the hold: %s dwarves come by boat, their landing chosen in %.0f ms:", count_words(count), time.duration_milliseconds(time.since(started)))
@@ -231,9 +257,34 @@ hold_make :: proc(h: ^Hold, island: ^Formed, orders: string, count := LANDING) {
 	fmt.printfln("  the boat comes in %.0f m from the %s and grounds at %d, %d, %d; the party gathers at %d, %d, %d, %.0f m from the boat and %.0f m from fresh water",
 		math.hypot(h.boat_from.x - h.boat_to.x, h.boat_from.y - h.boat_to.y), compass(l.out.x, l.out.y), l.at.x, l.at.y, l.at.z, l.camp.x, l.camp.y, l.camp.z,
 		math.hypot(f64(l.camp.x - l.at.x), f64(l.camp.z - l.at.z)), fresh_water(c))
-	fmt.printf("  the %s:", count_words(count))
+	if l.shut do fmt.println("  no way leads from the shore to the ground to live on near it, so the party gathers where it lands")
+	fmt.printf("  the %s%s:", count_words(count), party_words(h.set))
 	for f, i in h.party do fmt.printf("%s %s", "" if i == 0 else ";", dwarf_name(f))
 	fmt.println()
+}
+
+// Which draw of the seed's party an expedition's is, in words: nothing for the seed's first.
+party_words :: proc(set: Expedition) -> string {
+	if set.draws == 0 && len(set.again) == 0 do return ""
+	whole := fmt.tprintf("the seed's party drawn again %s", "once" if set.draws == 1 else "twice" if set.draws == 2 else fmt.tprintf("%d times", set.draws)) if set.draws > 0 else "the seed's party"
+	if len(set.again) == 0 do return fmt.tprintf(", %s", whole)
+	return fmt.tprintf(", %s, and then %s of them one at a time", whole, count_words(len(set.again)))
+}
+
+// What the expedition set out with, as the lines of an orders file that say it: none where it chose nothing.
+set_lines :: proc(set: Expedition, lines: ^[2]string) -> (n: int) {
+	if set.lands {
+		lines[n] = fmt.tprintf("land %d %d", set.shore.x, set.shore.y)
+		n += 1
+	}
+	if set.draws > 0 || len(set.again) > 0 {
+		b := strings.builder_make(context.temp_allocator)
+		fmt.sbprintf(&b, "party %d", set.draws)
+		for i in set.again do fmt.sbprintf(&b, " %d", i + 1)
+		lines[n] = strings.to_string(b)
+		n += 1
+	}
+	return
 }
 
 // A count in a word, while a word will do.
@@ -273,6 +324,27 @@ order_read :: proc(h: ^Hold, line: string) -> bool {
 		when_, rest := strings.trim(words[0], "[]"), words[2:] if len(words) > 2 else nil
 		seconds := 0.0
 		for part in strings.split(when_, ":", context.temp_allocator) do seconds = seconds*60 + (strconv.parse_f64(part) or_else -1e9)
+		if seconds >= 0 && len(words) >= 3 && (words[1] == "land" || words[1] == "party") {   // what the expedition set out with: no order, and read before the party is drawn
+			n := make([dynamic]int, context.temp_allocator)
+			for w in words[2:] {
+				k, good := strconv.parse_int(w)
+				if !good do return false
+				append(&n, k)
+			}
+			if words[1] == "land" {
+				if len(n) != 2 do return false
+				h.set.lands, h.set.shore = true, {i32(n[0]), i32(n[1])}
+			} else {
+				if n[0] < 0 do return false
+				h.set.draws = n[0]
+				clear(&h.set.again)
+				for i in n[1:] {
+					if i < 1 do return false
+					append(&h.set.again, i - 1)
+				}
+			}
+			return true
+		}
 		v: [3]i32
 		ok := seconds >= 0 && len(words) >= 4
 		marking := len(words) > 1 && (words[1] == "dig" || words[1] == "fell" || words[1] == "build" || words[1] == "unmark" || words[1] == "store")
@@ -428,6 +500,14 @@ hold_tick :: proc(h: ^Hold) {
 	for h.taken < len(h.orders) && h.orders[h.taken].tick <= h.tick {
 		obey(h, h.orders[h.taken])
 		h.taken += 1
+	}
+	if h.tick == 0 {   // what the expedition set out with, in the form an orders file takes, so that the log can be played again
+		lines: [2]string
+		for line in lines[:set_lines(h.set, &lines)] {
+			h.aside = true
+			if strings.has_prefix(line, "land") do say(h, `The hold says "%s": the boat is brought in at the shore the expedition chose%s.`, line, fmt.tprintf(", %.0f m from there, the nearest a boat can come in to", h.landed.off) if h.landed.off > 1.5*LAND_CELL else "" if h.landed.chosen else ", but no boat can come in near it, so the landing is the island's own")
+			else do say(h, `The hold says "%s": the party is %s.`, line, party_words(h.set)[2:])
+		}
 	}
 	if h.tick == 0 do say(h, "A boat with %s dwarves stands %.0f m off the shore, to the %s, and pulls for the landing.", count_words(len(h.dwarves)), math.hypot(h.boat_from.x - h.boat_to.x, h.boat_from.y - h.boat_to.y), compass(h.landed.out.x, h.landed.out.y))
 	if h.tick == h.boat_ticks do say(h, "The boat grounds at %d, %d, on %s.", h.landed.at.x, h.landed.at.z, ground_words(h.landed.at)[4:])

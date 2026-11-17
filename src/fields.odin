@@ -19,7 +19,7 @@ Field :: enum u8 {
 	// from the ground the generator makes at the point
 	Height, Steepness, Gravel, Fallen, Beach, Too_Steep, Under_Water, Over_Water,
 	// what a people looks for round a point (landing.odin)
-	Sea_Round, Fresh_Water, Livable_Near,
+	Sea_Round, Fresh_Water, Livable_Near, Livable_Round, Slope_Round, Timber_Round, Dam_Below,
 }
 GROUND_FIELDS :: bit_set[Field]{.Washed, .Height, .Steepness, .Gravel, .Fallen, .Beach, .Too_Steep, .Under_Water, .Over_Water}
 
@@ -118,6 +118,10 @@ FIELDS := [Field]Field_Info{
 	.Sea_Round = {"sea-round", "", "share of the square a kilometre across round the point that is sea; under a third, the land shuts a shore in", proc(p: ^Point) -> f32 { return sea_round(land_cell(p.x, p.z)) }, 0, 1, .Ramp, {0.85, 0.60, 0.25}, {0.10, 0.25, 0.70}},
 	.Fresh_Water = {"fresh-water", " m", "to the nearest lake, pond or stream draining 0.12 km² or more, which runs all year; 10,000 where none lies within 640 m", proc(p: ^Point) -> f32 { return fresh_water(land_cell(p.x, p.z)) }, 0, 640, .Ramp, {0.10, 0.30, 0.75}, {0.95, 0.92, 0.85}},
 	.Livable_Near = {"livable-near", " m", "to the nearest ground a person could live on; 10,000 where none lies within 256 m", proc(p: ^Point) -> f32 { return livable_near(land_cell(p.x, p.z)) }, 0, 256, .Ramp, {1.00, 0.55, 0.05}, {0.55, 0.55, 0.55}},
+	.Livable_Round = {"livable-round", " ha", "of ground a person could live on within 300 m", proc(p: ^Point) -> f32 { return livable_round(land_cell(p.x, p.z)) }, 0, 10, .Ramp, {0.55, 0.55, 0.55}, {1.00, 0.55, 0.05}},
+	.Slope_Round = {"slope-round", "", "rise over run of the land within 150 m, on average", proc(p: ^Point) -> f32 { return slope_round(land_cell(p.x, p.z)) }, 0, 1.2, .Ramp, {0.95, 0.95, 0.90}, {0.65, 0.05, 0.05}},
+	.Timber_Round = {"timber-round", "", "share of the places in the canopy, on the land within 300 m, that a tree a log can be cut from takes", proc(p: ^Point) -> f32 { t, _ := timber_round(land_cell(p.x, p.z)); return t }, 0, 1, .Ramp, {0.90, 0.85, 0.65}, {0.05, 0.30, 0.08}},
+	.Dam_Below = {"dam-below", " m", "to the stream that runs down to the sea from a lake a slide dammed, which the lake's water would take were its dam to fail; 10,000 where none passes within 640 m", proc(p: ^Point) -> f32 { d, _ := dam_below(land_cell(p.x, p.z)); return d }, 0, 640, .Ramp, {0.80, 0.25, 0.15}, {0.95, 0.95, 0.90}},
 	.Over_Water = {"over-water", " m", "of the ground over the level of the lake or pond it lies in or beside, or of a slow stream (on ground gentler than 1 in 5) within 8 m, or of the sea where a stream comes into a sheltered bay, or on a flat, of the water in the ground; under 0, the depth of water over it", proc(p: ^Point) -> f32 { return over_water(p) }, -1, 3, .Ramp, {0.10, 0.30, 0.75}, {0.95, 0.95, 0.90}},
 }
 

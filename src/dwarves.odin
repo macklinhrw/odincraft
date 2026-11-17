@@ -52,32 +52,57 @@ Facts :: struct {
 	skin, beard, hood: u32,
 }
 
-// The party of a world's seed, of so many: no trade twice until every trade has come.
-party_draw :: proc(s: u32, count: int, party: ^[dynamic]Facts) {
+// The party of a world's seed, of so many: no trade twice until every trade has come. A party can
+// be drawn again (plan.md, E-1): `draws` is how often the whole of it has been, and `again` which of
+// its dwarves were then drawn again one at a time, from 0, in the order they were. The same seed,
+// count and draws give the same party, so a party chosen before play can be drawn again by the hold
+// and by anyone who plays its log again.
+party_draw :: proc(s: u32, count: int, party: ^[dynamic]Facts, draws := 0, again: []int = nil) {
+	s := s if draws == 0 else hash(i32(draws), 0, s + 899)
 	// Trades by the weighted draw the plants' race uses: each row's key is a draw to the power one
 	// over its weight, and the highest not yet taken comes next.
 	builtin.resize(party, count)
 	taken: [len(TRADES)]bool
 	for &f, i in party {
+		f = {}
 		if i%len(TRADES) == 0 do taken = {}
 		best := f32(-1)
 		for row, k in TRADES do if key := math.pow(hash01(i32(k), i32(i/len(TRADES)), s + 900), 1/row.weight); !taken[k] && key > best do f.trade, best = k, key
 		taken[f.trade] = true
-		for try in i32(0)..<64 {   // no two of a party share a given name
-			f.given = fmt.aprintf("%s%s", STEMS[hash(i32(i), try, s + 901)%len(STEMS)], ENDS[hash(i32(i), try, s + 902)%len(ENDS)])
-			same := false
-			for o in party[:i] do same ||= o.given == f.given
-			if !same do break
-		}
-		f.byname = fmt.aprintf("%s%s", EARTHS[hash(i32(i), 0, s + 903)%len(EARTHS)], WORN[hash(i32(i), 0, s + 904)%len(WORN)])
-		u := hash01(i32(i), 0, s + 905)
-		f.age = int(math.lerp(AGES[0], AGES[1], u*u))   // more of them young
-		f.tall = math.lerp(TALL[0], TALL[1], hash01(i32(i), 0, s + 906))
-		f.skin, f.hood = SKINS[hash(i32(i), 0, s + 907)%len(SKINS)], HOODS[hash(i32(i), 0, s + 908)%len(HOODS)]
-		grey := smoothstep(55, 100, f32(f.age))
-		dark := BEARDS[hash(i32(i), 0, s + 909)%len(BEARDS)]
-		for shift in ([3]u32{16, 8, 0}) do f.beard |= u32(math.lerp(f32(dark >> shift & 255), f32(u32(0xb8b8b0) >> shift & 255), grey)) << shift
+		facts_draw(&f, i, s, party[:i])
 	}
+	// One drawn again is another dwarf in the same seat: a name, an age and a look of its own, and the
+	// trade its own draw puts first of those no other of its dozen has. No one else is changed by it.
+	for i, k in again do if i >= 0 && i < count {
+		own := hash(i32(k + 1), i32(i), s + 898)
+		taken = {}
+		for o, j in party do if j != i && j/len(TRADES) == i/len(TRADES) do taken[o.trade] = true
+		f := Facts{trade = party[i].trade}
+		best := f32(-1)
+		for row, t in TRADES do if key := math.pow(hash01(i32(t), i32(i), own + 900), 1/row.weight); !taken[t] && key > best do f.trade, best = t, key
+		party[i] = {}   // its name is free for the one who takes its seat, and for nobody to share
+		facts_draw(&f, i, own, party[:])
+		party[i] = f
+	}
+}
+
+// Who a dwarf is besides its trade, the `i`th of a party, drawn from `s`: no two of a party share a given name.
+facts_draw :: proc(f: ^Facts, i: int, s: u32, others: []Facts) {
+	for try in i32(0)..<64 {
+		f.given = fmt.aprintf("%s%s", STEMS[hash(i32(i), try, s + 901)%len(STEMS)], ENDS[hash(i32(i), try, s + 902)%len(ENDS)])
+		same := false
+		for o in others do same ||= o.given == f.given
+		if !same do break
+	}
+	f.byname = fmt.aprintf("%s%s", EARTHS[hash(i32(i), 0, s + 903)%len(EARTHS)], WORN[hash(i32(i), 0, s + 904)%len(WORN)])
+	u := hash01(i32(i), 0, s + 905)
+	f.age = int(math.lerp(AGES[0], AGES[1], u*u))   // more of them young
+	f.tall = math.lerp(TALL[0], TALL[1], hash01(i32(i), 0, s + 906))
+	f.skin, f.hood = SKINS[hash(i32(i), 0, s + 907)%len(SKINS)], HOODS[hash(i32(i), 0, s + 908)%len(HOODS)]
+	grey := smoothstep(55, 100, f32(f.age))
+	dark := BEARDS[hash(i32(i), 0, s + 909)%len(BEARDS)]
+	f.beard = 0
+	for shift in ([3]u32{16, 8, 0}) do f.beard |= u32(math.lerp(f32(dark >> shift & 255), f32(u32(0xb8b8b0) >> shift & 255), grey)) << shift
 }
 
 // A dwarf in a sentence: "Dorra Slatethumb, a mason of 61 years".

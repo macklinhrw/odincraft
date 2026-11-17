@@ -47,10 +47,11 @@ Act :: enum u8 {
 	Door_Move, Door_Pick, Door_Go, Door_Back, Draw, Stop, Rebind, Keys_Back,   // before play: the front door and its screens (door.odin)
 	Chart_Lens, Chart_Lenses, Chart_Zoom, Chart_Home, Isle_Depth, Isle_Row, Isle_Take, Found, Roam,   // the world's screen (chart.odin)
 	Mass_Leave,                                                                // a world being made: the mainland's long stage left (door.odin)
+	Site, Site_Row, Party_Who, Party_Move, Draw_Dwarf, Draw_Party, Set_Out,           // expedition planning (plan.odin): a landing, a row of its card, a dwarf, the party drawn again, and away
 }
 
 // A key: which act it does and with what, in which view, and whether holding it goes on doing it.
-Views :: enum u8 { Above, Afoot, Either, Menu, Door, Chart }   // Door and Chart: before play, at the front door's screens and on the world's map
+Views :: enum u8 { Above, Afoot, Either, Menu, Door, Chart, Plan }   // Door, Chart and Plan: before play, at the front door's screens, on the world's map and planning an expedition
 Bind :: struct {
 	key:          sdl.Scancode,
 	name:         string,   // as it is written on a button
@@ -90,6 +91,12 @@ BINDS := [?]Bind{
 	{.ESCAPE, "Esc", .Door_Back, 0, 0, .Chart, false}, {.HOME, "Home", .Chart_Home, 0, 0, .Chart, false},
 	{.EQUALS, "=", .Chart_Zoom, 1, 1, .Chart, true}, {.MINUS, "-", .Chart_Zoom, -1, -1, .Chart, true},
 	{.S, "S", .Stop, 0, 0, .Chart, false}, {.L, "L", .Chart_Lenses, 0, 0, .Chart, false},
+	// Planning an expedition (plan.odin).
+	{.RETURN, "Enter", .Set_Out, 0, 0, .Plan, false}, {.ESCAPE, "Esc", .Door_Back, 0, 0, .Plan, false},
+	{._1, "1", .Site, 0, 0, .Plan, false}, {._2, "2", .Site, 1, 1, .Plan, false}, {._3, "3", .Site, 2, 2, .Plan, false}, {._4, "4", .Site, 3, 3, .Plan, false},
+	{.UP, "Up", .Party_Move, -1, -1, .Plan, true}, {.DOWN, "Down", .Party_Move, 1, 1, .Plan, true},
+	{.D, "D", .Draw_Dwarf, -1, -1, .Plan, false}, {.A, "A", .Draw_Party, 0, 0, .Plan, false},
+	{.HOME, "Home", .Chart_Home, 0, 0, .Plan, false}, {.EQUALS, "=", .Chart_Zoom, 1, 1, .Plan, true}, {.MINUS, "-", .Chart_Zoom, -1, -1, .Plan, true},
 }
 
 // The key written on the button of an act.
@@ -489,7 +496,7 @@ play_act :: proc(act: Act, arg: int) {
 	case .Leave:   // out of play: the frame loop ends, and the way through goes on from there (main.odin)
 		leaving = Leave(arg)
 		u.running^ = false
-	case .Door_Move, .Door_Pick, .Door_Go, .Door_Back, .Draw, .Stop, .Rebind, .Keys_Back, .Chart_Lens, .Chart_Lenses, .Chart_Zoom, .Chart_Home, .Isle_Depth, .Isle_Row, .Isle_Take, .Found, .Roam, .Mass_Leave:   // before play (door_act)
+	case .Door_Move, .Door_Pick, .Door_Go, .Door_Back, .Draw, .Stop, .Rebind, .Keys_Back, .Chart_Lens, .Chart_Lenses, .Chart_Zoom, .Chart_Home, .Isle_Depth, .Isle_Row, .Isle_Take, .Found, .Roam, .Mass_Leave, .Site, .Site_Row, .Party_Who, .Party_Move, .Draw_Dwarf, .Draw_Party, .Set_Out:   // before play (door_act)
 	case .Scale:
 		u.scale = arg
 		play_keep()

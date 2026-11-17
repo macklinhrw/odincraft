@@ -94,6 +94,11 @@ Look :: struct {
 	isle_row:           f32,      // a row of it
 	thumb:              f32,      // an island's picture in its row
 	drift:              f32,      // modules a second the front door's picture of the world moves
+	// Expedition planning (interface.md, section 16).
+	shelter:            Colour,   // a shore the land shuts in, with fresh water a longer walk off; with it near, the shore is verdigris
+	plan_row:           f32,      // a landing's row
+	who_row, who_bust:  f32,      // a dwarf's, and its picture there
+	site_beds:          f32,      // the room the beds' names take beside the column on a place's card
 }
 
 LOOK := Look {
@@ -134,6 +139,7 @@ LOOK := Look {
 	door_left = 40, door_top = 62, door_wide = 190, choice = 16, choice_pad = 6,
 	making_wide = 190, meter = 1, isle = 5, isles_wide = 112, isle_row = 16, thumb = 12, drift = 1.5,
 	seas = {{0x3d, 0x74, 0x9e, 255}, {0x10, 0x25, 0x4c, 255}}, unformed = {0x7b, 0x86, 0x8c, 255},
+	shelter = {0xed, 0xe8, 0xdd, 150}, plan_row = 15.5, who_row = 17.5, who_bust = 15, site_beds = 27,
 }
 
 // ---- text -----------------------------------------------------------------------------------

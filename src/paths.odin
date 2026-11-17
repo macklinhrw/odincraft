@@ -109,6 +109,18 @@ walk_init :: proc(w: ^Walk, island: ^Formed) {
 	for c in 0..<n*n do w.going[c] = going(c)
 }
 
+// Let go what a walk read of its island: one made to ask a question of the ground, and done with (plan.odin).
+walk_drop :: proc(w: ^Walk) {
+	for _, p in w.patches do if p != nil {
+		kept_drop(w, p)
+		free(p)
+	}
+	delete(w.patches); delete(w.floors); delete(w.owner); delete(w.rooms); delete(w.edits); delete(w.edited)
+	delete(w.going); delete(w.cost); delete(w.back); delete(w.seen); delete(w.shut); delete(w.held); delete(w.shun)
+	free(w.columns)
+	w^ = {}
+}
+
 // The patch of a chunk, made if it has not been and the search in hand may still make one; its
 // floors are read again first if a block of it has changed.
 patch_at :: proc(w: ^Walk, cx, cz: i32, make_it := true) -> ^Patch {
@@ -483,10 +495,10 @@ room_exits :: proc(w: ^Walk, r: i32, out: ^[dynamic]Exit, make_it := true) {
 // The way from one floor to another, as the blocks to step through, the first the one stood on, and
 // the seconds it takes; or why there is none: the goal's ground is closed off from the walker's, or
 // the search made as many patches as it may without joining them.
-walk_way :: proc(w: ^Walk, from, to: [3]i32, out: ^[dynamic][3]i32) -> (seconds: f32, why: Found) {
+walk_way :: proc(w: ^Walk, from, to: [3]i32, out: ^[dynamic][3]i32, builds := BUILDS) -> (seconds: f32, why: Found) {
 	bound(w.island)
 	clear(out)
-	w.budget, w.starved = BUILDS, false
+	w.budget, w.starved = builds, false
 	a, b := walk_floor(w, from.x, from.y, from.z), walk_floor(w, to.x, to.y, to.z)
 	if a < 0 || b < 0 do return 0, .No_Ground
 	ra, rb := floor_room(w, a), floor_room(w, b)
