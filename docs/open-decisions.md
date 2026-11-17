@@ -145,6 +145,19 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
   - Each play step comes with a script that plays it as a player would (the pointer on the tree's own log, a drag across a wood, the order given and watched to its end), drawn unseen, and Claude looks at every picture before merging.
   - One play step at a time. The interface step in flight (I-2) is held, not merged, until the orders are right.
 
+**2026-11-16, by the owner, playing after part B** (a picture at a cut level: a block under the pointer joined to the dug ground by a line of marks; "these connected lines dont make any sense right now, because i could already have an area marked and it still continues from the actually dug spots; just remove this"; and "somehow digging this section is making them dig from the surface, which i definitely did not mark")
+
+- **An order to dig marks what was dragged and no block besides.** The way in an order made for itself is removed, with its stair from the surface for a room marked deep. The way to a room is the player's to mark.
+
+**2026-11-16, Claude's call** (what follows from taking the way in out; `adr/0011`; played as `p3-play.txt`, cases 3 to 5, and from the game's own log of orders)
+
+- **A dig leaves the last step out of what it digs** (`closes`). With no way in of its own, a pit two deep trapped a dwarf the first time it was played, and dug from the rim it was left with no way down to the rest of its marks. A block a dwarf could stand on is not dug where that would take the way out from lower ground beside it, turn the floor on it into a hole with no way out, or shut a dwarf in. The order ends and says so: "Dug: 9 blocks, 8 basalt. 1 left as the step out." A stair dug into it frees the block. Chosen over finishing the pit and leaving it to the player to rescue whoever is in it.
+- **No block is dug from under a dwarf walking over it** (`trodden`), only from under none. Walkers were not counted as standing, and one fell two blocks into a pit.
+- **Two rules tried and thrown out on the way**, each found wanting by replaying the game's own log: counting pits before and after (a small closed hollow beside the block hid the room being closed), and refusing any floor that lost its way out (it took ledges on a slope for pits and stalled a room dug into a hillside).
+- **Work no dwarf can reach raises its alert only while no other order may yet open the way to it**, so a room marked behind one being dug does not cry out.
+- **The headless run says what the marks left wait for**, after its line on the orders.
+- *Asked of the owner:* **one block of a pit left standing as its step.** A pit marked 3 by 2 and 2 deep is dug to 9 of its 10 blocks. *Recommendation: keep it; the other honest choices are a pit that traps, or blocks added outside the mark.*
+
 **2026-11-16, by the owner, playing after part A** (a picture: the Fell tool on a trunk at 2670, 3, -1726 says "No tree here"; "clearly a tree")
 
 - **Fell takes every tree that stands**: the canopy's, the smaller ones between and under them, young growth in a gap, bushes, and the dead still standing. Only the fallen are left out. The fault: the order asked for trees as the far view does, which leaves out all but the canopy's and the ones between; the tree in the picture was young growth 11 m tall. Part A's played case pointed at a canopy tree and so passed. One rule now (`trees_standing`, `trees.odin`) is asked by the hold and by the frame.

@@ -168,10 +168,7 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	s.a.mark, s.a.marked, s.a.marking = {block, block + {4, 0, 6}}, true, true
 	bar.dragged = true
 	frame(s)
-	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 2 deep: ") && strings.contains(says("tool.says"), "With the way in"), says("tool.says"))   // twelve blocks under the ground: a stair is found for it
-	s.a.mark = {block + {0, 8, 0}, block + {4, 8, 6}}
-	frame(s)
-	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 2 deep: ") && strings.contains(says("tool.says"), "With the way in"), says("tool.says"))   // four under it: the order digs its own way in
+	testing.expect(t, says("tool.says") == "5 by 7, 2 deep: 70 blocks.", says("tool.says"))   // twelve blocks under the ground: what was dragged and no block besides, no way in with it
 	s.a.mark = {block, block + {4, 0, 6}}
 	frame(s)
 	testing.expect(t, screen_find(&screen, "hand").rect == card, "the tool's card moved when its line changed")

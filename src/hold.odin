@@ -927,6 +927,13 @@ hold_report :: proc(h: ^Hold) {
 		for site in h.sites do left += int(!site.over)
 		fmt.printfln("  orders: %d given, %d with work left; %d blocks and trees worked, %d marks left; %d looks for work, %.2f ms each; %d counts of dwarves a change would shut in, %.2f ms each",
 			len(h.sites), left, h.work.done, len(h.marks), h.work.looks, time.duration_milliseconds(h.work.looking)/f64(max(h.work.looks, 1)), h.work.counts, time.duration_milliseconds(h.work.counting)/f64(max(h.work.counts, 1)))
+		if len(h.marks) > 0 {   // what the marks left wait for
+			waits: [Waits]int
+			for m in h.marks do waits[m.wait if m.taker < 0 else .None] += 1
+			fmt.print("  the marks left:")
+			for n, why in waits do if n > 0 do fmt.printf(" %d %s;", n, WAITS[why] if why != .None else "in hand or free to take")
+			fmt.println()
+		}
 		fmt.print("  the store:")
 		any := false
 		for n, m in h.store do if n > 0 {

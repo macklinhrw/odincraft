@@ -33,7 +33,7 @@ timer
 until done 600
 shot out/play/p3-05-fell-done.png
 
-print 3. Dig out: a drag on flat ground; then the order's card, and part of it taken back
+print 3. Dig out: a drag on flat ground, two deep, whose last block is left standing as the step out; then the order's card, and part of it taken back
 view over=2690,-1750 span=36 tilt=55
 key D
 move 1480 880
@@ -80,10 +80,11 @@ until done 600
 view cut=2
 shot out/play/p3-13-dig-hill-done-cut.png
 
-print 5. Dig out: at a cut level, a room marked inside the hill, which gets its own way in
+print 5. Dig out: at a cut level, a room marked inside the hill with no way to it: what was dragged is marked and no block besides; the dwarves dig what they can reach from the ground over it, and the alert says no dwarf has a way to the rest
 view cut=3
 move 1900 1100
 shot out/play/p3-14-dig-inside-hover.png
+say
 press
 move 2050 1200
 move 2200 1300
@@ -93,9 +94,12 @@ release
 wait 0.4
 view cut=2
 shot out/play/p3-16-dig-inside-marked.png
-timer
-until done 900
-shot out/play/p3-17-dig-inside-done.png
+run 60
+shot out/play/p3-17-dig-inside-waits.png
+say
+key X
+drag 1850 1050 2250 1350
+key D
 
 print 6. Build: a timber wall, a stone wall, and two timber blocks side by side
 view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
@@ -187,6 +191,7 @@ click 600 1000
 shot out/play/p3-32-second-click.png
 
 print 10. Fell: a click on the trunk of a young tree under taller ones (the owner's, at 2670, -1726), which is felled as any tree is
+# Played whole, case 2's drag has felled this tree already and the tool says so; played alone from here it is felled by this click.
 key esc
 view over=2670,-1726 span=30 tilt=55 turn=0 cut=off
 key T
