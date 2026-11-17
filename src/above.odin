@@ -89,15 +89,18 @@ Above :: struct {
 	above_point :: proc(a: ^Above, w: ^World, eye: [3]f64, pitch, aspect: f32, pointer: [2]f32) {
 	a.pointer, a.shown = pointer, over_world(pointer)
 	a.under = {}
-	if w.finest == 0 do a.under = pick(w, eye, view_ray(a.yaw, pitch, ABOVE_FOV, aspect, pointer), above_level(a), a.bare, 4*linalg.length(a.at - eye) + 600)   // from too far off for the block volume there is no block to pick (pick_far)
-	if a.marking && a.shown && a.under.ok do a.mark[1] = a.under.block
+	ray := view_ray(a.yaw, pitch, ABOVE_FOV, aspect, pointer)
+	if w.finest == 0 do a.under = pick(w, eye, ray, above_level(a), a.bare, 4*linalg.length(a.at - eye) + 600)   // from too far off for the block volume there is no block to pick (pick_far)
+	if tool_marks() do tool_point(a, w, eye, ray)   // a tool's mark lies flat on the level it began on (bar.odin)
+	else if a.marking && a.shown && a.under.ok do a.mark[1] = a.under.block
 	}
 
 	// Begin marking a box of blocks at the block under the pointer; mark_end leaves it marked, and
 	// mark_box says what it holds. A click marks one block.
 	mark_begin :: proc(a: ^Above) {
-	if a.shown && a.under.ok do a.mark, a.marking, a.marked = {a.under.block, a.under.block}, true, true
-	}
+	if tool_marks() do tool_begin(a)
+	else if a.shown && a.under.ok do a.mark, a.marking, a.marked = {a.under.block, a.under.block}, true, true
+}
 	mark_end :: proc(a: ^Above) { a.marking = false }
 	mark_clear :: proc(a: ^Above) { a.marking, a.marked = false, false }
 	mark_box :: proc(a: ^Above) -> (lo, hi: [3]i32, blocks: int, ok: bool) {
@@ -176,8 +179,9 @@ Pick :: struct {
 // The block under a ray, as the view shows it: the first block of the volume along the ray that
 // is drawn. What is above the cut's level is not there, so a ray from over it begins where it
 // comes down through the level, and a block it meets there is picked on its cut face. With `bare`
-// it passes through leaves. Later steps mark ground to dig and build through this.
-pick :: proc(w: ^World, eye: [3]f64, dir: [3]f32, level: f64, bare: bool, reach: f64) -> (p: Pick) {
+// it passes through leaves, and with `ground` through every block of a plant, to the ground it
+// stands on. Orders to dig and build are marked through this (bar.odin).
+pick :: proc(w: ^World, eye: [3]f64, dir: [3]f32, level: f64, bare: bool, reach: f64, ground := false) -> (p: Pick) {
 	from := 0.0
 	if eye.y > level {
 		if dir.y >= 0 do return
@@ -211,7 +215,7 @@ pick :: proc(w: ^World, eye: [3]f64, dir: [3]f32, level: f64, bare: bool, reach:
 			m := Mat.Air
 			if ly := cell.y - chunk.y_base; ly < 0 do m = .Stone   // under the layers kept all is solid
 			else if ly < chunk.h do m = chunk.blocks[int(cell.x & (CHUNK - 1) + 1) + int(cell.z & (CHUNK - 1) + 1)*P + int(ly)*P*P]
-			if m != .Air && !(bare && is(m, LEAVES)) {
+			if m != .Air && !(bare && is(m, LEAVES)) && !(ground && is(m, PLANT_BLOCKS)) {
 				p.block, p.ok, p.exact = cell, true, true
 				return
 			}

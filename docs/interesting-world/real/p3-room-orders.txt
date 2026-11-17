@@ -4,14 +4,14 @@
 130 block 2693 2 -1747 Air
 135 block 2691 3 -1747 Sandstone
 150 go 2705 -1738
-158 block 2696 0 -1749 Air
-158 block 2696 1 -1749 Air
+158 block 2704 1 -1739 Air
+158 block 2704 2 -1739 Air
 240 go 2693 -2047
 245 block 2693 0 -1747 Sandstone
 245 block 2693 1 -1747 Sandstone
 245 block 2693 2 -1747 Sandstone
-245 block 2696 0 -1749 Sandstone
-245 block 2696 1 -1749 Sandstone
+245 block 2704 1 -1739 Sandstone
+245 block 2704 2 -1739 Sandstone
 250 block 2688 4 -1755 Sandstone
 250 block 2688 5 -1755 Sandstone
 250 block 2688 3 -1753 Sandstone
@@ -69,11 +69,11 @@
 250 block 2697 4 -1753 Sandstone
 250 block 2697 5 -1753 Sandstone
 260 go 2696 2 -1754
-320 go 2688 3 -1754
+280 go 2688 3 -1754
 900 fell 2690 1 -1782 2699 1 -1774
 900 fell 2673 3 -1760 2689 3 -1744
-900 dig room 2692 1 -1780 2697 2 -1776
-1380 build floor timber 2692 3 -1780 2697 3 -1776
-1380 build wall stone 2697 0 -1776 2697 0 -1777
-1380 build wall stone 2697 0 -1779 2697 0 -1780
-1520 go 2695 0 -1778
+900 dig out 2692 1 -1780 2697 2 -1776
+980 build floor timber 2692 3 -1780 2697 3 -1776
+980 build wall stone 2697 0 -1776 2697 1 -1777
+980 build wall stone 2697 0 -1779 2697 1 -1780
+1020 go 2695 0 -1778

@@ -36,6 +36,7 @@ Mat :: enum u16 {
 	Red_Sandstone_Broken, Chalk_Broken, Coal_Broken, Breccia_Broken, Dolerite_Broken, Granite_Broken, Slate_Broken, Schist_Broken, Gneiss_Broken, Quartzite_Broken, Hornfels_Broken, Marble_Broken,
 	Mudstone_Gravel, Siltstone_Gravel, Sandstone_Gravel, Grit_Gravel, Limestone_Gravel, Basalt_Gravel, Scoria_Gravel, Rhyolite_Gravel, Tuff_Gravel, Reef_Gravel,
 	Red_Sandstone_Gravel, Chalk_Gravel, Coal_Gravel, Breccia_Gravel, Dolerite_Gravel, Granite_Gravel, Slate_Gravel, Schist_Gravel, Gneiss_Gravel, Quartzite_Gravel, Hornfels_Gravel, Marble_Gravel,
+	Timber,   // sawn timber laid as a block by the dwarves (orders.odin): never a tree's, so nothing fells it, grows on it or hangs leaves from it. What the hold makes comes last, so the land's own figures stand
 }
 
 Material :: struct {
@@ -54,6 +55,7 @@ MATERIALS := [Mat]Material{
 	.Snow      = {{0.780, 0.800, 0.840}, 0, 0, .Air},
 	.Wood      = {{0.105, 0.068, 0.036}, 0, 0, .Air},
 	.Leaves    = {{0.021, 0.074, 0.017}, 0, 0, .Air},   // tabu: dark and glossy
+	.Timber    = {{0.330, 0.215, 0.110}, 0, 0, .Air},   // fresh sawn wood, paler than any bark
 	.Gravel    = {{0.105, 0.097, 0.085}, 0, 0, .Air},
 	.Shii_Bark       = {{0.087, 0.070, 0.055}, 0, 0, .Air},   // dark grey-brown, furrowed
 	.Shii_Leaves     = {{0.074, 0.139, 0.021}, 0, 0, .Air},  // olive with a yellow cast

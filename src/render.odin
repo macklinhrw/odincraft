@@ -28,7 +28,7 @@ SEA_GRID   :: 64     // the sea is drawn as this many quads squared, as in shade
 BOX_MAX    :: 8192   // creatures' boxes drawn a frame at most
 FOV        :: 70.0   // vertical, degrees, in first person
 NO_CUT     :: 1e9    // the cut's level when the world is not cut (above.odin)
-TINTS      :: 16     // boxes of marked ground the terrain tints in one picture
+TINTS      :: 48     // boxes of marked ground the terrain tints in one picture
 NEAR       :: 0.1
 DARK       :: 150    // metres under the sea past which the ground is drawn black, so casts no shadow worth drawing; as in shaders.metal
 
@@ -77,6 +77,7 @@ Gpu :: struct {
 	cascade_eye:    [4][3]f64,            // and the eye it was drawn round
 	waited:         f64,   // seconds the last frame spent waiting for the display
 	unseen:         bool,  // no window is shown: frames are drawn in full and paced as a 120 Hz display would
+	hurry:          bool,  // and not paced at all: a play script is only waiting
 	shown_at:       u64,   // the refresh the last unseen frame was shown at
 	drawing:        ^sdl.GPUFence,   // the unseen frame the GPU may still be drawing
 }
@@ -911,7 +912,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 		now := sdl.GetPerformanceCounter()
 		if g.shown_at == 0 do g.shown_at = now
 		for g.shown_at < now do g.shown_at += refresh
-		for ; now < g.shown_at; now = sdl.GetPerformanceCounter() do sdl.DelayPrecise((g.shown_at - now)*1_000_000_000/sdl.GetPerformanceFrequency())
+		for ; now < g.shown_at && !g.hurry; now = sdl.GetPerformanceCounter() do sdl.DelayPrecise((g.shown_at - now)*1_000_000_000/sdl.GetPerformanceFrequency())
 		g.waited += f64(now - wait_from)/f64(sdl.GetPerformanceFrequency())
 		return
 	}

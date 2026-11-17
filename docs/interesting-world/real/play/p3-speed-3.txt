@@ -1,0 +1,11 @@
+# A small room, three by five and two deep, marked into the rise behind the landing and dug with the
+# clock at its speed 3, timed from the mark to the last block.
+#   build/odincraft --play=docs/interesting-world/real/play/p3-speed-3.txt --dwarves=60
+view over=2695,-1781 span=40 tilt=55 turn=180 cut=off
+key 3
+key D
+drag 1280 420 1420 640
+timer
+until done 900
+view cut=2
+shot out/play/p3-speed-3.png

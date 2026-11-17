@@ -22,8 +22,8 @@ struct Frame {
     float4 mark;        // xyz: the low corner of the marked box of blocks, from the eye; w: 1 when there is one
     float4 mark_size;   // xyz: its size in blocks
     float4 lens;        // xy: the eye from the corner of the island a lens is painted over, z: one over that island's side, w: 1 while a lens is on (play.odin)
-    float4 tint[16];    // boxes of ground marked for the dwarves (bar.odin): xyz the low corner from the eye; w: 0 none, 1 to be dug, 2 the box being dragged, 3 to be taken back, 4 the order in the hand
-    float4 tint_size[16];
+    float4 tint[48];    // boxes of ground marked for the dwarves (bar.odin): xyz the low corner from the eye; w: 0 none, 1 to be dug, 2 the box being dragged, 3 to be taken back, 4 the order in the hand, 5 the ground over what is being dragged and 6 over what is marked
+    float4 tint_size[48];
     float4 live;        // the interface's brass and its cinnabar, lit
     float4 wrong;
 };
@@ -420,9 +420,9 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     if (in.cell < 1.5) {
         col = outlined(col, in.rel, N, f.target, float3(1.0), f.target.w > 1.5 ? float3(2.2, 2.0, 1.2) : float3(0.0), 0.0);
         col = outlined(col, in.rel, N, f.mark, f.mark_size.xyz, float3(1.9, 1.2, 0.25), 0.12);
-        for (int i = 0; i < 16 && f.tint[i].w > 0.5; i++) {
+        for (int i = 0; i < 48 && f.tint[i].w > 0.5; i++) {
             float kind = f.tint[i].w;
-            col = outlined(col, in.rel, N, float4(f.tint[i].xyz, 1.0), f.tint_size[i].xyz, kind > 2.5 && kind < 3.5 ? f.wrong.rgb : f.live.rgb, kind < 1.5 ? 0.09 : 0.22);
+            col = outlined(col, in.rel, N, float4(f.tint[i].xyz, 1.0), f.tint_size[i].xyz, kind > 2.5 && kind < 3.5 ? f.wrong.rgb : f.live.rgb, kind < 1.5 ? 0.09 : kind > 5.5 ? 0.035 : kind > 4.5 ? 0.13 : 0.22);
         }
     }
 
@@ -513,7 +513,7 @@ struct BoxIn {
     float4 c [[attribute(0)]];   // middle, colour of its top face as 0xRRGGBB
     float4 x [[attribute(1)]];   // half axes; colour of its other faces
     float4 y [[attribute(2)]];   //            water over it, metres
-    float4 z [[attribute(3)]];
+    float4 z [[attribute(3)]];   //            where the body it is of stands, from the eye's height, or 0 for a box cut where the cut falls
 };
 
 struct BoxV {
@@ -536,7 +536,9 @@ vertex BoxV vs_box(BoxIn b [[stage_in]], uint vid [[vertex_id]], constant Frame 
     BoxV o;
     o.rel = b.c.xyz + b.x.xyz * s.x + b.y.xyz * s.y + b.z.xyz * s.z;
     o.position = drawn(o.rel, f);
-    o.clip = f.cut.x - o.rel.y;
+    // A body is drawn whole or not at all (ADR 0007): where the box says how high its feet stand, the
+    // cut asks that, so one standing under the level keeps its head and one standing over it is gone.
+    o.clip = b.z.w != 0.0 ? f.cut.x - b.z.w - 0.01 : f.cut.x - o.rel.y;
     o.local = s;
     o.upper = unpack_rgb(b.c.w);
     o.under = unpack_rgb(b.x.w);

@@ -43,9 +43,9 @@ import "core:time"
 TICK      :: 0.1     // seconds of the dwarves' world in a tick
 TICK_MS   :: 100
 LANDING   :: 7       // who come in the first boat. The hold grows: nothing below counts on seven
-ROWING    :: 1.4     // metres a second the boat comes in
-STEP_OUT  :: 15      // ticks between one dwarf stepping ashore and the next
-IN_FILE   :: 8       // ticks between one dwarf setting out and the next, so a party walks in file and looks for its ways one at a time
+ROWING    :: 3.0     // metres a second the boat comes in
+STEP_OUT  :: 6       // ticks between one dwarf stepping ashore and the next
+IN_FILE   :: 3       // ticks between one dwarf setting out and the next, so a party walks in file and looks for its ways one at a time
 ASKING    :: 64      // patches the hold may make to answer one order, before any way is looked for
 AIM_REACH :: 160.0   // metres off a block can be aimed at in first person to send the party to it, or a dwarf asked
 PATIENCE  :: 8       // ticks a walker waits behind one that stands in a file or waits its turn, before it goes round or squeezes past
@@ -156,6 +156,7 @@ Hold :: struct {
 	marks_v, shown_v: int,    // counts every change to the marks, and the count shown
 	at:       Maybe([3]f64),  // where the next thing said happened
 	aside:    bool,           // and it is for the log alone, not the screen's messages
+	short:    string,         // or it is said on the screen in these few words, the log's sentence behind them
 	errand:   int,            // orders to go obeyed so far; none while the party gathers above the landing
 	place:    string,         // where the errand leads, in words
 	summed:   bool,           // its end has been said
@@ -264,7 +265,7 @@ order_read :: proc(h: ^Hold, line: string) -> bool {
 			ok = len(rest) == named + 6
 			if ok && named > 0 {
 				ok = false
-				for name, shape in PLANS do if name == rest[0] && (o.kind == .Build) == (shape != .Room) || o.kind == .Dig && shape == .Stair && name == rest[0] do o.shape, ok = shape, true
+				for name, shape in PLANS do if name == rest[0] && (o.kind == .Dig) == (shape <= .Up) do o.shape, ok = shape, true
 			}
 			if ok && named > 1 {
 				ok = false
@@ -313,9 +314,9 @@ say :: proc(h: ^Hold, format: string, args: ..any) {
 	if !h.quiet && !h.aside {   // and to the screen's messages (play.odin), with where it happened and to whom
 		at, who := about(h, line)
 		if place, ok := h.at.?; ok do at = place   // where the orders say it happened (orders.odin)
-		tell_log(line, at, who)
+		tell_log(line, at, who, h.short)
 	}
-	h.at, h.aside = nil, false
+	h.at, h.aside, h.short = nil, false, ""
 }
 
 feet_on :: proc(b: [3]i32) -> [3]f64 { return {f64(b.x) + 0.5, f64(b.y), f64(b.z) + 0.5} }
@@ -412,7 +413,7 @@ hold_tick :: proc(h: ^Hold) {
 			}
 			if free {
 				d.from = feet_of(h, i)
-				d.doing, d.takes, d.into = .Ashore, 1500, 0
+				d.doing, d.takes, d.into = .Ashore, 600, 0
 				take(h, i, to)
 			}
 		}
@@ -434,6 +435,7 @@ hold_tick :: proc(h: ^Hold) {
 			}
 			if d.doing == .Ashore {
 				h.at = feet_on(d.cell)
+				h.short = fmt.tprintf("%s %s, %s, steps ashore.", h.party[i].given, h.party[i].byname, TRADES[h.party[i].trade].name)
 				say(h, "%s, steps ashore.", dwarf_name(h.party[i]))
 				d.doing, d.seek, d.wait, d.errand = .Walking, true, 0, true
 			}
@@ -509,6 +511,17 @@ held_off :: proc(h: ^Hold, i, o: int) -> Stepped {
 			h.work.round += 1
 			return .Stepped
 		}
+	}
+	// One at work keeps its place: the walker goes by it to the floor beyond, taking longer, as two
+	// who squeeze do, and the worker is not set back a floor (colony-sim-reference.md, takeaway 15).
+	if b.doing == .Working && !last {
+		beyond := d.path[d.next + 1]
+		if beyond in h.held do return .Held
+		step_to(h, i, beyond, SQUEEZE)
+		d.next += 2
+		d.pass = true
+		h.work.squeezed += 1
+		return .Stepped
 	}
 	// They squeeze past: each takes the other's floor.
 	x, y := d.cell, b.cell
@@ -623,7 +636,10 @@ arrive :: proc(h: ^Hold, i: int) {
 	d.doing = .Waiting
 	if !d.errand do return   // it only stepped aside
 	d.errand, d.rest = false, REST
-	if h.errand > 0 do say(h, "%s %s is there.", h.party[i].given, h.party[i].byname)
+	if h.errand > 0 {
+		h.aside = true   // the errand's end says it of all: one line, not one a dwarf
+		say(h, "%s %s is there.", h.party[i].given, h.party[i].byname)
+	}
 	errand_sum(h)
 }
 
@@ -637,10 +653,19 @@ errand_sum :: proc(h: ^Hold) {
 	all := len(h.dwarves)
 	if h.summed || there + stopped < all do return
 	h.summed = true
-	if stopped == all do say(h, "None of the %s found a way to %s.", count_words(all), h.place)
-	else if stopped > 0 do say(h, "%d of the %s stand at %s; %d found no way.", there, count_words(all), h.place, stopped)
-	else if h.errand == 0 do say(h, "The %s stand on the %s, and wait for word.", count_words(all), h.place)
-	else do say(h, "All %s stand at %s.", count_words(all), h.place)
+	if stopped == all {
+		h.short = "None of the party found a way there."
+		say(h, "None of the %s found a way to %s.", count_words(all), h.place)
+	} else if stopped > 0 {
+		h.short = fmt.tprintf("%d are there; %d found no way.", there, stopped)
+		say(h, "%d of the %s stand at %s; %d found no way.", there, count_words(all), h.place, stopped)
+	} else if h.errand == 0 {
+		h.short = fmt.tprintf("The %s are ashore, and wait for word.", count_words(all))
+		say(h, "The %s stand on the %s, and wait for word.", count_words(all), h.place)
+	} else {
+		h.short = fmt.tprintf("All %s are there.", count_words(all))
+		say(h, "All %s stand at %s.", count_words(all), h.place)
+	}
 }
 
 // A way between two floors, timed and counted.
@@ -686,6 +711,7 @@ find :: proc(h: ^Hold, i: int) {
 	if why != .Way {
 		clear(&d.path)
 		d.doing, d.said = .Stopped, no_way(h, why)
+		h.short = fmt.tprintf("%s %s stops: no way there.", h.party[i].given, h.party[i].byname)
 		say(h, "%s %s stops: %s.", h.party[i].given, h.party[i].byname, d.said)
 		errand_sum(h)
 	}
@@ -746,6 +772,7 @@ obey :: proc(h: ^Hold, o: Order) {
 			append(&shut, room)
 		}
 		if refused != .Way {
+			h.short = "No way leads there: no one sets out."
 			say(h, `The hold says "go %d %d %d": %s, so no one sets out.`, at.x, at.y, at.z, no_way(h, refused))
 			h.place = was
 			return
@@ -753,6 +780,7 @@ obey :: proc(h: ^Hold, o: Order) {
 		h.errand += 1
 		h.summed = false
 		spots_take(h, to)
+		h.short = "The party is sent."
 		say(h, `The hold says "go %d %d %d": the party is sent to %s.`, at.x, at.y, at.z, h.place)
 		turn := 0
 		for &d, i in h.dwarves do if ashore(d) {   // each looks for its own way when its turn in the file comes
@@ -885,7 +913,7 @@ watch := Watch{selected = -1}
 
 // Whether a run was asked only to run the dwarves' world with no window, print what happened and exit.
 hold_alone :: proc(opt: ^Options) -> bool {
-	return opt.dwarves > 0 && opt.shot == "" && opt.bench == 0 && !opt.show && !opt.has_why && !opt.survey && opt.map_path == ""
+	return opt.dwarves > 0 && opt.shot == "" && opt.play == "" && opt.bench == 0 && !opt.show && !opt.has_why && !opt.survey && opt.map_path == ""
 }
 
 // Send the party to stand on a block. The one call an order from a cursor needs.

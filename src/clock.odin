@@ -13,9 +13,11 @@ Clock :: struct {
 	paused:  bool,
 }
 
-// The water steps thirty times a second of the world's time and no more than twice a frame
-// (water_update), so four times is as fast as it can follow at sixty frames a second.
-SPEEDS :: [3]f64{1, 2, 4}
+// The three speeds are RimWorld's (TickManager.TickRateMultiplier: 1, 3 and 6 times). The water
+// steps thirty times a second of the world's time and no more than twice a frame (water_update),
+// so at sixty frames a second it follows up to four times and at six runs a third behind: a pool
+// fills a little slower than the dwarves dig.
+SPEEDS :: [3]f64{1, 3, 6}
 
 // Let `dt` seconds of real time pass: the world's time that passed with them.
 clock_step :: proc(c: ^Clock, dt: f64) -> (passed: f64) {

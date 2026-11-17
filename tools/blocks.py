@@ -134,6 +134,26 @@ def picture(name, colour):
     return out
 
 
+def planks(colour):
+    """Sawn timber, drawn here and from no one's tile: four boards across, a dark joint under each,
+    their ends butted at a different place on each board, and a faint grain along them."""
+    grey = sum(colour) / 3
+    target = [min(max((grey + (colour[k] - grey) * RICH) * LIFT, 0), 255) for k in range(3)]
+    out = Image.new("RGBA", (T, T))
+    for y in range(T):
+        board = y // 4
+        for x in range(T):
+            shade = 1 + 0.07 * ((board * 5) % 3 - 1) + 0.035 * (((x * 7 + board * 13 + (x // 5) * 3) % 5) - 2) / 2
+            if y % 4 == 3:
+                shade *= 0.62                      # the joint between two boards
+            elif (x + board * 6) % T == 0:
+                shade *= 0.70                      # where two boards butt
+            elif y % 4 == 0:
+                shade *= 1.06                      # the lit edge of a board
+            out.putpixel((x, y), tuple(max(0, min(255, round(v * shade))) for v in target) + (255,))
+    return out
+
+
 def form(name, row, names):
     """A rock's other forms (src/gen.odin, Mat): its scree is broken rock, slabs for a bedded rock
     and lumps for the others, each turned a quarter more than the one before; the rock broken in
@@ -155,6 +175,10 @@ def main():
     atlas = Image.new("RGBA", (2 * T, len(names) * T), (255, 0, 255, 255))
     for row, name in enumerate(names):
         if name == "Air":
+            continue
+        if name == "Timber":
+            atlas.paste(planks(colours[name]), (0, row * T))
+            atlas.paste(planks(colours[name]), (T, row * T))
             continue
         top, side, turns, keep = TILES.get(name) or form(name, row, names)
         if name not in TILES and not name.endswith(("_Scree", "_Broken", "_Gravel")):

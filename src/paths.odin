@@ -25,8 +25,10 @@ import "core:math/linalg"
 
 WADE   :: 0.5    // metres of water a dwarf wades; deeper turns it back (it stands 1.4 m)
 FLOORS :: 6      // floors kept in one column at most, from the lowest up
-DWARF  :: 1.25   // how many times longer than a person a dwarf takes over the same ground (a guess: its stride is shorter)
-CLIMB  :: 0.6    // the steepest grade counted against a step: a stair of blocks is climbed faster than a bare slope as steep (a guess)
+DWARF  :: 0.42   // how many times a walker's 0.6 s a metre (trails.odin) a dwarf takes on flat open ground: 0.25 s, four metres a second, which is RimWorld's 4.6 cells a second on soil (13 ticks a cell and 2 for the soil, of 60)
+CLIMB  :: 0.2    // the steepest grade counted against a step: twice as long as the flat, on a stair of blocks as on a hillside
+THICK  :: 2.1    // how many times slower the wettest, thickest ground is at most: RimWorld's mud (path cost 14 on a cell of 13 ticks)
+WADING :: 4.6    // how much slower a metre of water over a floor makes it: 3.3 times at half a metre, RimWorld's shallow water (path cost 30)
 BUILDS :: 400    // patches one search may make before it gives up
 FOLLOW :: 24     // rooms the goal's ground is followed through to learn whether it is closed off
 ROUND  :: 3.0    // seconds a way is longer for each floor a dwarf stands on: it goes round one where that is quicker, and squeezes past where it is not
@@ -436,8 +438,10 @@ walk_spots :: proc(w: ^Walk, f: i32, out: [][3]i32) -> (n: int) {
 // Seconds a dwarf takes over a step between two floors side by side: the walking cost the trails
 // are laid by (Tobler's, trails.odin) at the grade of the floors along the step, slower by the
 // wetness of the land's cell each floor lies in and, where plants cover the floor, by that cell's
-// plants, or quicker there on a worn trail; and through water, the time to wade it, much slower the
-// deeper, as a stream is costed there. It is the mean of the two floors' paces.
+// plants, or quicker there on a worn trail; and through water, slower the deeper. The land still
+// says which way is quicker, but a dwarf is brisk on all of it, as the walkers of the games this
+// is measured by are (interesting-world/notes/colony-sim-reference.md, section 5): the grade, the
+// plants and the water each slow it by a few times at most. It is the mean of the two floors' paces.
 step_seconds :: proc(w: ^Walk, fa, fb: i32) -> f32 {
 	a, b := floor_block(w, fa), floor_block(w, fb)
 	dir := [2]f32{f32(b.x - a.x), f32(b.z - a.z)}
@@ -450,8 +454,8 @@ floor_pace :: proc(w: ^Walk, f: i32, dir := [2]f32{0.64, 0.64}) -> f32 {
 	at, b, o := w.floors[f], floor_block(w, f), region.origin
 	c := land_cell(f64(b.x - o.x) + 0.5, f64(b.z - o.y) + 0.5)
 	s := walking(min((abs(f32(at.fall.x)*dir.x) + abs(f32(at.fall.y)*dir.y))/32, CLIMB), 0) if dir != {0.64, 0.64} else walking(min(0.64*math.hypot(f32(at.fall.x), f32(at.fall.y))/32, CLIMB), 0)
-	s *= w.going[c].wet*(1 if !at.grown || land.community[c] == 255 else 0.7 if trails.worn[c] > 0 else w.going[c].plants)
-	return DWARF*(s + 100*(f32(at.wet)/10)*(f32(at.wet)/10))
+	s *= min(w.going[c].wet*(1 if !at.grown || land.community[c] == 255 else 0.7 if trails.worn[c] > 0 else w.going[c].plants), THICK)
+	return DWARF*s*(1 + WADING*f32(at.wet)/10)
 }
 QUICKEST :: DWARF*0.6*0.7   // seconds a metre on the best going there is: flat, dry, on a worn trail
 TYPICAL  :: DWARF*2.0       // and on ground as the room search guesses it ahead: it leans toward the goal, and need not find the very best rooms (a guess)
