@@ -441,6 +441,12 @@ islands_upload :: proc(g: ^Gpu) {
 		sdl.ReleaseGPUTransferBuffer(g.dev, staging)
 		return
 	}
+	for &f in formed do if f.lifted != nil && !is_formed(&f) {   // a landmass's piece let go (masses_keep)
+		if f.ribbon != nil do sdl.ReleaseGPUBuffer(g.dev, f.ribbon)
+		if f.falls != nil do sdl.ReleaseGPUBuffer(g.dev, f.falls)
+		sdl.ReleaseGPUTexture(g.dev, f.lifted)
+		f.ribbon, f.falls, f.lifted, f.ribbon_count, f.falls_count = nil, nil, nil, 0, 0
+	}
 	for &f in formed do if f.lifted == nil && is_formed(&f) {
 		r, n := &f.rivers, u32(f.land.n)
 		f.ribbon, f.ribbon_count = upload(g, raw_data(r.ribbon), len(r.ribbon)*size_of([4]f32)), u32(len(r.ribbon))

@@ -166,27 +166,30 @@ route :: proc(g: ^Grid) #no_bounds_check {
 	// Every cell flooded is land, and each finds its own way down, whatever the order.
 	shared(n, rows(n), g, proc(g: ^Grid, lo, hi: int) {
 		n := g.n
-		#no_bounds_check for y in lo..<hi do for x in 0..<n {
-			c := y*n + x
-			if g.sea[c] do continue
-			best := g.next[c]
-			steepest := g.fill[c]/g.d if best < 0 else (g.fill[c] - g.fill[best])/span(g, c, int(best))
-			for o in OFFSETS {
-				if x + o.x < 0 || y + o.y < 0 || x + o.x >= n || y + o.y >= n do continue
-				nb := c + o.y*n + o.x
-				sea := g.sea[nb]
-				s := (g.fill[c] - (0 if sea else g.fill[nb]))/step(g, c, o)
-				if s > steepest do steepest, best = s, (-1 if sea else i32(nb))
-			}
-			g.next[c] = best
-			g.area[c] = g.d*g.d*(wear(g, c, g.z[c] - 0.5).runs if rocks.sinks else 1)   // what sinks into the rock runs on under the ground, and cuts nothing
-		}
+		#no_bounds_check for y in lo..<hi do for x in 0..<n do if c := y*n + x; !g.sea[c] do drain_cell(g, c, x, y)
 	})
 	for c in sinks do if g.next[c] < 0 do g.next[c] = SINK
 	if g.holding != nil do held_route(g)
 	#reverse for c in g.order {
 		if r := g.next[c]; r >= 0 do g.area[r] += g.area[c]
 	}
+}
+
+// Where a land cell's water goes: to the cell the flood reached it from, or to a neighbour the filled
+// surface falls to more steeply, the sea among them; and the land it drains of its own.
+drain_cell :: #force_inline proc(g: ^Grid, c, x, y: int) #no_bounds_check {
+	n := g.n
+	best := g.next[c]
+	steepest := g.fill[c]/g.d if best < 0 else (g.fill[c] - g.fill[best])/span(g, c, int(best))
+	for o in OFFSETS {
+		if x + o.x < 0 || y + o.y < 0 || x + o.x >= n || y + o.y >= n do continue
+		nb := c + o.y*n + o.x
+		sea := g.sea[nb]
+		s := (g.fill[c] - (0 if sea else g.fill[nb]))/step(g, c, o)
+		if s > steepest do steepest, best = s, (-1 if sea else i32(nb))
+	}
+	g.next[c] = best
+	g.area[c] = g.d*g.d*(wear(g, c, g.z[c] - 0.5).runs if rocks.sinks else 1)   // what sinks into the rock runs on under the ground, and cuts nothing
 }
 
 // How the rock at height z in a cell wears. The rock is read where it will stand in the
@@ -205,30 +208,44 @@ wear :: #force_inline proc(g: ^Grid, c: int, z: f32) -> Rock_Law {
 erode :: proc(g: ^Grid, dt: f32) #no_bounds_check {
 	for ci in g.order {
 		c := int(ci)
-		below, run: f32 = 0, g.d
 		if g.holding != nil && g.holding.held[c] {   // as the piece it was held to left it
 			g.z[c], g.load[c] = g.holding.vals[g.holding.index[c]].z1, 0
 			continue
 		}
-		if g.next[c] == SINK || (g.keep && g.fill[c] > g.z[c] + 0.01) {   // nothing runs on from a sink to cut it, and a lake's floor is still
-			g.z[c] += g.uplift[c]*g.lift*dt
-			g.load[c] = 0
-			continue
-		}
-		if r := g.next[c]; r >= 0 {
-			below, run = g.z[r], span(g, c, int(r))
-			if g.face[r] != 1 do g.face[c] = 1 + (g.face[r] - 1)*math.exp(-run/100)   // a cliff the sea undercuts eases over 100 m inland
-			else do g.face[c] = 1   // as that gives where it has eased to nothing, without the exp
-		}
-		law := wear(g, c, g.z[c])
-		f := ERODE*g.soft[c]*law.erodes*math.sqrt(g.area[c])*dt/run
-		z := (g.fill[c] + g.uplift[c]*g.lift*dt + f*below)/(1 + f)
-		was := g.z[c] + g.uplift[c]*g.lift*dt
-		g.z[c] = clamp(z, below + 0.001*run, below + law.limit*run*g.face[c])
-		g.load[c] = max(was - g.z[c], 0)*g.d*g.d
+		erode_cell(g, c, dt)
 	}
 	if g.holding != nil do held_load(g, dt)
 	#reverse for c in g.order do if r := g.next[c]; r >= 0 do g.load[r] += g.load[c]
+}
+
+// One land cell's step of uplift and cutting, once the cell it drains to has had its own.
+erode_cell :: #force_inline proc(g: ^Grid, c: int, dt: f32) #no_bounds_check {
+	below, run: f32 = 0, g.d
+	if g.next[c] == SINK || (g.keep && g.fill[c] > g.z[c] + 0.01) {   // nothing runs on from a sink to cut it, and a lake's floor is still
+		g.z[c] += g.uplift[c]*g.lift*dt
+		g.load[c] = 0
+		return
+	}
+	if r := g.next[c]; r >= 0 {
+		below, run = g.z[r], span(g, c, int(r))
+		if g.face[r] != 1 do g.face[c] = 1 + (g.face[r] - 1)*math.exp(-run/100)   // a cliff the sea undercuts eases over 100 m inland
+		else do g.face[c] = 1   // as that gives where it has eased to nothing, without the exp
+	}
+	law := wear(g, c, g.z[c])
+	f := ERODE*g.soft[c]*law.erodes*math.sqrt(g.area[c])*dt/run
+	z := (g.fill[c] + g.uplift[c]*g.lift*dt + f*below)/(1 + f)
+	was := g.z[c] + g.uplift[c]*g.lift*dt
+	g.z[c] = clamp(z, below + 0.001*run, below + law.limit*run*g.face[c])
+	g.load[c] = max(was - g.z[c], 0)*g.d*g.d
+}
+
+// One land cell's creep, from the ground as it stood.
+creep_cell :: #force_inline proc(g: ^Grid, old: []f32, c: int, k: f32) #no_bounds_check {
+	n := g.n
+	// A mantle of ash creeps wherever it can lie, which is not on a face.
+	rate := wear(g, c, old[c]).creep
+	if m := region.story.mantle; m > rate do rate = math.lerp(m, rate, smoothstep(0.7, 1.2, math.hypot(old[c + 1] - old[c - 1], old[c + n] - old[c - n])/(2*g.d)))
+	g.z[c] = max(old[c] + k*rate*(old[c - 1] + old[c + 1] + old[c - n] + old[c + n] - 4*old[c]), 0.02)
 }
 
 creep :: proc(g: ^Grid, dt: f32) {
@@ -236,18 +253,16 @@ creep :: proc(g: ^Grid, dt: f32) {
 	rounds := int(math.ceil(CREEP*dt/(0.2*g.d*g.d)))
 	cr := Creep{g, CREEP*dt/(f32(rounds)*g.d*g.d)}
 	for _ in 0..<rounds {
-		// g.fill holds the ground as it stood: free to use, since route rebuilds it.
-		shared(g.n, rows(g.n), g, proc(g: ^Grid, lo, hi: int) { for c in lo*g.n..<hi*g.n do g.fill[c] = max(g.z[c], 0) })
+		// g.fill holds the ground as it stood: free to use, since route rebuilds it. (A landmass's coarse
+		// stage keeps the filled surface for the order its shore is cut in, and has room of its own.)
+		shared(g.n, rows(g.n), g, proc(g: ^Grid, lo, hi: int) { old := g.old if g.old != nil else g.fill; for c in lo*g.n..<hi*g.n do old[c] = max(g.z[c], 0) })
 		shared(g.n, rows(g.n), &cr, proc(cr: ^Creep, lo, hi: int) {
-			g, n, old := cr.g, cr.g.n, cr.g.fill
+			g, n, old := cr.g, cr.g.n, cr.g.old if cr.g.old != nil else cr.g.fill
 			for y in max(lo, 1)..<min(hi, n - 1) {
 				for x in 1..<n - 1 {
 					c := y*n + x
 					if g.sea[c] || g.holding != nil && g.holding.held[c] do continue
-					// A mantle of ash creeps wherever it can lie, which is not on a face.
-					rate := wear(g, c, old[c]).creep
-					if m := region.story.mantle; m > rate do rate = math.lerp(m, rate, smoothstep(0.7, 1.2, math.hypot(old[c + 1] - old[c - 1], old[c + n] - old[c - n])/(2*g.d)))
-					g.z[c] = max(old[c] + cr.k*rate*(old[c - 1] + old[c + 1] + old[c - n] + old[c + n] - 4*old[c]), 0.02)
+					creep_cell(g, old, c, cr.k)
 				}
 			}
 		})

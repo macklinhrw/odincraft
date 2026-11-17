@@ -823,7 +823,7 @@ place_build :: proc() {
 	date := date_words(u.date)
 	at := u.p.pos if u.afoot^ else u.a.at
 	if f := island_near(at.x, at.z); f != nil && off_island(f, at.x, at.z) <= 1500 {   // the island it is on, by its name (making.odin), before the day
-		if name := isle_name(f.island.id) if f.island.id < len(archipelago) else "The mainland"; name != "" do date = fmt.tprintf("%s, %s", name, date)
+		if name := isle_name(f.island.id) if f.island.id < len(archipelago) else land_name(land_index(f.mass)); name != "" do date = fmt.tprintf("%s, %s", name, date)
 	}
 	hour := fmt.tprintf("%02d:%02d", int(u.date.hour), int(u.date.hour*60)%60)   // the hour the dwarves live by, whatever the sun was turned to
 	first := button_wide("Running at 00:00", key_for(.Pause))

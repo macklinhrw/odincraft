@@ -32,7 +32,9 @@ Formed :: struct {
 	places:     [dynamic]Place,
 	survey:     Survey,
 	seconds:    f64,    // how long it took to form
-	ready:      bool,   // formed: set once, by the thread that formed it, and read atomically (is_formed)
+	ready:      bool,   // formed: set by the thread that formed it, and read atomically (is_formed)
+	mass:       ^Landmass,   // a piece of a landmass: the landmass (continents.odin); nil on an island
+	drawn:      bool,   // a piece: the frame has seen it formed, and built again what was drawn of it from far off
 	// Put on the GPU by the frame thread once formed (islands_upload, render.odin).
 	ribbon, falls:             ^sdl.GPUBuffer,   // its rivers' water surface, and its falling water
 	ribbon_count, falls_count: u32,
@@ -79,7 +81,7 @@ island_at :: proc(x, z: f64) -> ^Formed {
 		o, h := [2]f64{f64(f.island.origin.x), f64(f.island.origin.y)}, f.island.size/2
 		if x >= o.x - h && x < o.x + h && z >= o.y - h && z < o.y + h do return &f
 	}
-	if p := mainland_piece(x, z); p >= 0 do return &formed[mainland_state.first + p]
+	if m, p := mass_piece(x, z); m != nil do return &formed[m.first + p]
 	return nil
 }
 
@@ -109,6 +111,10 @@ island_near :: proc(x, z: f64) -> (near: ^Formed) {
 // holds it, or the open sea's floor where none does or it is not yet formed.
 height_in_world :: proc(x, z, cell: f64) -> f32 {
 	f := island_at(x, z)
+	if f != nil && !is_formed(f) && f.mass != nil {
+		h, _, _ := far_ground(f.mass, x, z)
+		return max(h, SEA_BED)
+	}
 	if f == nil || !is_formed(f) do return SEA_BED
 	bound(f)
 	return height_at(x - f64(region.origin.x), z - f64(region.origin.y), cell)

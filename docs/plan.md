@@ -58,7 +58,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 
 | # | Step | State | Play needs it for |
 |---|---|---|---|
-| N1 | Continents as land, with no seam, inside the 10 minutes (old step 21) | First part built: a landmass's coarse stage whole, ordered pieces round the start or a site, where the landmass is small enough today (`foundations.md`, "Step 21, as built"). Next: the coarse stage fast enough for the largest, pieces kept on disk | Rivers of real size; peoples' homelands seen on foot |
+| N1 | Continents as land, with no seam, inside the 10 minutes (old step 21) | Built, both parts (`foundations.md`, "Step 21, as built" and "Step 21, second part, as built"): every landmass's coarse stage in parallel and kept (the whole world's in 2.6 to 6.4 min by seed and load), pieces kept on disk and formed round the player, land not yet formed drawn from the coarse stage, no seam by the measures on seeds 1 and 7. Left: the coast against a real ria coast; capped ridges in the 64 m stage; memory while forming | Rivers of real size; peoples' homelands seen on foot |
 | N2 | Climate per island (old 25): temperature by season, rain on the wind, six zones | Built | Farming; the storm |
 | N3 | Ground and water by kind (old 27). River mouths, bay-head flats and reed marsh are built. Caves are left: a lava tube on a cone island, a solution cave in limestone | Half built | Harbours; lairs |
 | N4 | **The underground.** Deposits placed by the rock's story (ore where a dike or pluton baked the beds, clay, coal, salt); water under the ground and where it comes out; caves that connect; heat under a volcano | New, next | Digging with a purpose; story 2 |
@@ -910,7 +910,7 @@ The scripts and their 46 pictures are in `interesting-world/real/play/`: `i2-doo
 - **A click on an island, on its name or on its row takes it in the hand and goes to it** (`i2-24`): it fills the picture between the panels, and its named places are written on it.
 - **Its card is rows**, in six depths: Land, Water, Rock, Climate, Life, Places (`i2-25` to `i2-29`). The why of a row is said beside the pointer (`i2-30`) and under the row when it is clicked (`i2-31`). The depth that is open stays open from island to island.
 - **"Land the party here"** (Enter) lands the seven on the island in the hand, and **"Walk it"** (W) stands the player there with no party (`i2-38`, `i2-40`). Over them a line says what to look at twice. Escape's menu in play leads back to the world or the front door.
-- **The mainland** is the list's last row and a name on the map. It says how it stands: known and not formed, with why (`i2-34`: seed 7's is 317,108 km², too large yet); being formed, with how far (`i2-53`); or formed on 64 m cells, drawn with its ranges and rivers.
+- **The mainland** is the list's last row and a name on the map. It says how it stands: known and not formed, with why (`i2-34`: seed 7's is 175 km from the start, beyond the 80 km a world's large lands are formed within when it is made); being formed, with how far (`i2-53`); or formed on 64 m cells, drawn with its ranges and rivers.
 - **Lenses** (L) open under the list (`i2-35`, `i2-36`).
 - **A new world** shows its islands by name as soon as its records are made, while the mainland's stage runs, and that stage can be left (`i2-53` to `i2-56`).
 

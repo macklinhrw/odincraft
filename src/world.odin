@@ -233,7 +233,22 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 	}
 	islands := 0
 	for &f in formed do islands += int(is_formed(&f))
-	if islands != w.islands do moved = true
+	if islands != w.islands {
+		moved = true
+		// A landmass's piece formed since: what was drawn of it from far off, from its coarse stage, is
+		// built again from its land.
+		for &f in formed[islands_count():] do if !f.drawn && is_formed(&f) {
+			f.drawn = true
+			o, h := [2]f64{f64(f.island.origin.x), f64(f.island.origin.y)}, f.island.size/2
+			for key, c in w.chunks do if key.level >= FAR_LEVEL && !c.dirty {
+				size := f64(i32(CHUNK) << u32(key.level))
+				if f64(key.x)*size < o.x + h && f64(key.x + 1)*size > o.x - h && f64(key.z)*size < o.y + h && f64(key.z + 1)*size > o.y - h {
+					c.dirty = true
+					append(&w.dirty, key)
+				}
+			}
+		}
+	}
 	w.islands = islands
 
 	if moved {
@@ -387,10 +402,12 @@ waits :: proc(key: Key) -> bool {
 		if !is_formed(&f) && lo.x < o.x + h && hi.x > o.x - h && lo.y < o.y + h && hi.y > o.y - h do return true
 	}
 	// Over the landmass, a piece not yet formed under any of the chunk's columns, read at most every 64 m.
-	if mainland_state.pass != nil {
+	// Over a landmass, a piece not yet formed under any of the chunk's columns, read at most every 64 m:
+	// near the ground it is waited for; from far off its land is drawn as the coarse stage has it.
+	if len(lands) > 0 && s/CHUNK < FAR_CELL {
 		step := max(s/CHUNK, 64)
 		for z := lo.y; z <= hi.y; z += step do for x := lo.x; x <= hi.x; x += step {
-			if p := mainland_piece(x, z); p >= 0 && !is_formed(&formed[mainland_state.first + p]) do return true
+			if m, p := mass_piece(x, z); m != nil && !is_formed(&formed[m.first + p]) do return true
 		}
 	}
 	return false

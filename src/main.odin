@@ -90,6 +90,7 @@ main :: proc() {
 		return
 	}
 	quiet_init()
+	mass_reach = opt.reach*1000
 	if door_first(&opt) {   // nothing names where to go: the front door, which makes the world while it is looked at (door.odin)
 		door_run(&opt, nil, nil, .Door)
 		return
@@ -141,12 +142,22 @@ main :: proc() {
 	arrivals_make()
 	names_make()
 	if opt.origin == {} && opt.kind == "" do world_note()   // what is known of it, kept for the list of worlds (making.odin)
-	// The land larger than a region nearest the start (continents.odin): its coarse stage before the
-	// islands' records are made into regions, since its pieces are regions beside theirs. The tools that
-	// act on one island and exit leave it a record.
-	offline := opt.survey || opt.map_path != "" || opt.has_why || opt.archipelago != ""
-	mainland_make()
-	if mainland_state.formable && !offline && opt.continent do mainland_pass()
+	// The land larger than a region (continents.odin): each land mass's coarse stage before the islands'
+	// records are made into regions, since its pieces are regions beside theirs. One that is kept is
+	// read back; one that is not is formed if it lies within what is drawn from the start, a site or the
+	// view asked for, or if the whole world's is asked for (--continent=1). The tools that act on one
+	// island and exit leave them records.
+	offline := opt.survey || opt.map_path != "" || opt.has_why || opt.archipelago != "" || hold_alone(&opt)
+	lands_make()
+	first_at := archipelago[opt.island].origin
+	around := [2]f64{opt.site.x, opt.site.y} if opt.has_site else [2]f64{f64(first_at.x), f64(first_at.y)}
+	if !offline {
+		views := make([dynamic][2]f64, context.temp_allocator)
+		append(&views, around)
+		if opt.has_pos do append(&views, opt.pos.xz)
+		if opt.has_over do append(&views, opt.over)
+		lands_pass(views[:], opt.continent == 1, opt.continent == 0)
+	}
 	pieces := regions_make()
 	home = &formed[opt.island]
 	if opt.archipelago != "" {
@@ -195,22 +206,27 @@ main :: proc() {
 		return
 	}
 	forming_wait(others[:soon])
-	// The landmass's pieces within `near` km of the start, or of the site asked for, formed before
-	// entering, each after the pieces it waits on; the rest nearest first on a thread of low priority
-	// once play has begun.
-	around := [2]f64{opt.site.x, opt.site.y} if opt.has_site else [2]f64{f64(home.island.origin.x), f64(home.island.origin.y)}
+	// The land masses' pieces within `near` km of the start, or of the site asked for, formed before
+	// entering, each after the pieces it waits on; from then on those within reach of the view, on a
+	// thread of low priority (masses_keep).
 	if pieces > 0 {
 		started := time.now()
-		before := 0
-		for p in slice.clone(mainland_order(around)) do if mainland_off(p, around) <= min(opt.near*1000, NEAR_REACH) {   // its own memory: forming frees the temporary as it goes
-			quiet = true
-			mainland_form(p)
-			quiet = false
-			before += 1
+		before := masses_form(around, min(opt.near*1000, NEAR_REACH))
+		fmt.printfln("land larger than a region: %d pieces within %.0f km of %s formed before entering, in %.1f s", before, min(opt.near, NEAR_REACH/1000), "the site" if opt.has_site else "the start", time.duration_seconds(time.since(started)))
+	}
+	if opt.seam > 0 {
+		mass_seam(around, opt.seam*1000)
+		if opt.landmap == "" do return
+	}
+	if opt.landmap != "" {
+		if len(lands) == 0 || !lands[0].ready do fmt.eprintln("no land larger than a region is at hand to map")
+		else if opt.has_site do mass_map(opt.landmap, around, (opt.mapspan if opt.mapspan > 0 else 64)*1000, opt.cuts)
+		else {
+			m := &lands[0]
+			for &l in lands do if l.ready && l.area > m.area do m = &l
+			mass_map(opt.landmap, {f64(m.origin.x), f64(m.origin.y)}, opt.mapspan*1000 if opt.mapspan > 0 else m.side, opt.cuts)
 		}
-		formed_now := 0
-		for &f in formed[mainland_state.first:] do formed_now += int(is_formed(&f))
-		fmt.printfln("the landmass: %d of its %d pieces formed before entering, %d of them within %.0f km of %s, in %.1f s", formed_now, pieces, before, min(opt.near, NEAR_REACH/1000), "the site" if opt.has_site else "the start", time.duration_seconds(time.since(started)))
+		return
 	}
 	if opt.has_site && !opt.has_pos {
 		opt.pos, opt.has_pos, opt.above, opt.fly = {opt.site.x, 60 + max(-f64(height_in_world(opt.site.x, opt.site.y, 1)), 0), opt.site.y}, true, true, true   // over the sea where the site is at sea
@@ -223,7 +239,7 @@ main :: proc() {
 	gpu_init(&g, window)
 	g.unseen = unseen
 	world_adopt(opt.island, opt.near)
-	leave := game(&opt, &g, window, unseen, others[soon:], around)
+	leave := game(&opt, &g, window, unseen, others[soon:])
 	if leave != .Quit do door_run(&opt, &g, window, leave)   // out of play to the world's screen or the front door, with this world in hand
 }
 
@@ -263,7 +279,7 @@ leaving: Leave
 
 // Play, from entering the world in hand on its start island (`home`) until the player leaves it:
 // the frame loop and its input. `far` are the islands still to be formed beside it.
-game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []int, around: [2]f64) -> Leave {
+game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []int) -> Leave {
 	leaving = .Quit
 	w := new(World)
 	world_init(w)
@@ -287,7 +303,8 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 	clock := Clock{speed = 2 if opt.pace == 6 else 1 if opt.pace == 3 else 0, paused = opt.pace == 0}
 	hold_enter(&p, &a, opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
 	forming_begin(far, 3, .Low, false)
-	pieces_begin(around, BACKGROUND_REACH)   // the landmass's pieces within reach, nearest first, one at a time
+	mass_focus = (p.pos if afoot else a.at).xz
+	masses_keep()   // the land masses' pieces within reach of the view, nearest first, and those left far behind let go
 	turned := f32(0)   // hours the sun was turned by hand
 	place := Mat.Stone
 	captured := false
@@ -404,6 +421,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 			yaw, fov = a.yaw, ABOVE_FOV
 		}
 		passed := clock_step(&clock, 0 if play.menu else dt)   // the world's time this frame: none while the menu is open
+		mass_focus = centre.xz
 		// The day and the hour (clock.odin): the dwarves' own where a hold runs, since the screen says the
 		// day they live by, and else the clock's. --hour and --day hold the sun where they say, for a
 		// picture of the land; the date said is the true one all the same.

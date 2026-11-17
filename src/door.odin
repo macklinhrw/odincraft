@@ -82,7 +82,8 @@ door_first :: proc(opt: ^Options) -> bool {
 	if opt.has_door do return true
 	straight := opt.has_over || opt.has_pos || opt.has_look || opt.fly || opt.first || opt.place != 0 || opt.bench > 0 || opt.shot != "" || opt.enter ||
 		opt.island != 0 || opt.kind != "" || opt.origin != {} || opt.map_path != "" || opt.archipelago != "" || opt.known != "" || opt.has_why || opt.survey ||
-		opt.has_plates_why || opt.dwarves > 0 || opt.orders != "" || opt.has_select || opt.has_cursor || opt.play != ""
+		opt.has_plates_why || opt.dwarves > 0 || opt.orders != "" || opt.has_select || opt.has_cursor || opt.play != "" ||
+		opt.has_site || opt.seam > 0 || opt.landmap != ""   // a site on a large land, and the tools that measure or map one and exit (continents.odin)
 	return !straight
 }
 
@@ -227,7 +228,7 @@ making_say :: proc(ran: f64) {
 	far_done, far_all, _ := making_progress(.Far)
 	fmt.printfln("the world of seed %d in %.1f s: the plates' history %s; the region round the start %.2f s; the mainland %s; the islands near the start %d of %d in %.2f s%s; the far islands %d of %d",
 		m.seed, ran, "kept from an earlier run" if m.kept else fmt.tprintf("%.2f s", m.took[.Plates]), m.took[.Region],
-		fmt.tprintf("formed on 64 m cells in %.1f s", m.took[.Mainland]) if sync.atomic_load_explicit(&mainland_state.ready, .Acquire) else "left as the history has it", near_done, near_all, m.took[.Near],
+		fmt.tprintf("at hand on 64 m cells in %.1f s", m.took[.Mainland]) if sync.atomic_load_explicit(&lands_state.regions, .Acquire) else "left as the history has it", near_done, near_all, m.took[.Near],
 		", and it could be entered" if world_enterable(0) else "", far_done, far_all)
 	if sync.atomic_load(&m.records) && is_formed(&formed[0]) {   // the start island's land, as the forming test hashes it: the same seed gives the same figure however the world was come to
 		f := &formed[0]
@@ -254,8 +255,7 @@ door_play :: proc() -> Leave {
 	sky_choose(&o)
 	d.last = making.seed
 	if !d.unseen do _ = sdl.StopTextInput(d.window)
-	at := home.island.origin
-	leave := game(&o, d.g, d.window, d.unseen, nil, {f64(at.x), f64(at.y)})
+	leave := game(&o, d.g, d.window, d.unseen, nil)
 	d.opt.press = o.press   // the parts play pressed are not pressed again here
 	clear(&d.opt.digs)
 	return leave
@@ -554,7 +554,7 @@ door_act :: proc(act: Act, arg: int) {
 	case .Isle_Take: chart_take(arg, true)
 	case .Chart_Zoom: chart_zoom(math.pow(0.9, f64(arg)), {c.free.x + c.free.w/2, c.free.y + c.free.h/2})
 	case .Chart_Home: chart_go(c.pick if d.screen == .Plan else -1)
-	case .Mass_Leave: sync.atomic_store(&mainland_state.leave, true)
+	case .Mass_Leave: sync.atomic_store(&lands_state.leave, true)
 	case .Found:   // an expedition to the island in the hand is planned, once its land is formed
 		if d.screen == .Chart && c.pick >= 0 && is_formed(&formed[c.pick]) do screen_go(.Plan)
 	case .Roam:
@@ -1021,9 +1021,10 @@ making_build :: proc(right, foot, wide: f32, brief: bool) -> (at: Rect) {
 	for s in Stage {
 		done, all, now := making_progress(s)
 		near_done, near_all, _ := making_progress(.Near)
-		ms := &mainland_state
 		massed := sync.atomic_load(&m.massed)
-		landed := sync.atomic_load_explicit(&ms.ready, .Acquire)   // the mainland's coarse stage stands
+		landed := sync.atomic_load_explicit(&lands_state.regions, .Acquire)   // a large land's coarse stage stands
+		lands_kept := true   // and none of them was formed in this run
+		if landed do for &l in lands do if l.ready && !l.kept do lands_kept = false
 		made := s <= .Region && (stage > s || records) || s == .Mainland && records && massed || s >= .Near && records && massed && done >= all
 		running := !made && !m.stopped && (s <= .Region && working && stage == s || s == .Mainland && records && stage == .Mainland || s == .Near && records && massed || s == .Far && records && massed && near_done >= near_all)
 		if brief && !running do continue   // in brief: the stage running alone
@@ -1031,7 +1032,7 @@ making_build :: proc(right, foot, wide: f32, brief: bool) -> (at: Rect) {
 		said := ""
 		switch {
 		case made && s <= .Region: said = "kept from an earlier run" if m.kept else fmt.tprintf("made in %.1f s", m.took[s])
-		case made && s == .Mainland: said = ("kept from an earlier run" if ms.kept else fmt.tprintf("made in %s", span_words(m.took[s]))) if landed else "left as the history has it"
+		case made && s == .Mainland: said = ("kept from an earlier run" if lands_kept else fmt.tprintf("made in %s", span_words(m.took[s]))) if landed else "left as the history has it"
 		case made && s == .Near:   said = fmt.tprintf("made in %.1f s", m.took[s]) if m.took[s] > 0 else "made"
 		case made:                 said = "made" if all > 0 else "none"
 		case running && s == .Mainland: said = fmt.tprintf("%d of %d steps", done, all) if all > 0 else ""
@@ -1043,7 +1044,7 @@ making_build :: proc(right, foot, wide: f32, brief: bool) -> (at: Rect) {
 		y += px(1.5)
 		if made && !(s == .Mainland && !landed) do part(.Sign, {cx, y + math.round((line_of(.Body) - px(L.sign))/2), px(L.sign), px(L.sign)}).sign = .Well
 		if made && s == .Mainland && !landed {   // why it was left, beside the pointer
-			part(.Fill, {cx, y, inner, line_of(.Body)}, colour = {}, state = {.Solid}, id = "making.why", tip = fmt.tprintf("The mainland is not formed as land: %s.", mainland_why()))
+			part(.Fill, {cx, y, inner, line_of(.Body)}, colour = {}, state = {.Solid}, id = "making.why", tip = fmt.tprintf("The mainland is not formed as land: %s.", land_why(0)))
 		}
 		if running do part(.Sign, {cx, y + math.round((line_of(.Body) - px(L.sign))/2), px(L.sign), px(L.sign)}).sign = .Caution
 		words(cx + px(L.sign) + px(2), y, row.name, .Body, L.brass if running else L.chalk if made else L.ash, "making.stage")
@@ -1061,8 +1062,9 @@ making_build :: proc(right, foot, wide: f32, brief: bool) -> (at: Rect) {
 		y += px(L.meter) + px(2)
 		what := row.makes
 		if s == .Mainland {   // long the first time: how long, and the way to leave it
-			left := ms.pass_seconds*f64(all - done)/f64(max(all, 1))
-			what = fmt.tprintf("%s About %s more on this machine.", what, span_words(left))
+			left := lands_state.expect*f64(all - done)/f64(max(all, 1))   // by what such land takes here, until it has run long enough to say by its own pace
+			if done >= 8 do left = time.duration_seconds(time.since(lands_state.began))*f64(all - done)/f64(done)
+			if all > 0 do what = fmt.tprintf("%s About %s more on this machine.", what, span_words(left))
 		}
 		if len(now) > 0 {
 			b := strings.builder_make(context.temp_allocator)
@@ -1070,9 +1072,9 @@ making_build :: proc(right, foot, wide: f32, brief: bool) -> (at: Rect) {
 			what = fmt.tprintf("In hand: %s.", strings.to_string(b))
 		}
 		if !brief do y += words(cx, y, what, .Small, L.ash, "making.makes", inner) + px(2)
-		if s == .Mainland && !brief {
+		if s == .Mainland && all > 0 {   // in brief too: it is the one way to leave a stage that runs for minutes
 			leave := "Leave it as known"
-			door_button({cx, y, button_wide(leave, ""), px(L.button)}, leave, .Mass_Leave, 0, "making.leave", "Stop forming the mainland: it stays as the plates' history has it for now, and the islands are made. It is formed the next time this world is opened.", faint = sync.atomic_load(&ms.leave))
+			door_button({cx, y, button_wide(leave, ""), px(L.button)}, leave, .Mass_Leave, 0, "making.leave", "Stop forming the mainland: it stays as the plates' history has it for now, and the islands are made. It is formed the next time this world is opened.", faint = sync.atomic_load(&lands_state.leave))
 			y += px(L.button) + px(3)
 		}
 	}

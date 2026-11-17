@@ -60,7 +60,16 @@ import "core:strings"
 //   place=N         look at named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
 //   site=x,z        an expedition site: the landmass's pieces within `near` km of this point in the world are
 //                   formed before entering, as the start's are, and the camera is put 60 m over it
-//   continent=0     leave the land larger than a region a record, as before step 21, even where it can be formed
+//   continent=0     leave the land larger than a region records, as before step 21
+//   continent=1     form the coarse stage of every land mass of the known world larger than a region that is
+//                   not kept yet (minutes, once for a seed); without it, only of those within what is drawn
+//                   from the start, a site or the view asked for
+//   coarse=check    form a coarse stage both in parallel and as the serial forming takes it, step by step,
+//                   and say the first stage where a cell differs; coarse=plain forms it the serial way
+//   reach=km        how near the player a landmass's pieces are kept formed beside play (40); 0 for none
+//   landmap=file    write a map of the land larger than a region as the game has it and exit: mapspan=km
+//                   across round --site, or the largest land mass whole; cuts draws the lines between pieces
+//   seam=km         measure the seam in a square that wide round --site (continents.odin, mass_seam), and exit
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground; with over, the view from above
 //                   panned toward its picture's top at `speed` m/s
@@ -104,7 +113,7 @@ import "core:strings"
 //                   region (half way through that stage), islands:N (N of those near the start formed), ready
 //                   (it can be entered and its pictures are drawn: the default), all (every island formed), now
 //   focus=N         the front door's Nth choice, or the Nth world of the list, in focus, from 1
-//   pick=N          on the world's map: island N in the hand (0 the start; -2 the mainland); tab=land, rock,
+//   pick=N          on the world's map: island N in the hand (0 the start; -2 the mainland, -3 and below the other large lands); tab=land, rock,
 //                   climate, life or places chooses its card's depth; lens=name puts a lens of the world on
 //                   (setting, depth, rain, temperature, age, rising, front, crust); over=x,z and span=metres place it
 //   press=id[,id]   press these parts one after another, each by its name as say prints it, and then take the
@@ -146,7 +155,12 @@ Options :: struct {
 	has_plates_why: bool,
 	site:          [2]f64,
 	has_site:      bool,
-	continent:     bool,
+	continent:     int,
+	reach:         f64,
+	landmap:       string,   // write a map of the land larger than a region and exit: round --site, or the nearest landmass whole
+	mapspan:       f64,      // km across
+	cuts:          bool,     // with the cuts between pieces drawn
+	seam:          f64,      // measure the seam in a square this many km across round --site, and exit
 	over:          [2]f64,
 	has_over:      bool,
 	span, tilt:    f64,
@@ -180,7 +194,7 @@ Options :: struct {
 	}
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, rain = -1, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING, continent = true}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, rain = -1, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING, continent = -1, reach = BACKGROUND_REACH/1000}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -251,7 +265,13 @@ options :: proc() -> Options {
 		case "place": ok = numbers(value, ",", v[:1]); o.place = int(v.x)
 		case "show":  o.show = true
 		case "site":  ok = numbers(value, ",", o.site[:]); o.has_site = true
-		case "continent": ok = numbers(value, ",", v[:1]); o.continent = v.x != 0
+		case "continent": ok = numbers(value, ",", v[:1]); o.continent = int(v.x)
+		case "coarse":    coarse_how = .Plain if value == "plain" else .Check if value == "check" else .Fast
+		case "reach":     ok = numbers(value, ",", v[:1]); o.reach = f64(v.x)
+		case "landmap":   o.landmap = value
+		case "mapspan":   ok = numbers(value, ",", v[:1]); o.mapspan = f64(v.x)
+		case "cuts":      o.cuts = true
+		case "seam":      ok = numbers(value, ",", v[:1]); o.seam = f64(v.x)
 		case "dwarves": ok = numbers(value, ",", v[:1]); o.dwarves = v.x
 		case "orders": o.orders = value
 		case "send":  o.send = true

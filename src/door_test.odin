@@ -301,6 +301,7 @@ the_front_door_and_the_world :: proc(t: ^testing.T) {
 	play = {lens = -1, lens_shown = -1, open = {0}}
 	chart_forget()
 	names_make()
+	lands_make()   // the large lands' records, as the world's records are made with them (world_records)
 	world_adopt(0, 64)   // the world the forming test made is the world in hand
 
 	// Every island has a name of its own, of two words, and no two share one.
@@ -399,7 +400,8 @@ the_front_door_and_the_world :: proc(t: ^testing.T) {
 		at := chart_to({f64(is.origin.x), f64(is.origin.y)})
 		testing.expectf(t, inside(chart.free, at), "island %d lies outside the part of the picture no panel stands on when the world's screen opens", is.id)
 	}
-	testing.expect_value(t, count("isles.row") + count("isles.mainland"), len(archipelago) + 1)
+	testing.expect_value(t, count("isles.row"), len(archipelago))
+	testing.expect_value(t, count("isles.mainland"), max(len(lands), 1))   // a row for each land larger than an island
 	testing.expect(t, says("isles.name") == isle_name(0) && strings.contains(says("isles.land"), "km²"), "the list's first row is not the start, with its land")
 	testing.expect(t, chart.pick == 0 && says("isle.title") == isle_name(0), "the start is not in the hand when the world's screen opens")
 	testing.expect(t, strings.contains(says("isle.sub"), "the start") && strings.contains(says("isle.sub"), kind_said(archipelago[0].kind).one[2:]), "the card does not say the island's kind, and that it is the start")
@@ -476,6 +478,15 @@ the_front_door_and_the_world :: proc(t: ^testing.T) {
 	settle()
 	stands, cause := row_says("As land")
 	testing.expect(t, chart.pick == MAINLAND && stands == "known, not formed" && strings.contains(cause, "not formed as land"), "the mainland's card does not say how it stands, and why")
+	// Every large land has a name of its own, and its row takes it in the hand with its own card.
+	for i in 1..<len(lands) do for j in 0..<i do testing.expectf(t, land_name(i) != land_name(j), "large lands %d and %d are both named %s", j, i, land_name(i))
+	if len(lands) > 1 {
+		click("isles.name", land_name(1))
+		settle()
+		stands, _ = row_says("As land")
+		land, _ := row_says("Land")
+		testing.expect(t, chart.pick == MAINLAND - 1 && says("isle.title") == land_name(1) && stands == "known, not formed" && strings.contains(land, "km²"), "another large land's card does not say how it stands")
+	}
 	testing.expect_value(t, count("isle.found"), 0)
 	click("isles.name", isle_name(1))
 	settle()

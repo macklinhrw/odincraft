@@ -20,13 +20,14 @@ import sdl "vendor:sdl3"
 //   the plates' history       350 million years of the whole planet (plates.odin), or read from build/worlds/
 //   the region round the start  its last 20 million years again on the known world's own cells; the known
 //                             world read from that, and the records of the islands near the start
-//   the mainland              the land larger than a region nearest the start (continents.odin): where it is
-//                             small enough, its coarse stage, the whole of it on 64 m cells, formed once and
-//                             kept in build/worlds/; where it is not, it stays as the history has it
+//   the large lands           every land mass larger than a region (continents.odin): the coarse stage of
+//                             each, the whole of it on 64 m cells, formed once and kept in build/worlds/.
+//                             One that is kept is read back; one that is not is formed if it lies within
+//                             reach of the start, and else stays as the history has it
 //   the islands near the start  the start island and those within `near` km of it, formed side by side, and
-//                             the mainland's pieces within reach of it
+//                             the large lands' pieces within reach of it
 //   the far islands           formed on three threads of low priority, while the player looks or plays, and
-//                             the mainland's pieces within reach of the start on one more
+//                             the large lands' pieces within reach of the view kept formed on one more
 //
 // Everything a stage does is the procedure the command line runs (known_make, archipelago_make,
 // gen_init), so a world made from the front door is the world `--seed=` makes, bit for bit. What is
@@ -42,9 +43,9 @@ Stage_Row :: struct { name, makes, unit: string }
 STAGES := [Stage]Stage_Row{
 	.Plates = {"The plates' history", "The whole planet's plates, moved through 350 million years: where the continents, the trenches and the volcanoes came to lie.", "million years"},
 	.Region = {"The region round the start", "The last 20 million years again, finer, over the 1,000 km the world knows; and from it where each island stands and of what kind.", "million years"},
-	.Mainland = {"The mainland", "The land larger than an island, the whole of it on cells 64 m across: its ranges, its valleys and where its rivers run. It is made once for a world and kept.", "steps"},
+	.Mainland = {"The mainland", "The land larger than an island that lies within reach of the start, the whole of it on cells 64 m across: its ranges, its valleys and where its rivers run. It is made once for a world and kept. Large lands farther off stay as the plates' history has them.", "steps"},
 	.Near   = {"The islands near the start", "The start island and those a boat could reach from it, formed as land: rock, rivers, woods, animals and named places.", "islands"},
-	.Far    = {"The far islands", "The rest of the islands, formed while you look or play, and the mainland's land near the start.", "islands"},
+	.Far    = {"The far islands", "The rest of the islands, formed while you look or play, and the mainland's land near the view.", "islands"},
 }
 
 Making :: struct {
@@ -58,9 +59,9 @@ Making :: struct {
 	stopped:   bool,             // it was told to stop, and has
 	kept:      bool,             // the plates' history was read from where an earlier run kept it
 	fresh:     bool,             // its records are being made: a world stopped now is begun again
-	massed:    bool,             // the mainland's stage has been gone through, whatever it came to
-	continent: bool,             // the mainland is formed as land where it can be (--continent=0 leaves it a record)
-	swap:      bool,             // the making's thread asks the frame's to make the list of regions again with the mainland's pieces (regions_make)
+	massed:    bool,             // the large lands' stage has been gone through, whatever it came to
+	continent: int,              // which large lands are formed as land (--continent): -1 those within reach of the start, 1 every one, 0 none
+	swap:      bool,             // the making's thread asks the frame's to make the list of regions again with the large lands' pieces (regions_make)
 	waiting:   bool,             // a world is ordered and the one before it is still being put down: the stages are not yet its own
 	began:     time.Time,        // when the stage running began
 	took:      [Stage]f64,       // seconds each stage took in this run; 0 for one not run
@@ -75,15 +76,14 @@ making: Making
 
 // ---- forming threads --------------------------------------------------------------------------
 
-// Islands waiting to be formed and the threads taking them, the next first. A place in `formed` after
-// the islands' is a piece of the mainland, formed after the pieces it waits on (continents.odin).
+// Islands waiting to be formed and the threads taking them, the next first. The large lands' pieces,
+// whose places in `formed` come after the islands', are formed by their own rule, each after the
+// pieces it waits on (mass_form, masses_keep, continents.odin), and told to stop by the same word.
 Pool :: struct {
 	mutex:   sync.Mutex,
 	list:    [dynamic]int,
 	next:    int,
 	late:    bool,   // beside play or the map: each thread works alone and says a line for each island
-	pieces:  bool,   // the mainland's pieces, on one thread
-	ended:   bool,   // its thread found nothing left and went: nothing more may be given it
 	threads: []^thread.Thread,
 }
 forming: struct { mutex: sync.Mutex, pools: [dynamic]^Pool, stop: bool }   // the mutex guards the list of pools
@@ -107,21 +107,15 @@ former :: proc(p: ^Pool) {
 		sync.lock(&p.mutex)
 		i := p.list[p.next] if p.next < len(p.list) else -1
 		p.next += 1
-		p.ended = i < 0
 		sync.unlock(&p.mutex)
 		if i < 0 do return
 		f := &formed[i]
 		if i < len(making.doing) do sync.atomic_store(&making.doing[i], 1)
-		if i >= islands_count() {
-			quiet = true
-			mainland_form(i32(i - mainland_state.first))
-		} else {
-			quiet = f != home   // the start island says its lines, as it does formed on the main thread
-			gen_init(f)
-		}
+		quiet = f != home   // the start island says its lines, as it does formed on the main thread
+		gen_init(f)
 		quiet = false
 		if i < len(making.doing) do sync.atomic_store(&making.doing[i], 0)
-		if p.late && i < islands_count() do island_say(f, " in the background")
+		if p.late do island_say(f, " in the background")
 		free_all(context.temp_allocator)
 	}
 }
@@ -144,10 +138,11 @@ forming_wait :: proc(list: []int = nil) {
 	for i in list do if is_formed(&formed[i]) do island_say(&formed[i], "")
 }
 
-// No island is begun after this; those in hand are finished and waited for.
+// No island or piece is begun after this; those in hand are finished and waited for.
 forming_stop :: proc() {
 	sync.atomic_store(&forming.stop, true)
 	forming_wait()
+	masses_end()
 	sync.atomic_store(&forming.stop, false)
 }
 
@@ -157,7 +152,7 @@ forming_toward :: proc(island: int) {
 	@(static) to: [2]i32
 	to = formed[island].island.origin
 	sync.guard(&forming.mutex)
-	for p in forming.pools do if p.late && !p.pieces {
+	for p in forming.pools do if p.late {
 		sync.guard(&p.mutex)
 		if p.next >= len(p.list) do continue
 		slice.sort_by(p.list[p.next:], proc(a, b: int) -> bool {
@@ -167,55 +162,27 @@ forming_toward :: proc(island: int) {
 	}
 }
 
-// The mainland's pieces within `reach` metres of a point of the world that are not formed, nearest first.
-pieces_near :: proc(at: [2]f64, reach: f64, allocator := context.temp_allocator) -> []int {
-	ms := &mainland_state
-	out := make([dynamic]int, allocator)
-	if !sync.atomic_load_explicit(&ms.ready, .Acquire) do return out[:]
-	for p in mainland_order(at) do if mainland_off(p, at) <= reach && !is_formed(&formed[ms.first + int(p)]) do append(&out, ms.first + int(p))
-	return out[:]
-}
-
-// Form the mainland's pieces within reach of a point, nearest first, one at a time on a thread of low
-// priority, beside whatever else is formed: given to the thread already at them where there is one.
-pieces_begin :: proc(at: [2]f64, reach: f64) {
-	list := pieces_near(at, reach)
-	if len(list) == 0 do return
-	{
-		sync.guard(&forming.mutex)
-		for p in forming.pools do if p.pieces {
-			sync.guard(&p.mutex)
-			if p.ended do continue
-			was := len(p.list)
-			for i in list do if !slice.contains(p.list[p.next:], i) do append(&p.list, i)   // what was asked for last is taken first
-			if n := len(p.list) - was; n > 0 do slice.rotate_left(p.list[p.next:], len(p.list) - p.next - n)
-			return
-		}
-	}
-	forming_begin(list, 1, .Low, true)
-	sync.guard(&forming.mutex)
-	forming.pools[len(forming.pools) - 1].pieces = true
-}
-
-// The world's regions (regions.odin): one for each island near the start and, once the mainland's
-// coarse stage has cut it, one for each of its pieces after them. Nothing may be formed yet, nor any
-// thread but the caller's read the list meanwhile: start-up calls it before a thread is begun, and
-// the making's thread has the frame's do it between two frames (`swap`).
+// The world's regions (regions.odin): one for each island near the start and, once the large lands'
+// coarse stages have cut them, one for each of their pieces after them, land mass by land mass.
+// Nothing may be formed yet, nor any thread but the caller's read the list meanwhile: start-up calls
+// it before a thread is begun, and the making's thread has the frame's do it between two frames (`swap`).
 regions_make :: proc() -> (pieces: int) {
-	ms := &mainland_state
-	pieces = len(ms.cut.size) if ms.pass != nil else 0
+	for &m in lands do if m.ready {
+		m.first = len(archipelago) + pieces
+		pieces += len(m.cut.size)
+	}
 	all := make([]Formed, len(archipelago) + pieces)
-	ms.first = len(archipelago)
 	for &f, i in all[:len(archipelago)] do f.island = archipelago[i]
-	for p in 0..<pieces {
-		o, s := piece_square(i32(p))
-		all[len(archipelago) + p].island = {id = len(archipelago) + p, origin = o, size = s, kind = mainland_kind(), seed = mainland.seed, setting = .Continent}
+	for &m in lands do if m.ready do for p in 0..<len(m.cut.size) {
+		o, size := piece_square(&m, i32(p))
+		all[m.first + p].island = {id = m.first + p, origin = o, size = size, kind = mass_kind(), seed = m.seed, setting = .Continent}
+		all[m.first + p].mass = &m
 	}
 	if len(arrivals) == len(archipelago) do arrivals_extend(pieces)
 	delete(formed)
 	formed = all
 	home = &formed[0]
-	sync.atomic_store_explicit(&ms.ready, pieces > 0, .Release)
+	sync.atomic_store_explicit(&lands_state.regions, pieces > 0, .Release)
 	return
 }
 
@@ -227,12 +194,12 @@ islands_apart :: proc(a, b: int) -> f64 {
 }
 
 // Whether play can begin on an island: it is formed, and so are every island within `near` km of it
-// and every piece of the mainland within reach of it, once the mainland's stage has been gone through.
+// and every piece of the large lands within reach of it, once their stage has been gone through.
 world_enterable :: proc(island := 0) -> bool {
 	if !sync.atomic_load(&making.records) || !sync.atomic_load(&making.massed) || island < 0 || island >= islands_count() do return false
 	for &f, i in formed[:islands_count()] do if !is_formed(&f) && islands_apart(i, island) <= making.near_km*1000 do return false
 	o := archipelago[island].origin
-	return len(pieces_near({f64(o.x), f64(o.y)}, min(making.near_km*1000, NEAR_REACH))) == 0
+	return masses_near({f64(o.x), f64(o.y)}, min(making.near_km*1000, NEAR_REACH)) == 0
 }
 
 // How far a stage has come, in its own unit: `done` of `all`, and the islands being formed now.
@@ -249,10 +216,9 @@ making_progress :: proc(s: Stage) -> (done, all: int, now: [dynamic]int) {
 	case .Region:
 		all = int(REGION_SPAN)
 		done = all if m.stage > .Region else clamp(int(REGION_SPAN + planet.t), 0, all) if regional.patch && planet.t < -0.01 else 0
-	case .Mainland:   // the steps of its coarse stage; none where it is left as the history has it
-		ms := &mainland_state
-		all = int(sync.atomic_load(&ms.steps))
-		done = min(int(sync.atomic_load(&ms.step)), all)
+	case .Mainland:   // the steps of the coarse stages being formed; none where every large land is read back or left as the history has it
+		all = int(sync.atomic_load(&lands_state.steps))
+		done = min(int(sync.atomic_load(&lands_state.step)), all)
 		return
 	case .Near, .Far:
 		if !sync.atomic_load(&m.records) do return
@@ -276,7 +242,7 @@ making_stage :: proc() -> Stage {
 // Order a world: whatever is in hand is put down, and the world of `seed` is made on a thread of
 // its own. The frame's thread calls this, having let go what it kept of the old one on the GPU
 // (world_gpu_drop), and reads nothing of a world until `records` is set again.
-world_open :: proc(seed: u32, near_km: f64, continent: bool) {
+world_open :: proc(seed: u32, near_km: f64, continent: int) {
 	m := &making
 	m.continent = continent
 	sync.lock(&m.mutex)
@@ -328,27 +294,24 @@ world_open :: proc(seed: u32, near_km: f64, continent: bool) {
 		m.stopped = false
 		if !show(o, true, true) do return
 		chart_painter_begin()
-		// The mainland: where it is small enough, its coarse stage, which is long the first time and
-		// read back after. Its pieces are then regions after the islands', a list the frame's thread
-		// makes again between two frames, with no picture being painted from the old one.
+		// The large lands: the coarse stage of each that is kept, read back, and of each within reach of
+		// the start, formed, which is long the first time. Their pieces are then regions after the
+		// islands', a list the frame's thread makes again between two frames, with no picture being
+		// painted from the old one.
 		if !sync.atomic_load(&m.massed) {
 			sync.atomic_store(cast(^u8)&m.stage, u8(Stage.Mainland))
 			m.began = time.now()
-			ms := &mainland_state
-			if ms.formable && m.continent {
-				sync.atomic_store(&ms.leave, false)
-				mainland_pass()
-				if ms.pass != nil {
-					chart_painter_end()
-					sync.atomic_store(&m.swap, true)
-					for sync.atomic_load(&m.swap) do time.sleep(time.Millisecond)
-					chart_painter_begin()
-				}
-			} else if ms.formable do ms.why = "it was asked to be left as the plates' history has it (--continent=0)"
+			sync.atomic_store(&lands_state.leave, false)
+			if lands_pass(nil, m.continent == 1, m.continent == 0) > 0 {
+				chart_painter_end()
+				sync.atomic_store(&m.swap, true)
+				for sync.atomic_load(&m.swap) do time.sleep(time.Millisecond)
+				chart_painter_begin()
+			}
 			m.took[.Mainland] = time.duration_seconds(time.since(m.began))
 			sync.atomic_store(&m.massed, true)
 		}
-		// The islands near the start, side by side, and the mainland's pieces within reach of it; then
+		// The islands near the start, side by side, and the large lands' pieces within reach of it; then
 		// the rest, beside whatever the player does.
 		sync.atomic_store(cast(^u8)&m.stage, u8(Stage.Near))
 		m.began = time.now()
@@ -360,11 +323,7 @@ world_open :: proc(seed: u32, near_km: f64, continent: bool) {
 		sync.unlock(&forming.mutex)
 		for t in near do thread.join(t)   // waited for here; forming_wait, which lets them go, is the next order's to call
 		start := [2]f64{f64(archipelago[0].origin.x), f64(archipelago[0].origin.y)}
-		for i in slice.clone(pieces_near(start, min(m.near_km*1000, NEAR_REACH))) do if !sync.atomic_load(&forming.stop) {   // its own memory: forming frees the temporary as it goes
-			quiet = true
-			mainland_form(i32(i - mainland_state.first))
-			quiet = false
-		}
+		if !sync.atomic_load(&forming.stop) do masses_form(start, min(m.near_km*1000, NEAR_REACH))
 		if world_enterable(0) {
 			m.took[.Near] += time.duration_seconds(time.since(m.began))
 			for i in m.near[1:] do island_say(&formed[i], "")
@@ -372,7 +331,8 @@ world_open :: proc(seed: u32, near_km: f64, continent: bool) {
 			clear(&left)
 			for i in m.far do if !is_formed(&formed[i]) do append(&left, i)
 			forming_begin(left[:], 3, .Low, false)
-			pieces_begin(start, BACKGROUND_REACH)
+			mass_focus = start
+			masses_keep()
 		} else {
 			m.took[.Near] += time.duration_seconds(time.since(m.began))
 			m.stopped = true
@@ -389,14 +349,14 @@ making_stop :: proc() {
 	making.stopped = true
 }
 
-// Whether every island of the world in hand is formed, and the mainland's stage gone through.
+// Whether every island of the world in hand is formed, and the large lands' stage gone through.
 world_whole :: proc() -> bool {
 	if !sync.atomic_load(&making.records) || !sync.atomic_load(&making.massed) do return false
 	for &f in formed[:islands_count()] do if !is_formed(&f) do return false
 	return true
 }
 
-// The frame's thread, between two frames: the list of regions made again with the mainland's pieces,
+// The frame's thread, between two frames: the list of regions made again with the large lands' pieces,
 // where the making's thread has asked for it.
 making_sync :: proc() {
 	if !sync.atomic_load(&making.swap) do return
@@ -420,7 +380,7 @@ world_records :: proc(s: u32) {
 	archipelago_make(false)
 	arrivals_make()
 	names_make()
-	mainland_make()   // its record, and whether it can be formed; its coarse stage is a stage of its own
+	lands_make()   // the large lands' records; their coarse stages are a stage of their own
 	regions_make()
 }
 
@@ -452,7 +412,7 @@ world_drop :: proc() {
 	for &f in k.feet do delete(f)
 	for &t in k.tracks do delete(t)
 	k^ = {}
-	mainland_drop()
+	lands_drop()
 	formed, home = nil, nil
 	clear(&archipelago)
 }

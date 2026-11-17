@@ -1,0 +1,34 @@
+# A world none of whose large lands lies within reach of its start, played from the player's seat
+# (step N1, second part; open-decisions.md, 2026-11-17): seed 7, whose mainland is 175 km off. Nothing
+# of it is formed when the world is made: the map draws each large land as the plates' history has
+# it, and its card says how it stands, why, and what forming it would take.
+#   build/odincraft --door --seed=7 --play=docs/interesting-world/real/play/n1-far.txt
+# Where a land's coarse stage is kept from a run that asked for it (--continent=1 or --site), it is
+# read back and drawn from its 64 m cells instead. The pictures go to out/play/.
+
+until ready 120
+print 1. the world in hand opened: the mainland's stage was passed at once, and the islands made
+part Worlds
+key Enter
+wait 0.6
+shot out/play/n1-10-far-world.png
+say
+
+print 2. the mainland: known, not formed, why, and what forming it would take
+part isles.mainland
+wait 0.6
+part As land
+shot out/play/n1-11-far-mainland.png
+say
+
+print 3. another large land, taken by its row: where it lies from the islands
+part The west land
+wait 0.6
+part As land
+shot out/play/n1-12-far-west-land.png
+say
+
+print 4. the whole known world: each large land named where it lies
+view over=0,0 span=1100000
+wait 0.6
+shot out/play/n1-13-far-known-world.png

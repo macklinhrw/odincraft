@@ -72,4 +72,46 @@ forming_is_deterministic :: proc(t: ^testing.T) {
 	// And the screens before play (door_test.odin), over the same world.
 	bind(home)
 	the_front_door_and_the_world(t)
+	// A landmass's coarse stage formed in parallel is the serial forming's, cell for cell (coarse.odin). Last: it makes the list of land masses again.
+	bind(home)
+	the_coarse_stage_is_the_serial_forming(t)
+}
+
+// The smallest land mass of the default world larger than a region, formed through its 64 m phases both
+// ways, step by step: in parallel, and as the serial forming takes it with its flood taking of two
+// cells at one level the lower index. Every stage of every step is compared.
+the_coarse_stage_is_the_serial_forming :: proc(t: ^testing.T) {
+	lands_make()
+	// The land mass on the smallest lattice that has land when its forming starts (one whose ground the
+	// history is still raising may start under the sea).
+	order := slice.clone(lands)
+	slice.sort_by(order, proc(a, b: Landmass) -> bool { return a.side < b.side })
+	m: ^Landmass
+	g: ^Grid
+	upto, n := 0, 0
+	for &o in order {
+		for &l in lands do if l.mass == o.mass do m = &l
+		mass_bind(m, &m.frame, -1, m.origin, m.side)
+		upto = 0
+		for p, i in region.history do if p.cell >= 64 do upto = i + 1
+		n = int(m.side)/64
+		g = coarse_grid(n)
+		if slice.contains(g.coarse.core, true) do break
+		coarse_free(g)
+		grid_free(g)
+		g = nil
+	}
+	if !testing.expect(t, g != nil, "the default world has a land mass larger than a region with land") do return
+	p := grid_make(n)
+	coarse_attach(p, true)
+	for ph in region.history {
+		g.left += ph.steps*ph.years*ph.uplift
+		p.left += ph.steps*ph.years*ph.uplift
+	}
+	check_phases(g, p, upto)
+	differ, cells := coarse_differ(g, p)
+	fmt.printfln("the coarse stage of land mass %d (%.0f km², on a lattice %.0f km across), formed in parallel and as the serial forming takes it: %d of %d land cells differ after %d steps; %d steps routed plainly", m.mass, m.area, m.side/1000, differ, cells, g.coarse.steps, g.coarse.failed)
+	testing.expect_value(t, differ, 0)
+	testing.expect_value(t, g.coarse.failed, 0)
+	testing.expect(t, cells > 10_000, "the land mass has land")
 }

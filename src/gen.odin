@@ -674,7 +674,7 @@ open_sea :: proc(key: Key) -> bool {
 		o, h := [2]f64{f64(f.island.origin.x), f64(f.island.origin.y)}, f.island.size/2
 		if lo.x < o.x + h && lo.x + CHUNK*s > o.x - h && lo.y < o.y + h && lo.y + CHUNK*s > o.y - h do return false
 	}
-	if mainland_state.pass != nil do for j in 0..=CHUNK do for i in 0..=CHUNK do if mainland_piece(lo.x + f64(i)*s, lo.y + f64(j)*s) >= 0 do return false
+	if len(lands) > 0 do for j in 0..=CHUNK do for i in 0..=CHUNK do if m, _ := mass_piece(lo.x + f64(i)*s, lo.y + f64(j)*s); m != nil do return false
 	return true
 }
 
@@ -690,10 +690,19 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns, edits: []Edit = nil) {
 		for i in 0..<i32(P) {
 			ix, iz := cx*CHUNK + i - 1, cz*CHUNK + j - 1   // cell coordinates at this level, in the world
 			k := j*P + i
-			if !bind_at((f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell) {
+			f := island_at((f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell)
+			if f != nil && !is_formed(f) {
+				if f.mass != nil {   // a landmass's piece not yet formed, seen from far off: the land its coarse stage holds
+					heights[k] = far_column(f.mass, (f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell, cell, level, c, int(k))
+					continue
+				}
+				f = nil
+			}
+			if f == nil {
 				heights[k], c.water[k], c.mat[k], c.top[k], c.ground[k] = SEA_BED, SEA_SURFACE, .Sand, SEA_BED, SEA_BED
 				continue
 			}
+			if f != here do bind(f)
 			x, z := (f64(ix) + 0.5)*cell - f64(region.origin.x), (f64(iz) + 0.5)*cell - f64(region.origin.y)
 			p: Point
 			g, m, plants := surface_at(x, z, cell, &p)

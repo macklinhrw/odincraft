@@ -71,17 +71,17 @@ Card_Row :: struct {
 	named: string,   // a place's card (landing.odin): what the row is called among the cautions, where it is one
 }
 Isle_Card :: struct {
-	of:     int,    // the island it is of, MAINLAND, or -1 for none
+	of:     int,    // the island it is of, a large land's pick (MAINLAND and below), or -1 for none
 	formed: bool,   // as it was when the card was written: an island says more once formed
-	pieces: int,    // the mainland's pieces formed when it was written
+	pieces: int,    // the large land's pieces formed when it was written
 	title, sub: string,
 	rows:   [Isle_Depth][dynamic]Card_Row,
 }
 
-MAINLAND :: -2
+MAINLAND :: -2   // the pick of the large land nearest the start; the next nearest is -3, and so on down `lands` (continents.odin)
 SHOAL :: 150   // metres deep the known world's picture draws the sea in an island's square, where the history has it shallower
 SPAN_WORLD :: [2]f64{4_000, 1_400_000}   // metres across the picture's width, from an island's bay to the whole known world
-MASS_TILES :: 4   // the mainland's picture is so many tiles along a side at the most, each an island's picture across
+MASS_TILES :: 4   // a large land's picture is so many tiles along a side at the most, each an island's picture across
 
 // A picture painted and waiting for the frame's thread to put it on the GPU.
 Painted :: struct { layer, lens: int, pixels: []u8, tint: Colour }
@@ -92,7 +92,7 @@ Chart :: struct {
 	to_at:   [2]f64,   // where the view is going, and how wide: it goes there over a third of a second
 	to_span: f64,
 	going:   bool,
-	pick:    int,      // the island in the hand, MAINLAND, or -1
+	pick:    int,      // the island in the hand, a large land's pick (MAINLAND and below), or -1
 	depth:   Isle_Depth,
 	row:     int,      // the row of the card's depth that says its why, or -1
 	lens:    int,      // the lens on, or -1
@@ -107,10 +107,9 @@ Chart :: struct {
 	painter: ^thread.Thread,
 	stop:    bool,
 	ready:   [dynamic]Painted,
-	shown:   [dynamic]bool,   // for each island and each tile of the mainland, its picture is on the GPU
+	shown:   [dynamic]bool,   // for each island and each tile of a large land, its picture is on the GPU
 	tints:   [dynamic]Colour, // and what the lens tints it
-	tiles:   [dynamic][2]int, // the mainland's tiles that hold land, by column and row; each a layer after the islands'
-	tiled:   int,             // tiles along a side of the mainland's lattice
+	tiles:   [dynamic][3]int, // the large lands' tiles that hold land, by column, row and the land's place in `lands`; each a layer after the islands'
 	known:   bool,            // the known world's picture is on the GPU
 	lens_on: int,             // the lens the known world's picture was painted by, or -1
 	waiting: int,             // pictures being painted or waiting to be put on the GPU
@@ -128,14 +127,15 @@ chart_painter_begin :: proc() {
 	c := &chart
 	sync.atomic_store(&c.stop, false)
 	sync.lock(&c.mutex)
-	// The mainland's tiles that hold land, where its coarse stage stands: each a layer after the islands'.
+	// The large lands' tiles that hold land, where a coarse stage stands: each a layer after the islands'.
 	clear(&c.tiles)
-	c.tiled = 0
-	if g := mainland_state.pass; g != nil && sync.atomic_load_explicit(&mainland_state.ready, .Acquire) {
-		c.tiled = clamp(int(math.ceil(mainland.side/128_000)), 1, MASS_TILES)
-		land := make([]bool, c.tiled*c.tiled, context.temp_allocator)
-		for ci in g.order do land[int(ci)/g.n*c.tiled/g.n*c.tiled + int(ci)%g.n*c.tiled/g.n] = true
-		for l, t in land do if l do append(&c.tiles, [2]int{t%c.tiled, t/c.tiled})
+	if sync.atomic_load_explicit(&lands_state.regions, .Acquire) do for &m, i in lands do if m.ready {
+		st, tiled := &m.store, land_tiled(&m)
+		land := make([]bool, tiled*tiled, context.temp_allocator)
+		for slot, sq in st.slot do if slot >= 0 {   // a square the coarse stage kept: land, or sea beside it
+			land[min((sq/st.m*SQUARE + SQUARE/2)*tiled/st.n, tiled - 1)*tiled + min((sq%st.m*SQUARE + SQUARE/2)*tiled/st.n, tiled - 1)] = true
+		}
+		for l, t in land do if l do append(&c.tiles, [3]int{t%tiled, t/tiled, i})
 	}
 	builtin.resize(&c.shown, len(archipelago) + len(c.tiles))
 	builtin.resize(&c.tints, len(archipelago) + len(c.tiles))
@@ -286,10 +286,10 @@ known_paint :: proc(lens: int) -> []u8 {
 			if k.h > -SHOAL {   // an island's square holds its own picture: the history's land and shallows there give way to it
 				w := world_of(at)
 				for is in archipelago do if max(abs(w.x - f64(is.origin.x)), abs(w.y - f64(is.origin.y))) < is.size/2 do k.h = -SHOAL
-				// The mainland where its coarse stage stands is drawn from that, finer: the history's land gives way to it.
-				if k.h > 0 && chart.tiled > 0 {
+				// A large land whose coarse stage stands is drawn from that, finer: the history's land gives way to it.
+				if k.h > 0 && len(chart.tiles) > 0 {
 					u, v := clamp(int((at.x + WINDOW/2)/KNOWN_STEP), 0, KNOWN_N - 1), clamp(int((at.y + WINDOW/2)/KNOWN_STEP), 0, KNOWN_N - 1)
-					if known.mass[v*KNOWN_N + u] == mainland.mass do k.h = -SHOAL
+					for &m in lands do if m.ready && known.mass[v*KNOWN_N + u] == m.mass do k.h = -SHOAL
 				}
 			}
 			job.h[py*N + px] = k.h
@@ -360,22 +360,24 @@ isle_paint :: proc(f: ^Formed) -> []u8 {
 	return pixels
 }
 
-// A tile of the mainland's picture: its coarse stage (continents.odin), the whole of it on cells
-// 64 m across, drawn as the islands are, by its height and lit, with the water its larger valleys
-// carry; its shallows clear to nothing, so that the known world's sea shows round it.
-mass_paint :: proc(tile: [2]int) -> []u8 {
+// How many tiles a large land's picture is along a side.
+land_tiled :: proc(m: ^Landmass) -> int { return clamp(int(math.ceil(m.side/128_000)), 1, MASS_TILES) }
+
+// A tile of a large land's picture: its coarse stage as it is kept (continents.odin, kept.odin), the
+// whole of it on cells 64 m across under the sea as it stands today, drawn as the islands are, by its
+// height and lit, with the water its larger valleys carry; its shallows clear to nothing, so that
+// the known world's sea shows round it.
+mass_paint :: proc(tile: [3]int) -> []u8 {
 	N :: PICTURE_ISLE
-	c, g := &chart, mainland_state.pass
+	m := &lands[tile.z]
+	st := &m.store
 	pixels := make([]u8, N*N*4)
-	per := f64(g.n)/f64(c.tiled)/N   // cells of the lattice to a pixel
-	at :: proc(g: ^Grid, x, y: f64) -> f32 {
-		i, j := clamp(int(x), 0, g.n - 1), clamp(int(y), 0, g.n - 1)
-		return g.z[j*g.n + i]
-	}
+	per := f64(st.n)/f64(land_tiled(m))/N   // cells of the lattice to a pixel
+	at :: proc(st: ^Store, x, y: f64) -> f32 { return store_z(st, clamp(int(x), 0, st.n - 1), clamp(int(y), 0, st.n - 1)) - st.rise }
 	for py in 0..<N do for px in 0..<N {
 		x, y := (f64(tile.x*N + px) + 0.5)*per, (f64(tile.y*N + py) + 0.5)*per
-		h := at(g, x, y)
-		slope := (at(g, x - per, y) - at(g, x + per, y) + at(g, x, y - per) - at(g, x, y + per))/f32(2*per*64)   // rise over run, falling toward the south-east
+		h := at(st, x, y)
+		slope := (at(st, x - per, y) - at(st, x + per, y) + at(st, x, y - per) - at(st, x, y + per))/f32(2*per*64)   // rise over run, falling toward the south-east
 		col: [3]f32
 		a := f32(1)
 		if h <= 0 {
@@ -386,7 +388,7 @@ mass_paint :: proc(tile: [2]int) -> []u8 {
 			col = math.lerp(math.lerp([3]f32{0.42, 0.60, 0.30}, [3]f32{0.66, 0.58, 0.38}, clamp(t*2.2, 0, 1)), [3]f32{0.52, 0.42, 0.34}, clamp(t*3.3 - 1.45, 0, 1))
 			col = math.lerp(col, [3]f32{0.90, 0.89, 0.86}, clamp(t*4 - 3, 0, 1))*clamp(0.8 + 1.6*slope, 0.35, 1.3)
 			drained := f32(0)   // the most land any cell under the pixel drains: a river is a line of cells
-			for j in int(y - per/2)..=int(y + per/2) do for i in int(x - per/2)..=int(x + per/2) do if i >= 0 && j >= 0 && i < g.n && j < g.n && !g.sea[j*g.n + i] do drained = max(drained, g.area[j*g.n + i])
+			for j in int(y - per/2)..=int(y + per/2) do for i in int(x - per/2)..=int(x + per/2) do drained = max(drained, store_area(st, i, j))
 			if drained > 40e6 do col = math.lerp(col, [3]f32{0.10, 0.30, 0.75}, clamp(0.45 + drained/400e6, 0, 1))
 		}
 		for j in 0..<3 do pixels[(py*N + px)*4 + j] = u8(clamp(col[j], 0, 1)*255)
@@ -457,6 +459,9 @@ chart_go :: proc(island: int) {
 		for p in continent.coast do if math.hypot(p.x - world_frame.origin.x, p.y - world_frame.origin.y) < 400_000 {
 			lo, hi = {min(lo.x, p.x), min(lo.y, p.y)}, {max(hi.x, p.x), max(hi.y, p.y)}
 		}
+	} else if i := land_of(island); i >= 0 {   // the islands, and the nearest shore of a large land farther off
+		p := lands[i].shore
+		lo, hi = {min(lo.x, p.x), min(lo.y, p.y)}, {max(hi.x, p.x), max(hi.y, p.y)}
 	}
 	chart_frame(lo, hi, 0.86)
 }
@@ -471,10 +476,15 @@ chart_move :: proc(dt: f64) {
 	if abs(c.span/c.to_span - 1) < 0.002 do c.at, c.span, c.going = c.to_at, c.to_span, false
 }
 
-// What lies at a point of the world: an island's square, the mainland, or nothing of note.
+// What lies at a point of the world: an island's square, a large land, or nothing of note.
 chart_under :: proc(p: [2]f64) -> int {
 	for is in archipelago do if max(abs(p.x - f64(is.origin.x)), abs(p.y - f64(is.origin.y))) < max(is.size/2, 0.5*f64(px(LOOK.isle))*chart.span/f64(max(chart.wide, 1))) do return is.id
-	if world_at(p.x, p.y).inland > 0 do return MAINLAND
+	if world_at(p.x, p.y).inland > 0 {
+		k := known_point(p.x, p.y)
+		u, v := clamp(int((k.x + WINDOW/2)/KNOWN_STEP), 0, KNOWN_N - 1), clamp(int((k.y + WINDOW/2)/KNOWN_STEP), 0, KNOWN_N - 1)
+		for m, i in lands do if m.mass == known.mass[v*KNOWN_N + u] do return MAINLAND - i
+		return MAINLAND
+	}
 	return -1
 }
 
@@ -498,25 +508,49 @@ map_name :: proc(x, y: f32, name: string, colour: Colour, id: string, style := S
 	return false
 }
 
-// Why the mainland is not formed as land, in a player's words.
-mainland_why :: proc() -> string {
-	ms := &mainland_state
-	if !ms.formable && mainland.mass > 0 {   // too large: what forming it would take here, and what is allowed
-		bytes := (mainland.side/64)*(mainland.side/64)*63
-		return fmt.tprintf("it is too large yet. The whole of it on cells 64 m across would take about %.0f min and %.1f GB here, where %.0f min and %.1f GB are allowed", ms.pass_seconds/60, bytes/1e9, f64(PASS_SECONDS)/60, PASS_BYTES/1e9)
-	}
-	return ms.why if ms.why != "" else "its stage has not been come to"
+// The large land a pick names, as its place in `lands`, or -1.
+land_of :: proc(pick: int) -> int { return MAINLAND - pick if pick <= MAINLAND && MAINLAND - pick < len(lands) else -1 }
+
+// A large land's place in `lands`, or -1.
+land_index :: proc(m: ^Landmass) -> int {
+	for &l, i in lands do if &l == m do return i
+	return -1
 }
 
-// How the mainland stands, in a few words.
-mainland_says :: proc() -> string {
-	ms := &mainland_state
-	if sync.atomic_load_explicit(&ms.ready, .Acquire) do return "formed on 64 m cells"
-	if making_stage() == .Mainland && ms.formable && sync.atomic_load(&ms.steps) > 0 do return "being formed"
+// A large land's name: the nearest the start is the mainland, and the others are called by where
+// they lie from it, until the peoples who live on them name them (the plan's P9).
+land_name :: proc(i: int) -> string {
+	if i <= 0 || i >= len(lands) do return "The mainland"
+	start := world_frame.origin
+	way := compass(lands[i].shore.x - start.x, lands[i].shore.y - start.y)
+	same := 0
+	for m in lands[1:i] do same += int(compass(m.shore.x - start.x, m.shore.y - start.y) == way)
+	return fmt.tprintf("The %s land", way) if same == 0 else fmt.tprintf("The far %s land", way) if same == 1 else fmt.tprintf("The %s land, %d", way, same + 1)
+}
+
+// Why a large land is not formed as land, in a player's words.
+land_why :: proc(i: int) -> string {
+	if i < 0 || i >= len(lands) do return "the known world holds no land larger than an island"
+	m := &lands[i]
+	switch {
+	case m.left: return "its forming was stopped before it had run, so it is left as the plates' history has it until this world is opened again"
+	case making.continent == 0: return "it was asked to be left as the plates' history has it (--continent=0)"
+	case !sync.atomic_load(&making.massed): return "its stage has not been come to"
+	}
+	return fmt.tprintf("its nearest shore lies %.0f km from the start, and a world's large lands are formed when it is made only within %d km of the start. It is formed when a view or a site comes within %d km of it: the whole of it on cells 64 m across, about %s here, once, and kept",
+		m.near/1000, COARSE_REACH/1000, COARSE_REACH/1000, span_words(mass_seconds(m)))
+}
+
+// How a large land stands, in a few words.
+land_says :: proc(i: int) -> string {
+	if i < 0 || i >= len(lands) do return "none in the known world"
+	m := &lands[i]
+	if sync.atomic_load_explicit(&lands_state.regions, .Acquire) && sync.atomic_load(&m.ready) do return "formed on 64 m cells" if len(m.cut.size) > 0 else "under the sea"
+	if sync.atomic_load(&lands_state.forming) == m.mass do return "being formed"
 	return "known, not formed"
 }
 
-// The map: the known world's picture, the mainland where its coarse stage stands, the islands
+// The map: the known world's picture, each large land where its coarse stage stands, the islands
 // formed, a mark where one is still to be, and their names. `plain` leaves the names out, for the
 // front door.
 chart_map :: proc(plain: bool) {
@@ -534,9 +568,10 @@ chart_map :: proc(plain: bool) {
 	}
 	lensed := c.lens >= 0 && c.lens_on == c.lens
 	isles := len(archipelago)
-	if c.tiled > 0 && sync.atomic_load_explicit(&mainland_state.ready, .Acquire) do for tile, t in c.tiles do if isles + t < len(c.shown) && c.shown[isles + t] && !lensed {
-		side := mainland.side/f64(c.tiled)
-		corner := [2]f64{f64(mainland.origin.x), f64(mainland.origin.y)} - mainland.side/2 + {f64(tile.x), f64(tile.y)}*side
+	if sync.atomic_load_explicit(&lands_state.regions, .Acquire) do for tile, t in c.tiles do if isles + t < len(c.shown) && c.shown[isles + t] && !lensed {
+		m := &lands[tile.z]
+		side := m.side/f64(land_tiled(m))
+		corner := [2]f64{f64(m.origin.x), f64(m.origin.y)} - m.side/2 + {f64(tile.x), f64(tile.y)}*side
 		lo, k := chart_to(corner), f32(f64(c.wide)/c.span*side)
 		if lo.x > c.wide || lo.y > c.high || lo.x + k < 0 || lo.y + k < 0 do continue
 		it := part(.Picture, {lo.x, lo.y, k, k}, id = "chart.mass")
@@ -580,10 +615,11 @@ chart_map :: proc(plain: bool) {
 		reach := max(side, 2*px(L.isle))/2 + px(2.5) if c.pick == i else max(side*0.36, mark/2) + px(1)
 		map_name(at.x, at.y + reach, name, L.brass if c.pick == i else L.chalk, "chart.name", .Body if side > 14*px(L.isle) else .Small, at.y - reach, i)
 	}
-	if !plain && len(continent.crest) > 0 && c.span > 60_000 {   // the land larger than an island, named where its range's crest runs
-		at := chart_to(continent.crest[len(continent.crest)/2])
+	if !plain && c.span > 60_000 do for i in 0..<max(len(lands), 1) {   // each land larger than an island: the mainland named where its range's crest runs, the others at their nearest shore
+		if i == 0 && len(continent.crest) == 0 || i > 0 && i >= len(lands) do continue
+		at := chart_to(continent.crest[len(continent.crest)/2] if i == 0 else lands[i].shore)
 		if at.x > 0 && at.y > 0 && at.x < c.wide && at.y < c.high {
-			map_name(at.x, at.y, fmt.tprintf("The mainland: %s", mainland_says()), L.brass if c.pick == MAINLAND else L.chalk, "chart.mainland", take = MAINLAND)
+			map_name(at.x, at.y, fmt.tprintf("%s: %s", land_name(i), land_says(i)), L.brass if c.pick == MAINLAND - i else L.chalk, "chart.mainland", take = MAINLAND - i)
 		}
 	}
 	if plain do return
@@ -611,10 +647,10 @@ chart_take :: proc(island: int, go := false) {
 	c := &chart
 	if island != c.pick {
 		c.pick, c.scroll, c.row = island, 0, -1   // the depth shown is kept from island to island, so that two can be compared in it
-		if island == MAINLAND do c.depth = .Land
+		if island <= MAINLAND do c.depth = .Land
 		if island >= 0 do forming_toward(island)   // its land and its neighbours' are made next
 	}
-	if go && (island >= 0 || island == MAINLAND) do chart_go(island)
+	if go && (island >= 0 || island <= MAINLAND) do chart_go(island)
 }
 
 card_row :: proc(k: ^Isle_Card, d: Isle_Depth, thing, says: string, why := "", sign := Sign.None, block := Colour{}, faint := false) {
@@ -645,8 +681,10 @@ card_write :: proc() {
 	k := &c.card
 	now := c.pick >= 0 && is_formed(&formed[c.pick])
 	pieces := 0
-	if c.pick == MAINLAND && sync.atomic_load_explicit(&mainland_state.ready, .Acquire) do for &f in formed[mainland_state.first:] do pieces += int(is_formed(&f))
-	if c.pick == k.of && now == k.formed && pieces == k.pieces && !(c.pick == MAINLAND && making_stage() == .Mainland) do return
+	li := land_of(c.pick)
+	landed := li >= 0 && sync.atomic_load_explicit(&lands_state.regions, .Acquire) && sync.atomic_load(&lands[li].ready)
+	if landed do for &f in formed[lands[li].first:][:len(lands[li].cut.size)] do pieces += int(is_formed(&f))
+	if c.pick == k.of && now == k.formed && pieces == k.pieces && !(c.pick <= MAINLAND && making_stage() == .Mainland) do return
 	delete(k.title); delete(k.sub)
 	for &rows in k.rows {
 		for r in rows { delete(r.thing); delete(r.says); delete(r.why) }
@@ -656,30 +694,34 @@ card_write :: proc() {
 	if c.pick == -1 do return
 	byte :: proc(v: [3]f32) -> Colour { return {u8(clamp(v.r, 0, 1)*255), u8(clamp(v.g, 0, 1)*255), u8(clamp(v.b, 0, 1)*255), 255} }
 	o_start := world_frame.origin
-	if c.pick == MAINLAND {
-		ms := &mainland_state
+	if c.pick <= MAINLAND {   // a large land: how it stands as land, and why; then what the world knows of it
 		ashore := f64(1e12)
-		for p in continent.coast do ashore = min(ashore, math.hypot(p.x - o_start.x, p.y - o_start.y))
-		k.title = strings.clone("The mainland")
-		k.sub = fmt.aprintf("Land larger than an island, %.0f km from the start", ashore/1000)
-		ready := sync.atomic_load_explicit(&ms.ready, .Acquire)
+		if li >= 0 do ashore = lands[li].near
+		else do for p in continent.coast do ashore = min(ashore, math.hypot(p.x - o_start.x, p.y - o_start.y))
+		k.title = strings.clone(land_name(li))
+		k.sub = fmt.aprintf("Land larger than an island, %.0f km %s of the start", ashore/1000, compass(lands[li].shore.x - o_start.x, lands[li].shore.y - o_start.y)) if li >= 0 else fmt.aprintf("Land larger than an island, %.0f km from the start", ashore/1000)
 		switch {
-		case ready:
-			card_row(k, .Land, "As land", "formed on 64 m cells", fmt.tprintf("Its coarse stage is run: the whole of it through the history's 64 m steps, %s. That gives its ranges, its valleys and where its rivers run, which is what the map draws.", "read back from where an earlier run kept it" if ms.kept else "formed in this run and kept"), .Well)
-			card_row(k, .Land, "Ground to walk on", fmt.tprintf("%d of %d pieces", pieces, len(ms.cut.size)), fmt.tprintf("It is cut along its drainage into pieces of about %d km². A piece is formed down to the ground you walk on when the start lies within %d km of it, and within %d km while you play. No door leads to it yet.", PIECE_KM2, NEAR_REACH/1000, BACKGROUND_REACH/1000), .Caution if pieces == 0 else .None)
-		case making_stage() == .Mainland && ms.formable && sync.atomic_load(&ms.steps) > 0:
-			card_row(k, .Land, "As land", "being formed", "Its coarse stage is running: the whole of it through the history's 64 m steps. It is made once for a world and kept.", .Caution)
+		case landed && len(lands[li].cut.size) == 0:
+			card_row(k, .Land, "As land", "under the sea", "Its coarse stage is run, and nothing of it is left over the sea: its ground starts under the sea when its forming begins, since the history is still raising it and the sea floor does not rise with the land.", .Caution)
+			card_row(k, .Land, "Can be landed on", "no", "Nothing is formed there to stand on.", faint = true)
+		case landed:
+			m := &lands[li]
+			card_row(k, .Land, "As land", "formed on 64 m cells", fmt.tprintf("Its coarse stage is run: the whole of it through the history's 64 m steps, %s. That gives its ranges, its valleys and where its rivers run, which is what the map draws.", "read back from where an earlier run kept it" if m.kept else fmt.tprintf("formed in this run in %s and kept", span_words(m.took))), .Well)
+			card_row(k, .Land, "Ground to walk on", fmt.tprintf("%d of %s pieces", pieces, thousands(len(m.cut.size))), fmt.tprintf("It is cut along its drainage into pieces of about %d km². A piece is formed down to the ground you walk on when the start lies within %d km of it, and within %.0f km of the view while you look or play; one left far behind is let go and read back on return. Beyond the pieces formed its land is drawn from the 64 m cells. No door leads to it yet.", PIECE_KM2, NEAR_REACH/1000, mass_reach/1000), .Caution if pieces == 0 else .None)
+		case li >= 0 && sync.atomic_load(&lands_state.forming) == lands[li].mass:
+			done, all, _ := making_progress(.Mainland)
+			card_row(k, .Land, "As land", "being formed", fmt.tprintf("Its coarse stage is running: the whole of it through the history's 64 m steps, %d of %d so far. It is made once for a world and kept.", done, all), .Caution)
 		case:
-			card_row(k, .Land, "As land", "known, not formed", fmt.tprintf("The plates' history made it, and the world knows its coast and its heights. It is not formed as land: %s.", mainland_why()), .Caution)
+			card_row(k, .Land, "As land", "known, not formed", fmt.tprintf("The plates' history made it, and the world knows its coast and its heights. It is not formed as land: %s.", land_why(li)), .Caution)
 			card_row(k, .Land, "Can be landed on", "no", "Nothing is formed there to stand on.", faint = true)
 		}
-		if mainland.mass > 0 {
-			card_row(k, .Land, "Land", fmt.tprintf("%s km²", thousands(int(mainland.area))), "As the plates' history left it, within the known world.")
-			card_row(k, .Land, "Highest ground", fmt.tprintf("%s m", thousands(int(mainland.top))), "The history's highest ground on it, on cells 2 km across.")
+		if li >= 0 {
+			card_row(k, .Land, "Land", fmt.tprintf("%s km²", thousands(int(lands[li].area))), "As the plates' history left it, within the known world.")
+			card_row(k, .Land, "Highest ground", fmt.tprintf("%s m", thousands(int(lands[li].top))), "The history's highest ground on it, on cells 2 km across.")
 		}
-		card_row(k, .Land, "Its range's crest", fmt.tprintf("%s m", thousands(int(continent.height))), "The middle height of the crest of the range behind the coast nearest the start.")
+		if li <= 0 do card_row(k, .Land, "Its range's crest", fmt.tprintf("%s m", thousands(int(continent.height))), "The middle height of the crest of the range behind the coast nearest the start.")
 		card_row(k, .Land, "Coast from the start", fmt.tprintf("%.0f km", ashore/1000))
-		card_row(k, .Life, "Animals", "every kind the islands have", "The islands' animals came from it, so every kind is taken to live there until it is formed and can say.")
+		if li <= 0 do card_row(k, .Life, "Animals", "every kind the islands have", "The islands' animals came from it, so every kind is taken to live there until it is formed and can say.")
 		return
 	}
 	is := archipelago[c.pick]
@@ -992,7 +1034,7 @@ world_build :: proc() {
 	u.place_foot = r.y + r.h
 }
 
-// Right: the islands there are to choose from, a row each, and the mainland. A row takes its island
+// Right: the islands there are to choose from, a row each, and the large lands. A row takes its island
 // in the hand and the view to it. Returns where the list ends.
 isles_build :: proc(room: f32) -> (foot: f32) {
 	c, u, L := &chart, &play, &LOOK
@@ -1009,7 +1051,7 @@ isles_build :: proc(room: f32) -> (foot: f32) {
 	part(.Text, {cx + inner - col.y, cy + line_of(.Title) - line_of(.Small), col.y, line_of(.Small)}, "highest", .Small, L.ash, {.Right}, id = "isles.head")
 	cy += line_of(.Title) + px(2)
 	high := px(L.isle_row)
-	rows := len(archipelago) + 1
+	rows := len(archipelago) + max(len(lands), 1)
 	box := Rect{x + 1, cy, w - 2, min(f32(rows)*high, max(room - (cy - y) - px(L.pad.y), 2*high))}
 	c.list_over = max(f32(rows)*high - box.h, 0)
 	c.list_scroll = clamp(c.list_scroll, 0, c.list_over)
@@ -1018,15 +1060,19 @@ isles_build :: proc(room: f32) -> (foot: f32) {
 	for i in 0..<rows {
 		ry := cy + f32(i)*high - c.list_scroll
 		if ry + high < box.y || ry > box.y + box.h do continue
-		mass := i == len(archipelago)
-		of := MAINLAND if mass else i
-		part(.Row, {box.x, ry, box.w, high}, state = {.Chosen} if c.pick == of else {}, act = .Isle_Take, arg = of, id = "isles.row" if !mass else "isles.mainland", tip = "Take it in the hand, and go to it." if !mass else "Take the mainland in the hand.")
+		mass := i >= len(archipelago)
+		li := i - len(archipelago)   // which large land, the nearest the start first
+		of := MAINLAND - li if mass else i
+		part(.Row, {box.x, ry, box.w, high}, state = {.Chosen} if c.pick == of else {}, act = .Isle_Take, arg = of, id = "isles.row" if !mass else "isles.mainland", tip = "Take it in the hand, and go to it." if !mass else "Take it in the hand, and see where it lies.")
 		pic := Rect{cx, ry + math.round((high - px(L.thumb))/2), px(L.thumb), px(L.thumb)}
 		part(.Fill, pic, colour = L.seas[1])
-		name, under, land, top := "The mainland", mainland_says(), "", ""
+		name, under, land, top := land_name(li), land_says(li), "", ""
 		if mass {
 			part(.Fill, {pic.x + px(1.5), pic.y + px(2.5), pic.w - px(3), pic.h - px(5)}, colour = L.unformed)
-			if mainland.mass > 0 do land = fmt.tprintf("%s km²", thousands(int(mainland.area)))
+			if li < len(lands) {
+				land = fmt.tprintf("%s km²", thousands(int(lands[li].area)))
+				if li > 0 do under = fmt.tprintf("%s, %.0f km %s", under, lands[li].near/1000, compass_short(lands[li].shore.x - start.x, lands[li].shore.y - start.y))
+			}
 		} else {
 			is := archipelago[i]
 			if i < len(c.shown) && c.shown[i] {
@@ -1045,6 +1091,11 @@ isles_build :: proc(room: f32) -> (foot: f32) {
 		}
 		tx := cx + px(L.thumb) + px(3)
 		ty := ry + math.round((high - line_of(.Name) - line_of(.Small))/2)
+		if mass && land != "" {   // a large land's name stands beside its figure: shorter where the two do not fit, and cut where that does not either
+			room := inner - (tx - cx) - text_wide(.Body, land) - px(2)
+			if text_wide(.Name, name) > room && strings.has_prefix(name, "The ") do name = capital(name[4:])
+			name = fit(.Name, name, room)
+		}
 		words(tx, ty, name, .Name, L.brass if c.pick == of else L.chalk, "isles.name")
 		words(tx, ty + line_of(.Name), fit(.Small, under, inner - (tx - cx)), .Small, L.ash, "isles.kind")
 		if land != "" do part(.Text, {cx + inner - col.x - col.y, ty, col.x, line_of(.Body)} if !mass else Rect{cx + inner - col.x - col.y, ty, col.x + col.y, line_of(.Body)}, land, .Body, {}, {.Right}, id = "isles.land")
@@ -1149,7 +1200,7 @@ chart_tip :: proc(pointer: [2]f32) -> string {
 		return fmt.tprintf("%.4g%s", v, FIELDS[row.field].unit)
 	}
 	if under >= 0 && under != c.pick do return fmt.tprintf("%s: %s", isle_name(under), kind_said(archipelago[under].kind).one)
-	if under == MAINLAND do return fmt.tprintf("The mainland: %s", mainland_says())
+	if under <= MAINLAND do return fmt.tprintf("%s: %s", land_name(MAINLAND - under), land_says(MAINLAND - under))
 	return ""
 }
 
@@ -1182,7 +1233,7 @@ chart_build :: proc() {
 		builtin.resize(&screen.items, first)
 	}
 	head := px(L.pad.y)*2 + line_of(.Title) + px(2)
-	rows_high := f32(len(archipelago) + 1)*px(L.isle_row) + head if records else 0
+	rows_high := f32(len(archipelago) + 1)*px(L.isle_row) + head if records else 0   // the islands and the mainland; the large lands farther off are scrolled to where the world being made needs the room
 	made := making_build(screen.w - px(L.margin), top - px(2), wide, false)
 	foot := (made.y if made.h > 0 else top) - px(2)
 	if made.h > 0 && foot - px(L.margin) < rows_high + lens_high {   // no room for all of it: the making is told in brief
