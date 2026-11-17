@@ -312,7 +312,7 @@ alerts_keep :: proc() {
 	reach, stuff, hard := 0, 0, 0
 	first: [3]Site_Seen
 	for site in s.sites {
-		if site.busy == 0 && site.waits[.None] == 0 && site.waits[.No_Way] + site.waits[.No_Room] > 0 && site.waits[.Front] + site.waits[.No_Way] + site.waits[.No_Room] == site.left {
+		if site.busy == 0 && site.left > 0 && site.waits[.Front] + site.waits[.No_Way] + site.waits[.No_Room] == site.left {   // nothing of it in hand or free to take, and none of it within any floor's reach
 			if reach == 0 do first[0] = site
 			reach += 1
 		}
