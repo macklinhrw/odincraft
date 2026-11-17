@@ -191,3 +191,58 @@ Read on 2026-11-16 for step E-1 (expedition planning), before any of it was buil
 - **The party is summed by the kinds of work there are** (`WORKS`): who digs, who fells, who builds, by name, and "no one's trade" where it is so. It is what "Team skills" is for: the reason to draw again.
 - **Set out is one button, bottom right, with its key; Back is at the other end with Escape.** What was chosen is kept when the player goes back and comes in again.
 - **No list of what they bring, no home hold, no finder**: P5, P9, and a world with more places than can be read.
+
+## 14. Needs and the year: hunger, thirst, sleep, gathering, fishing, the calendar
+
+Read on 2026-11-16 for step P4's first half, before it was built. Every figure has its file; "(from memory)" marks what is not in these folders.
+
+### The calendar
+
+| | A day | A year | Real time of a day | Real time of a year |
+|---|---|---|---|---|
+| RimWorld | 60,000 ticks, 2,500 an hour (`RW/RimWorld/GenDate.cs:16,28`) | 60 days, four quadrums of 15 (`GenDate.cs:25,27`) | 16:40 at normal speed, 5:33 at 3 times, 2:47 at 6 (60 ticks a second times `TickRateMultiplier` 1, 3, 6, or 12 when nothing is happening: `RW/Verse/TickManager.cs:58-90`) | 16.7 hours at normal, 2.8 at 6 times |
+| Dwarf Fortress | 1,200 ticks (`DH/docs/set-timeskip-duration.rst:57`) | 403,200 ticks: 12 months of 28 days, 336 days (`:59-60`) | 12 s at the default 100 ticks a second (the cap from memory) | 67 minutes |
+| Ingnomia | 14,400 ticks, 10 a game minute (`IG/src/base/util.h:96-99`) | 48 days, four seasons of 12 (`util.h:100`) | 12 minutes at its slow 50 ms a tick, 72 s at its fast 5 ms (`IG/src/game/game.h:134-135`) | 9.6 hours slow |
+
+RimWorld's pawns and Ingnomia's gnomes live by the hour: they work by day and sleep by night. Dwarf Fortress's day is too short to live by: a dwarf sleeps about once a month and eats twice a season, and the season is what the player feels. RimWorld's default timetable sleeps from 22:00 to 06:00 (`RW/RimWorld/Pawn_TimetableTracker.cs:31`: `index <= 5 || index > 21`).
+
+### Hunger
+
+- **RimWorld** (`RW/RimWorld/Need_Food.cs`, `HungerLevelUtility.cs`, `JobGiver_GetFood.cs`; `RW/Verse/RaceProperties.cs:150-170`). A person's food holds 1.0 and falls 2.6667e-5 a tick, 1.6 a day: full to nothing in 15 hours. It falls at half that once hungry, a quarter once urgently hungry, and not at all at nothing (`HungerMultiplier`: 1, 0.5, 0.25, 0). A pawn looks for food under 0.3 (`FoodLevelPercentageWantEat` for an omnivore; `GetPriority` 9.5, over rest's 8), is "hungry" under 0.24 and "urgently hungry" under 0.12. A new colonist starts at 0.8. Eating takes 500 ticks, 8 s (`IngestibleProperties.baseIngestTicks`); a simple meal is 0.9 (`RD/ThingDefs_Items/Items_Food.xml`), so a pawn eats a little under twice a day. At nothing, malnutrition grows 0.453 a day, a fifth more or less by the pawn, and kills at 1 (`BaseMalnutritionSeverityPerDay`; `RD/HediffDefs/Hediffs_Global_Needs.xml`: stages at 0.2, 0.4, 0.6, 0.8, `lethalSeverity` 1): 2.2 days. From a full belly to death is about 3.1 days, 52 minutes at normal speed and under 9 at 6 times.
+- **Dwarf Fortress** (`DF/df.unit.xml:2945-2953`; `DH/internal/notify/notifications.lua:93-95`). `hunger_timer` counts up every tick and eating sets it back. DFHack calls a unit in dire need over 75,000, which is the game's "starving": 62 days. Hungry is 50,000 (from memory). Death comes only when `stored_fat` is gone ("hunger leads to death only when 0"). The status flags are drowsy, very drowsy, dehydrated and starving (`DF/df.d_interface.xml:7241-7245`).
+- **Ingnomia** (`IG/content/db/ingnomia.db.sql:10582-10585,10596`). Hunger holds 100 and loses 0.025 a game minute, 36 a day: hungry at 30 (1.9 days), very hungry at 15, starving at 0 (2.8 days: "EatClosest"), dead at -100 (5.6 days).
+
+### Thirst
+
+- **RimWorld has none.**
+- **Dwarf Fortress**: `thirst_timer`; dire over 50,000 ("dehydrated", 42 days), thirsty at 25,000 (from memory): thirst runs twice as fast as hunger, so a dwarf drinks about twice for each meal. The job is `Drink`, "from drink area", or `DrinkItem` from a container (`DF/df.job.xml:205-217`): a dwarf with no drink in store walks to water and drinks there.
+- **Ingnomia** (`:10586-10589,10597`): the same figures as hunger.
+
+### Sleep
+
+- **RimWorld** (`RW/RimWorld/Need_Rest.cs:20-28,42-55,94`; `JobGiver_GetRest.cs:28-58`). Rest holds 1.0 and falls 1.5833e-5 a tick, 0.95 a day: full to tired (0.28) in 18 hours, very tired at 0.14. Asleep it gains 3.8095e-5 a tick times the bed's worth, a full sleep in 10.5 hours. A pawn lies down under 0.3 at any hour, and whatever its rest in the hours its timetable gives to sleep, where it falls asleep under 0.75 (`DefaultFallAsleepMaxLevel`) and wakes at 1.0. At nothing it falls asleep where it stands, on average within a quarter of a day. With no bed it sleeps on the ground where it is.
+- **Dwarf Fortress**: `sleepiness_timer`; dire over 150,000 ("very drowsy"); drowsy at 57,600 (from memory), 48 days.
+- **Ingnomia** (`:10580-10581,10595`): loses 0.03 a minute, 43 a day; very sleepy at 25, asleep on the spot at 0; sleep gives 0.35 a minute.
+
+### Gathering and fishing
+
+- **RimWorld**: plants are harvested by a designation dragged over them, one mark a plant, done once. A wild berry bush gives 10 berries of 0.05, half a nutrition, for 250 ticks of work, four seconds, and bears again 4.2 days later (`RD/ThingDefs_Plants/Plants_Wild_Temperate.xml`, `Plant_Berry`: `harvestYield` 10, `harvestWork` 250, `growDays` 6, `harvestAfterGrowth` 0.30; `Items_Resource_RawPlant.xml`). Rice gives 6 in 3 days, potatoes 11 in 5.8, corn 22 in 11.3 (`Plants_Cultivated_Farm.xml`). A hungry pawn with no meal eats from a bush itself. Fishing came with Odyssey (data only here, 1.6): water holds a population by its biome and size (`maxFishPopulation` 480 to 600, `Rimworld_Data/Odyssey/Defs/BiomeDefs/`), fish are 0.05 to 0.5 nutrition (`Items_Resource_Fish.xml`), and "larger ponds yield more fish per catch" (`TipSetDefs/Tips.xml`); it is marked as a zone on water (inference from its work type and stats).
+- **Dwarf Fortress**: `GatherPlants` and `Fish` are jobs (`DF/df.job.xml:167,235`); plants are designated by dragging (`DesignateGatherPlants`, `DF/df.plotinfo.xml:131`) and there are zones for gathering and for fishing (`PlantGathering`, `FishingArea`, `DF/df.d_basics.xml:139,145`). A fisher fishes any water it can reach.
+
+### What a player expects
+
+- **Dwarves look after themselves.** Nobody is told to eat, drink or sleep. A thirsty dwarf walks to water; a hungry one to food; a tired one lies down, at night for choice.
+- **Work waits, and the screen says why.** A pawn that left a wall to eat is "eating", and the wall's card does not say "waiting for a dwarf".
+- **Food is a count at the top, with how long it lasts.** RimWorld's resource readout and Dwarf Fortress's "Food" and "Drink" figures are the first thing looked at each morning.
+- **Gathering is a drag across the bushes**, and what would be taken shows before the button is let go. A bush with nothing on it is not marked.
+- **Needs are words and bars on the pawn's card**, worst first, and a list of the colony sorts by them. "Hungry", "starving", "drowsy" are words a player learns in a minute.
+- **Death is not sudden.** There is a stage with a name before it, an alert that stays, and time to act; and the death itself is a message nobody can miss, with the body left where it fell.
+- **Time can be hurried**, and a night at the fastest speed is under a minute.
+
+### For OdinCraft (as built, `plan.md`, "P4, first half, as built")
+
+- **A day of 20 minutes and a year of 48 days.** RimWorld's day and a fifth: a dwarf here walks to a stream to drink and over pathless slopes to its work. The year is Ingnomia's, four seasons of twelve days, and takes 16 hours at the clock's own pace where RimWorld's takes 16.7.
+- **Needs are rows** (`WANTS`, `src/needs.odin`): thirst falls two wholes a day, so a dwarf drinks about three times; hunger 1.2, two meals of two or three things; sleep 1.05 awake and mends 2.1 asleep, eight hours for sixteen. A dwarf sees to a need under about half when it has nothing in hand, and leaves its work for one under a fifth.
+- **Death takes a day and a half of thirst after running dry and three days of hunger**: longer than RimWorld's 2.2, because the remedy here may be a walk and an order away, and the first of it is said when the need reaches nothing.
+- **Gather and Fish are marks dragged like any order**, done once: a plant bears again next year, fished water holds fish again in four days. A hungry dwarf with no food lying anywhere marks the nearest for itself, as RimWorld's eats from a bush.
+- **A plant's shoots are a tenth of a day, a shii's nuts a day and a third, an ayu two fifths of a day**: one drag of ten by ten on a wood's floor feeds a dwarf two or three days, where RimWorld's bush is a third of one.

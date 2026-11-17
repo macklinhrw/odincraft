@@ -288,7 +288,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 	hold_enter(&p, &a, opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
 	forming_begin(far, 3, .Low, false)
 	pieces_begin(around, BACKGROUND_REACH)   // the landmass's pieces within reach, nearest first, one at a time
-	hour := opt.hour
+	turned := f32(0)   // hours the sun was turned by hand
 	place := Mat.Stone
 	captured := false
 
@@ -380,7 +380,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 		keys := sdl.GetKeyboardState(nil)
 		down :: proc(keys: [^]bool, s: sdl.Scancode) -> f32 { return 1 if keys[int(s)] && !typing && !play.menu else 0 }   // not while a field is typed in, or the menu is open
 		wish := [3]f32{down(keys, .D) - down(keys, .A), down(keys, .SPACE) - down(keys, .LCTRL), down(keys, .W) - down(keys, .S)}
-		hour = math.mod(hour + (down(keys, .RIGHTBRACKET) - down(keys, .LEFTBRACKET))*f32(dt)*3 + 24, 24)
+		turned = math.mod(turned + (down(keys, .RIGHTBRACKET) - down(keys, .LEFTBRACKET))*f32(dt)*3 + 24, 24)   // the sun turned by hand, to look: the dwarves' day is the clock's
 
 		// The camera: the player's eye, or the view from above, and the point the world streams round.
 		eye, centre: [3]f64
@@ -404,6 +404,12 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 			yaw, fov = a.yaw, ABOVE_FOV
 		}
 		passed := clock_step(&clock, 0 if play.menu else dt)   // the world's time this frame: none while the menu is open
+		// The day and the hour (clock.odin): the dwarves' own where a hold runs, since the screen says the
+		// day they live by, and else the clock's. --hour and --day hold the sun where they say, for a
+		// picture of the land; the date said is the true one all the same.
+		today := date_at(watch.clock if hold.found else clock.seconds)
+		hour := math.mod((opt.hour if opt.has_hour else today.hour) + turned, 24)
+		sun_day := opt.day if opt.has_day else today.sun
 		world_update(w, g.dev, centre)
 		water_update(&w.water, g.dev, passed)
 
@@ -470,11 +476,11 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 
 		// The creatures' clock runs from the day and hour; a picture is taken `after` seconds into it, so two
 		// runs show the same animals, and two pictures with different `after` show them moved on.
-		posed := f64(opt.day)*86400 + f64(hour)*3600 + (opt.after if opt.shot != "" && opt.bench == 0 else clock.seconds)
+		posed := f64(sun_day)*86400 + f64(hour)*3600 + (opt.after if opt.shot != "" && opt.bench == 0 else clock.seconds)
 		// From above the animals are posed round the ground under the view's middle, not round an eye
 		// that may stand a kilometre off, and from the eye's height, where no fish takes fright at it.
 		near := eye if afoot else [3]f64{a.at.x, eye.y, a.at.z}
-		boxes := creatures_pose(near, posed, f32(passed), hour, opt.day, &w.water)
+		boxes := creatures_pose(near, posed, f32(passed), hour, sun_day, &w.water)
 		for &b in boxes do b.centre += {f32(near.x - eye.x), 0, f32(near.z - eye.z)}
 		boxes = hold_pose(boxes, eye, dt)   // the boat and the dwarves
 		// The interface's parts for this frame, with the pointer where it is: nowhere while the mouse turns the head, or in a picture with no --cursor.
@@ -493,7 +499,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 			for c in BUILD_CHOICES do if bar.tool == .Build && strings.has_prefix(opt.plan, PLANS[c.plan]) do bar.build = c.plan
 			if strings.contains(opt.plan, "timber") do bar.stuff = .Timber
 			bar.posed = opt.cursor_box
-			if bar.posed && bar.tool != .Fell && bar.tool != .Send {   // as a drag lies: flat on the level it began on, and a line where the tool draws one
+			if bar.posed && bar.tool != .Fell && bar.tool != .Send && bar.tool != .Gather && bar.tool != .Fish {   // as a drag lies: flat on the level it began on, and a line where the tool draws one
 				a.mark[1].y = a.mark[0].y
 				if tool_line() {
 					if abs(a.mark[1].x - a.mark[0].x) >= abs(a.mark[1].z - a.mark[0].z) do a.mark[1].z = a.mark[0].z
@@ -504,7 +510,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 			a.marking = bar.posed && a.marked   // as while the button is down
 		}
 		listed := sdl.GetPerformanceCounter()
-		play_frame(f32(pw), f32(ph), at, dt, hour, opt.day, eye, yaw, pitch, fov, boxes)
+		play_frame(f32(pw), f32(ph), at, dt, hour, sun_day, today, eye, yaw, pitch, fov, boxes)
 		append(&listing, f32(f64(sdl.GetPerformanceCounter() - listed)/frequency))
 		script_parts()
 		if shot == opt.shot && shot != "" && opt.say || say_now do play_say()
@@ -513,7 +519,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 			else do fmt.println("script: nothing is under the pointer")
 		}
 		view := View {
-			eye = eye, yaw = yaw, pitch = pitch, hour = hour, day = opt.day, weather = opt.weather, seconds = f32(clock.seconds),
+			eye = eye, yaw = yaw, pitch = pitch, hour = hour, day = sun_day, weather_day = opt.day + f32(today.day), weather = opt.weather, seconds = f32(clock.seconds),
 			target = hit, has_target = aiming, crosshair = shot == "", boxes = boxes,
 			fov = fov, focus = eye if afoot else a.at, above = !afoot, level = NO_CUT if afoot else above_level(&a), bare = !afoot && a.bare, has_mark = !afoot && a.marked,
 		}

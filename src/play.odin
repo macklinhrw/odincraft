@@ -79,6 +79,7 @@ BINDS := [?]Bind{
 	{.D, "D", .Order, int(Tool.Dig), int(Tool.Dig), .Above, false}, {.T, "T", .Order, int(Tool.Fell), int(Tool.Fell), .Above, false},
 	{.B, "B", .Order, int(Tool.Build), int(Tool.Build), .Above, false}, {.M, "M", .Order, int(Tool.Send), int(Tool.Send), .Either, false},
 	{.S, "S", .Order, int(Tool.Store), int(Tool.Store), .Above, false},
+	{.G, "G", .Order, int(Tool.Gather), int(Tool.Gather), .Above, false}, {.N, "N", .Order, int(Tool.Fish), int(Tool.Fish), .Above, false},
 	{.X, "X", .Order, int(Tool.Remove), int(Tool.Remove), .Above, false},
 	{.ESCAPE, "Esc", .Back, 0, 0, .Menu, false},
 	{.W, "W", .Leave, int(Leave.World), int(Leave.World), .Menu, false}, {.D, "D", .Leave, int(Leave.Door), int(Leave.Door), .Menu, false},
@@ -164,6 +165,7 @@ Play :: struct {
 	aspect:   f32,
 	eye:      [3]f64,
 	yaw, pitch, fov, hour, day: f32,
+	date:     Date,            // the day and the hour of the world, as the clock has them (clock.odin)
 	aim:      Pick,            // in first person, the block aimed at
 	now:      f64,             // real seconds since the game began
 	rest:     f64,             // seconds the pointer has rested
@@ -185,6 +187,8 @@ Play :: struct {
 	several:  [dynamic]int,    // the dwarves in the hand, one or more, in the party's order
 	kept:     [dynamic]int,    // those kept in view at the top, in the order they were chosen
 	greeted:  bool,            // the first boat's were kept in view, once
+	mourned:  [dynamic]bool,   // the dwarves whose deaths were told
+	foraging: bool,            // the alert that the hold lives from hand to mouth stands
 	need:     [dynamic]i8,     // for each dwarf its row of NEEDS, or -1
 	needing:  [dynamic]int,    // the dwarves who need the player, worst first
 	alerted:  [len(NEEDS)]u64, // those each need's alert was last raised for
@@ -514,6 +518,7 @@ play_act :: proc(act: Act, arg: int) {
 				dwarves_take(who[:])
 				if at, ok := several_middle(); ok do go_to(at)
 			} else do go_to(m.at.xz)
+			if strings.has_prefix(m.id, "died-") do alert_clear(m.id)   // a death is told until it is looked at
 		}
 	case .Escape:   // closes the topmost thing (I6); with nothing open, it opens the menu
 		switch {
@@ -672,16 +677,6 @@ place_title :: proc(at: [3]f64) -> string {
 	return fmt.tprintf("%s of %s", sentence(compass(x - c.at.x, z - c.at.y))[:len(compass(x - c.at.x, z - c.at.y))], name)
 }
 
-// The day of the year in words, by the season it falls in, from the March equinox.
-date_words :: proc(day: f32) -> string {
-	SEASONS := [4]string{"spring", "summer", "autumn", "winter"}
-	d := (int(day) - 80)%%365
-	season := min(d*4/365, 3)
-	n := d - season*365/4 + 1
-	ending := "th" if n%100 >= 11 && n%100 <= 13 else "st" if n%10 == 1 else "nd" if n%10 == 2 else "rd" if n%10 == 3 else "th"
-	return fmt.tprintf("%d%s of %s", n, ending, SEASONS[season])
-}
-
 // A point of the world in the picture, in pixels, where it is in front of the eye.
 project :: proc(p: [3]f64) -> (at: [2]f32, ok: bool) {
 	u := &play
@@ -701,7 +696,8 @@ project :: proc(p: [3]f64) -> (at: [2]f32, ok: bool) {
 
 // List the screen's parts for this frame, and say which the pointer is on. `pointer` is in the
 // picture's pixels; `boxes` are the frame's animals, for the pointer to find one among.
-play_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64, hour, day: f32, eye: [3]f64, yaw, pitch, fov: f32, boxes: []Box) {
+play_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64, hour, day: f32, date: Date, eye: [3]f64, yaw, pitch, fov: f32, boxes: []Box) {
+	play.date = date
 	u, a, s := &play, play.a, &screen
 	clear(&s.items)
 	clear(&ui.quads)
@@ -796,12 +792,12 @@ place_build :: proc() {
 	u, L := &play, &LOOK
 	u.area = .Place
 	title := place_title(u.p.pos if u.afoot^ else u.a.at)
-	date := date_words(u.day)
+	date := date_words(u.date)
 	at := u.p.pos if u.afoot^ else u.a.at
 	if f := island_near(at.x, at.z); f != nil && off_island(f, at.x, at.z) <= 1500 {   // the island it is on, by its name (making.odin), before the day
 		if name := isle_name(f.island.id) if f.island.id < len(archipelago) else "The mainland"; name != "" do date = fmt.tprintf("%s, %s", name, date)
 	}
-	hour := fmt.tprintf("%02d:%02d", int(u.hour), int(u.hour*60)%60)
+	hour := fmt.tprintf("%02d:%02d", int(u.date.hour), int(u.date.hour*60)%60)   // the hour the dwarves live by, whatever the sun was turned to
 	first := button_wide("Running at 00:00", key_for(.Pause))
 	names := [3]string{"Slow", "Fast", "Fastest"}
 	ids := [3]string{"clock.slow", "clock.fast", "clock.fastest"}
@@ -864,19 +860,27 @@ stores_build :: proc() -> (foot: f32) {
 	loose, timber := 0, 0
 	Row :: struct { mat: Mat, name: string, n: int }
 	rows := make([dynamic]Row, context.temp_allocator)
+	food := make([dynamic]Row, context.temp_allocator)
 	for n, m in s.store do if n > 0 {
-		if is_stuff(m, .Timber) do timber += int(n)
+		if is(m, FOOD) do append(&food, Row{m, capital(store_words(m)), int(n)})
+		else if is_stuff(m, .Timber) do timber += int(n)
 		else do append(&rows, Row{m, sentence(mat_words(m))[:len(mat_words(m))], int(n)})
 	}
 	for n in s.loose do loose += int(n)
 	if timber > 0 do append(&rows, Row{.Timber, "Timber", timber})
-	if len(rows) == 0 && loose == 0 && len(s.zones) == 0 do return
+	if len(rows) == 0 && len(food) == 0 && loose == 0 && len(s.zones) == 0 do return
 	slice.sort_by(rows[:], proc(a, b: Row) -> bool { return a.n > b.n })
-	if len(rows) > 5 do builtin.resize(&rows, 5)
+	slice.sort_by(food[:], proc(a, b: Row) -> bool { return a.n > b.n })
+	if len(rows) > 4 do builtin.resize(&rows, 4)
+	if len(food) > 4 do builtin.resize(&food, 4)
 	note := fmt.tprintf("%d loose: no stockpile", loose) if len(s.zones) == 0 && loose > 0 else "No stockpile yet" if len(s.zones) == 0 else fmt.tprintf("%d lie loose, not counted", loose) if loose > 0 else ""
+	// How long the food stored lasts those alive (needs.odin): the one figure a player plans a season by.
+	days := s.food_days
+	lasts := "No food stored" if days <= 0 else "Food for under a day" if days < 0.75 else fmt.tprintf("Food for %s", days_words(days))
+	fed := hold_living() > 0 && s.tick > 0
 	w := px(66)
 	line := line_of(.Body)
-	high := 2*px(L.pad.y) + line_of(.Small) + px(1) + f32(max(len(rows), 1))*line + (px(1) + line_of(.Small) if note != "" else 0)
+	high := 2*px(L.pad.y) + line_of(.Small) + px(1) + f32(max(len(rows) + len(food), 1))*line + (px(1.5) + line_of(.Small) + px(0.5) if fed else 0) + (px(1) + line_of(.Small) if note != "" else 0)
 	x, y := screen.w - px(L.margin) - w, px(L.margin)
 	part(.Panel, {x, y, w, high}, id = "stores", tip = "What lies in the hold's stockpiles. Things lying anywhere else are not counted until they are carried in.")
 	u.crowd_right = x
@@ -884,12 +888,25 @@ stores_build :: proc() -> (foot: f32) {
 	y += px(L.pad.y)
 	y += words(cx, y, "Stores", .Small, L.ash, "stores.title") + px(1)
 	inner := w - 2*px(L.pad.x)
-	if len(rows) == 0 do y += words(cx, y, "Nothing stored", .Body, L.ash, "stores.none")
-	for r in rows {
+	put :: proc(cx, y, inner, line: f32, r: Row) {
+		L := &LOOK
 		part(.Block, {cx, y + math.round((line - px(L.block))/2), px(L.block), px(L.block)}, id = "stores.block").mat = r.mat
-		words(cx + px(L.block) + px(2.5), y, r.name, .Body, {}, "stores.kind")
 		count := fmt.tprint(r.n)
+		words(cx + px(L.block) + px(2.5), y, fit(.Body, r.name, inner - px(L.block) - px(4) - text_wide(.Figure, count)), .Body, {}, "stores.kind")
 		words(cx + inner - text_wide(.Figure, count), y, count, .Figure, {}, "stores.count")
+	}
+	if len(rows) == 0 && len(food) == 0 do y += words(cx, y, "Nothing stored", .Body, L.ash, "stores.none")
+	for r in rows {
+		put(cx, y, inner, line, r)
+		y += line
+	}
+	if fed {   // the food, under its own line
+		y += px(1.5)
+		y += words(cx, y, lasts, .Small, L.cinnabar if days <= 0 else L.brass if days < 1.5 else L.ash, "stores.food") + px(0.5)
+		part(.Head, {cx, y - line_of(.Small) - px(0.5), inner, line_of(.Small)}, tip = "How long the food in the stockpiles feeds the dwarves alive: each eats about twice a day. Food lying loose is eaten too, and is not counted here.")
+	}
+	for r in food {
+		put(cx, y, inner, line, r)
 		y += line
 	}
 	if note != "" do y += px(1) + words(cx, y, note, .Small, L.brass if len(s.zones) == 0 else L.ash, "stores.loose")
@@ -994,7 +1011,7 @@ ground_build :: proc() {
 	head := px(L.key_high) + 2*px(L.chip_pad.y)
 	controls := 4*px(L.button) + 3*px(L.gap)
 	fixed := 2*px(L.pad.y) + head + px(2.5) + px(4) + controls
-	foot := screen.h - px(L.hand_foot)
+	foot := screen.h - hand_foot()
 	least := max(px(L.margin), u.wrong_foot + px(2))
 	room := foot - least - fixed   // what the alerts over it leave the column
 	if room < px(L.beds_high[0])/2 do return   // none worth the name: the alerts have its place until they clear, and its keys still work
@@ -1155,7 +1172,7 @@ hand_build :: proc() {
 	w := px(L.hand_wide)
 	inner := w - 2*px(L.pad.x)
 	x := px(L.margin)
-	foot := screen.h - px(L.hand_foot)
+	foot := screen.h - hand_foot()
 	title, sub, line, next := u.card.title, u.card.sub, u.card.line, ""
 	says := u.card.says
 	need := -1
@@ -1184,7 +1201,8 @@ hand_build :: proc() {
 	head := px(L.block_large)
 	text_wide_here := inner - head - px(4)
 	head = max(head, line_of(.Title) + text_high(.Body, sub, text_wide_here) + (line_of(.Body) if need >= 0 else 0))
-	line_high := text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0)
+	feels := t.kind == .Dwarf && watch.seen.dwarves[t.dwarf].doing != .Dead   // a living dwarf's needs, as meters (crowd.odin)
+	line_high := text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high() if feels else 0)
 	tabs_high := line_of(.Body) + px(1.5) + px(2.5) if count > 0 else 0
 	fixed := 2*px(L.pad.y) + head + px(L.space) + line_high + (px(L.space) + tabs_high if count > 0 else 0) + px(4) + px(L.button)
 	// A card is as deep as its longest tab needs, within limits, so that changing tabs moves nothing.
@@ -1216,6 +1234,7 @@ hand_build :: proc() {
 	y += head + px(L.space)
 	y += words(cx, y, line, .Body, {}, "hand.line", inner)
 	if next != "" do y += px(1) + words(cx, y, next, .Body, L.ash, "hand.next", inner)
+	if feels do y += px(L.space) + feels_row(cx, y + px(L.space), inner, t.dwarf)
 	if count > 0 {
 		y += px(L.space)
 		tx = cx
@@ -1265,7 +1284,7 @@ hand_short :: proc(t: Thing, title, sub, line, next: string, need: int) {
 	w := px(L.hand_wide)
 	inner := w - 2*px(L.pad.x)
 	x := px(L.margin)
-	foot := screen.h - px(L.hand_foot)
+	foot := screen.h - hand_foot()
 	more := button_wide("More", key_for(.More), .Small, L.chip_pad.x)
 	chip := line_of(.Small) + 2*px(L.chip_pad.y)
 	if t.kind != .Dwarf {
@@ -1287,7 +1306,8 @@ hand_short :: proc(t: Thing, title, sub, line, next: string, need: int) {
 	head := px(L.block_large)
 	text_wide_here := inner - head - px(4)
 	head = max(head, line_of(.Title) + text_high(.Body, sub, text_wide_here) + (line_of(.Body) if need >= 0 else 0))
-	high := 2*px(L.pad.y) + head + px(L.space) + text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + px(3) + px(L.button)
+	feels := watch.seen.dwarves[t.dwarf].doing != .Dead
+	high := 2*px(L.pad.y) + head + px(L.space) + text_high(.Body, line, inner) + (text_high(.Body, next, inner) + px(1) if next != "" else 0) + (px(L.space) + feels_high() if feels else 0) + px(3) + px(L.button)
 	r := Rect{x, foot - high, w, high}
 	part(.Panel, r, id = "hand")
 	cx, y := x + px(L.pad.x), r.y + px(L.pad.y)
@@ -1305,6 +1325,7 @@ hand_short :: proc(t: Thing, title, sub, line, next: string, need: int) {
 	y += head + px(L.space)
 	y += words(cx, y, line, .Body, {}, "hand.line", inner)
 	if next != "" do y += px(1) + words(cx, y, next, .Body, L.ash, "hand.next", inner)
+	if feels do y += px(L.space) + feels_row(cx, y + px(L.space), inner, t.dwarf)
 	y += px(3)
 	hand_buttons(cx, y, "Follow", "Take the view to this dwarf, and keep it over it as it walks.")
 }
@@ -1359,7 +1380,7 @@ lists_build :: proc() {
 list_rect :: proc() -> Rect {
 	u, L := &play, &LOOK
 	w := min(px(L.list_wide), screen.w - 3*px(L.margin) - max(px(L.hand_wide), u.place_wide))
-	return {screen.w - px(L.margin) - w, px(L.margin), w, screen.h - px(L.hand_foot) - px(L.margin)}
+	return {screen.w - px(L.margin) - w, px(L.margin), w, screen.h - hand_foot() - px(L.margin)}
 }
 
 // The head of a list: its name and how many it holds, the field it finds by, and its choices, one of
@@ -1479,7 +1500,7 @@ lesson_build :: proc() {
 		w := wide + 2*px(L.chip_pad.x)
 		r: Rect
 		switch l {
-		case .Select: r = {px(L.margin), screen.h - px(L.hand_foot) - h, w, h}
+		case .Select: r = {px(L.margin), screen.h - hand_foot() - h, w, h}
 		case .Cut:    r = {u.ground.x - px(3) - w, u.beds.y + u.beds.h/2 - h/2, w, h}
 		case .Walk:   r = {u.ground.x - px(3) - w, u.walk_row.y + px(L.button) + px(L.gap), w, h}
 		}

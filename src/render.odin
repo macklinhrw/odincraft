@@ -88,6 +88,7 @@ View :: struct {
 	yaw, pitch: f32,
 	hour:       f32,    // time of day, 0..24, by the sun
 	day:        f32,    // of the year, 0 on 1 January
+	weather_day: f32,   // the day the weather is read on: a spell of cloud lasts as many of the game's days as it did of the sun's
 	weather:    [2]f32, // cover and cloud base forced by --weather, where they are 0 or more
 	seconds:    f32,
 	target:     [3]i32, // block being aimed at, or under the pointer
@@ -367,8 +368,8 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		address_mode_u = .CLAMP_TO_EDGE, address_mode_v = .CLAMP_TO_EDGE, address_mode_w = .CLAMP_TO_EDGE,
 	})
 
-	#assert(2*len(Mat) <= 2048, "a texture array holds 2,048 layers on Metal: the atlas has room for 1,024 materials")
-	g.blocks = atlas_layers(g, BLOCKS, len(Mat), "assets/blocks.png does not have a row of two tiles for each material")
+	#assert(2*BLOCK_MATS <= 2048, "a texture array holds 2,048 layers on Metal: the atlas has room for 1,024 materials")
+	g.blocks = atlas_layers(g, BLOCKS, BLOCK_MATS, "assets/blocks.png does not have a row of two tiles for each material a block can be")
 	g.plant_pics = atlas_layers(g, PLANTS, len(Plant_Kind), "assets/plants.png does not have a row of two pictures for each ground plant")
 	g.block_sampler = sdl.CreateGPUSampler(g.dev, {
 		min_filter = .LINEAR, mag_filter = .NEAREST, mipmap_mode = .LINEAR,
@@ -620,7 +621,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	f.screen = {f32(sw), f32(sh), 1 if v.crosshair else 0, 0}
 	// The camera in the cloud field, which drifts downwind from the start island's swell, and on the
 	// land's grid of the island nearest, whose `lifted` alone raises a cap.
-	cover, base := weather_at(v.day, v.hour)
+	cover, base := weather_at(v.weather_day if v.weather_day != 0 else v.day, v.hour)   // a view that names no day of weather has its own day's
 	if v.weather.x >= 0 do cover, base = v.weather.x, v.weather.y
 	from := math.to_radians(home.region.shape.swell)
 	drift := f64(SKY.wind)*((f64(v.day)*24 + f64(v.hour))*3600 + f64(v.seconds))

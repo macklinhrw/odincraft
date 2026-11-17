@@ -38,7 +38,7 @@ import "core:time"
 OFFERED     :: 4       // landings offered at the most, the game's own first
 OFFER_APART :: 800.0   // metres between two of them: each is another stretch of shore
 SITE_DEEP   :: 40      // metres of the ground's beds a place's card shows: where a first hall would be dug
-SITE_ROWS   :: 9       // rows a place's card has room for: the six of SHORE that always stand, the bed under the rock, and two of what the land may do
+SITE_ROWS   :: 10      // rows a place's card has room for: the seven of SHORE that always stand, the bed under the rock, and two of what the land may do
 SITE_SHOWN  :: 900.0   // metres across the island's picture that a place's card shows round the place
 
 Shore_Cell :: struct {

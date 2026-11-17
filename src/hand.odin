@@ -322,6 +322,12 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 		for p in watch.seen.piles do if p.at == t.block do in_store = p.stored
 		sub = fmt.tprintf("%d, in a stockpile", t.feature) if in_store else fmt.tprintf("%d, lying loose: not counted", t.feature)
 		what := "Timber, felled and lying where the tree stood" if is_stuff(t.mat, .Timber) else "Stone, lying where it was dug"
+		if is(t.mat, FOOD) {   // what is eaten says what it is, and that a hungry dwarf takes it wherever it lies (food.odin)
+			row := FOODS[food_of(t.mat)]
+			line = fmt.tprintf("Food: %s. One is %s of a day's eating. A hungry dwarf eats it where it lies%s", row.why, "a twentieth" if row.feeds <= 0.06 else "a tenth" if row.feeds <= 0.13 else "a fifth" if row.feeds <= 0.25 else "two fifths", "; in a stockpile it is counted at the top right" if in_store else ", and a dwarf with nothing more pressing carries it to a stockpile that takes food; Store (S) marks one")
+			c.title, c.sub, c.line = strings.clone(sentence(title)[:len(sentence(title)) - 1]), strings.clone(sub), strings.clone(sentence(line))
+			return
+		}
 		line = fmt.tprintf("%s. It is counted at the top right, and a wall or floor marked near it is built of it", what) if in_store else fmt.tprintf("%s. A dwarf with nothing more pressing carries it to a stockpile that takes it; Store (S) marks one", what)
 		c.title, c.sub, c.line = strings.clone(sentence(title)[:len(sentence(title)) - 1]), strings.clone(sub), strings.clone(sentence(line))
 		return
@@ -361,6 +367,10 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 			r := SURFACES[surface_row(&p)]
 			line = r.why
 			if k, _ := community_at(x, z, 1); len(r.host) == 0 do title, line = COMMUNITIES[k].name, COMMUNITIES[k].why
+			q: Point
+			if g, cover, plants := surface_at(x, z, 1, &q); true do if kind, stands := plant_at(&q, cover, plants); stands && g.water - g.h <= GROUND_PLANTS[kind].wet {   // the plant standing on it, where a dwarf eats of it (food.odin)
+				for row in FOODS do if row.from == .Plant && row.plant == kind do line = fmt.tprintf("%s. %s stands on it, which is food: %s. Gathered in %s (Gather, G)", line, capital(GROUND_PLANTS[kind].name), row.why, row.comes)
+			}
 		case:
 			line = fmt.tprintf("The soil here is %s, %.1f m deep: %s", SOILS[row].name, depth, SOILS[row].why)
 		}
@@ -380,6 +390,7 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 		age := land.age[land_cell(f64(o.x), f64(o.z))]
 		why := fmt.tprintf("the slide laid its ground bare") if abs(land.slid[cell]) > 0.5 && age == region.features[landslide.feature].age else fmt.tprintf("a typhoon threw the canopy then")
 		line = fmt.tprintf("%s. Its stand is about %s years old: %s", WHY[o.form], years(max(age, 1)), why)
+		for row in FOODS do if row.from == .Tree && row.tree == o.kind && (o.form == .Canopy || o.form == .Between) do line = fmt.tprintf("%s. It bears food: %s. Gathered in %s (Gather, G)", line, row.why, row.comes)
 		k, _ := community_at(x, z, 1)
 		own = fmt.tprintf("It stands in %s: %s.", COMMUNITIES[k].name, COMMUNITIES[k].why)
 		c.mat = SPECIES[o.kind].leaf if o.form < .Dead else SPECIES[o.kind].bark

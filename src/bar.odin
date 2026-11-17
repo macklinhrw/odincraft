@@ -25,14 +25,16 @@ import "core:strings"
 //
 // Everything here is the frame thread's, and reads the hold only through what it shows (Shown).
 
-Tool :: enum u8 { None, Dig, Fell, Build, Store, Send, Remove }
+Tool :: enum u8 { None, Dig, Fell, Build, Store, Gather, Fish, Send, Remove }
 Tool_Row :: struct { name, says, id: string }
 TOOL_ROWS := [Tool]Tool_Row{
 	.None   = {},
 	.Dig    = {"Dig", "Mark ground to be dug.", "orders.dig"},
 	.Fell   = {"Fell", "Mark trees to be felled for timber.", "orders.fell"},
 	.Build  = {"Build", "Mark blocks to be laid. Their stone or timber is brought to them.", "orders.build"},
-	.Store  = {"Store", "Mark ground as a stockpile: what is dug and felled is carried there, and counted.", "orders.store"},
+	.Store  = {"Store", "Mark ground as a stockpile: what is dug, felled, gathered and caught is carried there, and counted.", "orders.store"},
+	.Gather = {"Gather", "Mark plants and trees that bear food to be gathered.", "orders.gather"},
+	.Fish   = {"Fish", "Mark fresh water to be fished.", "orders.fish"},
 	.Send   = {"Send", "Send the party to stand somewhere.", "orders.send"},
 	.Remove = {"Remove", "Take marks back; or take built blocks down; or take ground out of a stockpile.", "orders.remove"},
 }
@@ -70,12 +72,16 @@ Bar :: struct {
 	cells:    [dynamic][3]i32,      // the blocks it would mark
 	boxes:    [dynamic][2][3]i32,   // and those to dig, as boxes
 	trees:    [dynamic]Tree,
+	food:     [dynamic]Bearing,   // with Gather and Fish: what it would mark (bearing_of, food.odin)
+	barren:   Barren,             // and why it would mark nothing, or less than stands there
+	picked:   map[[2]i32]int,     // the plants, trees and water taken, and on which day, as the hold last showed them
+	picked_v: int,
 	way:      int,          // with Remove: how many marks, built blocks or places it would take
 	built:    map[[3]i32]Plan,   // the blocks the dwarves laid that stand, and what each was laid as: told by the hold as they are laid and dug
 	undo:     enum u8 { Marks, Built, Zone },   // what Remove would take away here
 	said:     [3]string,    // the alerts as last raised
 }
-Preview_Key :: struct { tool: Tool, dig, build: Plan, stuff: Stuff, takes: Takes, deep, high: i32, a, b: [3]i32, press: [3]i32, dragged, pressed: bool, volume: int, marks: int }
+Preview_Key :: struct { tool: Tool, dig, build: Plan, stuff: Stuff, takes: Takes, deep, high: i32, a, b: [3]i32, press: [3]i32, dragged, pressed: bool, volume: int, marks: int, day, taken: int }
 bar := Bar{dig = .Out, build = .Wall, deep = 2, high = 2, job = -1}
 
 // Take a tool in the hand, or put it down; the same tool again puts it down. In first person Send
@@ -111,7 +117,7 @@ tool_point :: proc(a: ^Above, w: ^World, eye: [3]f64, ray: [3]f32) {
 	o := a.mark[0]
 	b := a.mark[1]
 	switch {
-	case bar.tool == .Fell || bar.tool == .Send || bar.tool == .Remove:   // the column under the pointer, whatever stands in it: a wall is taken down by dragging along its top
+	case bar.tool == .Fell || bar.tool == .Send || bar.tool == .Remove || bar.tool == .Gather || bar.tool == .Fish:   // the column under the pointer, whatever stands in it: a wall is taken down by dragging along its top
 		if bar.aim.ok do b = bar.aim.block
 	case ray.y < -1e-3:
 		t := (f64(o.y) + 0.5 - eye.y)/f64(ray.y)
@@ -165,6 +171,13 @@ tool_order :: proc(a: ^Above, m0, m1: [3]i32, press: Pick, dragged: bool) -> (o:
 			return {kind = .Build, shape = .Stair, stuff = bar.stuff, at = m0, to = far}, true
 		}
 	case .Store:  return {kind = .Store, at = m0, to = m1, takes = bar.takes}, true
+	case .Gather:
+		if !dragged && press.ok do if t := thing_at(play.w, press); t.kind == .Tree && t.tree.form != .Fallen && t.island != nil {   // a click on any part of a tree is that tree
+			foot := [3]i32{t.tree.x + t.island.region.origin.x, t.tree.base, t.tree.z + t.island.region.origin.y}
+			return {kind = .Gather, at = foot, to = foot}, true
+		}
+		return {kind = .Gather, at = m0, to = m1}, true
+	case .Fish:   return {kind = .Fish, at = m0, to = m1}, true
 	case .Send:   return {kind = .Go, at = m1}, true
 	case .Remove: return {kind = .Unmark, at = m0, to = m1}, true
 	}
@@ -205,6 +218,8 @@ job_of :: proc(t: Thing) -> int {
 	for g in s.ghosts {
 		if g.work == .Fell && t.kind == .Tree && t.island != nil && g.at.x == t.tree.x + t.island.region.origin.x && g.at.z == t.tree.z + t.island.region.origin.y do return g.site
 		if g.work == .Build && abs(g.at.x - b.x) + abs(g.at.y - b.y) + abs(g.at.z - b.z) <= 1 do return g.site
+		if g.work == .Gather && g.tall > 0 && t.kind == .Tree && t.island != nil && g.at.x == t.tree.x + t.island.region.origin.x && g.at.z == t.tree.z + t.island.region.origin.y do return g.site
+		if (g.work == .Gather && g.tall == 0 || g.work == .Fish) && g.at.x == b.x && g.at.z == b.z && abs(g.at.y - b.y) <= 1 do return g.site
 	}
 	return -1
 }
@@ -234,17 +249,23 @@ preview :: proc() {
 	u, a := &play, play.a
 	pressed := (a.marking || bar.posed) && a.marked
 	if !tool_marks() || !pressed && !(a.shown && bar.aim.ok) {
-		clear(&bar.cells); clear(&bar.boxes); clear(&bar.trees)
+		clear(&bar.cells); clear(&bar.boxes); clear(&bar.trees); clear(&bar.food)
 		bar.ready, bar.way, bar.seen = false, 0, {}
 		return
+	}
+	if s := &watch.seen; bar.picked_v != s.taken_v || len(bar.picked) != len(s.taken) {   // what was gathered and fished, as the hold last showed it
+		bar.picked_v = s.taken_v
+		clear(&bar.picked)
+		for t in s.taken do bar.picked[t.col] = t.day
 	}
 	m0, m1 := bar.aim.block, bar.aim.block
 	press, dragged := a.under, false
 	if pressed do m0, m1, press, dragged = a.mark[0], a.mark[1], bar.press, bar.dragged || bar.posed
-	key := Preview_Key{bar.tool, bar.dig, bar.build, bar.stuff, bar.takes, bar.deep, bar.high, m0, m1, press.block, dragged, pressed, u.w.volume, watch.seen.marks}
+	key := Preview_Key{bar.tool, bar.dig, bar.build, bar.stuff, bar.takes, bar.deep, bar.high, m0, m1, press.block, dragged, pressed, u.w.volume, watch.seen.marks, u.date.day, bar.picked_v}
 	if key == bar.seen do return
 	bar.seen = key
-	clear(&bar.cells); clear(&bar.boxes); clear(&bar.trees)
+	clear(&bar.cells); clear(&bar.boxes); clear(&bar.trees); clear(&bar.food)
+	bar.barren = {}
 	bar.way = 0
 	bar.order, bar.ready = tool_order(a, m0, m1, press, dragged)
 	if !bar.ready do return
@@ -266,6 +287,16 @@ preview :: proc() {
 				if t.form == .Fallen || !is(block_made(u.w, foot), PLANT_BLOCKS) do unordered_remove(&bar.trees, i)   // fallen, or felled already
 			}
 			bound(here)
+		}
+		if dragged do append(&bar.boxes, [2][3]i32{{lo.x, -500, lo.z}, {hi.x, 3000, hi.z}})   // the ground dragged over, whatever its height
+	case .Gather, .Fish:   // what the box bears now, by the hold's own rule over the blocks the frame has (bearing_of, food.odin)
+		if f := island_at(f64(lo.x) + 0.5, f64(lo.z) + 0.5); f != nil && is_formed(f) {
+			bound(f)
+			bearing_of(.Gather if o.kind == .Gather else .Fish, o.at, o.to, u.date.sun, u.date.day, world_blocks(u.w), &bar.picked, &bar.food, &bar.barren)
+			bound(here)
+			marked := make(map[[3]i32]bool, context.temp_allocator)
+			for g in watch.seen.ghosts do if g.work == .Gather || g.work == .Fish do marked[g.at] = true
+			for i := len(bar.food) - 1; i >= 0; i -= 1 do if bar.food[i].at in marked do ordered_remove(&bar.food, i)   // marked already
 		}
 		if dragged do append(&bar.boxes, [2][3]i32{{lo.x, -500, lo.z}, {hi.x, 3000, hi.z}})   // the ground dragged over, whatever its height
 	case .Store:   // the ground a dwarf can stand on in the rectangle, near the level it began on
@@ -402,6 +433,13 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 			framed[g.site] += 1
 			half := [3]f32{0.42, 0.42, 0.42} if brought else {0.3, 0.3, 0.3} if chosen else {0.2, 0.2, 0.2}
 			cube(&out, at, half, stuff_colour(g.stuff, &s.store), stuff_colour(g.stuff, &s.store) if brought else brass)
+		case .Gather:   // a tree wears its band and cap, as one to be felled does, in the colour of what is well; a plant has a small mark standing over it
+			if g.tall > 0 {
+				cube(&out, at + {0, 0.6, 0}, {0.62, 0.14 if chosen else 0.09, 0.62}, rgb(LOOK.verdigris), rgb(LOOK.verdigris))
+				cube(&out, at + {0, f32(g.tall) + 0.1, 0}, {0.6, 0.14, 0.6} if chosen else {0.5, 0.1, 0.5}, rgb(LOOK.verdigris), rgb(LOOK.verdigris))
+			} else do cube(&out, at + {0, -0.44, 0}, {0.46, 0.05, 0.46} if chosen else {0.4, 0.04, 0.4}, rgb(LOOK.verdigris), rgb(LOOK.verdigris))   // a tile on the ground the plant stands on: flat things read from above
+		case .Fish:     // a tile on the water
+			cube(&out, at + {0, 0.5, 0}, {0.46, 0.04, 0.46} if chosen else {0.4, 0.03, 0.4}, rgb(LOOK.verdigris), rgb(LOOK.verdigris))
 		case .Dig:
 		}
 	}
@@ -412,6 +450,15 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 		foot := [3]f64{f64(t.x + f.region.origin.x) + 0.5, f64(t.base), f64(t.z + f.region.origin.y) + 0.5}
 		cube(&out, rel(foot + {0, 1.1, 0}, eye), {0.66, 0.16, 0.66}, brass, brass)
 		cube(&out, rel(foot + {0, f64(t.height) + 0.6, 0}, eye), {0.7, 0.16, 0.7}, brass, brass)
+	}
+	for f in bar.food[:min(len(bar.food), 1500)] {   // what the tool would gather or fish: the marks it would leave, a little larger
+		if len(out) >= BOX_MAX - 64 do break
+		at := rel({f64(f.at.x) + 0.5, f64(f.at.y) + 0.5, f64(f.at.z) + 0.5}, eye)
+		if f.tall > 0 {
+			cube(&out, at + {0, 0.6, 0}, {0.66, 0.16, 0.66}, brass, brass)
+			cube(&out, at + {0, f32(f.tall) + 0.1, 0}, {0.7, 0.16, 0.7}, brass, brass)
+		} else if FOODS[f.food].from == .Fish do cube(&out, at + {0, 0.5, 0}, {0.46, 0.04, 0.46}, rgb(LOOK.chalk), rgb(LOOK.verdigris))   // paler than the ground dragged over, which is brass
+		else do cube(&out, at + {0, -0.44, 0}, {0.46, 0.05, 0.46}, rgb(LOOK.chalk), rgb(LOOK.verdigris))
 	}
 	return out[:]
 }
@@ -472,6 +519,13 @@ tool_says :: proc() -> string {
 		if !pressed do if z, on := zone_under(bar.aim.block + {0, 1, 0}); on do return fmt.tprintf("A stockpile for %s: %d of %d places hold something. Drag beside it to make it larger.", TAKES_SAYS[z.takes], z.full, z.cells)
 		if n == 0 do return "No ground to store on here."
 		return fmt.tprintf("%d by %d: %d %s for %s.", wide, long, n, "place" if n == 1 else "places", TAKES_SAYS[bar.takes])
+	case .Gather, .Fish:
+		k := len(bar.food)
+		work := Work.Gather if bar.tool == .Gather else .Fish
+		if k == 0 do return barren_words(work, bar.barren)
+		if bar.tool == .Fish do return fmt.tprintf("%d %s fish: %s.", k, "place holds" if k == 1 else "places hold", bearing_words(bar.food[:]))
+		if k == 1 && bar.food[0].tall > 0 do return fmt.tprintf("A %s tree, %d m: %s.", SPECIES[FOODS[bar.food[0].food].tree].name, bar.food[0].tall, bearing_words(bar.food[:]))
+		return fmt.tprintf("%d %s: %s.", k, "plant" if k == 1 else "plants and trees", bearing_words(bar.food[:]))
 	case .Send:
 		return "Click where the party should stand."
 	case .Remove:
@@ -492,17 +546,39 @@ bar_build :: proc() {
 	u, L := &play, &LOOK
 	if u.afoot^ do return
 	u.area = .Orders
-	x, y := px(L.margin), screen.h - px(L.margin) - px(L.button)
-	wide := f32(0)
-	for t in Tool do if t != .None do wide += button_wide(TOOL_ROWS[t].name, key_for(.Order, int(t))) + px(L.gap)
-	part(.Panel, {x, y, wide - px(L.gap), px(L.button)}, id = "orders")
-	for t in Tool do if t != .None {
-		row := TOOL_ROWS[t]
-		w := button_wide(row.name, key_for(.Order, int(t)))
-		button({x, y, w, px(L.button)}, row.name, .Order, int(t), bar.tool == t, row.id, row.says)
-		x += w + px(L.gap)
+	rows := bar_rows()
+	per := (len(Tool) - 1 + rows - 1)/rows   // tools to a row
+	y := screen.h - px(L.margin) - px(L.button) - f32(rows - 1)*(px(L.button) + px(L.gap))
+	t := Tool.None
+	for _ in 0..<rows {
+		x := px(L.margin)
+		wide := f32(0)
+		first := t
+		for k := 0; k < per && int(first) + k + 1 < len(Tool); k += 1 do wide += button_wide(TOOL_ROWS[Tool(int(first) + k + 1)].name, key_for(.Order, int(first) + k + 1)) + px(L.gap)
+		part(.Panel, {x, y, wide - px(L.gap), px(L.button)}, id = "orders")
+		for k := 0; k < per && int(t) + 1 < len(Tool); k += 1 {
+			t = Tool(int(t) + 1)
+			row := TOOL_ROWS[t]
+			w := button_wide(row.name, key_for(.Order, int(t)))
+			button({x, y, w, px(L.button)}, row.name, .Order, int(t), bar.tool == t, row.id, row.says)
+			x += w + px(L.gap)
+		}
+		y += px(L.button) + px(L.gap)
 	}
 }
+
+// The orders bar's rows: one where it has room beside the lists' buttons at the foot, and two where
+// the text is set large and it has not.
+bar_rows :: proc() -> int {
+	L := &LOOK
+	wide := f32(0)
+	for t in Tool do if t != .None do wide += button_wide(TOOL_ROWS[t].name, key_for(.Order, int(t))) + px(L.gap)
+	lists := button_wide("Dwarves", key_for(.List, int(List.Dwarves)), .Body, L.know_pad) + button_wide("Places", key_for(.List, int(List.Places)), .Body, L.know_pad) + button_wide("Menu", key_for(.Escape), .Body, L.know_pad)
+	return 1 if wide - px(L.gap) + lists + 2*px(L.margin) + px(4) <= screen.w else 2
+}
+
+// From the picture's foot to the hand: the orders bar's place lies under it, as many rows as it has.
+hand_foot :: proc() -> f32 { return px(LOOK.hand_foot) + f32(bar_rows() - 1)*(px(LOOK.button) + px(LOOK.gap)) if !play.afoot^ else px(LOOK.hand_foot) }
 
 // The hand, when a tool is held or the thing in it is marked: true if it drew the card.
 bar_hand :: proc() -> bool {
@@ -518,15 +594,33 @@ bar_hand :: proc() -> bool {
 	inner := w - 2*px(L.pad.x)
 	x := px(L.margin)
 	title := sentence(site_word(site))[:len(site_word(site))]
-	unit := "trees" if site.work == .Fell else "blocks"
+	unit := work_units(site.work, 2)
 	hands := "no dwarf at it" if site.busy == 0 else "one dwarf at it" if site.busy == 1 else fmt.tprintf("%s dwarves at it", count_words(site.busy))
 	line := fmt.tprintf("%d of %d %s left, %s.", site.left, site.total, unit, hands)
 	idle := 0
 	for d in watch.seen.dwarves do idle += int(!d.job && (d.doing == .Waiting || d.doing == .Stopped) && !d.shut)
 	next := waits_words(site, idle)
+	if site.busy == 0 && site.left > 0 && idle == 0 {   // work waits while the dwarves see to themselves: say so, and what they are at (needs.odin)
+		asleep, eating, drinking := 0, 0, 0
+		for d in watch.seen.dwarves {
+			asleep += int(d.doing == .Sleeping || d.caring && d.care == .Sleep)
+			eating += int(d.doing != .Sleeping && d.caring && d.care == .Food)
+			drinking += int(d.doing != .Sleeping && d.caring && d.care == .Drink)
+		}
+		if asleep + eating + drinking > 0 {
+			b := strings.builder_make(context.temp_allocator)
+			n := 0
+			at := [3]string{"asleep", "eating", "drinking"}
+			for count, k in ([3]int{asleep, eating, drinking}) do if count > 0 {
+				fmt.sbprintf(&b, "%s%s %s", "" if n == 0 else ", ", count_words(count), at[k])
+				n += 1
+			}
+			next = fmt.tprintf("Waits while the dwarves see to themselves: %s", strings.to_string(b))
+		}
+	}
 	if next != "" do next = fmt.tprintf("%s.", next)
 	high := 2*px(L.pad.y) + line_of(.Title) + text_high(.Body, line, inner) + (px(1) + text_high(.Body, next, inner) if next != "" else 0) + px(3) + px(L.button)
-	r := Rect{x, screen.h - px(L.hand_foot) - high, w, high}
+	r := Rect{x, screen.h - hand_foot() - high, w, high}
 	part(.Panel, r, id = "hand")
 	cx, y := x + px(L.pad.x), r.y + px(L.pad.y)
 	y += words(cx, y, title, .Title, id = "job.title")
@@ -569,7 +663,7 @@ tool_card :: proc() {
 	chip := line_of(.Body) + 2*px(L.chip_pad.y)
 	rows := 2 if bar.tool == .Dig else 3 if bar.tool == .Build else 1 if bar.tool == .Store else 0
 	high := 2*px(L.pad.y) + line_of(.Title) + f32(rows)*(chip + px(1.5)) + px(1.5) + 2*line_of(.Body)
-	r := Rect{x, screen.h - px(L.hand_foot) - high, w, high}
+	r := Rect{x, screen.h - hand_foot() - high, w, high}
 	part(.Panel, r, id = "hand")
 	cx, y := x + px(L.pad.x), r.y + px(L.pad.y)
 	words(cx, y, row.name, .Title, L.brass, "tool.title")
@@ -580,9 +674,9 @@ tool_card :: proc() {
 	args := [DEEPEST]int{1, 2, 3, 4}
 	#partial switch bar.tool {
 	case .Store:
-		names := [Takes]string{.All = "Everything", .Stone = "Stone", .Timber = "Timber"}
-		takes := [len(Takes)]int{int(Takes.All), int(Takes.Stone), int(Takes.Timber)}
-		chips(cx, y, "Takes", ([]string{names[.All], names[.Stone], names[.Timber]}), int(bar.takes), .Takes, takes[:], "tool.takes")
+		names := [Takes]string{.All = "Everything", .Stone = "Stone", .Timber = "Timber", .Food = "Food"}
+		takes := [len(Takes)]int{int(Takes.All), int(Takes.Stone), int(Takes.Timber), int(Takes.Food)}
+		chips(cx, y, "Takes", ([]string{names[.All], names[.Stone], names[.Timber], names[.Food]}), int(bar.takes), .Takes, takes[:], "tool.takes")
 		y += chip + px(1.5)
 	case .Dig:
 		names, tips: [len(DIG_CHOICES)]string
@@ -661,6 +755,16 @@ piles_view :: proc(boxes: []Box, eye, middle: [3]f64) -> []Box {
 		base := [3]f32{f32(f64(p.at.x) + 0.5 - eye.x), f32(f64(p.at.y) - eye.y), f32(f64(p.at.z) + 0.5 - eye.z)}
 		feet := base.y - 1e-3
 		n := int(min(p.n, HEAP))
+		if is(p.kind, FOOD) {   // what is eaten: a low heap of small things in its own colour, wider as there is more of it
+			heaps := clamp(int(p.n + 5)/6, 1, 4)
+			for k in 0..<heaps {
+				jog := f32((p.at.x*5 + p.at.z*11 + i32(k)*3)%%5 - 2)*0.02
+				size := [3]f32{0.17, 0.07, 0.17} if p.kind != .Ayu else {0.22, 0.045, 0.09}
+				at := base + {(f32(k%2) - 0.5)*0.42 + jog, size.y, (f32(k/2) - 0.5)*0.42 - jog}
+				append(&out, Box{at, f32(shaded(p.kind, 1.5)), {size.x, 0, 0}, f32(shaded(p.kind, 1.0)), {0, size.y, 0}, 0, {0, 0, size.z}, feet})
+			}
+			continue
+		}
 		if is_stuff(p.kind, .Timber) {
 			bark, wood := mat_rgb(p.kind if p.kind != .Timber else .Wood), mat_rgb(.Timber)
 			for k in 0..<n {

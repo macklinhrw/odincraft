@@ -43,7 +43,7 @@ stage_make :: proc(s: ^Stage) {
 frame :: proc(s: ^Stage, pointer := [2]f32{-1, -1}) {
 	above_update(&s.a, 1.0/60, {}, 0, 0, 0, false)
 	s.eye, s.pitch, _ = above_camera(&s.a, 2560.0/1440)
-	play_frame(2560, 1440, pointer, 1.0/60, 9.5, 95, s.eye, s.a.yaw, s.pitch, ABOVE_FOV, nil)
+	play_frame(2560, 1440, pointer, 1.0/60, 9.5, 95, date_at(watch.clock), s.eye, s.a.yaw, s.pitch, ABOVE_FOV, nil)
 }
 
 // Press a part as the pointer does: the left button down and up on its middle.
@@ -89,11 +89,11 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 
 	// Top left: the place, the date, and the clock, which a click and its key both work.
 	testing.expect(t, says("place.title") != "", "the place has no name")
-	testing.expect_value(t, says("place.date"), fmt.tprintf("%s, 16th of spring", isle_name(0)))
-	testing.expect_value(t, says("clock.pause"), "Running at 09:30")
+	testing.expect_value(t, says("place.date"), fmt.tprintf("%s, 1st of spring", isle_name(0)))
+	testing.expect_value(t, says("clock.pause"), "Running at 08:00")
 	testing.expect_value(t, screen_find(&screen, "clock.pause").key, "Space")
 	testing.expect(t, click(s, "clock.pause") && s.clock.paused, "a click on the clock did not pause it")
-	testing.expect_value(t, says("clock.pause"), "Paused at 09:30")
+	testing.expect_value(t, says("clock.pause"), "Paused at 08:00")
 	key(s, .SPACE)
 	testing.expect(t, !s.clock.paused, "Space did not let the clock go on")
 	click(s, "clock.fastest")
@@ -268,7 +268,7 @@ hold_shown :: proc(s: ^Stage, n: int) {
 	clear(&watch.seen.dwarves)
 	for f, i in party {
 		at := s.a.at + {f64(i%10)*2 - 9, 0, f64(i/10)*2 + 4}
-		append(&watch.seen.dwarves, Seen{who = f, was = at, at = at, doing = .Waiting})
+		append(&watch.seen.dwarves, Seen{who = f, was = at, at = at, doing = .Waiting, want = {.Drink = 1, .Food = 1, .Sleep = 1}})
 	}
 	watch.seen.place = "ground above the landing"
 	play.greeted, play.alerted = false, {}
@@ -379,7 +379,7 @@ the_dwarves_are_on_screen :: proc(t: ^testing.T) {
 	// The Dwarves list: a row each; it groups by need, by trade or by place, and finds by name, trade or place.
 	key(s, .F1)
 	testing.expect_value(t, says("list.title"), "Dwarves")
-	testing.expect(t, count("list.row") == 7 && says("list.group.name") == "Waiting for word", "the list has not a row for each dwarf, grouped by need")
+	testing.expect(t, count("list.row") == 7 && says("list.group.name") == "Idle", "the list has not a row for each dwarf, grouped by need")
 	testing.expect(t, strings.has_prefix(says("list.row.doing"), "Waiting for word at"), "a row does not say what its dwarf is doing")
 	testing.expect_value(t, says("list.row.how"), "well")
 	click(s, "list.row")   // every row takes the view to its dwarf and puts it in the hand

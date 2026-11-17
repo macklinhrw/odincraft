@@ -116,6 +116,7 @@ Options :: struct {
 	yaw, pitch:    f32,
 	hour, day:     f32,
 	has_day:       bool,
+	has_hour:      bool,   // --hour: the sun is held at that hour, for a picture of the land
 	weather:       [2]f32,
 	fly, show:     bool,
 	width, height: i32,
@@ -199,7 +200,7 @@ options :: proc() -> Options {
 		case "near":  ok = numbers(value, ",", v[:1]); o.near = v.x
 		case "look":  ok = numbers(value, ",", v[:2]); o.yaw, o.pitch, o.has_look = f32(v.x), f32(v.y), true
 		case "size":  ok = numbers(value, "x", v[:2]); o.width, o.height = i32(v.x), i32(v.y)
-		case "hour":  ok = numbers(value, ",", v[:1]); o.hour = f32(v.x)
+		case "hour":  ok = numbers(value, ",", v[:1]); o.hour, o.has_hour = f32(v.x), true
 		case "day":   ok = numbers(value, ",", v[:1]); o.day, o.has_day = f32(v.x), true
 		case "weather":
 			ok = numbers(value, ",", v[:2]) || numbers(value, ",", v[:1])

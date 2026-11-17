@@ -24,10 +24,15 @@ import "core:fmt"
 
 HEAP :: 8   // things of one kind that lie in one cell: RimWorld stacks 75 of a resource and one chunk of stone, Ingnomia ten stones; eight are a heap a dwarf's cell holds and the eye counts
 ARMFUL :: 4   // and that a dwarf carries at once
+BASKET :: 24   // of food, which is small: a heap of it in a cell, and a third of that carried (RimWorld stacks 75 berries and 10 meals)
 
-Takes :: enum u8 { All, Stone, Timber }
-TAKES := [Takes]string{.All = "all", .Stone = "stone", .Timber = "timber"}
-TAKES_SAYS := [Takes]string{.All = "stone and timber", .Stone = "stone", .Timber = "timber"}
+// How many things of a kind lie in one cell, and how many of it a dwarf carries at once.
+heap_of :: proc(m: Mat) -> i32 { return BASKET if is(m, FOOD) else HEAP }
+armful_of :: proc(m: Mat) -> i32 { return BASKET/3 if is(m, FOOD) else ARMFUL }
+
+Takes :: enum u8 { All, Stone, Timber, Food }
+TAKES := [Takes]string{.All = "all", .Stone = "stone", .Timber = "timber", .Food = "food"}
+TAKES_SAYS := [Takes]string{.All = "everything", .Stone = "stone", .Timber = "timber", .Food = "food"}
 
 Good :: struct {
 	at:   [3]i32,   // the cell it lies in: the one a dwarf's feet would be in
@@ -52,7 +57,7 @@ Pile_Seen :: struct { at: [3]i32, kind: Mat, n: i32, stored: bool }
 Zone_Seen :: struct { id: int, takes: Takes, cells, full: int }
 
 takes_kind :: proc(t: Takes, m: Mat) -> bool {
-	return t == .All || t == .Stone && is_stuff(m, .Stone) || t == .Timber && is_stuff(m, .Timber)
+	return t == .All || t == .Stone && is_stuff(m, .Stone) || t == .Timber && is_stuff(m, .Timber) || t == .Food && is(m, FOOD)
 }
 
 // Whether a pile lies where the hold counts it: in a stockpile that takes its kind.
@@ -75,13 +80,13 @@ good_put :: proc(h: ^Hold, at: [3]i32, kind: Mat, n: i32) {
 		if k, ok := h.lying[c]; ok {
 			g := &h.goods[k]
 			if g.kind != kind do return
-			room := left^ if over else min(left^, HEAP - g.n)
+			room := left^ if over else min(left^, heap_of(kind) - g.n)
 			if room <= 0 do return
 			g.n += room
 			left^ -= room
 			return
 		}
-		room := left^ if over else min(left^, HEAP)
+		room := left^ if over else min(left^, heap_of(kind))
 		h.lying[c] = len(h.goods)
 		append(&h.goods, Good{at = c, kind = kind, n = room})
 		left^ -= room
@@ -209,7 +214,7 @@ store_cell :: proc(h: ^Hold, g: Good) -> (to: [3]i32, room: i32, ok: bool) {
 	best := max(i32)
 	for c, cell in h.zoned {
 		if !takes_kind(h.zones[cell.zone].takes, g.kind) || c == g.at do continue
-		free := i32(HEAP) - cell.coming
+		free := heap_of(g.kind) - cell.coming
 		if k, lies := h.lying[c]; lies {
 			if h.goods[k].kind != g.kind do continue
 			free -= h.goods[k].n
@@ -276,7 +281,7 @@ haul_look :: proc(h: ^Hold, i: int) -> bool {
 		g := &h.goods[t.k]
 		to, room, ok := store_cell(h, g^)
 		if !ok do continue
-		n := min(room, ARMFUL, g.n - g.held)
+		n := min(room, armful_of(g.kind), g.n - g.held)
 		if !haul_set(h, i, {on = true, from = g.at, to = to, kind = g.kind, n = n, site = -1}) do continue
 		g.held += n
 		cell := &h.zoned[to]
