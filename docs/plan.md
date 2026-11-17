@@ -76,7 +76,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 | P2 (built) | **Seven dwarves.** Named, drawn simply, walking the block ground by a path they find. Any one can be asked who it is and what it is doing | Watches them come ashore and follow where they are sent | |
 | The dwarves on screen (built) | **Their place at the top, their list, and several in the hand** (`foundations/interface.md`, I14). Who needs you first, then who you keep in view, then the count of all; a list that finds, groups and folds; alerts that count; messages that lead to their place. Made for a hold that grows | Clicks a dwarf's picture and is taken to her | |
 | I-2 (built, and played) | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
-| E-1 | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
+| E-1 (built, and played) | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
 | P3 (built) | **Orders.** Mark ground to dig, trees to fell, blocks to build. Dwarves take the work themselves. Goods go to a store without being carried at first, as RimWorld's first version did; carrying follows in P5, since Bellwright's makers found that work done in the abstract "didn't feel inspiring" | Has a first room dug and roofed | 2 |
 | P4 | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown | Gets through a first season, or does not | 1 |
 | P5 | **Materials and making.** What the rock and the woods give is what can be built and made: stone by its kind, timber, clay, a first metal. Goods are carried and stored. A workshop | Builds from the island's own stone | 2 |
@@ -973,3 +973,62 @@ The scripts and their 46 pictures are in `interesting-world/real/play/`: `i2-doo
 - **Expedition planning** (E-1) begins where "Land the party here" stands: the island in the hand, its card's Land depth as the site card's first lines, the cautions' line as its warnings.
 - **A finder** (DF's site finder) belongs with E-1, once a world has more places than can be read one by one.
 - **A door onto the mainland** wants the choice of ground E-1 gives; `pieces_begin(at, reach)` already forms the land round a point.
+
+### E-1, as built: expedition planning (2026-11-16)
+
+Built on a branch from `main` at dacce79 and held to the way of working set after P3 (`open-decisions.md`, 2026-11-16): what a player of Dwarf Fortress and RimWorld expects of this screen was written down first, from their code and data (`interesting-world/notes/colony-sim-reference.md`, section 13); where everything lands was designed before it was drawn (`foundations/interface.md`, section 16); and it was played by script from the player's seat, every picture looked at, before anything was called done.
+
+The scripts and their 25 pictures are in `interesting-world/real/play/`: `e1-plan.txt` (an island taken, the landing offered read, the pointer along the shore, a bad place chosen anyway, the party and one dwarf drawn again, back and in again, set out, and out of play and in again) and `e1-danger.txt` (the start island: a sheltered landing by fresh water under a slide's lake, read, chosen, asked why, landed on). Run one with `build/odincraft --door --play=file`.
+
+**What can now happen that could not before:** the owner takes an island on the world's map, presses "Plan an expedition", and stands over the island with the landing the game would choose already in the hand and the seed's seven already in the boat. Enter sets out as the game always did. Or they move the pointer along the shore and read each place as it passes; click an open shore with no water, steep ground behind it and a 160 m climb to the nearest flat, see its four cautions named over the button, and set out all the same; draw the party again until it has a mason, or one dwarf until it is not a weaver of 45; go back to the map and come in again to find it all as they left it; and watch the boat come in where they said, with who they chose.
+
+**What the owner sees and does**
+
+- **On the world's map** the island's card has "Plan an expedition" (Enter) where "Land the party here" stood, as soon as that island's land is formed (`e1-01`).
+- **Planning** (`e1-02`): the island fills the picture between the panels, where it stood on the world's map. Its shore is marked where a boat lies sheltered; four landings stand on it by their numbers, the game's own first and chosen. Lower left is the place chosen: its name, what landing it is, the beds under the ground the party would gather on, and rows: Shelter, Fresh water, Ground to live on, Slope, Timber, Rock, Under it, and what the land may do there. Right is the expedition: 1 Where, the landings; 2 Who, the party; what work it has hands for; what to look at twice; Back and Set out.
+- **The pointer along the shore** puts the place under it on the card at once (`e1-05`), and the card goes back to the place chosen when the pointer leaves. On a shore too high for a boat it says so and how high (`e1-06`): that is the one thing refused.
+- **A click chooses the shore**, however bad (`e1-08`): it stands among the landings as "your own", and its cautions are named over Set out. Keys 1 to 4 choose a landing offered (`e1-09`). The wheel brings a bay nearer and Home shows the island whole (`e1-09b`).
+- **A row's why** is beside the pointer and, clicked, under the row (`e1-03`, `e1-04`, `e1-22`).
+- **A (All)** draws the whole party again; **D** draws the dwarf in focus again, and its button names it (`e1-10` to `e1-13`). The rows under them say who digs, fells and builds.
+- **Escape** goes back to the world's map with the island in the hand; Enter comes in again with the place and the party as they were left (`e1-14`, `e1-15`), and so does leaving a game for the world (`e1-19`).
+- **Set out** (Enter): the boat comes in at the place chosen with the party chosen (`e1-16` to `e1-18`, `e1-23`, `e1-24`). The play screen names the place as the card did.
+- **"Enter the last world" at the front door** is unchanged: straight in, at the game's own landing with the seed's own party.
+
+**What was built**
+
+- **A party is a function of the seed, its count and its draws** (`party_draw`, `dwarves.odin`): how often the whole of it was drawn again, and then which of its dwarves, in order. One drawn again is another dwarf in the same seat, with a trade no other of the party has; nobody else changes.
+- **A landing an expedition chose** (`landing_near`, `landing.odin`): the low shore nearest a column of the world that a boat can come in to, by the rule the game's own landing is tried by. Where no way leads from the shore to the ground beside it, the party gathers where it lands (`landing_take`).
+- **What a place offers and lacks, as rows** (`SHORE`, `landing.odin`): a thing, the fields it is read from, where they hold well and where they are lacking, the word for it, and its name among the cautions. Four fields were made for it (`fields.odin`): ground to live on within 300 m, the mean slope within 150 m, timber within 300 m, and how far the stream from a slide's lake passes.
+- **What a hold is started with** (`Expedition`, `hold.odin`; `adr/0009`): the hold is made with the shore and the draws, and says them at its first tick in the lines an orders file takes, `land x z` and `party n i ..`. Played again from those lines it is the same game. With nothing chosen it says neither and is the hold the game always made.
+- **The planning screen** (`plan.odin`, 580 lines): the island's shore read once when it is come to, the landings offered, the place's card, the party's rows, and the column that gives way in an order where the picture is small. It asks whether a boat can come in of a walk of its own, never of the hold.
+- **The card's rows are one procedure** for the island's card and the place's (`rows_put`, `chart.odin`). The column of beds is drawn with no block volume (`column_runs`, `hand.odin`).
+- **Keys** in a view of their own (`BINDS`, `Views.Plan`), named in Settings.
+- **Without a window**: `--door=plan` with `--pick=N` and `--party=N`; the script's `under` says the place under the pointer, or why no boat lands there (`AGENTS.md`). `src/door_test.odin` plans an expedition: every case above, at every size.
+
+**Found by playing, and put right** (each reproduced by the script first; `foundations/interface.md`, section 16, has the list): the party's line ran across the map once drawn again; a why was cut off at the card's foot; the seventh dwarf was half hidden; the chosen landing was hard to find among the others; a click on a landing's ring chose the shore beside it; a button's words were cut; a tip lay over the party; rows stood that were not true there; the game's own best landing was cautioned as steep; a why ended in a field's name.
+
+**Costs and checks**
+
+- `odin check src -vet-unused` passes. `./build.sh test` passes: `GOLDEN` unchanged; the dwarves' three logs alike at the parent's hash, `698fc3b965110ddf`; a planned expedition's log `fa379fb75eb08cc3`, and the same played again from its own lines. `--dwarves=900 --orders=build/hold_test_orders.txt` prints the parent's hash, `3496ed7decd3f5f3`, and `--dwarves=30` the parent's `711d8a9cbf815678`: a hold with nothing planned is the hold it was.
+- **Opening planning on an island takes one frame of about 50 ms** (54 ms on East Firths, 47 on North Back), while its 5,800 cells of shore are read and its landings found. After that the screen costs 0.10 ms a frame at the median and 0.25 at the 99th hundredth (`--door=plan --bench=8`). A click on the shore asks the ground whether a boat can come in and the party walk up: about 30 to 70 ms, once.
+- **Benches**, one round at the end, the machine at a load of 7 to 8 from other agents. Our work in ms as median / 99% / worst, and frames over 12.5 ms: forest flank 1.20 / 4.96 / 12.60 (1, by a tenth of a millisecond); down through cloud 1.08 / 3.05 / 3.85 (0); from above 1.61 / 4.74 / 6.87 (0). Nothing in play's drawing or streaming was changed, and the one frame was not chased.
+
+**Weak points**
+
+- **No hand has used it.** Script and pictures only, as with I-2.
+- **The island's picture is ten metres to a pixel.** Brought near with the wheel a bay is soft, and the marks on the shore are a few pixels: the card and the pointer carry the reading.
+- **The why of a place is read only once it is chosen**: a row cannot be pointed at while the pointer is on the shore.
+- **The camp of a hard site can be far up a hill.** On the open shore the script chose, the party lands and climbs 137 m to the nearest ground to live on, since a way leads there. The card says "1.8 ha, 160 m off" and not how high.
+- **In play the landing is under the trees.** From above with the leaves on, a party landed in a wood cannot be seen until V takes the leaves off. That is P1's, seen again here.
+- **One frame of 50 ms** when planning opens on an island for the first time.
+- **Three of the cautions are guesses at where a line falls**: a short walk to water is 300 m, steep ground is a mean of 35° within 150 m, and a slide's lake matters within 200 m of its stream.
+- **What the land may do is three things**: a slide's lake above, ground that slid, a stream's fan. The world knows no flood, storm or beast yet (N6, P7).
+- **A dwarf is a name, a trade and an age.** There is nothing else of it to choose by until P8.
+
+**For the steps that follow**
+
+- **What they bring** (P5) is a third head in the expedition's column, under Who.
+- **A home hold and its history** (P9, P10) is where the party is drawn from: `party_draw` takes the seed today and would take the hold's people.
+- **A finder** reads `SHORE`'s rows over every island's shore: the rows are data.
+- **A door onto the mainland** is this screen over a piece of it, once pieces have pictures.
+- **A danger of a new kind** is a field and a row of `SHORE` marked `may`.

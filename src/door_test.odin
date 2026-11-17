@@ -153,6 +153,22 @@ an_expedition_is_planned :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(says("site.why"), "sea round"), "a row of the place's card clicked does not say its why, with its figures")
 	click("site.thing", "Shelter")
 
+	// What the land may do is named where the world knows it: the shore below a lake a slide dammed.
+	bound(home)
+	for f, i in region.features do if f.kind == .Lake && f.cause >= 0 && region.features[f.cause].kind == .Slide {
+		least, below := f32(FAR), -1
+		for sc in p.shore do if d, lake := dam_below(int(sc.cell)); lake == i && d < least do least, below = d, int(sc.cell)
+		if testing.expectf(t, least <= 200, "no shore lies below the slide's lake: the nearest is %.0f m from its stream", least) {
+			rows := make([dynamic]Card_Row, context.temp_allocator)
+			site_write(&rows, below)
+			named := false
+			for r in rows do named ||= r.thing == "Slide's lake" && r.sign == .Trouble && r.named == "A slide's lake above"
+			testing.expect(t, named, "the shore below a slide's lake does not name it as a danger")
+			m := middle_of(land.grid, below)
+			fmt.printfln("the shore below the slide's lake: at %.0f, %.0f from the island's middle, %.0f m from its stream", m.x, m.y, least)
+		}
+	}
+
 	// The party drawn again, and one dwarf of it: each a function of the seed and the draws.
 	before := names(p.party[:])
 	key(.A)

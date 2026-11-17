@@ -3,6 +3,8 @@ package main
 import "core:fmt"
 import "core:math"
 import "core:strings"
+import "core:sync"
+import "core:time"
 
 // Expedition planning (plan.md, E-1; docs/foundations/interface.md, section 16): the screen between
 // the world's map and play. The island in the hand fills the picture, as it does on the world's
@@ -102,6 +104,8 @@ plan_open :: proc(island: int) -> bool {
 		plan_party()
 	}
 	if p.isle == island do return true
+	started := time.now()
+	defer if door.opt != nil && door.opt.bench > 0 do fmt.printfln("planning: the shore of %s read, and its landings found, in %.0f ms", isle_name(island), time.duration_milliseconds(time.since(started)))
 	f := &formed[island]
 	bound(f)
 	p.isle, p.row, p.scroll, p.under, p.cliff = island, -1, 0, -1, -1
@@ -558,7 +562,7 @@ plan_under :: proc() -> string {
 // The screen, listed.
 plan_build :: proc() {
 	c, p, d := &chart, &planning, &door
-	if !plan_open(c.pick) {   // no island in the hand, or its land not formed: the world's screen
+	if !sync.atomic_load(&making.records) || !plan_open(c.pick) {   // no world's records to read, no island in the hand, or its land not formed: the world's screen
 		d.screen = .Chart
 		chart_build()
 		return

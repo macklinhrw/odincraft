@@ -218,15 +218,15 @@ SHORE := [?]Shore_Row{
 			m := Mat(int(FIELDS[.Rock].at(p)))
 			return fmt.tprintf("%s, %s", mat_words(m), cut_words(m))
 		}, "The bed at the surface, under the soil, where the party would gather."},
-	{"A slide's lake", false, {}, {{.Dam_Below, -ANY, 200, 0}}, true, true, "A slide's lake above",
+	{"Slide's lake", false, {}, {{.Dam_Below, -ANY, 200, 0}}, true, true, "A slide's lake above",
 		proc(p: ^Point) -> string {
 			d, _ := dam_below(land_cell(p.x, p.z))
-			return fmt.tprintf("%.0f m from its stream", math.round(d/10)*10) if d >= LAND_CELL else "on its stream"
+			return fmt.tprintf("its stream %.0f m off", math.round(d/10)*10) if d >= LAND_CELL else "on its stream"
 		}, "A slide dammed a stream, and a lake stands behind its debris. The stream below the dam runs past here: were the dam to fail, this is where the water would come."},
 	{"Slid ground", true, {}, {{.Disturbed, -ANY, 9e4, 0}}, true, false, "Ground that slid",
 		proc(p: ^Point) -> string { return fmt.tprintf("%s years ago", years(FIELDS[.Disturbed].at(p))) },
 		"A slide's scar or its debris: the ground the party would gather on came down, or was laid bare."},
-	{"A stream's fan", true, {}, {{.Fan, 0.3, ANY, 0}}, true, false, "On a stream's fan",
+	{"Stream's fan", true, {}, {{.Fan, 0.3, ANY, 0}}, true, false, "On a stream's fan",
 		proc(p: ^Point) -> string { return "laid by its floods" },
 		"The flat at a stream's mouth is what the stream laid there in flood."},
 }
@@ -247,7 +247,7 @@ site_write :: proc(k: ^[dynamic]Card_Row, c: int) {
 		dangers += int(row.may)
 		figures := strings.builder_make(context.temp_allocator)   // the fields it is read from, with their figures, after the why
 		seen: bit_set[Field]
-		for windows in ([2][]Window{row.well, row.lacks}) do for w in windows do if f := FIELDS[w.field]; w.field not_in seen {
+		if !row.may do for windows in ([2][]Window{row.well, row.lacks}) do for w in windows do if f := FIELDS[w.field]; w.field not_in seen {   // what the land may do says its figure in its words
 			seen += {w.field}
 			name, _ := strings.replace_all(f.name, "-", " ", context.temp_allocator)
 			fmt.sbprintf(&figures, "%s%s %.3g%s", " Here: " if strings.builder_len(figures) == 0 else "; ", name, f.at(&p), f.unit)

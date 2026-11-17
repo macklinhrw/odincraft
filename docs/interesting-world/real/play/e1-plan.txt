@@ -23,9 +23,9 @@ print 3. the why of a row: beside the pointer, and under the row once it is clic
 move 330 1175
 wait 0.8
 snap out/play/e1-03-row-tip.png
-part A stream's fan
+part Stream's fan
 shot out/play/e1-04-row-why.png
-part A stream's fan
+part Stream's fan
 
 print 4. the pointer goes along the shore: an open shore to the west, read without a click
 move 838 698
@@ -99,9 +99,12 @@ key Enter
 wait 3
 shot out/play/e1-16-boat.png
 say
-run 40
+print 12b. the view put over the landing with the leaves off, to see them come ashore under the trees and start up the hill
+view over=-24950,-20838 span=90 bare
+run 22
 shot out/play/e1-17-ashore.png
-run 60
+run 75
+view over=-24880,-20830 span=160 bare
 shot out/play/e1-18-gathered.png
 say
 

@@ -12,6 +12,8 @@ It is a plan, not a decision. Section 8 holds what is the owner's. Pictures of f
 
 **Step I-2 is built** (`../plan.md`, section 10, "I-2, as built" and "I-2, as played"): the front door, a new world with honest progress, the world's screen, and settings. Section 14 below says what building it changed, and section 15 what playing it changed. Pictures: `../interesting-world/real/play/i2-*.jpg`.
 
+**Step E-1 is built** (`../plan.md`, section 10, "E-1, as built"): expedition planning, between the world's screen and play. Section 16 below says where everything on it lands and why, as it was designed before it was drawn, and what playing it changed. Pictures: `../interesting-world/real/play/e1-*.jpg`.
+
 Revised the same day after the owner's two criticisms of the first pass: a hold will grow past seven dwarves, and the first drawings were ugly and immature. The placement and the grammar stand. The look is redone (I10), and the design now grows with the hold (I14).
 
 The evidence is a survey of Dwarf Fortress's Steam interface, RimWorld's, and what the makers of Factorio, Victoria 3, Crusader Kings 3 and others have written about theirs, made by a research agent on 2026-11-16 that fetched each page. Its sources are listed at the end. Claude did not re-check its quotations. *(Memory)* marks what neither checked.
@@ -186,6 +188,8 @@ Lists, in the order they arrive:
 
 ![Expedition planning, where: the island's map with the chosen ground, its lenses at the left, the site card below them, and the expedition so far down the right](interface-expedition.jpg)
 
+*Built as one screen with where and who side by side; section 16. What they bring comes with P5.*
+
 1. **Where.** The map of the islands. Choosing an island shows its map; choosing ground on it shows a **site card** in words, from what the land already knows:
    - fresh water, and how near
    - a landing, and how sheltered
@@ -212,7 +216,7 @@ The interface steps sit in the play track (`plan.md`, section 5).
 | **I-1. The interface's ground and the play screen's frame** (after P1; built) | Text, panels on the module grid, the pointer shared between the world and the panels, scale, `--shot` with the interface. The four regions. The clock and speeds. The hand, answering what any block, tree, stream or place is and why. Messages. The level control, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there; paints the rain over the island |
 | **After I-1. The dwarves on screen** (built) | Their pictures at the top: who needs you, who you keep in view, the count of all. The Dwarves list, which finds, groups and folds. Several in the hand as a group. Alerts that count. Messages that lead to their place. A dwarf's card finished: name, trade and age, what it is doing and what it waits for, and tabs for its trade and itself | Clicks a dwarf's picture and is taken to her |
 | **I-2. The front door and the world** (built) | The front door, a new world with honest progress, the world's map, Walk the world, settings for text size and keys | Makes a world from the menu and walks it |
-| **E-1. Expedition planning** | Where, with the site card; who, with drawing again; set out | Chooses a hard site on purpose |
+| **E-1. Expedition planning** (built) | Where, with the site card; who, with drawing again; set out | Chooses a hard site on purpose |
 | **With P3. Orders** | The orders bar, marking ground by dragging, the build choices, what an order waits for | Has a room dug |
 | **With P4. Needs and the year** | Needs on the card, alerts, the date | Is warned before a dwarf starves |
 | **With P5. Materials** | Stores, what a build needs and has, a workshop's card, what the expedition brings | Builds from the island's stone |
@@ -362,6 +366,54 @@ I-2 was held out of `main` because nobody had played it (`../open-decisions.md`,
 - **While one world is put down for another the panel says so**, and none of the old world's stages under the new one's name.
 - **In play the island's name stands before the day**, top left: "North Back, 16th of spring". The name made for the map is the place's name wherever it is spoken of.
 - **The world's screen has nothing to draw for the seconds a new world's plates' history runs**, and says that nothing of it is known yet. That screen is then its two panels on the sea's dark.
+
+## 16. Expedition planning: where everything lands
+
+Step E-1 (`../plan.md`). Written before the screen was drawn, from what a player of Dwarf Fortress and RimWorld expects of it (`../interesting-world/notes/colony-sim-reference.md`, section 13), then corrected by playing it (`../interesting-world/real/play/e1-plan.txt`, `e1-danger.txt` and their pictures). The last part says what playing changed.
+
+**What it is for.** The player has an island in the hand and wants a hold on it. Two questions are theirs: where on its shore the boat comes in, and who is in the boat. The screen answers both before it is asked: a landing is chosen and a party drawn when it opens, so Enter alone sets out. Everything else on it is for the player who wants better, or worse on purpose.
+
+**One screen, not three.** Section 5 drew three questions one after another. With two to ask (what they bring is P5), each is small enough to stand beside the other, and neither hides the other: a player who draws the party again can still see where it lands.
+
+**Where each thing is, and why there.** The regions are the world's screen's (section 15), so that coming from that screen nothing moves but the panels: the island stays where it was.
+
+| Where | What | Why there |
+|---|---|---|
+| Top left | The expedition's name: "An expedition to North Back", and under it the island's kind and where it lies | What is constant (I1). It stands where the world's panel stood, so the player knows which screen this is before reading anything else |
+| The picture | The island, filling the part no panel stands on, as on the world's screen. Its shore is marked where it has a landing: verdigris where a boat lies sheltered with fresh water a short walk off, pale where it lies sheltered and water is further. The landings offered stand on it as a ring each with its number on a tab; the one chosen is larger, brass, with a dark line round it. A chalk ring follows the pointer along the shore | The choice is made on the land itself (colony-sim-reference, 13.2). The numbers join a row of the list to its place without a click (I4) |
+| Lower left | The place: the landing chosen, or while the pointer is on the shore the place under it. A line saying which of the two it is, the place's name, what landing it is; then the beds of the ground the party would gather on, drawn as a column with their names, and beside them the rows | The hand (I2): what is held or pointed at. It stands where the island's card stood, one scale down. The column is this game's own (I10): it is what the dwarves would dig through |
+| Right, the whole height | The expedition, read from its top to the one button at its foot: **1 Where**, the landings offered, a row each with its number, the game's own first; **2 Who**, the party, a row a dwarf, then the two ways to draw again, then what work the party has hands for; at the foot what to look at twice in the place chosen, by name, and Back and Set out | What is chosen so far, in the order it is decided, ending at the thing to do (section 5's drawing). Knowing is at the right (I1). The button is at the foot so that nothing chosen above can move it |
+
+**What the eye does.** It lands on the island, the largest and brightest thing. The brass ring on its shore is the one mark in the live colour, so the eye goes there next, and from there to the card at the lower left, which says in a name and a line what that place is. Then the right column from the top: where, who, what to look at twice, Set out in brass. A player who wants only to begin has read the place's name and the button; one who wants to choose moves the pointer to the shore.
+
+**The place's card.** Rows, as the island's card is: a thing, a word or a figure, a sign. Their order is a founder's: Shelter, Fresh water, Ground to live on, Slope, Timber, Rock, Under it. Then what the land may do there, a row each and only where it is so: a slide's lake above, ground that slid, a stream's fan. A disc marks what the place offers, a triangle what it lacks, a diamond a danger (I10). The why is asked for: beside the pointer on a row, and under the row as a second line when the row is clicked. Every row is a row of `SHORE` (`landing.odin`): windows on the land's fields read round the place, with the word for what they find. Four fields were made for it: hectares of ground to live on within 300 m, the mean slope within 150 m, the share of the canopy within 300 m that is timber, and metres to the stream that comes down from a lake a slide dammed. The card is as tall whatever it says: nine rows' room, so that it does not move as the pointer goes along the shore.
+
+**The pointer and the click.** The pointer takes the low shore within seven modules of it. The card says that place at once, with no wait and no click, and goes back to the place chosen when the pointer leaves the shore. A click chooses. The boat is then brought in at the nearest low shore a boat can come in to, which is asked of the ground by the rule the hold lands by (`landing_near`); where that is not where the player pointed, the card's first line says how far off. **Only a shore that stands too high for a boat is refused**, and the pointer on it says why and how high. An open shore, a dry one, a steep one, one with no tree near is chosen like any other: its cautions stand by name over Set out, each with its why beside the pointer, and Set out is as bright as ever.
+
+**The party.** A row a dwarf: its picture, its name, its trade and its age. One is in focus, in brass; a click on a row or the arrows move the focus. Under the rows are the two ways to draw again, each with its key: "Draw Bramik again" (D), which names the dwarf it acts on, and "All" (A). Under them, what work the party has hands for, a row for each kind of work there is (`WORKS`): who digs, who fells, who builds, by name, and "no one's trade" with a triangle where it is so. That is the reason to draw again, as RimWorld's team skills are. A dwarf has a trade and nothing else to choose yet, so there is no card for the one in focus: the row is the whole of it, and what its trade does is said beside the pointer.
+
+**Nothing counts on seven** (I14). The party's rows are a box that scrolls: twelve dwarves show ten and a thumb. The kinds of work are rows of a table. The landings offered are four at most.
+
+**Keys**, each a row of `BINDS` in a view of its own, and each on its button: Enter sets out, Escape goes back to the world's map with the island still in the hand, 1 to 4 choose a landing offered, Up and Down move among the party, D and A draw again, Home shows the island whole, = and - zoom. A drag moves the map and the wheel zooms about the pointer, as on the world's screen.
+
+**What is kept.** The place and the party stay as they were left when the player goes back and comes in again, and when a game is left for the world's screen. Another island begins with its own landing and keeps the party; another world begins with its own party.
+
+**Where the picture is small for the interface's size** the right column gives way in an order, so that the party keeps three rows and the buttons their place: first the work it has hands for is left out, then the landings that are not chosen, which still stand on the island by their numbers and answer their keys.
+
+**What playing it changed.** Each was found by the script and its pictures, reproduced, and put right.
+
+- *The party's line ran out of its panel and across the map* once the party had been drawn again ("seven dwarves, the seed's party drawn again once, and then two of them one at a time"). It is a few words: "seven, drawn again".
+- *A row's why was cut off at the card's foot.* A row chosen is scrolled whole into view, once, when it is chosen.
+- *The seventh dwarf was half hidden* at the standard size once a place of the player's own and four cautions stood in the column. The rows are a little lower, and the whole party shows.
+- *The landing chosen was a thin brass ring among thin chalk rings.* It is larger, with a dark line round it and a dot at its middle, and its number's tab is brass.
+- *A click on a landing's ring chose the shore beside it*, sixteen metres off, as a place of the player's own. The pointer on a ring is on that landing.
+- *"Draw Bramik again" was cut to "Draw Bramik ag..."* beside a second button that said "Draw all". The second says "All".
+- *The words beside the pointer on a cliff lay over the party's rows.* On the island they stand on the side away from the column.
+- *Rows that are only sometimes true stood always*: "Slid ground: 100000 years ago" on ground that never slid. What the land may do is a row only where it is so.
+- *"Steep ground" was cautioned at the game's own best landing* (31° round it, with 4.5 hectares of flat beside it). Dwarves dig into hillsides: the caution is kept for ground over 35°, and under that the row says "hilly" with no sign.
+- *The why of a danger ended "Here: dam below 97.3 m."* A danger says its figure in its own words, and the field's name is left out.
+
+**Not built, and no place left for it**: what the party brings (P5), the home hold it leaves (P9, P10), a finder of sites, the season it lands in.
 
 ## Sources
 
