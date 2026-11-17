@@ -658,8 +658,58 @@ open_sea :: proc(key: Key) -> bool {
 		o, h := [2]f64{f64(f.island.origin.x), f64(f.island.origin.y)}, f.island.size/2
 		if lo.x < o.x + h && lo.x + CHUNK*s > o.x - h && lo.y < o.y + h && lo.y + CHUNK*s > o.y - h do return false
 	}
-	if mainland_state.pass != nil do for j in 0..=CHUNK do for i in 0..=CHUNK do if mainland_piece(lo.x + f64(i)*s, lo.y + f64(j)*s) >= 0 do return false
+	if len(lands) > 0 do for j in 0..=CHUNK do for i in 0..=CHUNK do if m, _ := mass_piece(lo.x + f64(i)*s, lo.y + f64(j)*s); m != nil do return false
 	return true
+}
+
+// Cells this wide and wider are drawn over a landmass's piece that is not formed, from its coarse
+// stage: from about 4 km off. Nearer, a chunk waits for the piece (waits, world.odin).
+FAR_CELL  :: 32
+FAR_LEVEL :: 5
+
+// The ground a landmass's coarse stage holds at a point in the world, as it will stand once the sea
+// has risen the last of its rise: its height, how steep it is, and whether the sea is beside it.
+far_ground :: proc(m: ^Landmass, wx, wz: f64) -> (h, steep: f32, shore: bool) {
+	st := &m.store
+	u, v := (wx - f64(m.origin.x))/64 + f64(st.n)/2 - 0.5, (wz - f64(m.origin.y))/64 + f64(st.n)/2 - 0.5
+	i, j := int(math.floor(u)), int(math.floor(v))
+	tu, tv := f32(u - f64(i)), f32(v - f64(j))
+	a, b, c, d := store_z(st, i, j), store_z(st, i + 1, j), store_z(st, i, j + 1), store_z(st, i + 1, j + 1)
+	h = math.lerp(math.lerp(a, b, tu), math.lerp(c, d, tu), tv) - st.rise
+	steep = math.hypot((b - a + d - c)/2, (c - a + d - b)/2)/64
+	return h, steep, min(a, b, c, d) - st.rise <= 0
+}
+
+// A column over a piece of a landmass that is not formed, from far off: the coarse stage's ground,
+// clothed as the plant communities' own rows clothe ground of that slope (the laurel forest; the
+// valley forest on gentle ground; the strand beside the sea) and bare where soil does not hold.
+far_column :: proc(m: ^Landmass, wx, wz, cell: f64, level: i32, c: ^Columns, k: int) -> f32 {
+	h, steep, shore := far_ground(m, wx, wz)
+	if h < SEA_SURFACE {
+		h = max(h, SEA_BED)
+		c.water[k], c.mat[k], c.floor[k] = SEA_SURFACE, .Sand, .Sand
+		c.top[k] = min(i32(math.round(h)), SEA_LEVEL - 1)
+		c.ground[k] = c.top[k]
+		return h
+	}
+	if here != &m.frame do bind(&m.frame)
+	x, z := wx - f64(m.origin.x), wz - f64(m.origin.y)
+	c.under[k] = rock_base(x, z, cell)
+	com := Community_Kind.Coast if shore else .Valley if steep < 0.2 else .Slope
+	c.mat[k] = COMMUNITIES[com].cover if steep <= SOIL_HOLDS else rock_in(h - 0.5, c.under[k], rock_level(cell))
+	c.floor[k], c.water[k] = c.mat[k], NO_WATER
+	c.top[k] = i32(math.round(h))
+	c.ground[k] = c.top[k]
+	if steep <= SOIL_HOLDS {
+		r := hash(i32(math.floor(wx/cell)), i32(math.floor(wz/cell)), seed + 160 + u32(level))
+		spacing, tall, _ := stand(200)
+		if f32(r & 0xFFFF)/65536 < cover(com, spacing) {
+			sp := SPECIES[pick_species(com, f32((r >> 16) & 0xFF)/256)]
+			c.top[k] += i32(f32(sp.height[0] + i32((r >> 24) % u32(sp.height[1] - sp.height[0] + 1)))*tall) - 1
+			c.mat[k] = sp.leaf
+		}
+	}
+	return h
 }
 
 // The ground under a chunk at a level of detail. Beyond the nearest level, single trees are
@@ -674,10 +724,19 @@ gen_columns :: proc(level, cx, cz: i32, c: ^Columns) {
 		for i in 0..<i32(P) {
 			ix, iz := cx*CHUNK + i - 1, cz*CHUNK + j - 1   // cell coordinates at this level, in the world
 			k := j*P + i
-			if !bind_at((f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell) {
+			f := island_at((f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell)
+			if f != nil && !is_formed(f) {
+				if f.mass != nil {   // a landmass's piece not yet formed, seen from far off: the land its coarse stage holds
+					heights[k] = far_column(f.mass, (f64(ix) + 0.5)*cell, (f64(iz) + 0.5)*cell, cell, level, c, int(k))
+					continue
+				}
+				f = nil
+			}
+			if f == nil {
 				heights[k], c.water[k], c.mat[k], c.top[k], c.ground[k] = SEA_BED, SEA_SURFACE, .Sand, SEA_BED, SEA_BED
 				continue
 			}
+			if f != here do bind(f)
 			x, z := (f64(ix) + 0.5)*cell - f64(region.origin.x), (f64(iz) + 0.5)*cell - f64(region.origin.y)
 			p: Point
 			g, m, plants := surface_at(x, z, cell, &p)

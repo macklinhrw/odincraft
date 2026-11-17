@@ -497,6 +497,8 @@ Grid :: struct {
 	mouths: i32,            // and the mouths so far
 	at:     Lattice,        // where the grid lies on the lattice its cells are keyed by: its own on an island
 	holding: ^Holding,      // on a piece of land larger than a region, the cells held to what was formed beside it (continents.odin); nil on an island
+	old:    []f32,          // on a landmass's coarse stage, the ground as it stood before creep, so that `fill` is kept for the order of its cells (coarse.odin); nil elsewhere
+	coarse: ^Coarse,        // on a landmass's coarse stage formed in parallel, what that keeps (coarse.odin); nil elsewhere
 }
 
 // Where a grid's first cell lies on the lattice of the land it is part of, at the grid's cell size,
@@ -600,33 +602,34 @@ grid_make :: proc(n: int, at := Lattice{}) -> ^Grid {
 	g.uplift, g.soft, g.base, g.cut, g.face, g.load = carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32)
 	if rocks_held() do g.bodies = make([]Grid_Body, n*n)
 	g.next, g.jitter, g.seen, g.sea = carve(b, &at, n, i32), carve(b, &at, n, [2]f32), carve(b, &at, n, bool), carve(b, &at, n, bool)
-	shared(n, rows(n), g, proc(g: ^Grid, lo, hi: int) {
-		n, k, l := g.n, REFERENCE/region.size, g.at
-		for c in lo*n..<hi*n {
-			x, z := (f64(c%n + l.x) + 0.5)*f64(g.d) - region.size/2, (f64(c/n + l.z) + 0.5)*f64(g.d) - region.size/2
-			s := shore(x, z)
-			ix, iz := i32(c%n + l.x), i32(c/n + l.z)
-			g.face[c] = 1
-			g.jitter[c] = [2]f32{hash01(ix, iz, seed + 7 + u32(l.n)) - 0.5, hash01(ix, iz, seed + 8 + u32(l.n)) - 0.5}*0.9
-			// The beds decide how the rock wears; it also varies a little from one outcrop to the
-			// next, which keeps streams from running in straight lines along the grid, and is
-			// crushed along a fault.
-			g.soft[c] = math.exp(0.8*(hash01(ix, iz, seed + 6 + u32(l.n)) - 0.5))
-			if region.mass != nil {
-				mass_cell(g, c, x, z)
-				continue
-			}
-			if len(rocks.bodies) > 0 do g.soft[c] *= rock_weak(x, z)
-			u := rock_base(x, z, LAND_CELL)
-			g.base[c] = u.base
-			if g.bodies != nil do g.bodies[c] = {u.cover, u.roof, u.body}
-			g.z[c] = -2 - 60*smoothstep(0, 0.2, -s) + (SEA_BED + 62)*smoothstep(0.2, 0.5, -s)   // sea bed, falling away steeply as off a real high island
-			g.sea[c] = s <= 0
-			g.uplift[c] = uplift_at(x, z, s)
-			if s > 0 do g.z[c] = 0.5 + 30*s + 25*(1 + fbm(x*k, z*k, 900, 1, 3, seed + 9))
-		}
-	})
+	shared(n, rows(n), g, proc(g: ^Grid, lo, hi: int) { for c in lo*g.n..<hi*g.n do cell_start(g, c) })
 	return g
+}
+
+// A cell of a grid as the forming starts.
+cell_start :: #force_inline proc(g: ^Grid, c: int) {
+	n, k, l := g.n, REFERENCE/region.size, g.at
+	x, z := (f64(c%n + l.x) + 0.5)*f64(g.d) - region.size/2, (f64(c/n + l.z) + 0.5)*f64(g.d) - region.size/2
+	s := shore(x, z)
+	ix, iz := i32(c%n + l.x), i32(c/n + l.z)
+	g.face[c] = 1
+	g.jitter[c] = [2]f32{hash01(ix, iz, seed + 7 + u32(l.n)) - 0.5, hash01(ix, iz, seed + 8 + u32(l.n)) - 0.5}*0.9
+	// The beds decide how the rock wears; it also varies a little from one outcrop to the
+	// next, which keeps streams from running in straight lines along the grid, and is
+	// crushed along a fault.
+	g.soft[c] = math.exp(0.8*(hash01(ix, iz, seed + 6 + u32(l.n)) - 0.5))
+	if region.mass != nil {
+		mass_cell(g, c, x, z)
+		return
+	}
+	if len(rocks.bodies) > 0 do g.soft[c] *= rock_weak(x, z)
+	u := rock_base(x, z, LAND_CELL)
+	g.base[c] = u.base
+	if g.bodies != nil do g.bodies[c] = {u.cover, u.roof, u.body}
+	g.z[c] = -2 - 60*smoothstep(0, 0.2, -s) + (SEA_BED + 62)*smoothstep(0.2, 0.5, -s)   // sea bed, falling away steeply as off a real high island
+	g.sea[c] = s <= 0
+	g.uplift[c] = uplift_at(x, z, s)
+	if s > 0 do g.z[c] = 0.5 + 30*s + 25*(1 + fbm(x*k, z*k, 900, 1, 3, seed + 9))
 }
 
 // Uplift at a point whose shore value is s, m/yr at the shape's full rate: everywhere inland and

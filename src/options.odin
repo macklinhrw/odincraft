@@ -127,7 +127,8 @@ Options :: struct {
 	has_plates_why: bool,
 	site:          [2]f64,
 	has_site:      bool,
-	continent:     bool,
+	continent:     int,
+	reach:         f64,
 	over:          [2]f64,
 	has_over:      bool,
 	span, tilt:    f64,
@@ -157,7 +158,7 @@ Options :: struct {
 	}
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING, continent = true}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING, continent = -1, reach = BACKGROUND_REACH/1000}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -227,7 +228,9 @@ options :: proc() -> Options {
 		case "place": ok = numbers(value, ",", v[:1]); o.place = int(v.x)
 		case "show":  o.show = true
 		case "site":  ok = numbers(value, ",", o.site[:]); o.has_site = true
-		case "continent": ok = numbers(value, ",", v[:1]); o.continent = v.x != 0
+		case "continent": ok = numbers(value, ",", v[:1]); o.continent = int(v.x)
+		case "coarse":    coarse_how = .Plain if value == "plain" else .Check if value == "check" else .Fast
+		case "reach":     ok = numbers(value, ",", v[:1]); o.reach = f64(v.x)
 		case "dwarves": ok = numbers(value, ",", v[:1]); o.dwarves = v.x
 		case "orders": o.orders = value
 		case "send":  o.send = true

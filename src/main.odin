@@ -129,19 +129,37 @@ main :: proc() {
 		archipelago[opt.island].kind = kind
 	}
 	arrivals_make()
-	// The land larger than a region nearest the start (continents.odin): its coarse stage before the
-	// islands' records are made into regions, since its pieces are regions beside theirs. The tools that
-	// act on one island and exit leave it a record.
-	offline := opt.survey || opt.map_path != "" || opt.has_why || opt.archipelago != ""
-	mainland_make()
-	if mainland_state.formable && !offline && opt.continent do mainland_pass()
-	pieces := len(mainland_state.cut.size) if mainland_state.pass != nil else 0
+	// The land larger than a region (continents.odin): each land mass's coarse stage before the islands'
+	// records are made into regions, since its pieces are regions beside theirs. One that is kept is
+	// read back; one that is not is formed if it lies within what is drawn from the start, a site or the
+	// view asked for, or if the whole world's is asked for (--continent=1). The tools that act on one
+	// island and exit leave them records.
+	offline := opt.survey || opt.map_path != "" || opt.has_why || opt.archipelago != "" || hold_alone(&opt)
+	lands_make()
+	first_at := archipelago[opt.island].origin
+	around := [2]f64{opt.site.x, opt.site.y} if opt.has_site else [2]f64{f64(first_at.x), f64(first_at.y)}
+	pieces := 0
+	if !offline && opt.continent != 0 {
+		began := time.now()
+		left, left_area := 0, f32(0)
+		for &m in lands {
+			near := min(m.near, mass_from(&m, around))
+			if opt.has_pos do near = min(near, mass_from(&m, opt.pos.xz))
+			if opt.has_over do near = min(near, mass_from(&m, opt.over))
+			if mass_pass(&m, opt.continent == 1 || near <= COARSE_REACH) {
+				m.first = len(archipelago) + pieces
+				pieces += len(m.cut.size)
+			} else do left, left_area = left + 1, left_area + m.area
+		}
+		if left > 0 do fmt.printfln("land larger than a region: %d land masses, %.0f km², lie beyond what is drawn from here and their coarse stage is not kept: they stay records until --continent=1 forms the whole world's", left, left_area)
+		if pieces > 0 do fmt.printfln("land larger than a region: the coarse stages at hand in %.1f s, %d pieces in all", time.duration_seconds(time.since(began)), pieces)
+	}
 	formed = make([]Formed, len(archipelago) + pieces)
-	mainland_state.first = len(archipelago)
 	for &f, i in formed[:len(archipelago)] do f.island = archipelago[i]
-	for p in 0..<pieces {
-		o, s := piece_square(i32(p))
-		formed[len(archipelago) + p].island = {id = len(archipelago) + p, origin = o, size = s, kind = mainland_kind(), seed = mainland.seed, setting = .Continent}
+	for &m in lands do if m.ready do for p in 0..<len(m.cut.size) {
+		o, size := piece_square(&m, i32(p))
+		formed[m.first + p].island = {id = m.first + p, origin = o, size = size, kind = mass_kind(), seed = m.seed, setting = .Continent}
+		formed[m.first + p].mass = &m
 	}
 	arrivals_extend(pieces)
 	home = &formed[opt.island]
@@ -191,22 +209,19 @@ main :: proc() {
 		return
 	}
 	islands_done(early, others[:soon])
-	// The landmass's pieces within `near` km of the start, or of the site asked for, formed before
-	// entering, each after the pieces it waits on; the rest nearest first on a thread of low priority
-	// once play has begun.
-	around := [2]f64{opt.site.x, opt.site.y} if opt.has_site else [2]f64{f64(home.island.origin.x), f64(home.island.origin.y)}
+	// The landmasses' pieces within `near` km of the start, or of the site asked for, formed before
+	// entering, each after the pieces it waits on; from then on those within reach of the player, on a
+	// thread of low priority (masses_keep).
 	if pieces > 0 {
 		started := time.now()
 		before := 0
-		for p in slice.clone(mainland_order(around)) do if mainland_off(p, around) <= min(opt.near*1000, NEAR_REACH) {   // its own memory: forming frees the temporary as it goes
+		for &m in lands do if m.ready do for p in mass_order(&m, around, min(opt.near*1000, NEAR_REACH), context.allocator) {   // its own memory: forming frees the temporary as it goes
 			quiet = true
-			mainland_form(p)
+			mass_form(&m, p)
 			quiet = false
 			before += 1
 		}
-		formed_now := 0
-		for &f in formed[mainland_state.first:] do formed_now += int(is_formed(&f))
-		fmt.printfln("the landmass: %d of its %d pieces formed before entering, %d of them within %.0f km of %s, in %.1f s", formed_now, pieces, before, min(opt.near, NEAR_REACH/1000), "the site" if opt.has_site else "the start", time.duration_seconds(time.since(started)))
+		fmt.printfln("land larger than a region: %d pieces within %.0f km of %s formed before entering, in %.1f s", before, min(opt.near, NEAR_REACH/1000), "the site" if opt.has_site else "the start", time.duration_seconds(time.since(started)))
 	}
 	if opt.has_site && !opt.has_pos {
 		opt.pos, opt.has_pos, opt.above, opt.fly = {opt.site.x, 60 + max(-f64(height_in_world(opt.site.x, opt.site.y, 1)), 0), opt.site.y}, true, true, true   // over the sea where the site is at sea
@@ -260,7 +275,8 @@ main :: proc() {
 	clock := Clock{speed = 2 if opt.pace == 6 else 1 if opt.pace == 3 else 0, paused = opt.pace == 0}
 	hold_enter(&p, &a, &opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
 	islands_form(others[soon:], 3, .Low, false)
-	if pieces > 0 do mainland_background(around)
+	mass_focus = (p.pos if afoot else a.at).xz
+	if pieces > 0 && opt.reach > 0 do masses_keep(opt.reach*1000)
 	hour := opt.hour
 	place := Mat.Stone
 	captured := false
@@ -377,6 +393,7 @@ main :: proc() {
 			yaw, fov = a.yaw, ABOVE_FOV
 		}
 		passed := clock_step(&clock, 0 if play.menu else dt)   // the world's time this frame: none while the menu is open
+		mass_focus = centre.xz
 		world_update(w, g.dev, centre)
 		water_update(&w.water, g.dev, passed)
 
