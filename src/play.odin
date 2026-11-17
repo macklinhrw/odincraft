@@ -915,6 +915,12 @@ stores_build :: proc() -> (foot: f32) {
 	// How long the food stored lasts those alive (needs.odin): the one figure a player plans a season by.
 	days := s.food_days
 	lasts := "No food stored" if days <= 0 else "Food for under a day" if days < 0.75 else fmt.tprintf("Food for %s", days_words(days))
+	// With none stored, food that lies loose is still eaten: the sacks the party brought, before any stockpile is marked. It is said, and is no alarm.
+	lying := f32(0)
+	for n, m in s.loose do if n > 0 && is(m, FOOD) do lying += f32(n)*FOODS[food_of(m)].feeds
+	lying /= f32(max(hold_living(), 1))*WANTS[.Food].falls
+	loose_only := days <= 0 && lying >= 0.75
+	if loose_only do lasts = fmt.tprintf("Food for %s, loose", days_words(lying))
 	fed := hold_living() > 0 && s.tick > 0
 	w := px(78)
 	line := line_of(.Body)
@@ -940,7 +946,7 @@ stores_build :: proc() -> (foot: f32) {
 	}
 	if fed {   // the food, under its own line
 		y += px(1.5)
-		y += words(cx, y, lasts, .Small, L.cinnabar if days <= 0 else L.brass if days < 1.5 else L.ash, "stores.food") + px(0.5)
+		y += words(cx, y, lasts, .Small, L.brass if loose_only else L.cinnabar if days <= 0 else L.brass if days < 1.5 else L.ash, "stores.food") + px(0.5)
 		part(.Head, {cx, y - line_of(.Small) - px(0.5), inner, line_of(.Small)}, tip = "How long the food in the stockpiles feeds the dwarves alive: each eats about twice a day. Food lying loose is eaten too, and is not counted here.")
 	}
 	for r in food {

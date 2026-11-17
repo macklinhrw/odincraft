@@ -638,7 +638,7 @@ larder_tell :: proc(h: ^Hold) {
 	good := food_seasons(c)
 	h.at = feet_on(h.landed.camp)
 	// What it brought is carried up from the boat and lies where it gathers: sacks of provisions, PROVISIONS days of them for each.
-	sacks := i32(math.ceil(f32(living(h))*PROVISIONS/FOODS[.Provisions].feeds))
+	sacks := i32(math.ceil(f32(living(h))*PROVISIONS*WANTS[.Food].falls/FOODS[.Provisions].feeds))   // by the measure the stores count days of food in (food_days)
 	if sacks > 0 do good_drop(h, h.landed.camp + {0, 1, 0}, .Provisions, sacks)
 	brought := fmt.tprintf("The party brought provisions for %s, %d sacks, which lie where it gathered", days_words(PROVISIONS), sacks)
 	if good == 0 {

@@ -463,6 +463,13 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - *Asked:* **should a fire in the open warm at all?** RimWorld's does not; here it warms two steps round it and is what saves a party with no roof. *Recommendation: keep it*: a first night by a fire is the genre's oldest picture.
 - *Asked:* **the food of winter.** A hold that plays shelter well still loses dwarves to hunger where it stored nothing: with the room and no orders for food all seven starve in summer on `main` as here. Food that keeps and a season's store are the first half's open matter. *Recommendation: take it up before P5's materials*, since nothing else kills a careful player.
 
+**2026-11-17, Claude's call** (merging P4's second half, ea88d98)
+
+- **Merged**, after Claude played `p4-shelter-play.txt` on the merged tree (twenty pictures, no dwarf shut in or dead) and looked at the weather's line and its why, the fire's card, the hut with its roof and the sleeping place in the hand. The branch stood on `main`'s head, so its own replays of the earlier scripts and its one round of benches are of the merged tree. `GOLDEN` unchanged.
+- **The stores say food that lies loose**, in brass: "Food for about four days, loose". With the sacks lying where the party gathered and no stockpile yet, the panel said "No food stored" in red, which reads as starving. And the sacks are counted by the stores' own measure of a day's food, so the hold's word and the panel agree: 68 sacks for seven.
+- **The step's questions stand for the owner**: a week of winter to die of cold in; whether a chilled dwarf should work slower (*recommended: yes, with hunger and thirst, as one small step*); whether a fire in the open warms at all (*keep it*); and winter's food.
+- **Winter's food is the next play step, before P5**, as the step recommends: a careful hold that digs a room and keeps a fire still starves in winter, since nothing bears then but gobies and nothing keeps. Food that keeps and a season's store, read from how both games do it.
+
 **2026-11-16, Claude's call** (merging P4's first half, 3428f37, and what playing it on the merged tree showed)
 
 - **Merged**, after its conflicts with the day's other work were settled (the stockpile's card gains the food choice and food rows) and Claude played `p4-play.txt`, `zones-play.txt` and `p3-play.txt` on the merged tree and looked at the dwarf's card with its meters, Gather dragged, food stored and counted, and the night's list. `GOLDEN` unchanged. No benches run again; the step's one round had six frames over 12.5 ms on the forest flank under other load, to be measured once on a quiet machine with the others.
