@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:slice"
+import "core:strings"
 import "core:sys/posix"
 import sdl "vendor:sdl3"
 
@@ -407,6 +408,14 @@ main :: proc() {
 			at = {mx, my}*play.ratio
 		}
 		play_posed(&opt)
+		if unseen && opt.tool != "" && !afoot {   // a tool in the hand, as --tool= asks, the cursor's box its mark
+			for row, t in TOOL_ROWS do if strings.equal_fold(row.name, opt.tool) do bar.tool = t
+			for c in DIG_CHOICES do if bar.tool == .Dig && strings.contains(opt.plan, PLANS[c.plan]) do bar.dig = c.plan
+			for c in BUILD_CHOICES do if bar.tool == .Build && strings.contains(opt.plan, PLANS[c.plan]) do bar.build = c.plan
+			if strings.contains(opt.plan, "timber") do bar.stuff = .Timber
+			bar.posed = opt.cursor_box
+			a.marking = bar.posed && a.marked   // as while the button is down
+		}
 		listed := sdl.GetPerformanceCounter()
 		play_frame(f32(pw), f32(ph), at, dt, hour, opt.day, eye, yaw, pitch, fov, boxes)
 		append(&listing, f32(f64(sdl.GetPerformanceCounter() - listed)/frequency))
@@ -417,6 +426,7 @@ main :: proc() {
 			fov = fov, focus = eye if afoot else a.at, above = !afoot, level = NO_CUT if afoot else above_level(&a), bare = !afoot && a.bare, has_mark = !afoot && a.marked,
 		}
 		view.mark[0], view.mark[1], _, _ = mark_box(&a)
+		view.boxes = marks_view(&view, boxes, eye)   // what is marked for the dwarves, and what the box being dragged would mark
 		render(&g, w, view, shot)
 		append(&work, f32(f64(sdl.GetPerformanceCounter() - now)/frequency - g.waited))
 		append(&drawn, [4]int{g.quads_drawn, g.plants_drawn, g.boxes_drawn, g.water_drawn})

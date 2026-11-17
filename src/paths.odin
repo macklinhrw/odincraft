@@ -1,5 +1,6 @@
 package main
 
+import "base:runtime"
 import "core:math"
 import "core:math/linalg"
 
@@ -53,7 +54,7 @@ Patch :: struct {
 // A chunk's true blocks and what its columns say that floors are read from. A patch the dwarves only
 // walk lets them go once its floors are read; one where a block was changed, or a block asked
 // after, keeps them, so a changed block is one block written and the floors read again from memory
-// (docs/adr/0010): the generator is asked again only when a change falls outside the layers kept
+// (docs/adr/0011): the generator is asked again only when a change falls outside the layers kept
 // or a tree is felled.
 Kept :: struct {
 	blocks:      []Mat,
@@ -138,6 +139,7 @@ patch_at :: proc(w: ^Walk, cx, cz: i32, make_it := true) -> ^Patch {
 
 // Read a patch's floors: from the blocks it keeps, or from the generator's with the edits laid over them.
 patch_read :: proc(w: ^Walk, p: ^Patch) {
+	context.allocator = runtime.heap_allocator()   // kept blocks are let go by whichever thread next changes them
 	k := p.kept
 	if k == nil do k = ground_read(w, p.cx, p.cz)
 	patch_floors(w, p, k)
@@ -156,6 +158,7 @@ patch_read :: proc(w: ^Walk, p: ^Patch) {
 
 // Let a patch's kept blocks go: they are read from the generator again when next asked for.
 kept_drop :: proc(w: ^Walk, p: ^Patch) {
+	context.allocator = runtime.heap_allocator()
 	if p.kept == nil do return
 	w.kept -= 1
 	w.kept_bytes -= size_of(Kept) + len(p.kept.blocks)*size_of(Mat)

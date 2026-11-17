@@ -123,6 +123,36 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **On the interface's first design: "that sounds good", with two criticisms.** The hold will have more than seven dwarves as the game goes on, so nothing may be designed for seven only. And the mock-ups "look pretty ugly, though the logic is okay on first glance; seems it is lacking in maturity". So the placement and grammar stand, the look is redone with care, and the design is made to grow with the hold.
 - **On playing P2: two faults to fix first.** The dwarves "get stuck on each other and need to be able to walk around each other"; and "they don't obey physics": with the block broken beneath it a dwarf stays floating in the air, and from there takes no orders. So a dwarf takes up its place and others go round it, and a dwarf with no ground under it falls. Passed to step P3 as its first work, to be merged ahead of the rest.
 
+**2026-11-16, Claude's call** (step P3, orders; `plan.md` section 10, "P3, as built"; `adr/0011`)
+
+- **Orders are marks the hold keeps, and dwarves take them themselves**: the nearest a dwarf can stand beside and has a way to, one of its own trade counting as half as far. Nobody is assigned, and nothing counts on seven. Chosen over a planner that hands work out: the player is the will of the hold.
+- **Every dwarf does every kind of work; one whose trade it is not takes twice as long**, and leaves a mark once for an idle dwarf whose trade it is. Seven are all hands. *A guess to be changed by playing.*
+- **A room or a passage is two blocks high.** An order to dig a box one block high is dug two high, down from the block marked, so the cut that showed the mark shows the room. A taller box is dug as marked.
+- **A stair is a block to a step, and is its own shape**: dug, down a block a column from where the drag began, with three blocks of room over each step; built, up a block a column.
+- **Three things are built, of stone or timber from the store**: a wall two blocks high over the block the drag began on and down to the ground; a floor, one layer at that level, which over a room is its roof; a stair. A block is laid against a block beside it and needs nothing under it.
+- **No cave-ins and no weight.** Leaving them out does not make digging senseless; leaving a dwarf shut in would.
+- **No dwarf is shut in by the work**: the dwarves standing in small closed ground beside a block are counted before and after it is dug or laid, and a change that leaves more is taken back, the mark waiting. So a pit keeps its last step until everyone is out, and that step is dug from the rim. Chosen over asking for a way home before each block, and over letting a trapped dwarf climb.
+- **A dwarf works a block two under or over it in the next column where the block between is open**, which is what lets a pit's last step be dug from its rim.
+- **A pit deeper than two blocks ends with its last blocks left as its stair**, and its order unfinished, saying why.
+- **A dwarf shut in by the player's hand says so, in the log, on its card and as an alert, and a stair dug or built to it is an order like another.**
+- **A block takes 5 s of earth or loose rock and up to 59 s of the hardest rock the picks cut** (60 s times the square of the rock's strength more than earth): mudstone 9, breccia 12, basalt 39. **Rock stronger than 0.8 is too hard for the party's picks** (dolerite, hornfels, quartzite), until better tools come with making (P5). A tree takes 15 s and 3 a metre; a block 8 s to lay. *All guesses.*
+- **The store is a count by kind, with no place and no carrying**: rock by the kind it is, whatever form it lay in; timber by the tree, half its height in blocks; earth, sand and brush give nothing. Building takes the kind there is most of.
+- **A felled tree is gone at a stroke and leaves no stump.** A stump would stand on ground that could then never be dug.
+- **Ground a tree stands on waits for the felling**, and says so.
+- **The hold keeps the blocks of the chunks it works**, 155 KB each, and reads a changed chunk's floors again from memory into the places they had. Chosen over reading the generator again at every block, which cost 3 ms and left 39 KB behind each time.
+- **Remove takes back every order with a mark under the box, whole.** Part of an order cannot be taken back; it can be marked again smaller.
+- **Marked ground is tinted in the terrain's own shader, sixteen boxes a picture; trees wear a band and blocks to lay stand as small blocks.** A tint as strong as would hide the rock was not used (P1 found the same).
+- **Sending the party is the bar's Send, with the key M**, since G is the design's key for Gather; in first person M sends to the block aimed at. The right click only turns the view.
+- **The digging and building choices are chips on the tool's card, not keys.**
+- **A click on marked ground shows the order's card in place of the ground's**, with a button to the ground's own.
+- **The lines that say who took up which work go to the log and not to the screen's messages**, which seven of them filled.
+- **The orders' ADR is 0011**: 0010 was taken by the interface.
+- *Asked:* **how long should digging take?** A room of 48 blocks, 33 of them basalt, took the seven under eight minutes; two hours for a hundred dwarves to dig 60 m square. *Recommendation: play it at these figures first*; they are three constants in `orders.odin`.
+- *Asked:* **should rock too hard for the picks exist before better tools do?** It leaves blocks in a room that nothing in the game can yet remove: on this island the dolerite of its dikes. (a) Keep it: it is story 2's "where a dike crosses the beds", and a reason to want P5. (b) Let the picks cut everything, slowly. *Recommendation: (a)*.
+- *Asked:* **should a block laid need something under it?** A roof can be laid out over open air from one edge. *Recommendation: not until weight exists at all*; a rule for roofs alone would be the first of many.
+- *Asked:* **should work have ranks**, so that the room is dug before the trees are felled? The seven went to fell first, because the trees were nearer. *Recommendation: with the Work list (the design's work by trade)*, where a trade can be told who does it.
+- *Asked:* **should a dig deeper than two blocks cut its own stair at the start**, where the player would see it, instead of leaving its last blocks as one? *Recommendation: yes, as the first change after playing*, if the owner digs down as often as in.
+
 **2026-11-16, Claude's call** (two faults of step P2 the owner found playing it: a dwarf that did not fall, and dwarves on top of each other; `plan.md` section 10, "P2, as built", "Two faults, found by the owner playing"; `adr/0009`)
 
 - **A dwarf whose floor a changed block took away falls to the first ground below**, standing or in mid-step, faster as it goes (a free fall's time), and lands. It then takes orders as before; one on an errand looks for its way again from where it landed.

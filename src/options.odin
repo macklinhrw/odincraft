@@ -70,6 +70,9 @@ import "core:strings"
 // The interface (play.odin) is drawn over every picture. These put it in a state, for a picture or --say:
 //   plain           draw no interface: the world alone
 //   scale=percent   its size, from 75 to 200 in steps of 25 (default: by the picture's height, 100 at 1,440 pixels)
+//   tool=name       a tool in the hand: dig, fell, build, send or remove (bar.odin); with cursor=x,y,x,y the
+//                   box is its mark, shown as it is while the button is down, and with send the order is given
+//   plan=words      with tool: what is dug or built, and of what: room, stair, wall, floor, timber
 //   select=x,y      as if that pixel of the picture had been clicked: the thing under it is in the hand
 //   tab=name        with select: the card's depth shown (rock, ground, plants, near, world, or the thing's own)
 //   list=places     that list open; row=N chooses its Nth named place, which takes the view there
@@ -132,6 +135,7 @@ Options :: struct {
 	send:          bool,
 	plain, lenses, menu, lessons, say, drag: bool,
 	scale, row:    int,
+	tool, plan:    string,
 	select:        [2]f64,
 	has_select:    bool,
 	tab, list, lens, tell, alert: string,
@@ -223,6 +227,8 @@ options :: proc() -> Options {
 		case "row":   ok = numbers(value, ",", v[:1]); o.row = int(v.x)
 		case "select": ok = numbers(value, ",", o.select[:]); o.has_select = true
 		case "tab":   o.tab = value
+		case "tool":  o.tool = value
+		case "plan":  o.plan = value
 		case "list":  o.list, ok = value, value == "places"
 		case "lens":  o.lens = value
 		case "tell":  o.tell = value

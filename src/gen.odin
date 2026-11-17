@@ -199,7 +199,7 @@ Trait :: enum u8 {
 	Passes,   // a rock water passes through, so a spring rises where it lies on one that holds it (rivers.odin)
 	Sinks,    // a rock the rain sinks into rather than running off it, so few streams cut it (SOAKS, rock.odin)
 	Pebbles,  // a river's gravel, which lies two blocks deep on its bed (block_below)
-	Ring,     // a trunk cut across. No block is one: as an edit at a tree's foot it says the tree is felled to a stump (gen_volume)
+	Ring,     // a trunk cut across. No block is one: as an edit at a tree's foot it says the tree is felled (gen_volume)
 	Grass, Litter, Susuki, Dune, Silt, Sand, Rubble,   // the grounds a ground plant grows on (GROUND_PLANTS.on)
 }
 @(rodata) TRAITS := #partial [Mat]bit_set[Trait]{
@@ -775,7 +775,7 @@ block_below :: proc(surface: Mat, depth: i32, bed: Mat, soil: ^Soil, deep: i32, 
 // The blocks of a nearest-level chunk and its border, in layers from y_base up. `lo` and
 // `hi` widen the vertical range, for edits that reach outside the generated ground. They are
 // the island's under the chunk's middle, which stays bound for meshing; a column of the open sea
-// is sand to the bottom. A tree with an edit of rings at its foot has been felled, and only its stump stands.
+// is sand to the bottom. A tree with an edit of rings at its foot has been felled, and is left out.
 gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32, edits: []Edit = nil) -> (blocks: []Mat, y_base, h: i32) {
 	trees := make([dynamic]Tree, context.temp_allocator)
 	sea := !bind_at(f64(cx*CHUNK + CHUNK/2), f64(cz*CHUNK + CHUNK/2))
@@ -815,12 +815,9 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32, edits: []Edit = nil) -
 			k := int(x) + int(z)*P + int(y)*P*P
 			if replace || blocks[k] == .Air do blocks[k] = m
 		}
-		felled := false   // an edit at its foot says so (the dwarves' felling, orders.odin): its stump is left
+		felled := false   // an edit at its foot says so (the dwarves' felling, orders.odin): nothing of it stands
 		for e in edits do felled ||= is(e.mat, RINGS) && e.x == t.x + region.origin.x && e.z == t.z + region.origin.y
-		if felled {
-			if t.form != .Fallen do put(blocks, t.x - x0, t.base - y_base, t.z - z0, SPECIES[t.kind].bark, false)
-			continue
-		}
+		if felled do continue
 		if t.form != .Fallen {
 			grow(blocks, t, {x0, y_base, z0}, c)
 			continue

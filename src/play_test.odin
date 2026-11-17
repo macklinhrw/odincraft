@@ -135,6 +135,38 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	frame(s)
 	testing.expect(t, screen_says(&screen, .Wrong) == "", "a cleared alert still stands")
 
+	// The orders bar (plan.md, P3; bar.odin): each order a button with its key on it. Taking one puts
+	// its tool in the hand, with its choices, what the land says of the ground and, while a box is
+	// dragged, the mark's size in words. Escape puts it down.
+	orders := screen_says(&screen, .Orders)
+	for name in ([5]string{"Dig [D]", "Fell [T]", "Build [B]", "Send [M]", "Remove [X]"}) do testing.expectf(t, strings.contains(orders, name), "the orders bar lacks %s", name)
+	key(s, .D)
+	testing.expect_value(t, says("tool.title"), "Dig")
+	testing.expect(t, bar.tool == .Dig && play.hand.kind == .None && .Held in screen_find(&screen, "orders.dig").state, "D did not put the digging tool in the hand")
+	testing.expect(t, strings.contains(screen_says(&screen, .Hand), "A room") && strings.contains(screen_says(&screen, .Hand), "A stair down"), "the digging tool does not show its choices")
+	s.a.mark, s.a.marked, s.a.marking = {block, block + {4, 0, 6}}, true, true
+	frame(s)
+	testing.expect(t, strings.has_prefix(says("tool.mark"), "A room 5 by 7, two blocks high: 70 blocks to dig"), says("tool.mark"))
+	play_act(.Plan, int(Plan.Stair))
+	frame(s)
+	testing.expect(t, strings.has_prefix(says("tool.mark"), "A stair of 7 steps down"), says("tool.mark"))
+	s.a.marking, s.a.marked = false, false
+	testing.expect(t, click(s, "orders.build") && bar.tool == .Build, "a click on Build did not take the tool")
+	testing.expect(t, strings.contains(screen_says(&screen, .Hand), "none in store: dig rock for it"), "building does not say what is in store")
+	for module in 3..=8 {   // the tallest card, at every scale
+		play.scale = module
+		frame(s)
+		for it in screen.items do if it.part == .Panel {
+			r := it.rect
+			testing.expectf(t, r.x >= 0 && r.y >= 0 && r.x + r.w <= 2560 && r.y + r.h <= 1440, "at %d%% the panel %s leaves the picture with a tool held", module*25, it.id)
+		}
+	}
+	play.scale = 0
+	key(s, .ESCAPE)
+	testing.expect(t, bar.tool == .None && !play.menu, "Escape did not put the tool down")
+	hand_pick({block = block, ok = true, exact = true}, {0.5, 0.5})
+	frame(s)
+
 	// The Places list: every row goes to its place and takes it in the hand (I4).
 	key(s, .F4)
 	testing.expect_value(t, says("list.title"), "Places")
