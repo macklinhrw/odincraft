@@ -93,7 +93,7 @@ FIRE_BURNS  :: 3.0    // logs it burns in a day
 FIRE_RAIN   :: 3.0    // times as fast in rain with no roof over it
 FIRE_LOW    :: 2.0    // logs under which it is fed by whoever has nothing more pressing
 FIRE_DYING  :: 1.0    // and under which it is fed before any marked work
-FIRE_NIGHT  :: 4.0    // and, from FIRE_EVENING on, where no roof stands over it: a night of rain burns as many, and nobody wakes to feed it
+FIRE_NIGHT  :: [2]f32{4, 2}   // and, from FIRE_EVENING on, in the open and under a roof: a night burns one log, a night of rain three, and nobody wakes to feed it
 FIRE_EVENING :: 19.0  // the hour
 FIRE_REACH  :: [2]i32{2, 4}   // steps round it that it warms: in the open, where the wind takes its warmth; and where it stands under a roof with walls
 FIRE_FELT   :: 18.0   // °C a dwarf by it feels at the least, whatever the weather
@@ -410,7 +410,7 @@ fire_feed :: proc(h: ^Hold, i: int, dying: bool) -> bool {
 	w := &h.walk
 	for &f, k in h.fires {
 		low: f32 = FIRE_DYING if dying else FIRE_LOW
-		if !f.roof && date_tick(h.tick).hour >= FIRE_EVENING do low = FIRE_NIGHT   // made up for the night before the hold lies down: played, the fire by the racks went out on every night of rain with timber in the stockpile
+		if date_tick(h.tick).hour >= FIRE_EVENING do low = max(low, FIRE_NIGHT.y if f.roof else FIRE_NIGHT.x)   // made up for the night before the hold lies down: played, the fire by the racks went out on every night of rain, and the room's toward dawn, with timber in the stockpile
 		if !f.fed || f.fuel + f32(f.coming) >= low do continue
 		w.budget = ASKING
 		stand := walk_near(w, f.at.x, f.at.y, f.at.z, 2, false, &h.burning)

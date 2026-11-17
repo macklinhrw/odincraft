@@ -1,0 +1,279 @@
+# A first year, its first two days from the player's seat (plan.md, "A first year, as played"): the
+# hold the expedition of year-door.txt lands, run as a new player of Dwarf Fortress or RimWorld
+# would: stockpiles for food, timber and stone, a wood felled, a room dug into the rise by the
+# landing, a fire and a place to sleep in it, a wall across its open side, racks, the land gathered
+# and the stream fished; the first evening, night and dawn; and on the second day what was ordered
+# looked at, thing by thing. The first orders are given with the world paused. What follows is
+# year-orders.txt, with no window.
+#   build/odincraft --play=docs/interesting-world/real/play/year-days.txt --dwarves=1
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440. Two views
+# look straight down, 40 pixels to a block: over the room, a block's middle is at
+# x = 1300 + 40 (its x - 2692), y = 740 + 40 (its z + 1780); over the camp, y = 740 + 40 (its z + 1762).
+
+view over=2692,-1762 span=64 tilt=90 turn=0 cut=off
+key 2
+run 45
+
+print 1. ashore, and the world paused with Space to think, as a player of either game does: Store dragged three times on the flat stones between the camp and the rise, for food, for timber and for stone
+key Space
+key S
+part Food
+move 1220 580
+press
+move 1380 740
+wait 0.3
+shot out/play/year-20-store-food-drag.png
+say
+release
+part Timber
+drag 980 340 1140 500
+part Stone
+drag 980 580 1140 740
+key esc
+wait 0.5
+print 1b. still paused: the three stockpiles stand marked, and the messages say so
+shot out/play/year-21-stockpiles.png
+say
+
+print 2. Fell dragged across the wood south-west of the camp
+view over=2676,-1752 span=100 tilt=90 turn=0 cut=off
+key T
+move 700 300
+press
+move 1650 1250
+wait 0.3
+shot out/play/year-22-fell-drag.png
+say
+release
+key esc
+
+print 3. Dig, two deep, dragged from the foot of the rise into it
+view over=2692,-1780 span=64 tilt=90 turn=0 cut=off
+key D
+move 1360 680
+press
+move 1040 520
+wait 0.3
+shot out/play/year-23-dig-drag.png
+say
+release
+key esc
+print 3b. the clock let go at its fastest: the seven set about all of it at once
+key 3
+run 60
+view over=2690,-1772 span=70 tilt=50 turn=0 cut=off
+shot out/play/year-24-at-work.png
+say
+timer
+until done 900
+shot out/play/year-25-first-work-done.png
+say
+
+print 4. the room, with the view cut at its roof: Build, then Fire, clicked on its floor; Sleep dragged over the rest of it
+view over=2692,-1780 span=64 tilt=90 turn=0 cut=4
+key B
+part Fire
+move 1180 580
+wait 0.3
+under
+shot out/play/year-26-fire-tool.png
+say
+click 1180 580
+key esc
+key Z
+move 1020 500
+press
+move 1300 660
+wait 0.3
+shot out/play/year-27-sleep-drag.png
+say
+release
+key esc
+
+print 5. a wall of stone along the room's open side, one high, with a doorway left in it
+view over=2692,-1780 span=64 tilt=90 turn=0 cut=off
+key B
+part Wall
+part Stone*
+part 1
+drag 1380 500 1380 580
+click 1380 660
+wait 0.3
+shot out/play/year-28-wall-marked.png
+say
+key esc
+
+print 5b. the dig opened the room's north and east edge to the sky: Roof dragged over it from the hill's top
+key B
+part Roof
+part Timber*
+move 1180 460
+wait 0.3
+under
+press
+move 1340 660
+wait 0.3
+shot out/play/year-28b-roof-drag.png
+say
+release
+key esc
+
+print 6. racks by the food stockpile, four by four
+view over=2692,-1762 span=64 tilt=90 turn=0 cut=off
+key B
+part Rack
+move 1460 580
+press
+move 1580 700
+wait 0.3
+shot out/play/year-29-rack-drag.png
+say
+release
+key esc
+
+print 7. Gather dragged wide across the wood and the grass, and Fish along the stream
+view over=2680,-1755 span=160 tilt=90 turn=0 cut=off
+key G
+move 300 420
+press
+move 2300 1300
+wait 0.3
+shot out/play/year-30-gather-drag.png
+say
+release
+key esc
+key N
+move 1100 200
+press
+move 1900 1400
+wait 0.3
+shot out/play/year-31-fish-drag.png
+say
+release
+key esc
+
+print 8. the afternoon: the hold at work, and what it says
+until hour 15
+view over=2690,-1772 span=70 tilt=50 turn=0 cut=off
+shot out/play/year-32-afternoon.png
+say
+part Dwarves*
+wait 0.3
+shot out/play/year-33-dwarves-list.png
+say
+key esc
+
+print 9. evening, 19:00: the room cut open, the fire, the stores
+until hour 19
+view over=2690,-1783 span=40 tilt=55 turn=0 cut=4
+shot out/play/year-34-evening-room.png
+say
+view over=2690,-1766 span=50 tilt=55 turn=0 cut=off
+shot out/play/year-35-evening-yard.png
+say
+
+print 10. the first night, 22:40: where they lie, and a sleeper taken in the hand
+until hour 22.7
+view over=2690,-1783 span=40 tilt=55 turn=0 cut=4
+shot out/play/year-36-night-room.png
+say
+part Bramik Tuffelbow, weaver*
+wait 0.3
+shot out/play/year-37-night-sleeper.png
+say
+key esc
+view over=2690,-1772 span=70 tilt=50 turn=0 cut=off
+shot out/play/year-38-night-yard.png
+say
+
+print 11. dawn of the second day: what the hold says of the first
+until hour 6.2
+shot out/play/year-39-dawn.png
+say
+until hour 8.5
+view over=2690,-1772 span=70 tilt=50 turn=0 cut=off
+shot out/play/year-40-morning.png
+say
+
+print 12. the second day: is the room a room? The Shelter lens with the view cut at its roof
+view over=2690,-1783 span=40 tilt=90 turn=0 cut=4
+key L
+part Shelter
+key L
+shot out/play/year-41-shelter-lens.png
+say
+key L
+part Shelter
+key L
+
+print 13. things taken in the hand: the fire, the sleeping place, the food stockpile by its bare ground, a heap in it, a rack
+view over=2692,-1780 span=64 tilt=90 turn=0 cut=4
+click 1180 580
+wait 0.3
+shot out/play/year-42-fire-card.png
+say
+key esc
+click 1100 620
+wait 0.3
+shot out/play/year-43-sleep-card.png
+say
+key esc
+view over=2692,-1762 span=64 tilt=90 turn=0 cut=off
+click 1380 740
+wait 0.3
+shot out/play/year-44-stockpile-card.png
+say
+key esc
+click 1300 660
+wait 0.3
+shot out/play/year-45-heap-card.png
+say
+key esc
+click 1460 580
+wait 0.3
+shot out/play/year-46-rack-card.png
+say
+key esc
+
+print 14. a fire by the racks, and the wood farther west felled for it
+key B
+part Fire
+click 1420 620
+key esc
+view over=2660,-1760 span=100 tilt=90 turn=0 cut=off
+key T
+drag 500 300 1300 1200
+key esc
+
+print 15. noon of the second day: the yard at work
+until hour 12
+view over=2690,-1768 span=56 tilt=50 turn=0 cut=off
+shot out/play/year-47-noon-two.png
+say
+part Places*
+wait 0.3
+shot out/play/year-48-places.png
+say
+key esc
+move 1280 400
+
+print 16. the second evening and night: the fire in the room, where they lie, the yard by firelight
+until hour 20
+view over=2690,-1783 span=40 tilt=55 turn=0 cut=4
+shot out/play/year-49-evening-two.png
+say
+until hour 23
+shot out/play/year-50-night-two.png
+say
+view over=2690,-1768 span=56 tilt=50 turn=0 cut=off
+shot out/play/year-51-night-yard-two.png
+say
+
+print 17. the third dawn
+until hour 6.2
+shot out/play/year-52-dawn-three.png
+say
+until hour 9
+view over=2690,-1768 span=56 tilt=50 turn=0 cut=off
+shot out/play/year-53-morning-three.png
+say
