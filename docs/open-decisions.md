@@ -145,6 +145,25 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
   - Each play step comes with a script that plays it as a player would (the pointer on the tree's own log, a drag across a wood, the order given and watched to its end), drawn unseen, and Claude looks at every picture before merging.
   - One play step at a time. The interface step in flight (I-2) is held, not merged, until the orders are right.
 
+**2026-11-16, Claude's call** (P3 put right, part B: goods you can see, and a place for them; `plan.md` section 10, "Goods you can see, as built"; `adr/0012`; `foundations/interface.md` section 13; read against `interesting-world/notes/colony-sim-reference.md`, sections 6 and 7, and RimWorld's `StoreUtility`, `Frame` and `WorkGiver_ConstructDeliverResources`)
+
+- **What work yields is a thing lying where it was dug or felled**, up to eight of a kind in a cell: stone by its rock, timber by its tree. A block of rock dug is one stone; a tree is half its height in logs, as before. Earth, sand and brush leave nothing. Chosen over RimWorld's one chunk in four mined: the world is blocks, and a block dug is a block to build with (Ingnomia does the same).
+- **A stockpile is ground the player drags over, with what it takes**: everything, stone or timber. It follows a slope. Dragging beside one that takes the same makes it larger; Remove takes ground out of it. No priority among stockpiles yet, and no finer filter.
+- **The hold has what lies in its stockpiles. What lies loose is not counted, and the stores say how much that is.**
+- **Carrying is work a dwarf takes when no marked work can be taken**: the nearest heap not in a stockpile that takes it, up to four at a time, to the nearest place for it. Things for a block marked to be laid come first.
+- **A block marked to be laid waits for its stuff, holds it, and is laid of it**: the nearest stone or timber is fetched wherever it lies, stored or loose, as RimWorld fetches for a frame. One thing a block. A wall of stone is of the rock that was brought; timber is laid sawn.
+- **A block the dwarves laid remembers it was built.** A click says "wall of basalt". Remove takes it down, and the thing lies where it stood.
+- **Remove does the first of three things that applies**: marks, then built blocks, then a stockpile's ground. Chosen over three tools, as both games have; its line says which it will do.
+- **Friends do not block one another** (the owner's brief, "say what the real games do and do it"): a dwarf takes up a floor only where it stands still, and a walker goes by whoever is on its way, as RimWorld's pawns and Ingnomia's gnomes do. It still goes round a stander where there is room, and two never come to rest on one floor. This replaces P2's following, stepping round and squeezing past, which the owner asked for when dwarves stuck on each other; they no longer can stick. The room that took 97 to 215 s by when its order fell now takes 75 to 98 s.
+- **A way in is found for a room marked deep**: where the search every way at once finds none within about ten blocks, a straight stair or passage is tried the four ways from each cell stood in, rising, level and falling, up to 64 blocks. Where none is found the mark, the message and the order's card say "dig a stair or a passage to it first".
+- **A stair's preview says how deep each step lies**, as a figure on the ground over it.
+- **An idle dwarf does not stand in a stockpile**, on what lies there: it steps off, as it steps off marked ground.
+- **A fall of a block or two goes to the log alone.** Walkers now cross ground as it is dug, and fall a block more often.
+- *Asked:* **how much should a dwarf carry, and a cell hold?** Four and eight are guesses that read on screen: a dwarf with a stone on its head, a heap the eye can count. RimWorld's pawn carries 75 of a resource. *Recommendation: play it at these; they are two constants (`ARMFUL`, `HEAP`).*
+- *Asked:* **should a stockpile have a priority and a finer filter (basalt but not breccia)?** *Recommendation: with the Stores list, when there is more than stone and timber to sort.*
+- *Asked:* **one Remove for marks, built blocks and stockpiles, or three tools?** *Recommendation: one, until a player takes down a wall meaning to cancel a mark.*
+- *Asked:* **should earth be a thing too?** Dug earth vanishes, as it did. In Ingnomia soil is a thing and a hold fills with it. *Recommendation: no, until something is made of earth.*
+
 **2026-11-16, Claude's call** (P3 put right, part A: what exists made right; `plan.md` section 10, "P3, as put right"; `adr/0011`; `foundations/interface.md` section 12; read against `interesting-world/notes/colony-sim-reference.md` and its sources)
 
 *What each fault was, found by playing it through the play script before anything was changed:*

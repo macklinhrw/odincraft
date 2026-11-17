@@ -46,10 +46,11 @@ A felled tree is not a block changed but a tree taken out: an edit at its foot, 
 
 - The hold's memory grows with the ground it works: 155 KB a chunk of kept blocks and 16 bytes a changed block, and as much again in the frame's session edits. A hold 320 m square of worked ground is about 16 MB. Kept blocks are never let go, and nothing is on disk until the world is kept (P6).
 - Beyond the nearest 256 m the ground is drawn as columns, which show neither a pit nor a felled tree.
-- What is dug goes to a store that is a count by kind, and building takes from the count: goods are nowhere in the world until they are carried (P5).
+- What is dug lies where it was dug, a thing in a cell, and a block is laid of a thing brought to it (ADR 0012). P3 counted it into a store with no place.
 - A block laid needs a block beside it and nothing under it. Nothing falls.
 - What the frame knows of the orders is in `Shown`: each order with work left, how many dwarves are at it and how many marks wait for each cause; the ground still to dig as the fewest boxes a sweep of its marks finds (`boxes_of`), which the terrain's shader tints, forty-eight a picture, with the ground over each faintly; and the trees and cells marked, drawn as boxes.
-- **Taking marks back is by column**: every mark in the columns dragged over, and no other. An order may be trimmed, and its end says what was done of it.
+- **Taking marks back is by column**: every mark in the columns dragged over, and no other. An order may be trimmed, and its end says what was done of it. Where no mark lies under it, Remove takes built blocks down, and with none of those takes ground out of a stockpile (ADR 0012).
+- **A way in is searched every way at once through about ten blocks of ground, and beyond that as a straight stair or passage** up to 64 blocks long, rising, level or falling, the four ways from each cell stood in: under flat ground a room sixty blocks down gets a stair as long as it is deep. Where neither finds one, the order says so on its mark and its card: dig a stair or a passage to it first.
 - **Timber is laid as `Mat.Timber`**, a block of sawn boards that is no tree's. A tree's bark block laid by hand is still drawn as a trunk by the mesher's rule.
-- A dwarf at work keeps its place: a walker goes round it, or goes by it to the floor beyond, taking as long as a squeeze. It is not set back a floor.
+- A dwarf at work keeps its place, and a walker goes by it (ADR 0012, "Friends do not block one another").
 - `./build.sh test` hashes the blocks the hold changed and its store as well as the log, as played and as played again from the orders.

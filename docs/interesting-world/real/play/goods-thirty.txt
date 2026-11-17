@@ -1,0 +1,13 @@
+# Thirty dwarves carrying: run with the orders beside this file.
+#   build/odincraft --play=docs/interesting-world/real/play/goods-thirty.txt --dwarves=60 --party=30 --orders=docs/interesting-world/real/play/goods-thirty-orders.txt
+view over=2685,-1755 span=90 tilt=50 turn=0 cut=off
+key 3
+run 25
+shot out/play/g-20-thirty-carrying.png
+view over=2700,-1772 span=22 tilt=50 turn=180
+shot out/play/g-21-thirty-close.png
+timer
+until done 600
+view over=2685,-1755 span=90 tilt=50 turn=0
+shot out/play/g-22-thirty-done.png
+say

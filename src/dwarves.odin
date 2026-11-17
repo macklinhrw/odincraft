@@ -105,10 +105,11 @@ heading :: proc(bearing, scale: f32) -> matrix[3, 3]f32 {
 // A dwarf as sixteen boxes, its feet at `feet` from the eye: boots and legs, a broad tunic with a
 // belt, arms and hands, a head with a hood, a nose, eyes and a beard. `stride` is the metres it has walked,
 // which swing its legs and arms; seated, its legs lie forward.
-dwarf_boxes :: proc(out: ^[dynamic]Box, f: Facts, feet: [3]f32, bearing: f32, stride: f64, moving, seated: bool, toil: f32 = -1) {
+dwarf_boxes :: proc(out: ^[dynamic]Box, f: Facts, feet: [3]f32, bearing: f32, stride: f64, moving, seated: bool, toil: f32 = -1, carry := Mat.Air, carrying: i32 = 0) {
 	R := heading(bearing, f.tall/1.36)
 	swing := 0.7*f32(math.sin(math.mod(stride, 1.3)/1.3*math.TAU)) if moving else 0
 	strike := 1.3 + 0.9*math.sin(toil*5.5) if toil >= 0 else 0   // at work, both arms are raised and brought down
+	if carrying > 0 do strike = 2.75   // and held up under what it carries
 	cloth, at := TRADES[f.trade].cloth, feet
 	if seated do at.y -= 0.22*f.tall/1.36
 	for side in ([2]f32{-1, 1}) {
@@ -125,6 +126,14 @@ dwarf_boxes :: proc(out: ^[dynamic]Box, f: Facts, feet: [3]f32, bearing: f32, st
 	limb(out, at, R, {0, 1.21, -0.03}, {0.17, 0.15, 0.15}, f.hood, f.hood)   // the hood, over the crown and down the back of the head
 	limb(out, at, R, {0, 1.10, 0.18}, {0.03, 0.035, 0.03}, f.skin, f.skin)
 	limb(out, at, R, {0, 0.93, 0.15}, {0.13, 0.14, 0.05}, f.beard, f.beard)
+	if carrying > 0 {   // what it carries, on its head and hands: a block of the stone, or a log, and a second over it for a full load
+		rgb := mat_rgb(carry)
+		timber := is_stuff(carry, .Timber)
+		for k in 0..<min(carrying, 2) {
+			half := [3]f32{0.42, 0.11, 0.11} if timber else {0.19, 0.17, 0.19}
+			limb(out, at, R, {0, 1.5 + 2*half.y*f32(k) + half.y, 0.04}, half, mat_rgb(.Timber) if timber && k == min(carrying, 2) - 1 else rgb, rgb)
+		}
+	}
 }
 
 // The boat as boxes, its middle at `at` from the eye on the water, its bow toward `bearing`: a

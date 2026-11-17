@@ -699,7 +699,7 @@ A tick of seven at that dig took 57 µs on average, where P3's took 3.8: the mar
 **What still feels wrong**
 
 - **Four metres a second is a run.** From above it reads as brisk; on foot beside them the dwarves hurry. It is RimWorld's figure and one constant.
-- **Many hands at one face still waste themselves.** Seven dwarves dig 93 blocks in about 100 s where the work in them is about 95 s for each of seven: they get in each other's way at a face, and the same room took 97 to 215 s as the order fell a moment sooner or later.
+- *(Mended in part B, below.)* **Many hands at one face still waste themselves.** Seven dwarves dig 93 blocks in about 100 s where the work in them is about 95 s for each of seven: they get in each other's way at a face, and the same room took 97 to 215 s as the order fell a moment sooner or later.
 - **A stair's preview shows its top and not its depth.** The tint lies on the ground over it; the line says how many steps.
 - **A dwarf standing above the cut is gone**, with only its picture at the top to lead to it.
 - **The ground over a mark tints the tree over it too**, leaf and all.
@@ -711,4 +711,73 @@ A tick of seven at that dig took 57 µs on average, where P3's took 3.8: the mar
 - **A click on a built block says "basalt", not "a wall".** A block does not yet remember it was built.
 - **Nobody has used it.** It was played by script, each case as the owner met it, and every picture looked at; no hand has moved a pointer over it.
 
-**For part B** (goods you can see, and a place for them): the store is still a count by kind, shown on the Build tool's buttons and nowhere else. Part B makes what is dug and felled into things that lie where they fell, gives the bar a Store order that marks a zone, has the dwarves carry, counts the store from what lies in zones, and builds from real things.
+**Part B** is the next section: what is dug and felled lies where it fell, the bar's Store order marks a place for it, the dwarves carry, the stores count what lies in stockpiles, and building takes real things. It also mends three of the faults listed above: a stair's preview says its depth, hands at one face no longer waste themselves, and a room marked deep gets its way in.
+
+### Goods you can see, as built (2026-11-16)
+
+The owner, on playing P3: "unlike in dwarf fortress or rimworld i dont define a region where materials i gathered, it goes who knows where and i cant see it." The plan had put carrying off to P5 and P3 counted what was dug into a store with no place. That is reversed (`adr/0012`). It was built from how the real games do it (`interesting-world/notes/colony-sim-reference.md`, sections 6 and 7, and RimWorld's `StoreUtility`, `Frame` and `WorkGiver_ConstructDeliverResources` read beside it).
+
+**What can now happen that could not before:** the owner digs a room and sees its stone lying in it; drags a stockpile on the shore and watches the dwarves carry the stone there, a block on each head; reads at the top right what the hold has; orders a wall with nothing to build it of, is told so, digs, and sees the wall go up of the stone that was dug; takes the wall down and has the stone back.
+
+**What the owner does and sees**
+
+- **Things.** A block of rock dug is a stone of that rock lying in the cell it was dug from; a tree felled is its logs lying where it stood (half its height, as before). Up to eight of a kind lie in a cell, as a heap of small stones or logs laid across each other, and a heap that overflows spreads to the cells beside it. Earth, sand and brush leave nothing. A click on a heap says what, how many and whether it is counted.
+- **Store (S)** on the bar: drag a rectangle on the ground and it is a stockpile, tinted verdigris, for everything, for stone or for timber. It takes the places a dwarf can stand in the rectangle near the level the drag began on, so it follows a slope. Dragging beside one that takes the same makes it larger. A click on it says what it takes and how full it is.
+- **Carrying.** A dwarf with no marked work it can take carries: the nearest heap that does not lie in a stockpile that takes it, four things at a time, to the nearest place for it. It is seen carrying, a stone or a log held over its head.
+- **The stores, top right.** A row a kind beside a block of itself: what lies in stockpiles. Under them, small: how many things lie loose, "not counted"; or, before any stockpile is marked, "no stockpile yet".
+- **Building takes real things.** A block marked to be laid stands as a small block until its stone or timber is brought, as a nearly whole one once it lies at the order, and is then laid of that very thing. The nearest is fetched, stored or loose. With none to be had anywhere an alert says so: "No stone anywhere for the wall: dig rock."
+- **A built block remembers it.** A click on a wall says "Wall of basalt, built by the hold". Remove (X) dragged along it takes it down, and the stone lies where it stood.
+- **Remove** does the first of three things that applies, and its line says which: marks taken back; built blocks taken down; ground taken out of a stockpile, where what lies there then lies loose and is no longer counted.
+
+An orders file says a stockpile as `store all|stone|timber x y z x y z`.
+
+**Three faults of part A, mended**
+
+- **Hands at one face.** The real games' answer is that friends do not block: RimWorld's pawns and Ingnomia's gnomes pass through one another. So a dwarf now takes up a floor only where it stands still, and a walker goes by whoever is on its way; it still goes round a stander where there is room, and no two come to rest on one floor. The room of 93 blocks, given at six different moments, took 97 to 215 s before and takes 75 to 98 s now. P2's stepping round and squeezing past, which the owner asked for when dwarves stuck on each other, is gone: they can no longer stick.
+- **A stair's preview says how deep it goes**: a figure on the ground over each step, "-1" to "-4".
+- **A room marked deep gets its way in.** Where the search every way at once finds none within about ten blocks, a straight stair or passage is tried the four ways from each cell stood in, rising, level and falling, up to 64 blocks. Where none is found, the message, the mark and the order's card say: dig a stair or a passage to it first.
+
+**Played** (`docs/interesting-world/real/play/goods-play.txt` and `goods-thirty.txt`; the pictures are beside them)
+
+| The case | Before | Now | Pictures |
+|---|---|---|---|
+| A wall ordered with nothing to build it of | It waited on a count nobody saw | It stands marked as small blocks, and an alert says "No stone anywhere for the wall: dig rock." | [waiting](interesting-world/real/play/g-01-wall-waiting.jpg) |
+| A dig whose stone lies loose, then is used | The stone went to an unseen store | 27 stones lie in the room they were dug from; the stores say "20 loose: no stockpile"; the wall's six are fetched from there and it is built 24 s after the dig ends. A click on it says "Wall of basalt, built by the hold" | [loose](interesting-world/real/play/g-02-stone-loose.jpg), [built](interesting-world/real/play/g-03-wall-built.jpg), [clicked](interesting-world/real/play/g-04-click-wall.jpg) |
+| A stockpile dragged on flat ground, and the stone carried | No such thing | 4 by 3: 12 places for stone; 21 stones carried 30 m to it in 52 s, 9 s at the fastest speed, and the stores read Basalt 21 | [drag](interesting-world/real/play/g-05-store-flat-drag.jpg), [carrying](interesting-world/real/play/g-06-carrying.jpg), [stored](interesting-world/real/play/g-07-stored.jpg) |
+| A click on a pile and on a stockpile | | "Basalt  8, in a stockpile"; "Stockpile  stone; 3 of 12 full" | [pile](interesting-world/real/play/g-08-click-pile.jpg), [stockpile](interesting-world/real/play/g-09-click-zone.jpg) |
+| A wood felled and its logs carried to a stockpile on a slope | The timber went to the unseen store | 75 logs lie where the twelve trees stood, "75 lie loose, not counted"; a stockpile of 50 places follows the slope; all are carried in 26 s; Timber 75 | [loose](interesting-world/real/play/g-10-logs-loose.jpg), [drag](interesting-world/real/play/g-11-store-slope-drag.jpg), [carrying](interesting-world/real/play/g-12-logs-carrying.jpg), [on foot](interesting-world/real/play/g-13-logs-carrying-afoot.jpg), [stored](interesting-world/real/play/g-14-logs-stored.jpg) |
+| Remove on a built wall | Remove knew only marks | Its line says "6 built blocks taken down; what they are of lies there"; it is taken down in 50 s and five of the six stones are carried back to the stockpile | [drag](interesting-world/real/play/g-15-wall-remove-drag.jpg), [down](interesting-world/real/play/g-16-wall-down.jpg) |
+| A stockpile removed with things in it | | "12 places taken out of the stockpile"; the stores drop Basalt 26 and read "27 lie loose, not counted" | [drag](interesting-world/real/play/g-17-zone-remove-drag.jpg), [gone](interesting-world/real/play/g-18-zone-gone.jpg) |
+| A stair's preview | Showed its top only | A figure over each step: -1 to -4 | [depth](interesting-world/real/play/g-19-stair-depth.jpg) |
+| Thirty dwarves, a room of 93 blocks, a wood of twelve trees and a stockpile for each (`goods-thirty.txt`) | | Dug, felled and all 140 things stored in 88 s of their time, 15 s at the fastest speed | [carrying](interesting-world/real/play/g-20-thirty-carrying.jpg), [close](interesting-world/real/play/g-21-thirty-close.jpg), [done](interesting-world/real/play/g-22-thirty-done.jpg) |
+
+The seconds are the dwarves' time. Playing it found: idle dwarves standing in the stockpile on top of the heaps (they now step off it, as off marked ground); a heap of stones that read as one grey block (the stones are now paler than the weathered rock, apart, and no two of one shade); a wall that could not be taken down by dragging along it, because a drag begun on its top lay in the air (Remove now takes the column under the pointer); an on-foot picture taken from inside a tree, which was mine.
+
+**Determinism and checks.** `odin check src -vet-unused` passes. `./build.sh test` passes with `GOLDEN` unchanged. The dwarves' world gives the same result as played, from its orders alone and beside a reader: the log's hash is `8c5e885fd39409b` (171 events) and the ground's `3239cea40e0c1fc9`, **changed on purpose** (things, carrying, the new way of passing). The hold's test now marks a stockpile before the room's door and asks that what is dug is carried to it, and that the room is roofed and walled of things brought; the passage test asks that dwarves go by each other and none is held up.
+
+Frame times, our own work, each bench once on the finished build:
+
+| Bench | Median / 99% / worst | Over 12.5 ms |
+|---|---|---|
+| Forest flank | 1.91 / 6.04 / 8.89 ms | 0 |
+| Down through cloud | 2.13 / 5.40 / 9.61 ms | 0 |
+| From above, the cut following the ground | 2.31 / 6.51 / 9.15 ms | 0 |
+| Over the landing, 40 s: seven digging, felling and carrying | 1.99 / 5.64 / 12.45 ms | 0 |
+| The same with thirty | 1.98 / 5.89 / 14.81 ms | 4 |
+
+**Four frames over the target with thirty dwarves, the worst 14.8 ms: written down, not chased.** A tick of seven costs 101 µs on average and of thirty 183 µs (57 µs for seven in part A): the goods' picture for the frame is made again whenever a thing moves, and a stockpile's best place is looked for over every cell of every stockpile. The worst tick was 45 ms, a way looked for; ticks run beside the frame and do not hold it.
+
+**Left out, on purpose**: a priority among stockpiles and a finer filter (basalt and not breccia; one tree's timber); a haul order for one thing, and forbidding one; how much a dwarf can lift, wheelbarrows and carts; earth as a thing; things that spoil, burn or wash away; a workshop that turns a log into boards (timber is sawn as it is laid); a Stores list; goods kept on disk (P6).
+
+**What still feels wrong**
+
+- **Thirty idle dwarves gather in a knot beside the stockpile** they last carried to. Nothing sends an idle dwarf anywhere.
+- **Taking a wall down is slow**: 50 s for six blocks of basalt, each cut as rock is. A built block should come down faster than rock is dug.
+- **A heap in shadow is dark on dark rock.** Stone on stone reads from the stockpile's tint more than from the stones.
+- **The alert "idle: no stone or timber lies anywhere" stands a moment too long** after stone begins to lie about, until the dwarf it counts looks again.
+- **One stone of the wall taken down was left loose** beside it: a heap of one waits its turn like any other.
+- **Dwarves pass through each other while walking**, which from close shows two bodies in one place for a moment.
+- **A stockpile takes what a dwarf can stand on**, so it will not cover water or a tree's foot, and its tint on a slope is in steps.
+- **No Stores list**: the top right shows the five kinds there are most of.
+- **Timber is one row at the top right but three kinds in the world** (tabu, shii, sawn), and a wall of timber is always sawn boards whatever tree it came from.
+- **Still unplayed by a hand.** Every case was played by script and every picture looked at.
