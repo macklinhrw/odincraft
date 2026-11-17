@@ -70,10 +70,9 @@ Bar :: struct {
 	cells:    [dynamic][3]i32,      // the blocks it would mark
 	boxes:    [dynamic][2][3]i32,   // and those to dig, as boxes
 	trees:    [dynamic]Tree,
-	way:      int,          // blocks of them that are a way in
+	way:      int,          // with Remove: how many marks, built blocks or places it would take
 	built:    map[[3]i32]Plan,   // the blocks the dwarves laid that stand, and what each was laid as: told by the hold as they are laid and dug
 	undo:     enum u8 { Marks, Built, Zone },   // what Remove would take away here
-	lost:     bool,         // no way in was found for the ground the tool would mark
 	said:     [3]string,    // the alerts as last raised
 }
 Preview_Key :: struct { tool: Tool, dig, build: Plan, stuff: Stuff, takes: Takes, deep, high: i32, a, b: [3]i32, press: [3]i32, dragged, pressed: bool, volume: int, marks: int }
@@ -253,10 +252,8 @@ preview :: proc() {
 	lo, hi := box_of(o.at, o.to)
 	#partial switch o.kind {
 	case .Dig:
-		bar.lost = false
-		cells_of(.Dig, o.shape, o.at, o.to, world_blocks(u.w), &bar.cells, &bar.lost)
+		cells_of(.Dig, o.shape, o.at, o.to, world_blocks(u.w), &bar.cells)
 		boxes_of(bar.cells[:], &bar.boxes)
-		if o.shape == .Out do for c in bar.cells do bar.way += int(c.x < lo.x || c.x > hi.x || c.z < lo.z || c.z > hi.z || c.y < lo.y || c.y > hi.y)
 	case .Build:
 		cells_of(.Build, o.shape, o.at, o.to, world_blocks(u.w), &bar.cells)
 	case .Fell:
@@ -311,8 +308,10 @@ alerts_keep :: proc() {
 	places: [3][3]f64
 	reach, stuff, hard := 0, 0, 0
 	first: [3]Site_Seen
+	moving := false   // some order has work in hand or free to take: ground may yet be opened toward one that has none
+	for site in s.sites do moving ||= site.busy > 0 || site.waits[.None] > 0
 	for site in s.sites {
-		if site.busy == 0 && site.left > 0 && site.waits[.Front] + site.waits[.No_Way] + site.waits[.No_Room] == site.left {   // nothing of it in hand or free to take, and none of it within any floor's reach
+		if site.busy == 0 && site.left > 0 && site.waits[.Front] + site.waits[.No_Way] + site.waits[.No_Room] == site.left && (!moving || site.waits[.No_Way] + site.waits[.No_Room] > 0) {   // nothing of it in hand or free to take, and none of it within any floor's reach
 			if reach == 0 do first[0] = site
 			reach += 1
 		}
@@ -444,8 +443,6 @@ tool_says :: proc() -> string {
 			_, _, steps := stair_run(o.at, o.to)
 			return fmt.tprintf("%d steps %s, heading %s: %d %s.%s", steps, "down" if o.shape == .Down else "up", COMPASS[heading(o)], n, blocks, more)
 		}
-		if bar.way > 0 do more = fmt.tprintf("%s With the way in, %d of them.", more, bar.way)
-		if bar.lost do more = fmt.tprintf("%s No way in found: dig a stair or a passage to it first.", more)
 		if !pressed do return fmt.tprintf("%s: %s, %.0f s a block. Here: %d %s.%s", name, cut_words(under), dig_seconds(under), n, blocks, more)
 		return fmt.tprintf("%d by %d, %d deep: %d %s.%s", wide, long, hi.y - lo.y + 1, n, blocks, more)
 	case .Fell:
