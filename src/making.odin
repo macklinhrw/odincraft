@@ -662,6 +662,7 @@ game_end :: proc(w: ^World, g: ^Gpu) {
 	delete(w.chunks)
 	for _, e in w.edits do delete(e)
 	delete(w.edits)
+	delete(w.felled)
 	wt := &w.water
 	delete(wt.floor); delete(wt.depth); delete(wt.hold); delete(wt.flow_x); delete(wt.flow_z)
 	delete(wt.before); delete(wt.shown); delete(wt.sea); delete(wt.still); delete(wt.roof)
