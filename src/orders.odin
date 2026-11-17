@@ -577,7 +577,7 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 				foot := [3]i32{t.x + ox, t.base, t.z + oz}
 				under := false   // its foot, or the root a block or two under it, stands on a block of the order
 				for down in i32(1)..=3 do under ||= foot - {0, down, 0} in h.marked
-				if t.form == .Fallen || !under || foot in h.marked || foot in w.edited do continue
+				if t.form == .Fallen || !under || foot in h.marked || ([3]i32{foot.x, FELLED, foot.z} in w.edited) do continue
 				if b, _ := walk_block(w, foot); !is(b, PLANT_BLOCKS) do continue
 				mark_add(h, Mark{at = foot, site = id, work = .Fell, taker = -1, by = -1, tall = t.height, tree = t.kind})
 				rooted += 1
@@ -589,7 +589,7 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 		trees_standing(lo.x - ox, lo.z - oz, hi.x - ox, hi.z - oz, &trees)
 		for t in trees {
 			foot := [3]i32{t.x + ox, t.base, t.z + oz}
-			if t.form == .Fallen || foot in h.marked || foot in w.edited do continue
+			if t.form == .Fallen || foot in h.marked || ([3]i32{foot.x, FELLED, foot.z} in w.edited) do continue
 			if m, _ := walk_block(w, foot); !is(m, PLANT_BLOCKS) do continue   // no stem or bush stands there
 			mark_add(h, Mark{at = foot, site = id, work = .Fell, taker = -1, by = -1, tall = t.height, tree = t.kind})
 		}
@@ -953,7 +953,7 @@ work_tick :: proc(h: ^Hold, i: int) {
 	case .Fell:
 		grain := GRAIN
 		bark := SPECIES[m.tree].bark
-		walk_edit(w, {m.at.x, m.at.y, m.at.z, grain[bark][0]})
+		walk_edit(w, {m.at.x, FELLED, m.at.z, grain[bark][0]})   // kept apart from the block it stood on, which may be built on
 		ground_changed(h, m.at, grain[bark][0], false)
 		h.at, h.aside = feet_on(m.at), true   // the order's end says how many: one line, not one a tree
 		if m.tree == .Scrub do say(h, "%s %s clears a bush of scrub.", h.party[i].given, h.party[i].byname)   // brush: no timber in it
@@ -988,7 +988,7 @@ ground_changed :: proc(h: ^Hold, at: [3]i32, mat: Mat, frame: bool) {
 	h.ground += 1
 	if !frame {
 		sync.lock(&h.mutex)
-		append(&h.out, Edit{at.x, at.y, at.z, mat})
+		append(&h.out, Edit{at.x, FELLED if is(mat, RINGS) else at.y, at.z, mat})
 		sync.unlock(&h.mutex)
 	}
 	felled := is(mat, RINGS)

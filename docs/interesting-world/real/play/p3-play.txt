@@ -200,3 +200,14 @@ until done 200
 key esc
 shot out/play/p3-34-young-tree-felled.png
 say
+
+print 11. a timber wall laid across where that tree stood: the tree stays felled (it grew back through the wall when the owner built one)
+view over=2670,-1726 span=30 tilt=55 turn=0 cut=off
+key B
+part Timber*
+drag 1180 720 1380 720
+timer
+until done 400
+key esc
+shot out/play/p3-36-wall-on-a-stump.png
+say
