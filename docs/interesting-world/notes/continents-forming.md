@@ -1,5 +1,144 @@
 # Forming land larger than one region
 
+## Step 21's third part, 2026-11-17: far land reached, and far land that is the land it becomes
+
+Written 2026-11-17 by Claude for the third part of step 21 (the plan's N1). The two sections below this one are the second and first parts, which this continues; their designs stand except where this section says otherwise. Every number was measured on this machine (an M3 Max, 12 performance cores and 4 efficiency, 128 GB) with other agents' work on it, at a load of 5 to 16 as each line says, unless it is marked as a guess or an inference. The owner has not looked at any of it.
+
+### What was asked, and what is done
+
+| Asked | Done? | In a line |
+|---|---|---|
+| A far land reached from inside the game: formed from its card, formed in play as the view nears it, the world put down and taken up cleanly; the list of regions growing in place | **Yes** | "Form it" on the card of a land known and not formed, with what it takes said first, its steps counted and a way to leave it; in play a land is asked for 80 km off or farther by the view's speed; a land formed is walked from its card. The list of regions is laid in room set aside and never moves. Played by script on seed 7 |
+| Far land that matches the land it becomes | **Mostly.** The ridges no longer sink nor the valleys rise; the formed land still stands a median 8 to 14 m over the land drawn from afar | On seed 1's ridge the formed land stood a tenth 151 m under and a tenth 30 m over the far-drawn land on 64 m cells; now 0.2 m and 33 m over, with the median 14 m over. On seed 7's coast, a tenth 81 m under and 50 m over; now 11 m under and 37 m over, the median 8 m over |
+| A real drowned coast on an old margin measured; the sea floor inside a land mass rising with the land; the rebound's width measured | **The first two: yes. The width: no** | Five real drowned coasts measured as the islands were (`real-islands.md`); seed 1's coast is within them on eight figures of ten. The sea floor rises with the crust, and the land starts at the history's height over the low sea, so a continent's coast stands near where the history puts it (seed 7's 187 km from the start, where the history has it at 175 and it stood at 230). The rebound's width cannot be read from a coast's shape |
+
+### Why far land and formed land differed: three causes, each measured
+
+The measure is new (`mass_likeness`, `afar.odin`, printed by `--seam`): the formed land's mean over each 64 m cell, and over each 256 m cell, less the land as it is drawn there from afar, both from the sea's level up. Those are the cells a piece is seen at when it forms on approach; the second part's figure, on 16 m cells, counts every valley narrower than a coarse cell as a difference.
+
+**1. A coarse cell held a cap's slope down a face that is mostly weak rock.** `erode_cell` held a cell no higher over the cell it drains to than the rock at the cell's top allows: a bed that holds 60° holds 110 m over a 64 m cell. Where the cap is 20 m thick and the rock under it holds 35°, cells of 16 m hold 23 m on the cap and 11 m a cell under it: 57 m in 64. So the coarse stage stood narrow ridges 110 m a cell over valleys, which the finer phases took down: on seed 1's ridge the cells where a strong bed caps weaker rock stood a median 44 m lower once formed, a tenth of them 198 m lower, and the ground between, which the far-drawn land had under the sea, came out as land.
+
+*Closed:* on a land larger than a region a face holds what its beds hold (`face_holds`, `erosion.odin`): the run to the cell below is spent bed by bed from the foot up, each bed at its own slope. It is the same at any cell size, and is used at every cell size of a land mass. The islands keep the rock at the cell's top.
+
+**2. A piece went on rising at the rate the coarse stage's last steps left, whatever the piece wore.** With the first cause closed the tails were gone and a bias was left: the formed land stood a median 78 m over the far-drawn land on seed 1's ridge. Traced phase by phase on eleven pieces: the 32 m phase wears 0.7 to 0.9 of what the coarse stage wore a year, and the 16 m phase about half; the crust under the piece went on rising at 0.82 of the coarse stage's wear all the same, so low ground rose 30 to 50 m out of the sea.
+
+*Closed:* a piece's crust rises by the coarse stage's own rule (`piece_rebound`, `continents.odin`): 0.82 of what the land round a cell wore this step, as a mean over a square, the sea in it counting for nothing. A piece knows the land 6 km past its cut and no farther, so its square is 12 km across where the coarse stage's is 24. The share of the square that is land is read from the coarse stage, which every piece reads alike. The field of rates the second part kept with the coarse stage is gone.
+
+**3. The far land was drawn as it stood when the pieces take it up, less a guess.** The second part drew the coarse stage's ground lowered by the share of the finer phases' wear that the rebound would not give back, taken as the coarse stage's own rate. But in the 0.4 Myr of the finer phases the land does not fall evenly: hills go on wearing, low ground between them rises with the crust, and the sea then comes 120 m into the valleys and silt fills their heads.
+
+*Closed:* the coarse stage is run on to today (`coarse_today`, `coarse.odin`): once its 64 m phases are cut and kept for the pieces, the same grid is run through the years of the finer phases on its own cells, in steps of 20 kyr, the sea's last rise among them, and the ground it leaves is kept with it. That ground is what is drawn from afar and on the world's map, with no correction. It adds 23 steps: 28 s of seed 7's continent's 284 s.
+
+**What is left.** The formed land stands over the far-drawn land by a median 8 m on seed 7's coast and 14 m on seed 1's ridge on 64 m cells, a tenth of it 33 to 37 m over: the heads of the far-drawn inlets reach a few hundred metres farther inland than the formed ones. *(Inference, from the phases' traces:)* cells of 16 m stand higher than cells of 64 m under the same rising crust, because a stream is one cell wide at any cell size and the ground beside it, which drains little, wears slowly; the same land therefore wears less on finer cells. Closing it means the coarse cells cutting as the finer cells along their way would. One form of that was tried (the land a cell drains of its own gathering along its way across the cell) and moved the figure by 8 m of 78; it is not in.
+
+### Tried and dropped
+
+| Tried | Result |
+|---|---|
+| The face rule in the coarse stage only | The same figures as with it at every cell size, within 2 m; kept at every size because it is a rule about rock, not about cells |
+| A coarse cell cutting as the four finer cells along its way would, its own land gathering along the way | The bias 69.5 m where it was 77.8 m: the coarse stage's wear is set by its relief and the rebound, not by how hard a hill's top cell cuts |
+| A piece's rebound as the coarse stage's rate times the share of it the piece's own wear makes | The bias 66 m: low ground beside worn hills still rose at the hills' rate |
+| The sea counted in a piece's square from the cells the piece knows | Two pieces that know different parts of one square took its sea differently, and the ground between them tilted: a closed hollow 17 m deep over 27 ha at a cut. The land's share is read from the coarse stage instead |
+
+### The figures, before and after
+
+`--seam`, in squares 8 km across wholly formed. "Before" is `main` at e9e87bd with the new measure added.
+
+| | Seed 1, the capped ridge (58,640, −9,200) before | after | Seed 7, its coast before (−212,200, 112,320) | after (−186,000, 92,000) |
+|---|---|---|---|---|
+| Land in the square, and its highest | 50.5 km², 432 m | 50.1 km², 226 m | 28.6 km², 328 m | 34.8 km², 226 m |
+| Formed less far-drawn on 64 m cells: median; a tenth under; a tenth over | 0.2; −151.0; +30.4 m | +14.2; +0.2; +33.0 m | −9.9; −80.8; +50.2 m | +8.2; −11.4; +37.3 m |
+| The same on 256 m cells | −3.8; −143.3; +16.8 m | +12.5; 0.0; +29.8 m | −5.4; −58.4; +30.9 m | +5.8; −5.0; +28.8 m |
+| On 16 m cells (the second part's figure) | 0.3; −157.4; +73.4 m | +17.1; +1.8; +35.7 m | −21.3; −88.3; +65.5 m | +12.6; −14.8; +42.9 m |
+| A hundredth of the 64 m cells under, and over | −289.9; +53.0 m | −10.2; +46.9 m | −148.8; +87.7 m | −50.5; +70.2 m |
+| Cut on land | 12.9 km | 22.0 km | 2.6 km | 25.2 km |
+| Closed hollows over 2 m within 100 m of a cut | none | none | none | 2 cells, 4.2 m |
+| Closed hollows over 2 m away from a cut | 2 cells, 8.8 m | 6 cells, 2.4 m | 1 cell, 2.2 m | none |
+| Steps across the cut: 99th percentile, largest | 49.1, 65.9 m | 9.9, 37.3 m | 18.0, 18.7 m | 26.8, 46.0 m |
+| Steps more than 300 m from any cut | 30.4, 80.4 m | 6.5, 44.0 m | 30.3, 84.3 m | 21.3, 47.9 m |
+| Steps across the cut over the largest elsewhere at that slope | 0 of 856 | 2 of 1,483 | 0 of 160 | 0 of 1,654 |
+
+Seed 7's coast has moved (below), so its square is a new one, where its mainland comes nearest the start with land enough to measure. A third square on seed 1, 28 km north of the ridge (66,800, 9,000): 30.0 km² to 136 m, 15.0 km of cut, no closed hollow, steps across the cut 4.5 and 9.5 m against 8.9 and 34.0 m elsewhere, none of 1,003 over the largest elsewhere; formed less far-drawn on 64 m cells +5.7, −6.0 and +23.4 m.
+
+**The two steps on seed 1** that are larger than any away from a cut at their slope: 37.3 m at most, on the capped ridge's crest, where a cut runs. Away from cuts the land is far smoother than it was (a 99th percentile of 6.5 m where it was 30.4 m), since no face stands steeper than its beds hold; the steps across a cut have fallen less on a crest, where neither flank is held from the other. The second part's lean (384 m) is unchanged.
+
+**One world whatever the order**: seed 1's pieces round (58,640, −9,200) formed from nothing, and again after those round (66,800, 9,000) had been: the 9 pieces formed in both runs are the same byte for byte.
+
+**The parallel forming is still the serial forming's, cell for cell**: seed 1's nearest land mass (44,832 km²) formed both ways, every stage of every step compared: 0 of 10,719,089 land cells differ; and seed 7's smallest with land in `./build.sh test`: 0 of 110,820. The check found three things on the way, all where the sea floor now makes land: land the sea floor made in a step was taken as shore in that step by the parallel forming and not by the serial one, whose shore is the flood's order; and land made by the sea floor or by silt after the step's routing kept whatever its cells last held of the routing, differently in the two.
+
+**Every island is unchanged**: all 83 islands of seeds 1 to 10, formed alone by this build and by `main`'s, give maps the same byte for byte.
+
+### The coast, and the sea inside a land mass
+
+**The measure.** Five real drowned coasts on old ground, measured as the islands were (`real-islands.md`, "Drowned coasts on old ground"): Tsushima's Asō Bay, Ago Bay, Kujūkushima, and the Severn's and the Patuxent's inlets on Chesapeake Bay, the last two on a margin no plate boundary has worked for 180 Myr. 64 to 100% of their land lies under 50 m. The first part held seed 1's coast, with 75% under 50 m, to three forearc coasts with 14 to 24%.
+
+**What the measure showed about the forming.** The history's ground is today's, over today's sea. The forming runs with the sea 115 to 120 m lower, as it stood through the ice ages, and raises it at the end. The first two parts started the land at the history's height over the *low* sea, so the last rise drowned every part of a continent under 120 m: 31% of seed 1's nearest land mass, and of seed 7's continent, whose land stood a median 109 m before that rise, more than half. That, more than the sea floor, is why seed 7's coast stood 230 km from the start where the history has it at 175.
+
+*Closed:* a land mass's ground starts the last rise higher (`mass_ground`): what the history has at 50 m stood 170 m over the low sea, was cut into valleys down to it, and has the sea in those valleys today. And the crust rises under the sea as under the land (`bank` in the mainland's shape), so ground the history is still raising comes up through the sea in its time. Where the known world's ground is another land mass's or an island's region, it is sea here and does not rise.
+
+| | Before | After |
+|---|---|---|
+| Seed 7's continent (317,108 km² in the known world): land before the last rise; its median; how much stays over the rise | 297,760 km²; 109 m; under half | 322,945 km²; 195 m; 70% |
+| Its land nearest the start (the history: 175 km) | 230 km | 187 km, an islet off its north-east point; its nearest shore with land round it, where it is come ashore, 194 km |
+| Seed 7's land mass 2 (856 km²) | formed as nothing | 680 km² before the last rise, 49% of it over it |
+| Seed 1's nearest (44,832 km²): land before the last rise; median; over the rise | 39,433 km²; 463 m; 83% (second part); with the face rule alone 39,249 km²; 327 m; 69% | 43,905 km²; 425 m; 75% |
+
+Seed 7's land mass 6 (816 km²) still ends under the sea: the history has it under 112 m.
+
+**The parallel forming with a sea floor that rises.** Squares of open sea are not started, so their floor cannot rise step by step. Each such square knows how far the crust must rise before its floor comes within a step of the waves' reach (`Coarse.wake`); it is started then, and its floor is raised by every step taken so far, in the steps' own order, so that it stands to the bit where the serial forming has it.
+
+**Islets join the shore they lie off.** With the low sea's shelf as land, seed 1's nearest land mass was cut into 1,018 pieces, most of them islets, each of which would form on a window of its own. Pieces whose seas meet (within 2 km of each) now lie beside each other for the joining of small pieces: 181 pieces.
+
+**The rebound's width** is not measured. A coast's shape does not hold it; it needs the bending of the crust under a known load.
+
+### Reaching a far land
+
+- **The list of regions grows in place** (`regions.odin`; ADR 0005): room for a million records is set aside for a world, of which only those in use take memory. A land's pieces are written whole beyond the list's end, then the list's length is stored, then the land is marked as listed. Nothing moves, and no reader waits. `making.swap`, by which the frame's thread made the list again, is gone.
+- **A land is asked for** (`lands_ask`): by "Form it" on its card, or by play. One thread forms the lands asked for, one at a time, by the procedure the making's stage runs. Its steps are counted where the stage's are; "Leave it as known" leaves it, and nothing is kept.
+- **In play** the same thread watches the view: a land is asked for within 80 km, or within the 65 km the view reaches and the distance the view travels in twice the time the land takes (`lands_ahead`). The coarse stage then shares its work among five helper threads of sixteen.
+- **The frame** builds again what it drew as open sea where a land has come to hand, and a line says when a land is begun and when it stands.
+- **Walking it**: play begins on the piece where the land comes nearest the start, once the pieces within 8 km of there are formed.
+- **Found by flying over land not yet formed**: a chunk of 2 or 4 m cells whose middle lay over a piece not formed asked that piece for its trees and read past the end of an empty list. A point over land not yet formed now binds nothing (`bind_at`), as a point at sea.
+- **Found by playing the journey**, both the second part's and met now because pieces form as the view travels: a piece formed beside play after the frame had put the formed land on the GPU was the nearest land when the frame drew, with no texture to bind, and the game ended; and a piece under 8 km across was read past its end by the survey of its land in 1 km squares.
+- **A land is come ashore** on its ground nearest the start that has land round it (half the square 2 km across): seed 7's mainland's nearest ground of any kind is an islet a few hundred metres across, where the first playing set the player down.
+
+### Times and memory
+
+| | Second part | Now |
+|---|---|---|
+| Seed 7's whole known world: six land masses, 336,328 km² | 220.8 s at a load of 10; 386.8 s at 15 to 17 | 344.2 s (5.7 min) at a load of 7 to 16 |
+| Of it, its continent | 201 to 357 s by the load | 283.5 s: 252.6 s for 146 steps, 23.6 s run on to today, 7 s cut and kept |
+| Seed 1's whole known world: four land masses, 307,968 km² | 153.7 s | 255.7 s (4.3 min) at a load of 6 to 11 |
+| Seed 3's: six, 386,908 km² | 293.7 s | 332.8 s (5.5 min) at a load of 7 to 12 |
+| Memory at the peak | 9.6 GB (seed 1), 11.4 to 11.6 (seed 7), 11.8 (seed 3) | 10.2, 13.9 and 12.7 GB |
+| The coarse stage kept | 1,334 MB for seed 7's continent | 1,826 MB: more land, and the ground as it stands today with it |
+| Seed 1's nearest land mass | 25.0 to 26.3 s | 32.5 to 35.4 s |
+| Seed 7's continent formed from its card while the map is drawn | not built | 266 s |
+| Seed 7's west land (11,352 km²) formed beside play | not built | 8.7 s |
+
+The whole world is still inside the ten minutes on the three seeds timed, with less to spare: the land is larger (the shelf is land while the sea stands low), a face is read bed by bed, and the stage runs on to today. To hold the time the flood through hollows gained a third size of block, sixteen times the first across (`FLOOD_SIDES`): on seed 7's continent the flood over the whole lattice, on one thread, fell from 102 s to 61 s, and the continent from 370 s to 284 s.
+
+**Benches**, one round, this build beside `main`'s built the same way, at a load of 5 to 6. No frame of our work over 12.5 ms on either. Our work, median and worst: the forest flank 1.76 and 8.4 ms (`main` 1.81 and 8.6); down through cloud 1.94 and 7.6 ms (1.88 and 9.4); from above 2.48 and 9.9 ms (2.31 and 11.4). The journey (`--seed=7 --bench=60 --fly --speed=250 --above=-279500,300,-5254 --look=270,-5`, the west land's coarse stage not kept): the land is asked for 82 km off and formed in 12.3 s beside play; our work 0.87 and 6.9 ms, none over 12.5 ms; 3 frame intervals over 12.5 ms.
+
+### Weak points
+
+- **Formed land stands a median 8 to 14 m over far-drawn land**, a tenth of it 33 to 37 m over. A piece that forms on approach is seen to rise a little and its inlets to shorten by a few hundred metres at their heads.
+- **Seed 1's ridge has two steps across a cut larger than any elsewhere at their slope**, of 1,483; and seed 7's coast a closed hollow of two cells, 4.2 m, by a cut.
+- **The land is lower and smoother than the second part's**: no ridge stands on a cap alone. Seed 1's ridge square stands to 226 m where it stood to 432 m. The owner has not judged it.
+- **Memory**: 10.2 to 13.9 GB while the largest form.
+- **Timings moved by the load**, and none was taken on a quiet machine.
+- **A view that jumps arrives before a land can be formed.** The view from above travels up to 58 km a second. The land is then formed while it is looked at, and near the ground a piece not yet formed shows as nothing until it is.
+- **No party lands on a large land yet**: it is walked.
+- **Five real coasts, two of them a coastal plain of sands and clays.** None of the five was read from a geological map.
+- **The judge was Claude**, by the figures and the pictures.
+
+![12 km of seed 1's nearest land mass where a ridge of strong rock over weak stands on a cut, as it is drawn from afar](../real/continent-seed1-ridge-afar-3.jpg)
+
+![The same 12 km formed](../real/continent-seed1-ridge-formed-3.jpg)
+
+![12 km of seed 7's mainland's coast, as it is drawn from afar and formed](../real/continent-seed7-coast-afar-formed-3.jpg)
+
+![Seed 7's known world as its coarse stages hold it today, 1,020 km across](../real/continent-seed7-map-3.jpg)
+
 ## Step 21's second part, 2026-11-17: every landmass, inside the ten minutes
 
 Written 2026-11-16 and 17 by Claude for the second part of step 21 (the plan's N1). The section below this one is the first part, of the same day, which this continues; its design stands except where this section says otherwise. Every number was measured on this machine (an M3 Max, 12 performance cores and 4 efficiency, 128 GB) with other agents' work on it, at a load of 6 to 17 as each line says, unless it is marked as a guess or an inference. The owner has not looked at any of it.

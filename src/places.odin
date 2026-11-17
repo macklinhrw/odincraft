@@ -97,7 +97,7 @@ places_make :: proc() {
 	}
 	for y in 0..<8 do for x in 0..<8 {
 		cells := 0
-		for j in 0..<1024/int(g.d) do for i in 0..<1024/int(g.d) do cells += int(!g.sea[(y*1024/int(g.d) + j)*n + x*1024/int(g.d) + i])
+		for j in 0..<1024/int(g.d) do for i in 0..<1024/int(g.d) do if row, col := y*1024/int(g.d) + j, x*1024/int(g.d) + i; row < n && col < n do cells += int(!g.sea[row*n + col])   // a large land's piece can be under 8 km across
 		if cells*4 >= (1024/int(g.d))*(1024/int(g.d)) do survey.squares |= 1 << uint(y*8 + x)
 	}
 	survey.land = f32(len(g.order))*g.d*g.d/1e6

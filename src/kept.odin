@@ -2,7 +2,6 @@ package main
 
 import "core:c"
 import "core:fmt"
-import "core:math"
 import "core:mem"
 import "core:slice"
 import "core:strings"
@@ -15,10 +14,9 @@ import "core:sys/posix"
 // cell's piece, and what is known of each piece (continents.odin).
 
 KEPT_MAGIC   :: 0x4b434f31   // "1OCK"
-KEPT_VERSION :: 3
+KEPT_VERSION :: 4
 KEPT_RING    :: 2            // squares kept round any with land: 8 km, past a piece's margin
 KEPT_CELLS   :: SQUARE*SQUARE
-KEPT_ROSE    :: (SQUARE/ROSE_STEP)*(SQUARE/ROSE_STEP)
 NEXT_NONE    :: 255          // a land cell that drains into the sea,
 NEXT_SEA     :: 254          // and a cell of the sea; else the way a land cell drains, as its place in OFFSETS
 
@@ -34,14 +32,16 @@ Store :: struct {
 	next:   [][KEPT_CELLS]u8,
 	owner:  [][KEPT_CELLS]i16,     // each cell's piece, or -1
 	cut, face: [][KEPT_CELLS]f32,
-	rose:   [][KEPT_ROSE]f32,      // every ROSE_STEP cells: m/yr the rebound was raising the ground when the coarse stage ended
+	now:    [][KEPT_CELLS]f32,     // the ground as the coarse stage run on to today leaves it, over today's sea (coarse_today)
 	pieces: []Kept_Piece,
 	pairs:  [][2]i32,              // the pieces beside each other
 	left, lift, rise: f32,         // the grid's, as the coarse stage left them
 }
 
-// Write a coarse stage's grid and its cut. `own` is each cell's piece and 1, or 0.
-store_write :: proc(path: string, g: ^Grid, cut: ^Cut, own: []i32) -> bool {
+// Write a coarse stage's grid and its cut, as the pieces take it up: all of it but the ground as it
+// stands today, which store_today adds once the grid has been run on, and which makes the file whole.
+// `own` is each cell's piece and 1, or 0. Returns where it is being written, or "" if it could not be.
+store_write :: proc(path: string, g: ^Grid, cut: ^Cut, own: []i32) -> (temp: string) {
 	n, m := g.n, g.n/SQUARE
 	has := make([]bool, m*m)
 	defer delete(has)
@@ -76,21 +76,10 @@ store_write :: proc(path: string, g: ^Grid, cut: ^Cut, own: []i32) -> bool {
 	defer delete(pairs)
 	for l, p in cut.near do for q in l do if i32(p) < q do append(&pairs, [2]i32{i32(p), q})
 	head := Kept_Head{magic = KEPT_MAGIC, version = KEPT_VERSION, n = i32(n), m = i32(m), squares = i32(len(squares)), shores = i32(len(shores)), pieces = i32(len(cut.size)), pairs = i32(len(pairs)), left = g.left, lift = g.lift, rise = g.rise}
-	temp := fmt.ctprintf("%s.%d", path, posix.getpid())
-	fd := posix.open(temp, {.WRONLY, .CREAT, .TRUNC}, transmute(posix.mode_t)posix.mode_t{.IRUSR, .IWUSR, .IRGRP, .IROTH})
-	if fd < 0 do return false
+	temp = fmt.aprintf("%s.%d", path, posix.getpid())
+	fd := posix.open(strings.clone_to_cstring(temp, context.temp_allocator), {.WRONLY, .CREAT, .TRUNC}, transmute(posix.mode_t)posix.mode_t{.IRUSR, .IWUSR, .IRGRP, .IROTH})
+	if fd < 0 do return ""
 	ok := true
-	put :: proc(fd: posix.FD, data: []u8, ok: ^bool) {
-		data := data
-		for len(data) > 0 && ok^ {
-			wrote := posix.write(fd, raw_data(data), c.size_t(min(len(data), 1 << 28)))
-			if wrote <= 0 {
-				ok^ = false
-				return
-			}
-			data = data[wrote:]
-		}
-	}
 	put(fd, mem.ptr_to_bytes(&head), &ok)
 	put(fd, slice.to_bytes(slot), &ok)
 	put(fd, slice.to_bytes(shore), &ok)
@@ -131,14 +120,61 @@ store_write :: proc(path: string, g: ^Grid, cut: ^Cut, own: []i32) -> bool {
 			put(fd, buf[:KEPT_CELLS*(1 if plane == .Next else 2 if plane == .Owner else 4)], &ok)
 		}
 	}
+	posix.close(fd)
+	if !ok {
+		posix.unlink(strings.clone_to_cstring(temp, context.temp_allocator))
+		return ""
+	}
+	return
+}
+
+@(private="file")
+put :: proc(fd: posix.FD, data: []u8, ok: ^bool) {
+	data := data
+	for len(data) > 0 && ok^ {
+		wrote := posix.write(fd, raw_data(data), c.size_t(min(len(data), 1 << 28)))
+		if wrote <= 0 {
+			ok^ = false
+			return
+		}
+		data = data[wrote:]
+	}
+}
+
+// Add the ground as it stands today to a coarse stage being written (store_write), the grid having
+// been run on to today, and put the file in its place. With `g` nil the file is let go instead.
+store_today :: proc(temp, path: string, g: ^Grid) -> bool {
+	name := strings.clone_to_cstring(temp, context.temp_allocator)
+	defer delete(temp)
+	if g == nil {
+		posix.unlink(name)
+		return false
+	}
+	// The squares kept, in the order the file has them.
+	fd := posix.open(name, {})
+	if fd < 0 do return false
+	head: Kept_Head
+	m := g.n/SQUARE
+	slot := make([]i32, m*m)
+	defer delete(slot)
+	ok := posix.read(fd, ([^]u8)(&head), size_of(head)) == size_of(head) && posix.read(fd, ([^]u8)(raw_data(slot)), c.size_t(m*m*4)) == m*m*4
+	posix.close(fd)
+	if !ok do return false
+	squares := make([]i32, head.squares)
+	defer delete(squares)
+	for at, t in slot do if at >= 0 do squares[at] = i32(t)
+	fd = posix.open(name, {.WRONLY, .APPEND})
+	if fd < 0 do return false
+	buf := make([]f32, KEPT_CELLS)
+	defer delete(buf)
 	for t in squares {
-		f := slice.reinterpret([]f32, buf)
-		side := SQUARE/ROSE_STEP
-		for j in 0..<side do for i in 0..<side do f[j*side + i] = g.coarse.rose[(int(t)/m*side + j)*(n/ROSE_STEP) + int(t)%m*side + i]
-		put(fd, buf[:KEPT_ROSE*4], &ok)
+		started := g.coarse == nil || g.coarse.ready[t]
+		#no_bounds_check for j in 0..<SQUARE do for i in 0..<SQUARE do buf[j*SQUARE + i] = g.z[(int(t)/m*SQUARE + j)*g.n + int(t)%m*SQUARE + i] if started else MASS_SHELF
+		put(fd, slice.to_bytes(buf), &ok)
 	}
 	posix.close(fd)
-	if ok do ok = posix.rename(temp, strings.clone_to_cstring(path, context.temp_allocator)) == 0
+	if ok do ok = posix.rename(name, strings.clone_to_cstring(path, context.temp_allocator)) == 0
+	if !ok do posix.unlink(name)
 	return ok
 }
 
@@ -154,7 +190,7 @@ store_open :: proc(st: ^Store, path: string, n: int) -> bool {
 	file := slice.from_ptr((^u8)(at), int(info.st_size))
 	head := (^Kept_Head)(at)^
 	m := int(head.m)
-	size := size_of(Kept_Head) + 2*m*m*4 + int(head.pieces)*size_of(Kept_Piece) + int(head.pairs)*8 + int(head.squares)*(KEPT_CELLS*(3*4 + 1 + 2) + KEPT_ROSE*4) + int(head.shores)*KEPT_CELLS*8
+	size := size_of(Kept_Head) + 2*m*m*4 + int(head.pieces)*size_of(Kept_Piece) + int(head.pairs)*8 + int(head.squares)*KEPT_CELLS*(4*4 + 1 + 2) + int(head.shores)*KEPT_CELLS*8
 	if head.magic != KEPT_MAGIC || head.version != KEPT_VERSION || int(head.n) != n || size != len(file) {
 		posix.munmap(at, c.size_t(info.st_size))
 		return false
@@ -171,7 +207,7 @@ store_open :: proc(st: ^Store, path: string, n: int) -> bool {
 	st.z, st.area, st.load = take(file, &k, [KEPT_CELLS]f32, s), take(file, &k, [KEPT_CELLS]f32, s), take(file, &k, [KEPT_CELLS]f32, s)
 	st.next, st.owner = take(file, &k, [KEPT_CELLS]u8, s), take(file, &k, [KEPT_CELLS]i16, s)
 	st.cut, st.face = take(file, &k, [KEPT_CELLS]f32, int(head.shores)), take(file, &k, [KEPT_CELLS]f32, int(head.shores))
-	st.rose = take(file, &k, [KEPT_ROSE]f32, s)
+	st.now = take(file, &k, [KEPT_CELLS]f32, s)
 	return true
 }
 
@@ -230,17 +266,9 @@ store_window :: proc(st: ^Store, lo: [2]int, side: int) -> (g: ^Grid, owner: []i
 	return
 }
 
-// How fast the rebound was raising the ground at a point of the lattice when the coarse stage ended,
-// m/yr: between the four kept round it. The point is in cells, a cell's middle at its index and a half.
-store_rose :: proc(st: ^Store, u, v: f32) -> f32 #no_bounds_check {
-	at :: proc(st: ^Store, i, j: int) -> f32 #no_bounds_check {
-		side := SQUARE/ROSE_STEP
-		if i < 0 || j < 0 || i >= st.n/ROSE_STEP || j >= st.n/ROSE_STEP do return 0
-		slot := st.slot[j/side*st.m + i/side]
-		return st.rose[slot][j%side*side + i%side] if slot >= 0 else 0
-	}
-	x, y := (u - 0.5)/ROSE_STEP, (v - 0.5)/ROSE_STEP
-	i, j := int(math.floor(x)), int(math.floor(y))
-	tu, tv := x - f32(i), y - f32(j)
-	return math.lerp(math.lerp(at(st, i, j), at(st, i + 1, j), tu), math.lerp(at(st, i, j + 1), at(st, i + 1, j + 1), tu), tv)
+// The ground at a cell of the lattice as the coarse stage run on to today leaves it, over today's sea;
+// the shelf's floor in the open sea off it.
+store_now :: proc(st: ^Store, i, j: int) -> f32 #no_bounds_check {
+	slot, k := store_at(st, i, j)
+	return st.now[slot][k] if slot >= 0 else MASS_SHELF
 }

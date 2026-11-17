@@ -235,8 +235,34 @@ erode_cell :: #force_inline proc(g: ^Grid, c: int, dt: f32) #no_bounds_check {
 	f := ERODE*g.soft[c]*law.erodes*math.sqrt(g.area[c])*dt/run
 	z := (g.fill[c] + g.uplift[c]*g.lift*dt + f*below)/(1 + f)
 	was := g.z[c] + g.uplift[c]*g.lift*dt
-	g.z[c] = clamp(z, below + 0.001*run, below + law.limit*run*g.face[c])
+	top := below + law.limit*run*g.face[c]
+	if (g.coarse != nil || g.holding != nil) && z > below + LEAST_LIMIT*run*g.face[c] do top = below + face_holds(g, c, below, run*g.face[c])
+	g.z[c] = clamp(z, below + 0.001*run, top)
 	g.load[c] = max(was - g.z[c], 0)*g.d*g.d
+}
+
+LEAST_LIMIT :: 0.7   // the slope the weakest rock holds, rise over run (rock.odin: 35 degrees)
+
+// How high a face stands over the cell below it across `run` metres, on a land larger than a region
+// (continents.odin): each bed down the face holds its own slope, so the run is spent bed by bed from
+// the foot up. A cell 64 m across that read only the rock at its top held a strong cap's slope over
+// a face that is mostly weak rock, 110 m to the next cell, which cells of 16 m, each reading its own
+// bed, wear back: ridges stood in the coarse stage that the finer phases took down (step 21, third
+// part). Read so, a face holds what its beds hold at any cell size. The islands keep the rock at the
+// cell's top: they are formed whole before they are seen, and are judged as they are.
+face_holds :: proc(g: ^Grid, c: int, below, run: f32) -> f32 #no_bounds_check {
+	under, shift := grid_under(g, c), g.uplift[c]*g.left - g.rise
+	h, left := below, run
+	for left > 0 {
+		limit := rocks.law[rock_in(h + 2 + shift, under, ROCK_SIM)].limit
+		if left*limit <= 4 {
+			h += left*limit
+			break
+		}
+		h += 4
+		left -= 4/limit
+	}
+	return h - below
 }
 
 // One land cell's creep, from the ground as it stood.
@@ -323,7 +349,10 @@ coast :: proc(g: ^Grid, dt: f32) {
 	if sh := region.shape; sh.bank > 0 || sh.reef > 0 do for c in 0..<n*n do if g.sea[c] {
 		g.z[c] += f32(sh.bank)*g.uplift[c]*g.lift*dt
 		if g.z[c] > -REEF_DEPTH && g.z[c] < -REEF_TOP do g.z[c] = min(g.z[c] + f32(sh.reef)*dt, -REEF_TOP)
-		if g.z[c] > 0 do g.sea[c], g.cut[c] = false, 0
+		if g.z[c] > 0 {
+			g.sea[c], g.cut[c] = false, 0
+			if g.coarse != nil do g.fill[c], g.next[c], g.area[c], g.load[c] = g.z[c], -1, 0, 0   // a land mass's (coast_mass, coarse.odin): land that drains nowhere until the next step routes it
+		}
 	}
 	open := sea_table(g, into = g.open)
 	// Each cell on its own, shared among threads: the platform wears deeper, and each land cell beside
@@ -391,7 +420,10 @@ coast :: proc(g: ^Grid, dt: f32) {
 					break
 				}
 				g.z[c] = max(g.z[c], top)
-				if g.z[c] > 0 do g.sea[c] = false
+				if g.z[c] > 0 && g.sea[c] {
+					g.sea[c] = false
+					if g.coarse != nil do g.fill[c], g.next[c], g.area[c], g.load[c] = g.z[c], -1, 0, 0   // a land mass's (coast_mass, coarse.odin): land that drains nowhere until the next step routes it
+				}
 				append(&queue, [2]i32{i32(c), out})
 			}
 		}

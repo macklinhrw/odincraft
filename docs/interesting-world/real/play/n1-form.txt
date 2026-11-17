@@ -1,0 +1,102 @@
+# A far land formed from its card and walked, played from the player's seat (step N1, third part;
+# open-decisions.md, 2026-11-17): seed 7, whose mainland lies 175 km from the start. A world's own
+# making leaves it as the plates' history has it; here it is formed from its card while the map is
+# looked at, gone to, and walked, and the world is then put down for another and taken up again.
+# Its coarse stage takes six or seven minutes the first time and is kept, so to play this again from
+# a land not formed remove what was kept first:
+#   find build/worlds -name 'landmass-7-*' -delete
+#   build/odincraft --door --seed=7 --play=docs/interesting-world/real/play/n1-form.txt
+# The pictures go to out/play/.
+
+until ready 120
+print 1. the world in hand: the mainland is known, and not formed
+part Worlds
+key Enter
+wait 0.6
+part isles.mainland
+wait 0.8
+part As land
+shot out/play/n1-20-known.png
+say
+
+print 2. what forming it takes is said before it is asked for
+part As land
+part Forming it takes
+shot out/play/n1-21-costs.png
+
+print 3. Form it: its card and the world being made say how far it has come, with the way to leave it
+part land.form
+wait 8
+snap out/play/n1-22-forming.png
+say
+
+print 4. the islands are looked at meanwhile
+part All islands
+part isles.name
+wait 20
+snap out/play/n1-23-meanwhile.png
+
+print 5. formed: drawn from its 64 m cells as they stand today, with its rivers
+until land 1500
+wait 1
+part isles.mainland
+wait 1
+shot out/play/n1-24-formed.png
+say
+print the whole of it
+view over=27648,282624 span=1150000
+wait 0.6
+shot out/play/n1-25-whole.png
+print and where it is come ashore, nearer
+view over=-170080,93920 span=90000
+wait 0.6
+shot out/play/n1-26-shore.png
+
+print 6. Walk it: its ground where it is come ashore is formed first, and play begins when it stands
+part land.walk
+wait 6
+snap out/play/n1-27-walk-waits.png
+say
+until play 3000
+wait 3
+shot out/play/n1-28-ashore.png
+say
+print from above: the ground formed, and beyond it the land drawn from the 64 m cells
+view span=1500 tilt=55
+wait 2
+shot out/play/n1-29-above.png
+view span=24000 tilt=60
+wait 2
+shot out/play/n1-30-above-far.png
+
+print 7. out to the world: the mainland stands as it was left, with its pieces counted
+key Esc
+part Leave to the world
+wait 1
+shot out/play/n1-31-world-again.png
+say
+
+print 8. another world made, and this one taken up again: its mainland is read back (a seed whose world is kept is taken up, not made again)
+key Esc
+key Esc
+part Make a new world
+type 5
+wait 0.2
+key Enter
+wait 1
+until ready 300
+snap out/play/n1-32-other-world.png
+key Esc
+key Esc
+part Make a new world
+key Backspace
+key Backspace
+type 7
+wait 0.2
+key Enter
+wait 1
+until ready 300
+part isles.mainland
+wait 1
+shot out/play/n1-33-taken-up.png
+say

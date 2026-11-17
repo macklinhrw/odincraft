@@ -87,6 +87,14 @@ REAL := [?]Real{
 	// from Wada to Kamogawa, its Mineoka hills to 333 m; the Kumano coast's rias at Owase on Kii, to 751 m;
 	// Cape Muroto's west shore on Shikoku, to 617 m. Bōsō's deepest hollow may be a reservoir.
 	{"Bōsō", {6, 0, 4, 24, 0.0, 0.46, 35, 10, 1.83, 11.9}}, {"Kii", {39, 32, 19, 17, 0.0, 0.72, 76, 5, 1.76, 26.2}}, {"Muroto", {8, 0, 4, 14, 0.0, 0.68, 76, 2, 1.75, 11.8}},
+	// Drowned coasts on old ground that hardly rises, in 8 km windows as those (step 21, third part): Ago
+	// Bay on the Shima peninsula, to 201 m, and Kujūkushima north of Sasebo, to 277 m, from the same
+	// elevation model as the islands; the Severn's and the Patuxent's inlets on Chesapeake Bay's western
+	// shore, to 57 and 45 m, a coastal plain on a margin no plate boundary has worked for 180 million
+	// years, from the United States' 10 m model. The mainland is judged against these and Tsushima's
+	// Asō Bay, and no longer against the three above, which rise fast on a forearc.
+	{"Ago", {18, 1, 10, 85, 0.0, 0.73, 15, 5, 0.99, 4.0}}, {"Kujūkushima", {21, 9, 12, 64, 0.0, 0.72, 20, 6, 1.58, 17.2}},
+	{"Severn", {17, 1, 9, 100, 0.0, 0.49, 14, 7, 1.18, 6.7}}, {"Patuxent", {7, 0, 3, 100, 0.0, 0.53, 8, 8, 0.81, 1.5}},
 }
 
 // The real islands the island is judged against, and whether its rock's story names them.
@@ -293,9 +301,9 @@ KINDS := [?]Kind{
 		// Land larger than a region (continents.odin): no outline or uplift of its own, which are the
 		// plates' history's at each place, and no island is of it. A history as the inlets kind's,
 		// since the sea rose 120 m on every coast at the end of the last ice age, and the coasts of a
-		// continent's margin it stands for (Kii, Shikoku's Pacific shore) are drowned valleys.
-		name = "mainland", after = {"Bōsō", "Kii", "Muroto"}, weight = 0, story = "layered, gently tilted",
-		shape = {swell = {0, 360}, silt = {0.4, 0.8}},
+		// continent's old margin are drowned valleys (Ago Bay, Kujūkushima, Chesapeake Bay's inlets).
+		name = "mainland", after = {"Ago", "Kujūkushima", "Tsushima", "Severn", "Patuxent"}, weight = 0, story = "layered, gently tilted",
+		shape = {swell = {0, 360}, silt = {0.4, 0.8}, bank = {1, 1}},   // the crust rises under its sea as under its land (mass_ground, continents.odin)
 		history = {
 			{cell = 64, years = 20000, steps = {140, 175}, uplift = {1, 1}},
 			{cell = 32, years = 6000, steps = {40, 60}, uplift = {1, 1}},

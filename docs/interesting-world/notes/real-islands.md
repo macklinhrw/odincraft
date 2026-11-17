@@ -401,6 +401,51 @@ It is the measure for a granite island worn low, not for the granite massif, who
 - **Colour and banding.** The real islands wear the game's seeded beds in the game, so only their shape was judged.
 - **Size.** The south window holds 2.4 times the land of our largest granite island.
 
+## Drowned coasts on old ground, against the continents' coasts
+
+Added 2026-11-17 by Claude for step 21's third part (the plan's N1). The first part judged the mainland's coast against three stretches that rise fast on a forearc (south Bōsō, Kii at Owase, Cape Muroto) and found seed 1's coast far from them: 75% of its land under 50 m where theirs is 14 to 24%. The history makes a continent's coast old ground that hardly rises, and the sea rose 120 m into it at the end of the last ice age. So it is measured here against real coasts of that kind.
+
+**The coasts.** Five windows of 8,192 m, the first from this note's own table:
+
+| Coast | Window centre | Land, highest | What it is |
+|---|---|---|---|
+| Tsushima, Asō Bay | 34.340 N 129.300 E | 25.1 km², 173 m | Folded sandstone and mudstone on the shelf between Korea and Kyushu, drowned into a maze of inlets (above) |
+| Ago Bay, Shima peninsula | 34.300 N 136.800 E | 38.5 km², 201 m | Japan's best-known ria: a low upland cut in old sedimentary rock, its valleys drowned to branching bays (memory) |
+| Kujūkushima, north of Sasebo | 33.185 N 129.655 E | 38.3 km², 277 m | Tertiary sandstone and shale under caps of basalt, behind the arc, drowned into some two hundred islands (memory) |
+| Severn River, Chesapeake Bay | 39.030 N 76.550 W | 46.0 km², 57 m | The Atlantic coastal plain: sands and clays on a margin no plate boundary has worked since the Atlantic opened, its valleys drowned when the sea last rose (memory) |
+| Patuxent River, Chesapeake Bay | 38.400 N 76.520 W | 39.0 km², 45 m | The same plain, 70 km south |
+
+Chesapeake Bay is the old, slowly moving margin the plan asked for. The two Japanese coasts stand on ground that is not rising fast (Kujūkushima behind the arc; Shima on the outer side, with low terraces), and come from the same elevation model as every island here.
+
+**Data.** The Japanese windows are GSI's `dem_png` tiles at zoom 14, as above (116 tiles, the two checks below among them). The American ones are the Terrarium elevation tiles kept on Amazon's open data (`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`, height = 256 R + G + B/256 − 32,768 m), zoom 14, which in the United States carry the Geological Survey's 10 m model (memory; the ground's detail in them is that fine). Their water is not marked, and their sea bed is a coarse model blended in, so a cell is taken as water where its height is 0.6 m or less. About 310 tiles were fetched, with a generic user agent, and kept outside the repository. Five other coasts were fetched and dropped because the tiles there are a 30 m model or worse, smoothed (the Hawkesbury north of Sydney, Betanzos and Vigo in Galicia, Mokpo), stepped (Kinsale) or patched with a noisy survey of the water (the Fal); Elk Neck at the head of Chesapeake Bay had blots in its water.
+
+**How.** As the islands: sampled bilinearly at 4 m, averaged into 16 m cells, the window's outer 160 m set to sea and its shore left out; then the game's own routing and start-up figures on the grid, through `--real=`, rebuilt a third time in a scratch copy of `src/` (the loader is 40 lines in `land.odin`). The check: Mikurajima gives 110, 72, 51, 5, 2.5, 0.69, 121 and 7 against `REAL`'s 117, 81, 51, 5, 2.5, 0.69, 122 and 7, and Tsushima 38, 32, 25, 75, 0.0, 1.28, 28, 4, 0.32 and 0.7 against 39, 40, 24, 74, 0, 1.25, 29, 4, 0.32 and 0.7. The two shore figures come out a few points lower than the first tools gave; the rest agree. The generated coasts are measured by the same tool: `--seam=8.192 --window=file` writes a formed square in the form a real coast is kept in.
+
+**The figures.**
+
+| | Tsushima | Ago | Kujūkushima | Severn | Patuxent | Seed 1 (58,640, −9,200) | Seed 7 (−186,000, 92,000) |
+|---|---|---|---|---|---|---|---|
+| Land in the window, km²; highest, m | 25.1; 173 | 38.5; 201 | 38.3; 277 | 46.0; 57 | 39.0; 45 | 46.7; 226 | 32.9; 226 |
+| Shore height within 100 m, m | 39 | 18 | 21 | 17 | 7 | 18 | 39 |
+| Shore rising 30 m in 50 m, % | 40 | 1 | 9 | 1 | 0 | 0 | 20 |
+| Slope in the first 100 m, ° | 24 | 10 | 12 | 9 | 3 | 10 | 23 |
+| Land under 50 m, % | 74 | 85 | 64 | 100 | 100 | 75 | 36 |
+| Land over 60°, % | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.1 | 0.1 |
+| Fall at a crest, m | 1.25 | 0.73 | 0.72 | 0.49 | 0.53 | 0.35 | 0.52 |
+| Height above the nearest stream, m | 29 | 15 | 20 | 14 | 8 | 19 | 44 |
+| Deepest closed hollow, m | 4 | 5 | 6 | 7 | 8 | 3 | 4 |
+| Streams draining over 0.12 km², km per km² | 0.32 | 0.99 | 1.58 | 1.18 | 0.81 | 1.33 | 1.01 |
+| Largest basin at the sea, km² | 0.7 | 4.0 | 17.2 | 6.7 | 1.5 | 3.9 | 5.0 |
+
+**What they say.**
+
+- **A drowned coast on old ground is low.** 64 to 100% of the land in the five real windows lies under 50 m, against 14 to 24% on the three forearc coasts. The first part's finding that seed 1's coast had 75% of its land under 50 m was a finding about the coasts it was held to, not about the land.
+- **Seed 1's coast is within the five on eight figures of ten**, and near them on the other two: its crests are rounder (0.35 m against 0.49 to 1.25) and one cell in a thousand stands over 60° where they have none.
+- **Seed 7's coast, where its mainland comes nearest the start, is hillier than the five**: 36% under 50 m and 44 m above the nearest stream, where the highest of them (Tsushima, Kujūkushima) have 64 to 74% and 20 to 29 m. Its shore, its crests, its streams and its hollows are within them. The history gives that corner a range behind the coast; it lies between these coasts and the forearc ones (Bōsō, to 333 m, has 24% under 50 m and 35 m above the stream).
+- **So the mainland is judged against these five** (`mainland` in `KINDS`), and no longer against Bōsō, Kii and Muroto, whose rows stay in `REAL`.
+
+**Not judged.** The rock: none of the five was read from a geological map. The sea bed: none of these models has one. Whether Shima's coast is rising slowly or sinking, which decides how well it stands for an old margin, is from memory. The width over which a continent's crust rebounds (24 km in the coarse stage) cannot be read from a coast's shape: it needs the bending of the crust under a known load, such as shorelines raised round a vanished ice sheet or lake, and no such measure was taken.
+
 ## Livable ground
 
 Added by Claude on 2026-11-11, after the owner looked at the comparison. The owner's reading: real islands are a good north star but not the only reference. Mikurajima, the most dramatic island in the set, has nowhere to live. The references should lean toward livable real islands, the generated islands should have both drama and ground a person could settle, well balanced, and the variance should still allow an inhospitable island as a rarer kind.

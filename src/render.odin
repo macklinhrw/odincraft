@@ -624,7 +624,10 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	if v.weather.x >= 0 do cover, base = v.weather.x, v.weather.y
 	from := math.to_radians(home.region.shape.swell)
 	drift := f64(SKY.wind)*((f64(v.day)*24 + f64(v.hour))*3600 + f64(v.seconds))
-	near := island_near(v.eye.x, v.eye.z)
+	// Nearest of those whose land is on the GPU: a piece of a large land formed since this frame's
+	// upload (masses_keep forms them beside play) has no texture to bind yet.
+	near := home
+	for &r in formed do if is_formed(&r) && r.lifted != nil && (near.lifted == nil || off_island(&r, v.eye.x, v.eye.z) < off_island(near, v.eye.x, v.eye.z)) do near = &r
 	corner := [2]f64{f64(near.land.at.x)*LAND_CELL - near.region.size/2, f64(near.land.at.z)*LAND_CELL - near.region.size/2}   // where its land's arrays begin: its region's corner, or a landmass piece's window
 	f.cloud = {f32(math.mod(v.eye.x + math.sin(from)*drift, 65536)), f32(math.mod(v.eye.z - math.cos(from)*drift, 65536)), f32(v.eye.x - f64(near.region.origin.x) - corner.x), f32(v.eye.z - f64(near.region.origin.y) - corner.y)}
 	f.weather = {cover, base, SKY.deck, f32(f64(near.land.n)*LAND_CELL)}
