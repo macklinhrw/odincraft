@@ -143,6 +143,7 @@ Site :: struct {
 	promised:    int,               // of what lies at it, what marks in hand will use
 	down:        bool,              // it takes built blocks down
 	steps:       int,               // blocks of it left standing, as the way out of the pit it dug
+	behind:      int,               // and blocks left with them that no floor reaches while they stand
 	over:        bool,
 }
 
@@ -393,13 +394,13 @@ mark_remove :: proc(h: ^Hold, k: int, done: bool) {
 		for g, i in s.got do fmt.sbprintf(&b, "%s %d of %s", "" if i == 0 else " and" if i == len(s.got) - 1 else ",", g.n, store_words(g.mat))
 		fmt.sbprint(&b, ".")
 	}
-	if s.steps > 0 do fmt.sbprintf(&b, " %d %s left standing as the step out of the pit: a stair dug into it would free %s.", s.steps, "block is" if s.steps == 1 else "blocks are", "it" if s.steps == 1 else "them")
+	if s.steps > 0 do fmt.sbprintf(&b, " %d %s left standing as the step out of the pit%s: a stair dug into it would free %s.", s.steps, "block is" if s.steps == 1 else "blocks are", fmt.tprintf(", and %d behind %s that cannot be come at while %s", s.behind, "it" if s.steps == 1 else "them", "it stands" if s.steps == 1 else "they stand") if s.behind > 0 else "", "it" if s.steps + s.behind == 1 else "them")
 	h.at = site_middle(s)
 	short := strings.builder_make(context.temp_allocator)
 	head := "Built" if s.work == .Build && s.shape == .Rack else "Felled" if s.work == .Fell else "Gathered" if s.work == .Gather else "Fished" if s.work == .Fish else "Taken down" if s.down else "Dug" if s.thing == "digging" else fmt.tprintf("%s %s", s.thing, WORKS[s.work].done)
 	fmt.sbprintf(&short, "%s: %d %s", sentence(head)[:len(head)], n, units)
 	for g in s.got do fmt.sbprintf(&short, ", %d %s", g.n, store_words(g.mat))
-	if s.steps > 0 do fmt.sbprintf(&short, ". %d left as the step out", s.steps)
+	if s.steps > 0 do fmt.sbprintf(&short, ". %d left as the step out%s", s.steps, fmt.tprintf(", %d behind it", s.behind) if s.behind > 0 else "")
 	h.short = fmt.tprintf("%s.", strings.to_string(short))
 	say(h, "%s", strings.to_string(b))
 }
@@ -711,12 +712,14 @@ mark_waits :: proc(h: ^Hold, k: int, why: Waits, by := -1) {
 	if m.wait != why do h.marks_v += 1
 	m.wait, m.tried, m.by, m.as_of = why, h.tick, by, h.ground
 	// An order with nothing left but the last steps out of its pit, each found so as the ground now
-	// stands, is done: they are left standing, and it says so.
+	// stands, and the blocks no floor reaches while those steps stand, is done: they are left
+	// standing, and it says so. Without this the blocks behind a step wait for it for ever.
 	if why == .Way_Out {
 		site := m.site
-		for o in h.marks do if o.site == site && (o.wait != .Way_Out || o.taker >= 0 || o.as_of != h.ground) do return
+		for o in h.marks do if o.site == site && o.wait != .Front && (o.wait != .Way_Out || o.taker >= 0 || o.as_of != h.ground) do return
 		for j := len(h.marks) - 1; j >= 0; j -= 1 do if h.marks[j].site == site {
-			h.sites[site].steps += 1
+			if h.marks[j].wait == .Way_Out do h.sites[site].steps += 1
+			else do h.sites[site].behind += 1
 			mark_remove(h, j, true)
 		}
 	}
