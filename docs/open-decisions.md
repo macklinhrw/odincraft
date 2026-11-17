@@ -123,6 +123,25 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **On the interface's first design: "that sounds good", with two criticisms.** The hold will have more than seven dwarves as the game goes on, so nothing may be designed for seven only. And the mock-ups "look pretty ugly, though the logic is okay on first glance; seems it is lacking in maturity". So the placement and grammar stand, the look is redone with care, and the design is made to grow with the hold.
 - **On playing P2: two faults to fix first.** The dwarves "get stuck on each other and need to be able to walk around each other"; and "they don't obey physics": with the block broken beneath it a dwarf stays floating in the air, and from there takes no orders. So a dwarf takes up its place and others go round it, and a dwarf with no ground under it falls. Passed to step P3 as its first work, to be merged ahead of the rest.
 - **Less time on benchmarks.** "The amount of time you are running benchmarks is pissing me off", said as Claude ran round after round before merging P3. From here a merge takes one short round at most, a step's own figures are not run again, and a suspected slow frame is written down to be measured once on a quiet machine, not chased under load. The target itself stands: no frame of our own work over 12.5 ms.
+- **On playing P3: "not only is the gameplay experience bad, its terrible."** The owner's findings, each to be fixed:
+  - The dwarves do their work at a snail's pace, even at the fastest speed.
+  - Ground clearly marked to be dug is left alone, with "no dwarf can reach" it.
+  - Felling: a click straight on a log says no tree is there. Trees are hard to mark, and a drag cannot take many because the box goes vertical.
+  - Building: a timber wall turned into a tree, and two laid logs grew moss like a fallen trunk.
+  - The cut takes off the dwarves' heads and bodies, and their feet sink into the floor.
+  - The menus are badly designed. Dig offers "a room", which has nothing to do with rooms and only digs two blocks high, and "a stair down", which only digs a block. Fell has the same fault.
+  - **There is no place for what is gathered.** "Unlike in dwarf fortress or rimworld i dont define a region where materials i gathered, it goes who knows where and i cant see it."
+  - "Where did all the research time go to? Did you learn nothing? I'm massively dissapointed."
+- **What follows, at the owner's word:** goods are things that lie in the world and are carried to a place the player marks for them, now and not in P5. Orders are named for what the player gets and work as a player of those two games expects. No play step is merged again until it has been played through by script, from the player's seat, and its pictures judged against those expectations.
+
+**2026-11-16, Claude's call** (what went wrong with P3, and what changes)
+
+- **The fault was Claude's way of working, not one bug.** Five play steps were merged in a day, none played by anyone. Each was checked for a clean build, the same result twice, frame time and a picture or two, and none for whether a click on a tree fells it. `lessons.md` warns of exactly this: "Measurements passed while the owner's eyes rejected"; "One feature at a time, each one finished or reverted"; "The running game is the test harness".
+- **The research was written down and not used where it counted.** Claude's own table of what Dwarf Fortress and RimWorld play is lists designations and stockpiles, and the plan then put goods in "a store without being carried", citing RimWorld's first version. That was a misjudgment: goods you can see and a place you choose for them are the genre's core, and the owner knows it. The orders were named for how they were built ("a room" for two blocks high), where both games name an order for what the player gets.
+- **From here:**
+  - Before a play step is built, Claude writes what a player of Dwarf Fortress and RimWorld expects of it, and the step is judged against that.
+  - Each play step comes with a script that plays it as a player would (the pointer on the tree's own log, a drag across a wood, the order given and watched to its end), drawn unseen, and Claude looks at every picture before merging.
+  - One play step at a time. The interface step in flight (I-2) is held, not merged, until the orders are right.
 
 **2026-11-16, Claude's call** (step P3, orders; `plan.md` section 10, "P3, as built"; `adr/0011`)
 
