@@ -93,6 +93,8 @@ FIRE_BURNS  :: 3.0    // logs it burns in a day
 FIRE_RAIN   :: 3.0    // times as fast in rain with no roof over it
 FIRE_LOW    :: 2.0    // logs under which it is fed by whoever has nothing more pressing
 FIRE_DYING  :: 1.0    // and under which it is fed before any marked work
+FIRE_NIGHT  :: 4.0    // and, from FIRE_EVENING on, where no roof stands over it: a night of rain burns as many, and nobody wakes to feed it
+FIRE_EVENING :: 19.0  // the hour
 FIRE_REACH  :: [2]i32{2, 4}   // steps round it that it warms: in the open, where the wind takes its warmth; and where it stands under a roof with walls
 FIRE_FELT   :: 18.0   // °C a dwarf by it feels at the least, whatever the weather
 FIRE_WARMS  :: 12.0   // of the whole, in a day, that warmth comes back by it
@@ -258,11 +260,20 @@ sleep_find :: proc(h: ^Hold, i: int) -> [3]i32 {
 		s := shelter_of(blocks, c)
 		return 3 if indoors(s) || fire_near(h, c) >= 0 && s.roof else 2 if s.roof || fire_near(h, c) >= 0 else 1
 	}
-	// The sleeping places: the best sheltered free place, the nearest of those, that a way leads to.
-	Bed :: struct { c: [3]i32, rank: int }
+	// The sleeping places: the best sheltered free place that a way leads to; of those one with nobody lying, or about
+	// to lie, in the places round it; and of those the nearest. A body lies longer than a block: played, the seven lay
+	// in a heap on the five places nearest the door of a room of forty (plan.md, "A first year").
+	Bed :: struct { c: [3]i32, rank, crowd: int }
 	beds := make([dynamic]Bed, context.temp_allocator)
-	for c, cell in h.zoned do if h.zones[cell.zone].sleep && rests_well(h, c, i) do append(&beds, Bed{c, rank(h, blocks, c)})
-	for a in 1..<len(beds) do for k := a; k > 0 && (beds[k].rank > beds[k - 1].rank || beds[k].rank == beds[k - 1].rank && nearer(beds[k].c, beds[k - 1].c, d.cell)); k -= 1 do beds[k], beds[k - 1] = beds[k - 1], beds[k]
+	lain := make([dynamic][3]i32, context.temp_allocator)   // where the others lie, or go to lie
+	for o, j in h.dwarves do if j != i && o.caring && o.care == .Sleep && o.doing != .Dead do append(&lain, o.care_at)
+	for c, cell in h.zoned do if h.zones[cell.zone].sleep && rests_well(h, c, i) {
+		crowd := 0
+		for l in lain do crowd += int(abs(l.x - c.x) <= 1 && abs(l.z - c.z) <= 1 && abs(l.y - c.y) <= 1)
+		append(&beds, Bed{c, rank(h, blocks, c), crowd})
+	}
+	before :: proc(a, b: Bed, from: [3]i32) -> bool { return a.rank > b.rank || a.rank == b.rank && (a.crowd < b.crowd || a.crowd == b.crowd && nearer(a.c, b.c, from)) }
+	for a in 1..<len(beds) do for k := a; k > 0 && before(beds[k], beds[k - 1], d.cell); k -= 1 do beds[k], beds[k - 1] = beds[k - 1], beds[k]
 	way := make([dynamic][3]i32, context.temp_allocator)
 	for b in beds[:min(len(beds), 3)] {
 		if b.c == d.cell do return b.c
@@ -398,7 +409,9 @@ fires_settle :: proc(h: ^Hold, at: [3]i32, mat: Mat) {
 fire_feed :: proc(h: ^Hold, i: int, dying: bool) -> bool {
 	w := &h.walk
 	for &f, k in h.fires {
-		if !f.fed || f.fuel + f32(f.coming) >= (FIRE_DYING if dying else FIRE_LOW) do continue
+		low: f32 = FIRE_DYING if dying else FIRE_LOW
+		if !f.roof && date_tick(h.tick).hour >= FIRE_EVENING do low = FIRE_NIGHT   // made up for the night before the hold lies down: played, the fire by the racks went out on every night of rain with timber in the stockpile
+		if !f.fed || f.fuel + f32(f.coming) >= low do continue
 		w.budget = ASKING
 		stand := walk_near(w, f.at.x, f.at.y, f.at.z, 2, false, &h.burning)
 		if stand < 0 do continue

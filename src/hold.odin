@@ -176,6 +176,8 @@ Shown :: struct {
 	ghosts:    [dynamic]Ghost,
 	store:     [Mat]i32,      // what lies in stockpiles that take it: what the hold has (goods.odin)
 	loose:     [Mat]i32,      // and what lies anywhere else, which is not counted
+	unhoused:  [Takes]i32,    // of that, what no stockpile has room for, by its class: stone, timber, food
+	untaken:   [Takes]bool,   // and whether that is because no stockpile takes the class at all
 	piles:     [dynamic]Pile_Seen,
 	zones:     [dynamic]Zone_Seen,
 	zone_boxes: [dynamic]Tint,
@@ -1093,7 +1095,7 @@ hold_thread :: proc(h: ^Hold) {
 	bind(h.island)
 	for {
 		sync.lock(&h.mutex)
-		for !h.quit && h.tick < h.until && h.tick >= sync.atomic_load(&h.target) do sync.cond_wait(&h.wake, &h.mutex)
+		for !h.quit && h.tick < h.until && h.tick >= sync.atomic_load(&h.target) && len(h.inbox) == 0 do sync.cond_wait(&h.wake, &h.mutex)
 		done := h.quit || h.tick >= h.until
 		for o, k in h.inbox {   // an order from the frame is obeyed at the tick it is taken, and the log keeps that
 			o := o
@@ -1101,11 +1103,32 @@ hold_thread :: proc(h: ^Hold) {
 			inject_at(&h.orders, h.taken + k, o)
 		}
 		clear(&h.inbox)
+		stands := h.tick >= sync.atomic_load(&h.target)   // the clock stands, paused: what was ordered is still marked at once
 		sync.unlock(&h.mutex)
 		if done do return
-		hold_tick(h)
+		if stands do hold_heed(h)
+		else do hold_tick(h)
 		free_all(context.temp_allocator)
 	}
+}
+
+// The clock stands and the frame has given an order: it is obeyed now, at the tick in hand, and
+// what it marked is shown, so that the world paused is a place to give orders in (interface.md, I7).
+// The tick in hand begins with the orders due at it (hold_tick), so an order obeyed here is obeyed
+// in the same state as one read from the log at that tick: the log plays again the same.
+hold_heed :: proc(h: ^Hold) {
+	bound(h.island)
+	if h.taken >= len(h.orders) || h.orders[h.taken].tick > h.tick do return
+	for h.taken < len(h.orders) && h.orders[h.taken].tick <= h.tick {
+		obey(h, h.orders[h.taken])
+		h.taken += 1
+	}
+	sync.lock(&h.mutex)
+	orders_show(h)
+	goods_show(h)
+	fires_show(h)
+	benches_show(h)
+	sync.unlock(&h.mutex)
 }
 
 // Run the hold on its own thread until a tick; the frame's clock says how fast.
@@ -1388,7 +1411,7 @@ dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
 	if d.job do for site in s.sites do if site.id == d.site {
 		row := WORKS[site.work]
 		what := fmt.tprintf("a %s", SPECIES_OF[d.cut]) if site.work == .Fell else store_words(d.cut) if site.work == .Build && d.cut != .Air else mat_words(d.cut)
-		if d.working do c.doing = fmt.tprintf("Laying %s for the %s", what, site.place) if site.work == .Build else fmt.tprintf("Felling %s, one of the %s", what, site.place) if site.work == .Fell else fmt.tprintf("Digging %s for the %s", what, site.place)
+		if d.working do c.doing = fmt.tprintf("Laying %s for the %s", what, site.place) if site.work == .Build else fmt.tprintf("Felling %s, one of the %s", what, site.place) if site.work == .Fell else fmt.tprintf("Gathering %s for the %s", store_words(d.cut), site.place) if site.work == .Gather else fmt.tprintf("Catching %s for the %s", store_words(d.cut), site.place) if site.work == .Fish else fmt.tprintf("Digging %s for the %s", what, site.place)
 		else do c.doing = fmt.tprintf("Walking to the %s, to %s there", site.place, row.name)
 		c.next = fmt.tprintf("Will take more of that work while any is left: %d of its %d %s are still to do", site.left, site.total, "trees" if site.work == .Fell else "blocks")
 	}

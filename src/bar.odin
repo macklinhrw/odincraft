@@ -135,7 +135,7 @@ tool_line :: proc() -> bool {
 tool_point :: proc(a: ^Above, w: ^World, eye: [3]f64, ray: [3]f32) {
 	bar.aim = a.under
 	if w.finest == 0 do bar.aim = pick(w, eye, ray, above_level(a), true, 4*linalg.length(a.at - eye) + 600, true)   // through leaf and limb, to the ground: no order is given to a crown
-	if !a.marking || !a.shown do return
+	if !a.marking do return   // a box begun on the world goes on following the pointer over a panel (play.odin): it stopped at the panel's edge, and a wood dragged to the foot of the screen was one tree
 	o := a.mark[0]
 	b := a.mark[1]
 	switch {
@@ -232,6 +232,15 @@ world_blocks :: proc(w: ^World) -> Blocks {
 			bind(f)
 			g := ground(f64(b.x - region.origin.x) + 0.5, f64(b.z - region.origin.y) + 0.5, 1)   // the water the land stands there, which a dwarf wades half a metre of
 			return f32(b.y) > g.h + 0.5 || g.water - f32(b.y) <= WADE
+		},
+		proc(data: rawptr, b: [3]i32) -> bool {
+			f := island_at(f64(b.x) + 0.5, f64(b.z) + 0.5)
+			if f == nil || !is_formed(f) do return false
+			was := here
+			defer bind(was)
+			bind(f)
+			g := ground(f64(b.x - region.origin.x) + 0.5, f64(b.z - region.origin.y) + 0.5, 1)
+			return f32(b.y) <= g.h + 0.5 && g.water > f32(b.y)
 		}, w}
 }
 
@@ -431,6 +440,7 @@ alerts_keep :: proc() {
 		places[3] = feet_on(f.at)
 		break
 	}
+	if texts[3] != "" && stuff > 0 && first[1].stuff == .Timber do texts[1] = "" if hard == 0 else "Rock too hard for the picks."   // the fire's alert says that no timber lies: it is not said twice
 	for text, i in texts do if text != bar.said[i] && ids[i] != "" {
 		delete(bar.said[i])
 		bar.said[i] = strings.clone(text)
