@@ -211,3 +211,27 @@ until done 400
 key esc
 shot out/play/p3-36-wall-on-a-stump.png
 say
+
+print 12. Fell: a drag across the hill of scrub south-west of the landing (the owner's: trees marked, every dwarf waiting), worked to its last bush
+view over=2659,-1763 span=211
+key 3
+key T
+move 820 420
+press
+move 1200 900
+move 1620 1320
+wait 0.3
+shot out/play/p3-37-hill-drag.png
+say
+release
+timer
+until done 600
+shot out/play/p3-38-hill-cleared.png
+move 820 420
+press
+move 1200 900
+move 1620 1320
+wait 0.3
+say
+release
+key esc
