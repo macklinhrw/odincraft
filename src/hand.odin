@@ -7,13 +7,13 @@ import "core:strings"
 
 // The hand (interface.md, I2 and I3): what a click on the world picks up, and what its card says.
 // Anything can be picked up: a block of ground, a tree, a stream, a lake, the sea, a named place,
-// an animal, a dwarf, or a box of blocks marked by dragging. A dwarf's card is the hold's own
-// (hold_card, hold.odin), read afresh each frame, since a dwarf goes on with its day. A card leads with what the thing is in a line
+// an animal, a dwarf or several, or a box of blocks marked by dragging. A dwarf's card is the hold's own
+// (hold_card, hold.odin; dwarf_says, crowd.odin), read afresh each frame, since a dwarf goes on with its day. A card leads with what the thing is in a line
 // and why in the next, in sentences written for it here from the land's own records; the rest of
 // what `--why` says of its ground is a tab away, in its own words, and under a block of ground
 // stands the column of rock it lies in.
 
-Thing_Kind :: enum u8 { None, Ground, Tree, Stream, Lake, Sea, Place, Animal, Box, Dwarf }
+Thing_Kind :: enum u8 { None, Ground, Tree, Stream, Lake, Sea, Place, Animal, Box, Dwarf, Dwarves }   // Dwarves: several of them, as a group (Play.several)
 Thing :: struct {
 	kind:     Thing_Kind,
 	island:   ^Formed,
@@ -29,9 +29,10 @@ Thing :: struct {
 }
 
 // The depths of a card: its own, then what --why says of the ground it stands on, by part.
-Depth :: enum u8 { Own, Rock, Ground, Plants, Near, World }
-DEPTHS := [Depth]string{.Own = "", .Rock = "Rock", .Ground = "Ground", .Plants = "Plants", .Near = "Near", .World = "World"}
-OWN := [Thing_Kind]string{.None = "", .Ground = "", .Tree = "Tree", .Stream = "Stream", .Lake = "Water", .Sea = "Sea", .Place = "Place", .Animal = "Animal", .Box = "Blocks", .Dwarf = ""}
+// A dwarf's are its trade and what it knows of itself (dwarf_says, crowd.odin).
+Depth :: enum u8 { Own, Rock, Ground, Plants, Near, World, Self }
+DEPTHS := [Depth]string{.Own = "", .Rock = "Rock", .Ground = "Ground", .Plants = "Plants", .Near = "Near", .World = "World", .Self = "Self"}
+OWN := [Thing_Kind]string{.None = "", .Ground = "", .Tree = "Tree", .Stream = "Stream", .Lake = "Water", .Sea = "Sea", .Place = "Place", .Animal = "Animal", .Box = "Blocks", .Dwarf = "Trade", .Dwarves = ""}
 
 Hand_Card :: struct {
 	title, sub, line: string,
@@ -313,7 +314,7 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 	cell := land_cell(x, z)
 	c.mat = t.mat
 	switch t.kind {
-	case .None, .Dwarf:
+	case .None, .Dwarf, .Dwarves:
 	case .Ground:
 		title = mat_words(t.mat)
 		under := top - 1 - t.block.y
