@@ -77,7 +77,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 | The dwarves on screen (built) | **Their place at the top, their list, and several in the hand** (`foundations/interface.md`, I14). Who needs you first, then who you keep in view, then the count of all; a list that finds, groups and folds; alerts that count; messages that lead to their place. Made for a hold that grows | Clicks a dwarf's picture and is taken to her | |
 | I-2 | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
 | E-1 | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
-| P3 | **Orders.** Mark ground to dig, trees to fell, blocks to build. Dwarves take the work themselves. Goods go to a store without being carried at first, as RimWorld's first version did; carrying follows in P5, since Bellwright's makers found that work done in the abstract "didn't feel inspiring" | Has a first room dug and roofed | 2 |
+| P3 (built) | **Orders.** Mark ground to dig, trees to fell, blocks to build. Dwarves take the work themselves. Goods go to a store without being carried at first, as RimWorld's first version did; carrying follows in P5, since Bellwright's makers found that work done in the abstract "didn't feel inspiring" | Has a first room dug and roofed | 2 |
 | P4 | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown | Gets through a first season, or does not | 1 |
 | P5 | **Materials and making.** What the rock and the woods give is what can be built and made: stone by its kind, timber, clay, a first metal. Goods are carried and stored. A workshop | Builds from the island's own stone | 2 |
 | P6 | **The world is kept.** A world is saved and reopened with what was dug and built. Leaving or losing a hold writes it into the world. A new party can land in the same world and walk into it | Finds the last game's hall | 3 |
@@ -611,3 +611,142 @@ Pictures, each 2,560 × 1,440: `interesting-world/real/crowd-*.jpg`. `crowd-besi
 ![Three dwarves in the hand](interesting-world/real/crowd-three.jpg)
 
 ![The built screen beside the design's drawing](interesting-world/real/crowd-beside-drawing.jpg)
+
+### P3, as built: orders (2026-11-16)
+
+**What can now happen that could not before:** the owner marks a room in a hillside and it is dug, by dwarves who chose the work themselves; marks trees and has timber; roofs the room and walls it with a door; and reads on any marked ground what is left of it, who is at it and what it waits for.
+
+**What the owner does and sees.** From above, the orders stand at the bottom left: **Dig (D), Fell (T), Build (B), Send (M), Remove (X)**. Taking one puts its tool in the hand: its choices, what the land says of the ground under the pointer (what rock, how it cuts, what a block of it gives the store, how much lies over it), and, while a box is dragged, the mark's size in words. Letting the button go gives the order. Marked ground is tinted brass until it is dug; a tree to fell wears a brass band; a block to lay stands as a small block of what it will be. The dwarves go to it by ways of their own and work, arms raised. A click on marked ground puts the order's card in the hand: what is left, who is at it, what it waits for, Go there and Take it back. Escape puts a tool down. A dwarf's card says what it digs and for which order. Problems stand at the top right until they stop being true: work no dwarf can reach, building with nothing in store, rock too hard, a dwarf shut in.
+
+**What was built**
+
+- **Orders are marks on the hold's ground** (`orders.odin`, `adr/0011`): every block to dig or lay and every tree to fell is a mark the hold keeps, with the order it came from. An orders file marks the same way: `dig room|stair`, `fell`, `build wall|floor|stair stone|timber`, `unmark`, each with the box's two corners, the first where the drag began. The log prints each order in that form.
+- **Dwarves take the work themselves.** An idle dwarf looks at the twelve marks nearest it, a mark of its own trade counting as half as far; it takes the first it can stand beside and has a way to, walks there and works. The one at a face goes on at the face. One whose trade the work is not leaves a mark once for an idle dwarf whose trade it is. The miner cut 14 of the room's 48 blocks, the other six 34. Kinds of work are three rows (`WORKS`): whose trade, and that other hands take twice as long.
+- **What a block takes**: 5 s for earth and loose rock, and for solid rock 60 s more times the square of its strength (`rock.odin`'s figure): 9 s for mudstone, 12 for breccia, 39 for basalt. Rock stronger than 0.8 (dolerite, hornfels, quartzite) is too hard for the party's picks: it is marked, left, and said. A tree takes 15 s and 3 more a metre of its height; a block takes 8 s to lay.
+- **Digging in one-metre blocks.** A **room or passage is two blocks high**: a box one block high is dug two high, the block marked and the one under it, so the cut that showed the mark shows the room. A **stair is a block to a step**: dug, it goes down a block a column from where the drag began, with three blocks of room over each step; built, it goes up. A **wall** stands two blocks over the block the drag began on and down to the ground; a **floor** is one layer at that level, and over a room it is the roof. A dwarf works a block beside it from one under its feet to one over its head, right over its head, or two down or up where the block between is open, so a pit's last step is dug from its rim.
+- **No dwarf is shut in by the work.** Before a block is dug that a dwarf could stand on, and before any is laid, the dwarves standing in small closed ground beside it are counted; the change is made and they are counted again; if there are more, the change is taken back and the mark waits. A pit two deep is finished with everyone out of it. A pit five deep stops with its last two blocks left as the stair, and says why.
+- **A dwarf that is shut in says so**, in the log, on its card and as an alert, and any stair dug or built to it lets it out: four dwarves walled into a trench by hand were let out by a stair of four blocks ordered from the rim.
+- **The store** is a count by kind, without carrying: rock by the kind it is in whatever form it lay, timber by the tree's kind (half its height in blocks); earth, sand and brush give nothing. Building takes the kind the store has most of.
+- **The hold's ground stays real** (below).
+- **The interface's part** (`bar.odin`, with small hooks in `play.odin`): the bar, the tool's card, the order's card, the marks in the world, and an alert for work no dwarf can reach, for building with nothing in store and for rock too hard. Sending is the bar's Send; G and the right click are no longer read.
+- **Who needs you** (`NEEDS`, `crowd.odin`, merged from the dwarves on screen) has three rows of the orders': a dwarf idle while work is marked that it cannot take, because no way leads to it, because nothing is in store to build it, or because its rock is too hard. A dwarf is marked so only when everything marked and not in hand waits for one of those; work others are at, or that waits its turn, marks nobody. A dwarf the work or the player's hand shut in is that table's "shut in".
+- **A drag from above** marks ground with a tool in the hand; with an empty hand it takes dwarves where there are any and blocks where there are none.
+- **Felling**: a felled tree is an edit of rings at its foot, which the generator reads as "this tree is gone" for every chunk its crown reached. Nothing of it is left standing.
+
+**Keys.** D, T, B, M, X take a tool (the same key or Escape puts it down); left drag marks with it; the choices are clicked on its card. In first person M sends the party to the block aimed at. Everything of P1, P2 and I-1 stands, but G and the right click no longer send.
+
+**How the hold's ground stays real.** The hold never read the world the frame streams (`adr/0009`). It now changes blocks itself, so:
+
+- **It keeps the blocks of every chunk it has changed or asked a block of**: about 155 KB a chunk (1.4 MB for the nine chunks of a dig 60 m square). A changed block is one block written there and the chunk's floors read again from memory. Before, each change read the chunk from the generator again, 3 ms, and left its old floors behind for good; floors are now put back in the place they had.
+- **Each change is passed to the frame**, which records it in the session's edits (`world.odin`) and rebuilds the chunk if it is in the nearest 256 m. When the camera leaves, the dwarves go on by their own blocks; when it comes back the chunk is built with the edits laid over it. A dig of 6,372 blocks made with the camera away was all there when the view came over it, at 0.79 ms a frame and no frame over 8.1.
+- **How large**: nothing bounds it but memory. A hold whose worked ground is 320 m square is a hundred chunks, 16 MB of kept blocks, and 32 bytes a changed block besides (the hold's and the frame's). The search for a way, the count of dwarves in pockets and a look for work are all local, so their cost does not grow with the hold's size.
+- **What it does not do**: beyond 256 m the ground is columns, which show neither a pit nor a felled tree; and nothing is written to disk (P6).
+
+**The run** (`build/odincraft --dwarves=1700 --orders=docs/interesting-world/real/p3-room-orders.txt`; the test writes the same orders to `build/hold_test_orders.txt`). After the fixes' stages, fifteen minutes in:
+
+```
+[15:00.0] The hold says "fell 2673 3 -1760 2689 3 -1744": 9 trees are marked to be felled at the susuki grass and scrub a short walk south-west of the landing.
+[15:00.0] The hold says "dig room 2692 1 -1780 2697 2 -1776": a room is marked to be dug at the blocks at a mouth by the landing, 48 blocks of it.
+[15:00.3] Ardet Sootboot takes up the felling of the trees marked at the susuki grass and scrub a short walk south-west of the landing.
+[15:33.1] Vesket Chalkback fells a tabu tree 6 m tall: 3 of timber for the store.
+[17:37.6] Esken Tuffheel fells a tabu tree 12 m tall: 6 of timber for the store.
+[17:40.0] Vesket Chalkback clears a bush of scrub.
+[22:45.8] The room at the blocks at a mouth by the landing is dug: 48 blocks. Bramik Tuffelbow cut 8, Jorris Chalkheel cut 1, Vesket Chalkback cut 2, Yrsa Coalsleeve cut 10, Oddum Peatshank cut 9, Esken Tuffheel cut 4, Ardet Sootboot cut 14. The store has gained 33 of basalt.
+[23:00.0] The hold says "build floor timber 2692 3 -1780 2697 3 -1776": a roof is marked to be built of timber at the blocks at a mouth by the landing, 16 blocks of it.
+[23:00.0] The hold says "build wall stone 2697 0 -1776 2697 0 -1777": a wall is marked to be built of stone at the blocks at a mouth by the landing, 4 blocks of it.
+[23:54.2] The wall at the blocks at a mouth by the landing is built: 4 blocks. Bramik Tuffelbow laid 2, Esken Tuffheel laid 2.
+[25:03.4] The roof at the blocks at a mouth by the landing is built: 16 blocks. Bramik Tuffelbow laid 1, Jorris Chalkheel laid 1, Vesket Chalkback laid 1, Yrsa Coalsleeve laid 3, Oddum Peatshank laid 3, Esken Tuffheel laid 3, Ardet Sootboot laid 4.
+[25:20.0] The hold says "go 2695 0 -1778": the party is sent to the blocks at a mouth by the landing.
+[27:25.0] All seven stand at the blocks at a mouth by the landing.
+```
+
+The room is five by six, dug level into the rise behind the landing's stones, 33 of its blocks basalt; the hill roofs its back, timber its front, and its wall of basalt has a door. Thirteen minutes of the dwarves' time from the order to the party standing under the roof. One of the nine trees marked was still standing when the run ended.
+
+**Determinism.** `./build.sh test` plays the game a stretch at a time (the faults' stages, then the trees, the room, the roof, the walls and the party sent in), then plays its orders again from the file alone and beside a reader: three logs with one hash (`9b98e380e3d7bd5d`, 169 events) and the blocks the hold changed with its store one hash (`bf4100e5c465335b`, 140 blocks). The no-window run prints the same. `GOLDEN` is unchanged; `odin check src -vet-unused` passes. The screen's test presses the bar by key and by pointer, reads the tool's card and the mark's words, and checks every panel inside the picture at each scale with a tool held.
+
+**Several miners in one passage.** A passage two blocks high and 18 long, dug into the rise from its foot, seven dwarves and then twenty (one miner in each seven):
+
+| Wide | Blocks | Seven | Twenty | A block, with seven |
+|---|---|---|---|---|
+| 1 | 33 | 7 min 7 s | 7 min 52 s | 12.9 s |
+| 2 | 68 | 9 min 33 s | 10 min 37 s | 8.4 s |
+| 3 | 101 | 8 min 31 s | 10 min 24 s | 5.1 s |
+
+A passage one block wide has one place to work from at its face, so one dwarf digs and the rest wait; hands beyond the working places slow it a little, by squeezing past the worker (53 to 105 squeezes with twenty). **Two wide is what works** for a way dwarves pass each other in and for two to dig abreast; three wide is dug two and a half times as fast a block as one. Before the one at the face was let go on at the face, the same passages took 12 min 52 s, 12 min 58 s and 9 min 6 s with seven, and twenty took twice as long as seven, by walking in and out.
+
+**What was tried and dropped**
+
+- *Reading a chunk from the generator again at every changed block* (P2's way): 3 ms a block and 39 KB left behind each time. A dig of 6,000 blocks would have left a quarter of a gigabyte.
+- *A stump left where a tree was felled.* Ground under a stump could then never be dug. Nothing is left.
+- *Asking whether a dwarf still has a way home before each block.* A way home is far and the answer is local: the count of dwarves in closed ground beside the block is 0.2 ms and needs no home.
+- *Whoever looks first takes the next block.* Idle dwarves took the block beside a worker, walked in, and squeezed the worker off its place.
+- *A mark that could not be worked waiting five seconds before it is looked at again.* A dig then advanced a layer every five seconds. A change now wakes the marks beside it.
+- *The first hillside the test found*: it was the sandstone passage the test itself had built, and then a bank of sand that gave one block of stone. The room is looked for in rock, with open ground before its door.
+
+**Costs**, the machine at a load of 6 to 11 from other agents:
+
+| What | Cost |
+|---|---|
+| A tick of seven with the room being dug | 3.8 µs on average over the run above |
+| A look for work | 0.05 ms (553 in that run); 0.02 ms with 6,000 marks and a hundred dwarves (85,935) |
+| A count of dwarves a change would shut in | 0.17 to 0.20 ms, made twice for a block a dwarf could stand on |
+| A hundred dwarves digging 60 m square, two deep: 6,366 blocks in two hours of their time | a tick 87 µs on average, the changed blocks' floors in it: about 0.6 ms a block. 16,290 ways at 0.06 ms; 9 chunks' blocks kept in 1.4 MB |
+| Kept for the room's run | 4 chunks' blocks, 0.5 MB, beside 1.1 MB of floors |
+
+Frame times, our own work, median / 99% / worst and frames over 12.5 ms, `main` at 95e14dd then this branch, alternating:
+
+| Bench | `main` | This branch |
+|---|---|---|
+| Forest flank | 1.43 / 6.0 / 23.5 (1); 1.33 / 4.5 / 9.0 (0) | 1.52 / 5.5 / 12.2 (0); 1.67 / 7.2 / 13.9 (2) |
+| Down through cloud | 1.25 / 3.7 / 6.4 (0); 1.76 / 4.9 / 9.4 (0) | 1.52 / 4.7 / 10.9 (0); 1.65 / 5.4 / 8.7 (0) |
+| From above, the cut following the ground | 1.78 / 6.0 / 13.4 (2); 2.36 / 9.8 / 23.8 (3) | 1.81 / 5.7 / 11.0 (0); 1.75 / 5.2 / 8.7 (0) |
+| Over the landing, 40 s: `main` with the seven walking, this branch with them digging | 0.77 / 2.6 / 9.4 (0) | 0.82 / 3.0 / 8.0 (0); 0.79 / 2.9 / 9.0 (0) |
+| The same with a hundred | 0.83 / 2.9 / 13.4 (1) | 0.82 / 2.7 / 5.6 (0); 0.79 / 2.8 / 6.1 (0) |
+
+No difference shows. The marks cost the terrain's shader a loop of at most sixteen boxes; a hundred dwarves at work are 1,608 of the frame's boxes, and their ticks 11 µs.
+
+**Pictures**
+
+![Marked ground: the room's box tinted on the cut hillside, with the orders bar under it](interesting-world/real/p3-marked.jpg)
+
+![The digging tool held over the hillside: its choices, what the land says of the ground under the pointer, and the mark's size in words](interesting-world/real/p3-tool.jpg)
+
+![The room half dug, two dwarves at work in it](interesting-world/real/p3-half.jpg)
+
+![The same moment with the order in the hand: what is left, who is at it, what it waits for](interesting-world/real/p3-job.jpg)
+
+![A dwarf at work, and its card: what it digs and for which order](interesting-world/real/p3-dwarf.jpg)
+
+![The building tool: a wall, a floor or a stair, of stone or timber, with what is in store of each, and the blocks a drag would lay](interesting-world/real/p3-build.jpg)
+
+![A wall ordered with nothing in store: its blocks stand marked, the seven are marked at the top as idle for want of stone, and two alerts say so](interesting-world/real/p3-needs.jpg)
+
+![The finished room cut open from above: the party inside, the walls and the door](interesting-world/real/p3-done-cut.jpg)
+
+![The same uncut: its roof of timber](interesting-world/real/p3-done.jpg)
+
+![From inside, on foot: the roof, the wall of basalt and the door](interesting-world/real/p3-inside.jpg)
+
+**Left out, on purpose**: carrying (P5), needs (P4), workshops and what materials are for (P5), cave-ins and any weight on a roof, tools that wear or differ, a felled tree lying where it fell, digging by one dwarf told by hand, orders with a rank among them, zones and stores as places.
+
+**Weak points**
+
+- **Nobody has used it.** No window was opened: the drag, the keys and the cards were run by the test and by pictures.
+- **A dug stair's tint is its steps' boxes; a room's is its whole box.** Remove takes back every order with a mark under it, whole: part of an order cannot be taken back.
+- **A block laid needs nothing under it**: a roof can be laid out over open air from its edge, and nothing ever falls. A wall of earth holds as rock does.
+- **Dwarves work through each other's places badly.** With more hands than places they squeeze past the worker, who is set a floor back and walks to its place again.
+- **A dig deeper than two blocks leaves its own stair** as the last blocks no dwarf can dig without being shut in, and the order then stands unfinished until it is taken back.
+- **Only small pits count as pits**: closed ground of 3,000 floors or more (a quarry 55 m square) is taken for open country, and a dwarf can be shut in it.
+- **Timber laid on the ground between other timbers shows moss on top**, by the rule that draws a lying trunk.
+- **A dwarf chooses by straight distance**, not by the way's length: it can take a block across a wall from it and walk round.
+- **The marks' tints are sixteen boxes a picture**, the nearest the view's middle first.
+- **Felling takes the tree at a stroke**, and what stood on its limbs is not there to fall.
+- **The hold's kept blocks are never let go.**
+- **Orders are not kept between games** (P6), and the far ground shows nothing of them.
+
+**For the interface's design** (`foundations/interface.md`)
+
+- **An order is data**: `hold_order(Order)` gives one; `watch.seen.sites` lists those with work left, each with what is left, how many dwarves are at it and what the rest wait for by cause (`Waits`); `waits_words` says that in a sentence. `watch.seen.store` is the store.
+- **The Work list** (the design's "work by trade") has its rows in `WORKS`; nothing yet lets the player say who does a trade.
+- **The stores' place at the top right is still empty**: the store shows in the building tool's card.
+- **M is Send's key**, since G is the design's for Gather.

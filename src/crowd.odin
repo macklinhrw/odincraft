@@ -36,6 +36,13 @@ NEEDS := [?]Need{
 		"Waits for a way out to be dug or laid", .Trouble, proc(d: ^Seen) -> bool { return d.plight == .Shut_In }},
 	{"no-way", "no way", "stopped: it found no way to where it was sent", "stopped: they found no way to where they were sent",
 		"Waits for word from the hold, or for a way to be made", .Caution, proc(d: ^Seen) -> bool { return d.plight == .No_Way }},
+	// Orders (orders.odin): a dwarf with nothing to do while work is marked that it cannot take, by what the work waits for.
+	{"no-reach", "cannot reach the work", "idle: no way leads to the work that is marked", "idle: no way leads to the work that is marked",
+		"Waits for a way to it to be dug or built, or for other work", .Caution, proc(d: ^Seen) -> bool { return d.lack == .No_Way }},
+	{"no-stuff", "nothing to build with", "idle: nothing is in store to build what is marked", "idle: nothing is in store to build what is marked",
+		"Waits for rock to be dug or trees felled, or for other work", .Caution, proc(d: ^Seen) -> bool { return d.lack == .No_Stuff }},
+	{"too-hard", "rock too hard", "idle: what is marked is rock too hard for the party's picks", "idle: what is marked is rock too hard for the party's picks",
+		"Waits for softer ground to be marked", .Caution, proc(d: ^Seen) -> bool { return d.lack == .Too_Hard }},
 }
 
 FOLD_OVER :: 8   // a group of the list longer than this folds to its count,
@@ -455,12 +462,14 @@ dwarves_build :: proc() {
 dwarf_brief :: proc(i: int) -> string {
 	s := &watch.seen
 	if k := play.need[i]; k >= 0 do return fmt.tprintf("%s.", capital(NEEDS[k].one))
+	if s.dwarves[i].job do return fmt.tprintf("%s.", hold_card(i).doing)   // at work, or on its way to it (orders.odin)
 	to := fmt.tprintf("the %s", s.place) if s.errand == 0 else s.place
 	switch s.dwarves[i].doing {
 	case .Aboard:  return "In the boat."
 	case .Ashore:  return "Stepping ashore."
 	case .Walking: return fmt.tprintf("Walking to %s.", to)
 	case .Waiting, .Stopped: return fmt.tprintf("Waiting for word at %s.", to)
+	case .Working: return fmt.tprintf("%s.", hold_card(i).doing)
 	}
 	return ""
 }
@@ -531,7 +540,7 @@ several_says :: proc() -> (title, sub, line, next: string) {
 	line = fmt.tprintf("%s.", strings.to_string(b))
 	// What they share: what they are doing, and what is wrong with any.
 	to := fmt.tprintf("the %s", s.place) if s.errand == 0 else s.place
-	DOING := [Doing]string{.Aboard = "in the boat", .Ashore = "stepping ashore", .Walking = fmt.tprintf("walking to %s", to), .Waiting = fmt.tprintf("waiting for word at %s", to), .Stopped = "stopped where they stand"}
+	DOING := [Doing]string{.Aboard = "in the boat", .Ashore = "stepping ashore", .Walking = fmt.tprintf("walking to %s", to), .Waiting = fmt.tprintf("waiting for word at %s", to), .Stopped = "stopped where they stand", .Working = "at work"}
 	doing: [Doing]int
 	for i in who do doing[s.dwarves[i].doing] += 1
 	share := strings.builder_make(context.temp_allocator)

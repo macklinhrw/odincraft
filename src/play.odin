@@ -21,7 +21,7 @@ import sdl "vendor:sdl3"
 //   top right     the stores and what is wrong: an alert for each thing that is, which leads to its cause
 //   right         the ground here: the column of beds under the view's middle with the cut marked
 //                 on it, its controls, the lenses, and the walk
-//   lower left    the hand: the thing selected (hand.odin); the orders bar's place lies under it
+//   lower left    the hand: the thing selected (hand.odin), or the tool held; the orders bar under it (bar.odin)
 //   bottom right  the lists: Dwarves, Places, and the menu
 //
 // Every action is an Act. A key is a row of BINDS that names an act, and a button names its act
@@ -38,6 +38,7 @@ Act :: enum u8 {
 	Pause, Speed,                                        // the clock
 	Cut, Cut_Move, Cut_Drag, Follow, Bare, Lenses, Lens, Walk,   // the ground here
 	Why, Go, Drop, Depth,                                // the hand
+	Order, Plan, Stuff, Take_Back, Plain,                // the orders bar, a tool's choices, and an order's card (bar.odin)
 	List, Sort, Fold, Row, Find, Thumb,                  // the lists
 	Who, Lead, Keep, Only, Whole, Crowd,                 // the dwarves: a picture, a row, kept in view, the list's kept alone, a group whole, the list opened on some (crowd.odin)
 	Menu, Back, Quit, Scale, Escape,
@@ -69,6 +70,9 @@ BINDS := [?]Bind{
 	{.K, "K", .Keep, -1, -1, .Either, false},
 	{.F1, "F1", .List, int(List.Dwarves), int(List.Dwarves), .Either, false},
 	{.F4, "F4", .List, int(List.Places), int(List.Places), .Either, false},
+	{.D, "D", .Order, int(Tool.Dig), int(Tool.Dig), .Above, false}, {.T, "T", .Order, int(Tool.Fell), int(Tool.Fell), .Above, false},
+	{.B, "B", .Order, int(Tool.Build), int(Tool.Build), .Above, false}, {.M, "M", .Order, int(Tool.Send), int(Tool.Send), .Either, false},
+	{.X, "X", .Order, int(Tool.Remove), int(Tool.Remove), .Above, false},
 	{.ESCAPE, "Esc", .Back, 0, 0, .Menu, false},
 	{.Q, "Q", .Quit, 0, 0, .Menu, false},
 }
@@ -399,6 +403,15 @@ play_act :: proc(act: Act, arg: int) {
 		} else if u.hand.kind != .None do go_to({f64(u.hand.block.x) + 0.5, f64(u.hand.block.z) + 0.5})
 	case .Drop: hand_drop()
 	case .Depth: u.tab, u.card_scroll = Depth(arg), 0
+	case .Order: tool_take(Tool(arg))
+	case .Plan:
+		if bar.tool == .Dig do bar.dig = Plan(arg)
+		else do bar.build = Plan(arg)
+	case .Stuff: bar.stuff = Stuff(arg)
+	case .Take_Back:
+		if site, ok := site_seen(bar.job); ok do hold_order({kind = .Unmark, at = site.lo, to = site.hi})
+		hand_drop()
+	case .Plain: bar.plain = true
 	case .List:
 		u.list = .None if u.list == List(arg) else List(arg)
 		u.list_scroll, u.typing = 0, false
@@ -460,6 +473,7 @@ play_act :: proc(act: Act, arg: int) {
 		case u.lenses: u.lenses = false
 		case u.list != .None: u.list = .None
 		case a.marking: mark_clear(a)
+		case bar.tool != .None: tool_take(bar.tool)
 		case u.hand.kind != .None: hand_drop()
 		case: u.menu = true
 		}
@@ -527,7 +541,12 @@ play_event :: proc(e: ^sdl.Event) -> bool {
 			return true
 		}
 		if !left || u.afoot^ do return false
-		if a.marking {   // a block was under the press: a click picks up what it is part of, a drag the box it marked
+		if tool_marks() {   // a tool is in the hand: the box is its order
+			if a.marking {
+				mark_end(a)
+				tool_give(a)
+			}
+		} else if a.marking {   // a block was under the press: a click picks up what it is part of, a drag the box it marked
 			mark_end(a)
 			if lo, hi, _, _ := mark_box(a); lo != hi {
 				if who := dwarves_in(lo, hi); len(who) > 0 {   // a box dragged over dwarves takes them, and with Shift adds them to the hand
@@ -670,6 +689,7 @@ play_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64, hour, day: f32, ey
 		u.animal.row, u.animal.at, u.animal.nest, u.animal.ok = animal_under(boxes, eye, ray, 6*math.tan(math.to_radians(fov)/2)/high)
 	}
 	lens_follow()
+	bar_frame()
 
 	u.place_foot, u.wrong_foot, u.ground, u.beds = 0, 0, {}, {}
 	crowd_read()
@@ -683,6 +703,7 @@ play_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64, hour, day: f32, ey
 		lenses_build()
 	}
 	hand_build()
+	bar_build()
 	lists_build()
 	if u.list == .Places do places_build()
 	if u.list == .Dwarves do dwarves_build()
@@ -1017,6 +1038,7 @@ lenses_build :: proc() {
 hand_build :: proc() {
 	u, L := &play, &LOOK
 	u.area = .Hand
+	if bar_hand() do return   // a tool is held, or the thing is marked ground: the order's card (bar.odin)
 	t := u.hand
 	if t.kind == .None do return
 	if t.kind == .Dwarves {

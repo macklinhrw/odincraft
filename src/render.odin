@@ -28,6 +28,7 @@ SEA_GRID   :: 64     // the sea is drawn as this many quads squared, as in shade
 BOX_MAX    :: 8192   // creatures' boxes drawn a frame at most
 FOV        :: 70.0   // vertical, degrees, in first person
 NO_CUT     :: 1e9    // the cut's level when the world is not cut (above.odin)
+TINTS      :: 16     // boxes of marked ground the terrain tints in one picture
 NEAR       :: 0.1
 DARK       :: 150    // metres under the sea past which the ground is drawn black, so casts no shadow worth drawing; as in shaders.metal
 
@@ -99,6 +100,9 @@ View :: struct {
 	bare:       bool,   // leaves are not drawn
 	mark:       [2][3]i32,   // the box of blocks marked, its low corner and its high one
 	has_mark:   bool,
+	tints:      [TINTS][4]f32,   // boxes of ground marked for the dwarves, each its low corner from the eye and what it is: 1 to be dug, 2 the box being dragged, 3 to be taken back, 4 the order in the hand (bar.odin)
+	tint_sizes: [TINTS][4]f32,
+	tint_count: int,
 	}
 
 // Mirrors `Frame` in shaders.metal.
@@ -106,6 +110,8 @@ Frame :: struct {
 	view_proj: matrix[4, 4]f32,
 	shadow_vp: [4]matrix[4, 4]f32,
 	cascade_r, sun, cam, target, cam_r, cam_u, cam_f, screen, cloud, weather, focus, cut, mark, mark_size, lens: [4]f32,
+	tint, tint_size: [TINTS][4]f32,
+	live, wrong: [4]f32,   // the interface's brass and cinnabar (LOOK), which marked ground is tinted with
 	}
 
 	// Mirrors `ShadowU` in shaders.metal.
@@ -617,6 +623,9 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	if v.has_target {
 		f.target = {f32(f64(v.target.x) - v.eye.x), f32(f64(v.target.y) - v.eye.y), f32(f64(v.target.z) - v.eye.z), 2 if v.above else 1}
 	}
+	for i in 0..<min(v.tint_count, TINTS) do f.tint[i], f.tint_size[i] = v.tints[i], v.tint_sizes[i]
+	lit :: proc(c: Colour, by: f32) -> [4]f32 { return {math.pow(f32(c.r)/255, 2.2)*by, math.pow(f32(c.g)/255, 2.2)*by, math.pow(f32(c.b)/255, 2.2)*by, 1} }
+	f.live, f.wrong = lit(LOOK.brass, 2.6), lit(LOOK.cinnabar, 2.6)
 	if v.has_mark {
 		f.mark = {f32(f64(v.mark[0].x) - v.eye.x), f32(f64(v.mark[0].y) - v.eye.y), f32(f64(v.mark[0].z) - v.eye.z), 1}
 		f.mark_size = {f32(v.mark[1].x - v.mark[0].x + 1), f32(v.mark[1].y - v.mark[0].y + 1), f32(v.mark[1].z - v.mark[0].z + 1), 0}
