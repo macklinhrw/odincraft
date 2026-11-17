@@ -262,7 +262,7 @@ preview :: proc() {
 	case .Fell:
 		if f := island_at(f64(lo.x) + 0.5, f64(lo.z) + 0.5); f != nil && is_formed(f) {
 			bound(f)
-			trees_in(lo.x - region.origin.x, lo.z - region.origin.y, hi.x - region.origin.x, hi.z - region.origin.y, &bar.trees)
+			trees_standing(lo.x - region.origin.x, lo.z - region.origin.y, hi.x - region.origin.x, hi.z - region.origin.y, &bar.trees)
 			for i := len(bar.trees) - 1; i >= 0; i -= 1 {
 				t := bar.trees[i]
 				foot := [3]i32{t.x + region.origin.x, t.base, t.z + region.origin.y}

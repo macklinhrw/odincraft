@@ -121,6 +121,14 @@ pick_species :: proc(k: Community_Kind, u: f32) -> Tree_Kind {
 	return .Shii
 }
 
+// Every tree an order to fell takes in a rectangle of blocks: whatever stands, the canopy's trees, the
+// smaller ones between and under them, the bushes and the dead still standing. Not the fallen. The
+// one rule for the hold, which marks them, and the frame, which shows what will be marked.
+trees_standing :: proc(x0, z0, x1, z1: i32, out: ^[dynamic]Tree) {
+	trees_in(x0, z0, x1, z1, out, true)
+	for i := len(out) - 1; i >= 0; i -= 1 do if out[i].form == .Fallen do ordered_remove(out, i)
+}
+
 // Every tree whose trunk stands in a rectangle of blocks, and `near`, the small, dead and fallen as
 // well, with the fallen whose trunks reach into it. The same tree is found whichever chunk or level
 // of detail asks. Each 3 m square holds a candidate with a vigour; of the candidates whose crowns

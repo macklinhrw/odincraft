@@ -185,3 +185,18 @@ shot out/play/p3-31-click-on-ground.png
 click 600 1000
 click 600 1000
 shot out/play/p3-32-second-click.png
+
+print 10. Fell: a click on the trunk of a young tree under taller ones (the owner's, at 2670, -1726), which is felled as any tree is
+key esc
+view over=2670,-1726 span=30 tilt=55 turn=0 cut=off
+key T
+move 1280 720
+wait 0.3
+shot out/play/p3-33-young-tree.png
+say
+click 1280 720
+timer
+until done 200
+key esc
+shot out/play/p3-34-young-tree-felled.png
+say
