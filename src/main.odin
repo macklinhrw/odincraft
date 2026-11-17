@@ -406,7 +406,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 			opt.after += seconds   // the wait counts from the dig
 			idle_frames = 0
 		}
-		if opt.shot != "" && seconds >= opt.after && (idle_frames > 3 || seconds > opt.after + 120 || opt.bench > 0) {
+		if opt.shot != "" && seconds >= opt.after && (idle_frames > 3 || seconds > opt.after + 120 || opt.bench > 0) && pressed_all(opt, play_act) {   // and every part --press names has been pressed
 			shot = opt.shot
 			running = false
 			if !afoot && opt.has_cursor {   // what the pointer is on, said as the picture is taken

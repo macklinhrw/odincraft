@@ -43,10 +43,13 @@ Act :: enum u8 {
 	Who, Lead, Keep, Only, Whole, Crowd,                 // the dwarves: a picture, a row, kept in view, the list's kept alone, a group whole, the list opened on some (crowd.odin)
 	Menu, Back, Quit, Scale, Escape,
 	Said, Wrong,                                         // a message or an alert, which leads to its place
+	Leave,                                               // out of play, to the world's screen or the front door (door.odin)
+	Door_Move, Door_Pick, Door_Go, Door_Back, Draw, Stop, Rebind, Keys_Back,   // before play: the front door and its screens (door.odin)
+	Chart_Lens, Chart_Zoom, Chart_Home, Isle_Depth, Found, Roam,               // the world's screen (chart.odin)
 }
 
 // A key: which act it does and with what, in which view, and whether holding it goes on doing it.
-Views :: enum u8 { Above, Afoot, Either, Menu }
+Views :: enum u8 { Above, Afoot, Either, Menu, Door, Chart }   // Door and Chart: before play, at the front door's screens and on the world's map
 Bind :: struct {
 	key:          sdl.Scancode,
 	name:         string,   // as it is written on a button
@@ -74,12 +77,21 @@ BINDS := [?]Bind{
 	{.B, "B", .Order, int(Tool.Build), int(Tool.Build), .Above, false}, {.M, "M", .Order, int(Tool.Send), int(Tool.Send), .Either, false},
 	{.X, "X", .Order, int(Tool.Remove), int(Tool.Remove), .Above, false},
 	{.ESCAPE, "Esc", .Back, 0, 0, .Menu, false},
+	{.W, "W", .Leave, int(Leave.World), int(Leave.World), .Menu, false}, {.D, "D", .Leave, int(Leave.Door), int(Leave.Door), .Menu, false},
 	{.Q, "Q", .Quit, 0, 0, .Menu, false},
+	// Before play (door.odin, chart.odin).
+	{.UP, "Up", .Door_Move, -1, -1, .Door, true}, {.DOWN, "Down", .Door_Move, 1, 1, .Door, true},
+	{.RETURN, "Enter", .Door_Go, 0, 0, .Door, false}, {.ESCAPE, "Esc", .Door_Back, 0, 0, .Door, false},
+	{.D, "D", .Draw, 0, 0, .Door, false}, {.S, "S", .Stop, 0, 0, .Door, false},
+	{.RETURN, "Enter", .Found, 0, 0, .Chart, false}, {.W, "W", .Roam, 0, 0, .Chart, false},
+	{.ESCAPE, "Esc", .Door_Back, 0, 0, .Chart, false}, {.HOME, "Home", .Chart_Home, 0, 0, .Chart, false},
+	{.EQUALS, "=", .Chart_Zoom, 1, 1, .Chart, true}, {.MINUS, "-", .Chart_Zoom, -1, -1, .Chart, true},
+	{.S, "S", .Stop, 0, 0, .Chart, false},
 }
 
 // The key written on the button of an act.
 key_for :: proc(act: Act, arg := 0) -> string {
-	for b in BINDS do if b.act == act && b.arg == arg && (b.views == .Menu) == play.menu do return b.name
+	for b in BINDS do if b.act == act && b.arg == arg && b.views <= .Menu && (b.views == .Menu) == play.menu do return b.name
 	return ""
 }
 
@@ -282,6 +294,7 @@ play_keep :: proc() {
 	b := strings.builder_make(context.temp_allocator)
 	for l in u.learned do fmt.sbprintfln(&b, "learned %v", l)
 	if u.scale != 0 do fmt.sbprintfln(&b, "scale %d", u.scale)
+	settings_lines(&b)   // the world last entered, the keys changed, and how long a world took to make (door.odin)
 	_ = os.write_entire_file("build/interface.txt", b.buf[:])
 }
 
@@ -445,6 +458,10 @@ play_act :: proc(act: Act, arg: int) {
 	case .Menu: u.menu = true
 	case .Back: u.menu = false
 	case .Quit: u.running^ = false
+	case .Leave:   // out of play: the frame loop ends, and the way through goes on from there (main.odin)
+		leaving = Leave(arg)
+		u.running^ = false
+	case .Door_Move, .Door_Pick, .Door_Go, .Door_Back, .Draw, .Stop, .Rebind, .Keys_Back, .Chart_Lens, .Chart_Zoom, .Chart_Home, .Isle_Depth, .Found, .Roam:   // before play (door_act)
 	case .Scale:
 		u.scale = arg
 		play_keep()
@@ -501,7 +518,7 @@ play_event :: proc(e: ^sdl.Event) -> bool {
 			}
 			return true
 		}
-		for b in BINDS do if b.key == e.key.scancode && (b.views == .Menu) == u.menu && (b.views != .Above || !u.afoot^) && (b.views != .Afoot || u.afoot^) {
+		for b in BINDS do if b.key == e.key.scancode && b.views <= .Menu && (b.views == .Menu) == u.menu && (b.views != .Above || !u.afoot^) && (b.views != .Afoot || u.afoot^) {
 			if !e.key.repeat || b.held do play_act(b.act, b.shifted if e.key.mod & sdl.KMOD_SHIFT != {} else b.arg)
 			return true
 		}
@@ -1377,7 +1394,7 @@ menu_build :: proc() {
 	lessons := f32(0)
 	for l in LESSONS do lessons += text_high(.Body, l, inner) + px(1)
 	chip := line_of(.Body) + 2*px(L.chip_pad.y)
-	high := 2*px(L.pad.y) + line_of(.Great) + line_of(.Body) + px(6) + px(L.button) + px(6) + line_of(.Body) + px(2) + chip + px(6) + line_of(.Body) + px(2) + lessons + px(5) + px(L.button)
+	high := 2*px(L.pad.y) + line_of(.Great) + line_of(.Body) + px(6) + px(L.button) + px(6) + line_of(.Body) + px(2) + chip + px(6) + line_of(.Body) + px(2) + lessons + px(5) + 3*px(L.button) + 2*px(L.gap)
 	r := Rect{math.round((screen.w - w)/2), math.round((screen.h - high)/2), w, high}
 	part(.Panel, r, id = "menu")
 	x, y := r.x + px(L.pad.x), r.y + px(L.pad.y)
@@ -1397,6 +1414,10 @@ menu_build :: proc() {
 	y += words(x, y, "What the game has told you", .Body, L.ash) + px(2)
 	for l in LESSONS do y += words(x, y, l, .Body, {}, "menu.lesson", inner) + px(1)
 	y += px(4)
+	button({x, y, inner, px(L.button)}, "Leave to the world", .Leave, int(Leave.World), false, "menu.leave.world", "Out of this game to the world's map, where another island can be chosen. What was dug and built is not kept yet.")
+	y += px(L.button) + px(L.gap)
+	button({x, y, inner, px(L.button)}, "Leave to the front door", .Leave, int(Leave.Door), false, "menu.leave.door", "Out of this game to the front door: the worlds, a new world, and settings.")
+	y += px(L.button) + px(L.gap)
 	button({x, y, button_wide("Quit", key_for(.Quit)), px(L.button)}, "Quit", .Quit, 0, false, "menu.quit")
 }
 

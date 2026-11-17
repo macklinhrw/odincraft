@@ -50,7 +50,7 @@ fragment float4 fs_ui(UiV in [[stage_in]],
         float v = -in.extra.x + 0.25;
         int layer = int(floor(v));
         float4 t = layer == 1 ? known.sample(known_smp, in.uv) : isles.sample(isle_smp, in.uv, uint(layer - 2));
-        if (fract(v) > 0.5) t.rgb = float3(dot(t.rgb, float3(0.30, 0.59, 0.11)));
+        if (fract(v) > 0.5) t.rgb = float3(saturate(0.5 + 0.9 * dot(t.rgb, float3(0.30, 0.59, 0.11))));   // its relief alone, light enough for the colour to read
         c *= t;
     } else if (in.extra.x > 0.5) {
         // A block's tile, lit as the noon sun lights it and encoded as the world's picture is (finish, shaders.metal).

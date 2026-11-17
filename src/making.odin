@@ -171,10 +171,11 @@ making_progress :: proc(s: Stage) -> (done, all: int, now: [dynamic]int) {
 	switch s {
 	case .Plates:
 		all = int(SPAN + SPIN_UP)
-		done = all if m.stage > .Plates || regional.patch else clamp(int(SPAN + SPIN_UP + planet.t), 0, all) if m.working && planet.crust != nil else 0
+		// The planet's clock stands at nought before its history is begun and when it is done: only a time before today is read.
+		done = all if m.stage > .Plates || regional.patch else clamp(int(SPAN + SPIN_UP + planet.t), 0, all) if m.working && planet.crust != nil && planet.t < -0.01 else 0
 	case .Region:
 		all = int(REGION_SPAN)
-		done = all if m.stage > .Region else clamp(int(REGION_SPAN + planet.t), 0, all) if regional.patch else 0
+		done = all if m.stage > .Region else clamp(int(REGION_SPAN + planet.t), 0, all) if regional.patch && planet.t < -0.01 else 0
 	case .Near, .Far:
 		if !sync.atomic_load(&m.records) do return
 		list := m.near if s == .Near else m.far
@@ -257,7 +258,7 @@ world_open :: proc(seed: u32, near_km: f64) {
 			sync.atomic_store(cast(^u8)&m.stage, u8(Stage.Far))
 			clear(&left)
 			for i in m.far do if !is_formed(&formed[i]) do append(&left, i)
-			forming_begin(left[:], 3, .Low, true)
+			forming_begin(left[:], 3, .Low, false)
 		} else {
 			m.stopped = true
 		}
@@ -400,7 +401,7 @@ world_says :: proc() -> string {
 	for n in by_kind do kinds += int(n > 0)
 	said := 0
 	for n, k in by_kind do if n > 0 {
-		fmt.sbprintf(&b, "%s%s of %s", "" if said == 0 else " and " if said == kinds - 1 else ", ", number_words(n), kind_words(k))
+		fmt.sbprintf(&b, "%s%s %s", "" if said == 0 else " and " if said == kinds - 1 else ", ", number_words(n), kind_said(k).many if n > 1 else kind_said(k).one[strings.index(kind_said(k).one, " ") + 1:])
 		said += 1
 	}
 	ashore := f64(1e12)
@@ -413,27 +414,27 @@ world_says :: proc() -> string {
 // Where the party lands, in a sentence.
 start_says :: proc() -> string {
 	is := archipelago[0]
-	return fmt.tprintf("The start is an island of %s, %.0f km across, on the %s at %.0f° N.", kind_words(is.kind), is.size/1000, SETTINGS[is.setting], world_frame.latitude)
+	return fmt.tprintf("The start is %s, %.0f km across, on the %s at %.0f° N.", kind_said(is.kind).one, is.size/1000, SETTINGS[is.setting], world_frame.latitude)
 }
 
-// What each kind of island is, in words for a person: "an island of ...", and what made it so
-// (KINDS, land.odin, whose rows these follow by name).
-Kind_Said :: struct { name, of, made: string }
+// What each kind of island is, in words for a person: one of them, several, the word under it on
+// the map, and what made it so (KINDS, land.odin, whose rows these follow by name).
+Kind_Said :: struct { name, one, many, short, made: string }
 KINDS_SAID := [?]Kind_Said{
-	{"ridge", "one long ridge", "It rose for three to four million years as one range, and the sea then rose a little way into the mouths of its valleys, leaving coves between the cliffs."},
-	{"inlets", "drowned valleys", "A ridge island the sea rose more than a hundred metres into when the ice last melted: its valleys are long branching inlets between steep spurs, and the rivers have filled the head of each with a flat."},
-	{"cone", "one volcano", "One vent built it out of the sea from lava and ash in a few tens of thousands of years, and the sea and its streams have cut it since into a wall of cliffs round gorges. It is the hard kind to live on."},
-	{"crater", "a fallen crater", "A steep cone of lava and ash whose top fell in after a last eruption, leaving a rim round a closed floor, where a small cone has grown."},
-	{"domes", "lava domes", "A vent spread a low fan of pumice and ash, and stiff pale lava then piled steep domes on it, with bays where the sea lies between them."},
-	{"worn", "worn hills", "It rose as a ridge island does, then stopped rising; the sea came into its valleys, and the land has worn down since to low round hills about wide bays."},
-	{"raised", "raised terraces", "The sea fell twice late in its rise and bared the platform the waves had cut, so an old cliff stands behind a terrace, and the streams have cut back into it."},
-	{"reef", "raised reef", "A bank in a warm sea that rose a ring at a time while coral filled each band the sea flooded: a flight of terraces round its oldest flat. Rain sinks into the reef, so no stream crosses it."},
+	{"ridge", "a ridge island", "ridge islands", "ridge", "It rose for three to four million years as one long range, and the sea then rose a little way into the mouths of its valleys, leaving coves between the cliffs."},
+	{"inlets", "an island of drowned valleys", "islands of drowned valleys", "drowned valleys", "A ridge island the sea rose more than a hundred metres into when the ice last melted: its valleys are long branching inlets between steep spurs, and the rivers have filled the head of each with a flat."},
+	{"cone", "a volcano island", "volcano islands", "volcano", "One vent built it out of the sea from lava and ash in a few tens of thousands of years, and the sea and its streams have cut it since into a wall of cliffs round gorges. It is the hard kind to live on."},
+	{"crater", "a crater island", "crater islands", "crater", "A steep cone of lava and ash whose top fell in after a last eruption, leaving a rim round a closed floor, where a small cone has grown."},
+	{"domes", "an island of lava domes", "islands of lava domes", "lava domes", "A vent spread a low fan of pumice and ash, and stiff pale lava then piled steep domes on it, with bays where the sea lies between them."},
+	{"worn", "a worn island", "worn islands", "worn hills", "It rose as a ridge island does, then stopped rising; the sea came into its valleys, and the land has worn down since to low round hills about wide bays."},
+	{"raised", "a terraced island", "terraced islands", "terraces", "The sea fell twice late in its rise and bared the platform the waves had cut, so an old cliff stands behind a terrace, and the streams have cut back into it."},
+	{"reef", "a reef island", "reef islands", "raised reef", "A bank in a warm sea that rose a ring at a time while coral filled each band the sea flooded: a flight of terraces round its oldest flat. Rain sinks into the reef, so no stream crosses it."},
 }
 kind_said :: proc(k: int) -> Kind_Said {
 	for row in KINDS_SAID do if row.name == KINDS[k].name do return row
-	return {KINDS[k].name, KINDS[k].name, ""}
+	n := KINDS[k].name
+	return {n, n, n, n, ""}
 }
-kind_words :: proc(k: int) -> string { return kind_said(k).of }
 
 // A world made by start-up itself (main.odin) is the world in hand from here on, with the island
 // start-up acts on as its start: so that play can be left for the world's screen.
