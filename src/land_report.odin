@@ -30,7 +30,7 @@ land_stats :: proc(g: ^Grid) {
 		}
 		if drop > face do face, top, foot = drop, c, at
 	}
-	at :: proc(g: ^Grid, c: int) -> [3]f32 { return {(f32(c%g.n) + 0.5)*g.d - f32(region.size/2), g.z[c], (f32(c/g.n) + 0.5)*g.d - f32(region.size/2)} }
+	at :: proc(g: ^Grid, c: int) -> [3]f32 { m := middle_of(g, c); return {f32(m.x), g.z[c], f32(m.y)} }
 	fmt.printfln("steeper than 45°: %.1f%% of land; median slope %.0f°; tallest face %.0f m, from %.0f to %.0f",
 		100*f32(steep)/f32(len(slopes)), math.to_degrees(math.atan(middle(slopes[:]))), face, at(g, top), at(g, foot))
 	fmt.print("rock at the surface:")
@@ -200,7 +200,8 @@ land_map :: proc(path, overlay: string) {
 	defer delete(pixels)
 	for py in 0..<SIZE {
 		for px in 0..<SIZE {
-			x, z := (f64(px) + 0.5)*region.size/SIZE - region.size/2, (f64(py) + 0.5)*region.size/SIZE - region.size/2
+			o := land_corner()
+			x, z := (f64(px) + 0.5)*land_side()/SIZE + o.x, (f64(py) + 0.5)*land_side()/SIZE + o.y
 			h := land_at(land.z[0], land.n, x, z)
 			gx := land_at(land.z[0], land.n, x + 8, z) - land_at(land.z[0], land.n, x - 8, z)
 			gz := land_at(land.z[0], land.n, x, z + 8) - land_at(land.z[0], land.n, x, z - 8)
@@ -257,7 +258,7 @@ land_map :: proc(path, overlay: string) {
 	}
 	// Each roofed place and stack (events.odin) is ringed, in orange for a notch, white for a shelter, red for a sea cave and yellow for a stack.
 	for f in region.features do if f.kind >= .Notch && f.kind <= .Cave || f.kind == .Stack {
-		cx, cy := int((f.at.x + region.size/2)*SIZE/region.size), int((f.at.y + region.size/2)*SIZE/region.size)
+		cx, cy := int((f.at.x - land_corner().x)*SIZE/land_side()), int((f.at.y - land_corner().y)*SIZE/land_side())
 		for dy in -6..=6 do for dx in -6..=6 do if r := dx*dx + dy*dy; r >= 16 && r <= 36 && cx + dx >= 0 && cy + dy >= 0 && cx + dx < SIZE && cy + dy < SIZE {
 			ring := #partial [Feature_Kind][3]u8{.Notch = {255, 140, 0}, .Shelter = {255, 255, 255}, .Cave = {230, 20, 20}, .Stack = {255, 230, 0}}
 			for k in 0..<3 do pixels[((cy + dy)*SIZE + cx + dx)*4 + k] = ring[f.kind][k]
@@ -265,7 +266,7 @@ land_map :: proc(path, overlay: string) {
 	}
 	// Each fall a white dot, larger the taller it is, and each spring a small cyan one, ringed in black.
 	for f in region.features do if f.kind == .Fall || f.kind == .Spring {
-		px, py := int((f.at.x + region.size/2)*SIZE/region.size), int((f.at.y + region.size/2)*SIZE/region.size)
+		px, py := int((f.at.x - land_corner().x)*SIZE/land_side()), int((f.at.y - land_corner().y)*SIZE/land_side())
 		fall := f.kind == .Fall
 		r, colour := 1.5 + f.measured[0].value/30 if fall else 1, [3]u8{255, 255, 255} if fall else {90, 230, 255}
 		for dy in -4..=4 do for dx in -4..=4 do if d := math.hypot(f32(dx), f32(dy)); d <= r + 1 && px + dx >= 0 && py + dy >= 0 && px + dx < SIZE && py + dy < SIZE {

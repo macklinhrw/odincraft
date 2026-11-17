@@ -37,6 +37,8 @@ Added to the vocabulary. Fields: plate setting, crust age, uplift rate, relative
 
 *Why expensive later.* Products, river records and streaming are all keyed by the unit.
 
+*Changed by step 21 (2026-11-16, `interesting-world/notes/continents-forming.md`):* pinning failed (step 20), and so did every way of forming a landmass's long phases in pieces. What holds: **the landmass is formed whole through its 64 m phases (the coarse stage), and only the 32 and 16 m phases in pieces**, cut along its 64 m drainage and formed one after another, downstream first, each holding its formed neighbours' land through time at the cut and forming 6 km past it toward the rest (`continents.odin`). The seam is then not a divide pinned from above but the earlier piece's own land, which the later one adapts to.
+
 ### D2. A region is an island up to about 33 km across, or a basin unit of that size.
 
 *Recommendation.* Cap a region at 2048² cells of 16 m: 33 km square, 20 s on one core (measured). An island that fits is one region, formed as today. A larger landmass is formed whole at 64 m, then cut by the Pfafstetter scheme, which splits a basin along its main stem into its four largest tributary basins and the five reaches between them, recursively, until each piece fits ([Verdin & Verdin 1999](https://doi.org/10.1016/S0022-1694(99)00011-6), sourced). Each piece is refined through 32 m and 16 m with its divides pinned to the 64 m solution, its outlet pinned to the trunk river's level, and a reach's upstream river entering as a point inflow. Today's schedule already spends most of its steps at 64 m, so a seam can disagree only by what the last two stages cut: tens of metres (guess, tested in Stage 2).
@@ -45,6 +47,8 @@ Added to the vocabulary. Fields: plate setting, crust age, uplift rate, relative
 
 *Why expensive later.* The cap sets the largest river and lake one simulation holds, the memory budget, and the shape of every record.
 
+*Changed by step 21 (2026-11-16):* a piece of a landmass holds about 300 km² of land, on a square window of its lattice round it; the landmass pass has no cap but time and memory, since it cannot be cut. It is the one serial job: 37,555 km² took 251 to 260 s; the known world's largest landmasses, 317,000 to 380,000 km², about 35 to 42 min and 8 to 16 GB as a square grid, until the flood runs in parallel.
+
 ### D3. A region is a pure function of the seed and its record. Form near first, the rest in the background, and re-form rather than store.
 
 *Recommendation.* Forming reads only the region's record and the seed hashed with its id, never another region's fine result, on one thread, so the result does not depend on order or core count. At creation: the world rung (about 1 s, guess), then every region within 64 km of the start, then enter. The rest form in the background on three low-priority threads and are kept as summaries of a few kilobytes, so every region is formed once at creation and the seed fixes the world. `--map` still forms one region in a second. A region the player comes within 64 km of is formed again, identically. No disk cache until saves exist.
@@ -52,6 +56,8 @@ Added to the vocabulary. Fields: plate setting, crust age, uplift rate, relative
 *Alternatives.* Everything held in memory at 16 m: about 3.5 GB for 5% land at a slim 12 bytes a cell (guess).
 
 *Why expensive later.* Once forming reads a neighbour's result or depends on order, determinism and parallel forming are both lost.
+
+*Changed by step 21 (2026-11-16):* a piece of a landmass is a pure function of the seed, the landmass's coarse stage and the bands of its neighbours earlier in a fixed order, which are pure functions in turn. So it does depend on order, but the order is the world's, not the player's: forming any piece forms what it waits on first (a median of 4 pieces on seed 1's landmass), and it comes out the same whichever piece or site was reached first. The coarse stage is kept on disk beside the known world. The stages, against the owner's goal of 2026-11-16 of 10 minutes for the whole world: the plates (2.5 s); every landmass's coarse stage (today only where under 8 min; the rest needs the parallel flood); the pieces round the start or a chosen site before entering; the rest beside play or when visited.
 
 ### D4. The world rung is records plus a 2 km raster, from a cheap stand-in for plates.
 

@@ -74,8 +74,14 @@ cap_at :: proc(c: int) -> (contrast, depth: f32, strong, weak: Mat) {
 	return
 }
 
+// Where a cell's middle lies, relative to the region's middle.
 middle_of :: proc(g: ^Grid, c: int) -> [2]f64 {
-	return {(f64(c%g.n) + 0.5)*f64(g.d) - region.size/2, (f64(c/g.n) + 0.5)*f64(g.d) - region.size/2}
+	return {(f64(c%g.n + g.at.x) + 0.5)*f64(g.d) - region.size/2, (f64(c/g.n + g.at.z) + 0.5)*f64(g.d) - region.size/2}
+}
+
+// The grid's cell under a point relative to the region's middle, or the nearest on its edge.
+grid_cell :: proc(g: ^Grid, x, z: f64) -> int {
+	return clamp(int((z + region.size/2)/f64(g.d)) - g.at.z, 0, g.n - 1)*g.n + clamp(int((x + region.size/2)/f64(g.d)) - g.at.x, 0, g.n - 1)
 }
 
 // Choose the slide's place, take its scar out of the hillside and lay its debris in the valley,
@@ -94,7 +100,7 @@ slide_make :: proc(g: ^Grid) -> bool {
 	valley := head
 	for g.next[valley] >= 0 && g.area[valley] < CHANNEL_AREA do valley = int(g.next[valley])
 	to := middle_of(g, valley) - middle_of(g, head)
-	long := clamp(f32(math.hypot(to.x, to.y)), SLIDE.length[0], SLIDE.length[1])*f32(region.size/REFERENCE)
+	long := clamp(f32(math.hypot(to.x, to.y)), SLIDE.length[0], SLIDE.length[1])*f32(stretch())
 	wide := long*draw(SLIDE.width, 1)
 	age := SLIDE.age[0]*math.pow(SLIDE.age[1]/SLIDE.age[0], draw({0, 1}, 2))
 	contrast, deep, strong, weak := cap_at(head)

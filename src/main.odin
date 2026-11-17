@@ -5,6 +5,7 @@ import "core:math"
 import "core:os"
 import "core:slice"
 import "core:sys/posix"
+import "core:time"
 import sdl "vendor:sdl3"
 
 // The game: start-up, the frame loop and its input, and the bench report. Command-line options are
@@ -127,8 +128,21 @@ main :: proc() {
 		archipelago[opt.island].kind = kind
 	}
 	arrivals_make()
-	formed = make([]Formed, len(archipelago))
-	for &f, i in formed do f.island = archipelago[i]
+	// The land larger than a region nearest the start (continents.odin): its coarse stage before the
+	// islands' records are made into regions, since its pieces are regions beside theirs. The tools that
+	// act on one island and exit leave it a record.
+	offline := opt.survey || opt.map_path != "" || opt.has_why || opt.archipelago != ""
+	mainland_make()
+	if mainland_state.formable && !offline && opt.continent do mainland_pass()
+	pieces := len(mainland_state.cut.size) if mainland_state.pass != nil else 0
+	formed = make([]Formed, len(archipelago) + pieces)
+	mainland_state.first = len(archipelago)
+	for &f, i in formed[:len(archipelago)] do f.island = archipelago[i]
+	for p in 0..<pieces {
+		o, s := piece_square(i32(p))
+		formed[len(archipelago) + p].island = {id = len(archipelago) + p, origin = o, size = s, kind = mainland_kind(), seed = mainland.seed, setting = .Continent}
+	}
+	arrivals_extend(pieces)
 	home = &formed[opt.island]
 	if opt.archipelago != "" {
 		archipelago_map(opt.archipelago)
@@ -139,7 +153,7 @@ main :: proc() {
 	// begun. A run that exits once the start island is formed forms only that.
 	others := make([dynamic]int)
 	apart :: proc(i: int) -> f64 { return math.hypot(f64(formed[i].island.origin.x - home.island.origin.x), f64(formed[i].island.origin.y - home.island.origin.y)) }
-	if !opt.survey && opt.map_path == "" && !opt.has_why && !hold_alone(&opt) do for _, i in formed do if &formed[i] != home do append(&others, i)
+	if !opt.survey && opt.map_path == "" && !opt.has_why && !hold_alone(&opt) do for _, i in formed[:len(archipelago)] do if &formed[i] != home do append(&others, i)
 	slice.sort_by(others[:], proc(a, b: int) -> bool { return apart(a) < apart(b) })
 	soon := 0
 	for soon < len(others) && apart(others[soon]) <= opt.near*1000 do soon += 1
@@ -176,6 +190,27 @@ main :: proc() {
 		return
 	}
 	islands_done(early, others[:soon])
+	// The landmass's pieces within `near` km of the start, or of the site asked for, formed before
+	// entering, each after the pieces it waits on; the rest nearest first on a thread of low priority
+	// once play has begun.
+	around := [2]f64{opt.site.x, opt.site.y} if opt.has_site else [2]f64{f64(home.island.origin.x), f64(home.island.origin.y)}
+	if pieces > 0 {
+		started := time.now()
+		before := 0
+		for p in slice.clone(mainland_order(around)) do if mainland_off(p, around) <= min(opt.near*1000, NEAR_REACH) {   // its own memory: forming frees the temporary as it goes
+			quiet = true
+			mainland_form(p)
+			quiet = false
+			before += 1
+		}
+		formed_now := 0
+		for &f in formed[mainland_state.first:] do formed_now += int(is_formed(&f))
+		fmt.printfln("the landmass: %d of its %d pieces formed before entering, %d of them within %.0f km of %s, in %.1f s", formed_now, pieces, before, min(opt.near, NEAR_REACH/1000), "the site" if opt.has_site else "the start", time.duration_seconds(time.since(started)))
+	}
+	if opt.has_site && !opt.has_pos {
+		opt.pos, opt.has_pos, opt.above, opt.fly = {opt.site.x, 60 + max(-f64(height_in_world(opt.site.x, opt.site.y, 1)), 0), opt.site.y}, true, true, true   // over the sea where the site is at sea
+		if !opt.has_look do opt.yaw, opt.pitch, opt.has_look = 0, -20, true
+	}
 	if opt.above && opt.place == 0 do opt.pos.y += f64(height_in_world(opt.pos.x, opt.pos.z, 1))
 	// With no day named, the first fair day from the March equinox on: a person looking at the
 	// land sees it in sunlight, and pictures taken on different days of work can be compared.
@@ -223,6 +258,7 @@ main :: proc() {
 	clock := Clock{speed = 2 if opt.pace == 4 else max(opt.pace - 1, 0), paused = opt.pace == 0}
 	hold_enter(&p, &a, &opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
 	islands_form(others[soon:], 3, .Low, false)
+	if pieces > 0 do mainland_background(around)
 	hour := opt.hour
 	place := Mat.Stone
 	captured := false

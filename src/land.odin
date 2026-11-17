@@ -83,6 +83,10 @@ REAL := [?]Real{
 	{"Toshima", {82, 65, 40, 14, 1.2, 0.19, 130, 2, 0.49, 0.2}}, {"Mikurajima", {117, 81, 51, 5, 2.5, 0.69, 122, 7, 1.58, 2.6}}, {"Aogashima", {107, 85, 50, 9, 2.9, 0.63, 96, 77, 0.99, 0.2}},
 	{"Kōzushima", {70, 48, 34, 14, 1.8, 0.56, 72, 10, 1.26, 1.9}}, {"Hahajima", {85, 85, 39, 16, 1.9, 0.81, 79, 9, 0.92, 1.9}}, {"Chichijima", {60, 67, 29, 28, 0.8, 0.73, 54, 7, 1.19, 3.5}},
 	{"Kikaijima", {4, 0, 2, 57, 0, 0.05, 10, 1, 1.83, 4.4}}, {"Tsushima", {39, 40, 24, 74, 0, 1.25, 29, 4, 0.32, 0.7}}, {"Yakushima", {24, 4, 15, 6, 0.0, 0.42, 80, 3, 2.05, 11.7}},
+	// A main island's coast and hills, in 8 km windows the window's cut rim left out (step 21): south Bōsō
+	// from Wada to Kamogawa, its Mineoka hills to 333 m; the Kumano coast's rias at Owase on Kii, to 751 m;
+	// Cape Muroto's west shore on Shikoku, to 617 m. Bōsō's deepest hollow may be a reservoir.
+	{"Bōsō", {6, 0, 4, 24, 0.0, 0.46, 35, 10, 1.83, 11.9}}, {"Kii", {39, 32, 19, 17, 0.0, 0.72, 76, 5, 1.76, 26.2}}, {"Muroto", {8, 0, 4, 14, 0.0, 0.68, 76, 2, 1.75, 11.8}},
 }
 
 // The real islands the island is judged against, and whether its rock's story names them.
@@ -285,6 +289,20 @@ KINDS := [?]Kind{
 			{cell = 16, years = 1000, steps = {7, 9}, uplift = {1, 1}, sea = {30, 36}},     // the last rise, and the thousands of years since
 		},
 	},
+	{
+		// Land larger than a region (continents.odin): no outline or uplift of its own, which are the
+		// plates' history's at each place, and no island is of it. A history as the inlets kind's,
+		// since the sea rose 120 m on every coast at the end of the last ice age, and the coasts of a
+		// continent's margin it stands for (Kii, Shikoku's Pacific shore) are drowned valleys.
+		name = "mainland", after = {"Bōsō", "Kii", "Muroto"}, weight = 0, story = "layered, gently tilted",
+		shape = {swell = {0, 360}, silt = {0.4, 0.8}},
+		history = {
+			{cell = 64, years = 20000, steps = {140, 175}, uplift = {1, 1}},
+			{cell = 32, years = 6000, steps = {40, 60}, uplift = {1, 1}},
+			{cell = 16, years = 3000, steps = {30, 30}, uplift = {1, 1}},
+			{cell = 16, years = 1000, steps = {5, 8}, uplift = {1, 1}, sea = {115, 120}},
+		},
+	},
 }
 
 Region :: struct {
@@ -298,6 +316,7 @@ Region :: struct {
 	history:  []Phase(f32),
 	vents:    [dynamic]Vent,   // in the order they open
 	features: [dynamic]Feature,   // what events made, in the order they were made (events.odin)
+	mass:     ^Landmass,       // on land larger than a region, the landmass whose lattice it lies on, which its ground starts from (continents.odin); nil on an island
 }
 
 // A vent, drawn from its phase's ranges.
@@ -476,7 +495,15 @@ Grid :: struct {
 	open:   []i32,          // the table of sea cells the coast reads, kept from step to step (sea_table),
 	reached: []i32,         // the last mouth whose silt reached each cell, numbered on the grid from 1 so it is never cleared,
 	mouths: i32,            // and the mouths so far
+	at:     Lattice,        // where the grid lies on the lattice its cells are keyed by: its own on an island
+	holding: ^Holding,      // on a piece of land larger than a region, the cells held to what was formed beside it (continents.odin); nil on an island
 }
+
+// Where a grid's first cell lies on the lattice of the land it is part of, at the grid's cell size,
+// and how many cells that lattice has along a side. Each cell's own randomness is keyed by where it
+// lies on the lattice, so a piece of a landmass draws for each cell what the whole would. An island's
+// grid is its whole lattice.
+Lattice :: struct { x, z, n: int }
 
 // The finished land, read by the generator.
 Land :: struct {
@@ -508,7 +535,16 @@ Land :: struct {
 	mouth:   []u16,    // 1 + the stream mouth whose fan a cell lies in (mouths_make, rivers.odin), or 0
 	rain:    []f32,    // mm a year, on the 64 m grid (land_rain, climate.odin)
 	rained:  f32,      // and its mean over the land
+	at:      Lattice,  // on a piece of a landmass, the window of its lattice the arrays cover (continents.odin); zero on an island, whose arrays cover its region
 }
+
+// Where the land's arrays begin, metres from the region's middle, and how far they reach: the whole
+// region on an island; on a piece of a landmass, whose region is the landmass's, its window.
+land_corner :: #force_inline proc() -> [2]f64 { return {f64(land.at.x)*LAND_CELL - region.size/2, f64(land.at.z)*LAND_CELL - region.size/2} }
+land_side :: #force_inline proc() -> f64 { return f64(land.n)*LAND_CELL }
+
+// How a kind's lengths stretch with its region: an island's with its size; a landmass's not at all.
+stretch :: #force_inline proc() -> f64 { return region.size/REFERENCE if region.mass == nil else 1 }
 
 // Ground a person could live on, from where the villages on eight real islands stand
 // (interesting-world/notes/real-islands.md, "Livable ground"): no steeper than 20°, which
@@ -539,10 +575,25 @@ carve :: proc(block: []u8, at: ^int, n: int, $T: typeid) -> []T {
 // Rows of an n × n grid to a part of the work shared among threads (`shared`, regions.odin).
 rows :: proc(n: int) -> int { return max(8192/n, 1) }
 
-// A grid over the region as it stands at the start.
-grid_make :: proc(n: int) -> ^Grid {
+// A grid's arrays, uninitialised but for the cells' place on the lattice.
+grid_make_empty :: proc(n: int, at := Lattice{}) -> ^Grid {
 	g := new(Grid)
-	g.n, g.d = n, f32(region.size)/f32(n)
+	g.at = at if at.n > 0 else Lattice{0, 0, n}
+	g.n, g.d = n, f32(region.size)/f32(g.at.n)
+	g.block = make([]u8, 9*room(n, f32) + room(n, i32) + room(n, [2]f32) + 2*room(n, bool))
+	b, k := g.block, 0
+	g.z, g.fill, g.area = carve(b, &k, n, f32), carve(b, &k, n, f32), carve(b, &k, n, f32)
+	g.uplift, g.soft, g.base, g.cut, g.face, g.load = carve(b, &k, n, f32), carve(b, &k, n, f32), carve(b, &k, n, f32), carve(b, &k, n, f32), carve(b, &k, n, f32), carve(b, &k, n, f32)
+	if rocks_held() do g.bodies = make([]Grid_Body, n*n)
+	g.next, g.jitter, g.seen, g.sea = carve(b, &k, n, i32), carve(b, &k, n, [2]f32), carve(b, &k, n, bool), carve(b, &k, n, bool)
+	return g
+}
+
+// A grid over the region as it stands at the start: all of it, or the window `at` of its lattice.
+grid_make :: proc(n: int, at := Lattice{}) -> ^Grid {
+	g := new(Grid)
+	g.at = at if at.n > 0 else Lattice{0, 0, n}
+	g.n, g.d = n, f32(region.size)/f32(g.at.n)
 	g.block = make([]u8, 9*room(n, f32) + room(n, i32) + room(n, [2]f32) + 2*room(n, bool))
 	b, at := g.block, 0
 	g.z, g.fill, g.area = carve(b, &at, n, f32), carve(b, &at, n, f32), carve(b, &at, n, f32)
@@ -550,17 +601,21 @@ grid_make :: proc(n: int) -> ^Grid {
 	if rocks_held() do g.bodies = make([]Grid_Body, n*n)
 	g.next, g.jitter, g.seen, g.sea = carve(b, &at, n, i32), carve(b, &at, n, [2]f32), carve(b, &at, n, bool), carve(b, &at, n, bool)
 	shared(n, rows(n), g, proc(g: ^Grid, lo, hi: int) {
-		n, k := g.n, REFERENCE/region.size
+		n, k, l := g.n, REFERENCE/region.size, g.at
 		for c in lo*n..<hi*n {
-			x, z := (f64(c%n) + 0.5)*f64(g.d) - region.size/2, (f64(c/n) + 0.5)*f64(g.d) - region.size/2
+			x, z := (f64(c%n + l.x) + 0.5)*f64(g.d) - region.size/2, (f64(c/n + l.z) + 0.5)*f64(g.d) - region.size/2
 			s := shore(x, z)
-			ix, iz := i32(c%n), i32(c/n)
+			ix, iz := i32(c%n + l.x), i32(c/n + l.z)
 			g.face[c] = 1
-			g.jitter[c] = [2]f32{hash01(ix, iz, seed + 7 + u32(n)) - 0.5, hash01(ix, iz, seed + 8 + u32(n)) - 0.5}*0.9
+			g.jitter[c] = [2]f32{hash01(ix, iz, seed + 7 + u32(l.n)) - 0.5, hash01(ix, iz, seed + 8 + u32(l.n)) - 0.5}*0.9
 			// The beds decide how the rock wears; it also varies a little from one outcrop to the
 			// next, which keeps streams from running in straight lines along the grid, and is
 			// crushed along a fault.
-			g.soft[c] = math.exp(0.8*(hash01(ix, iz, seed + 6 + u32(n)) - 0.5))
+			g.soft[c] = math.exp(0.8*(hash01(ix, iz, seed + 6 + u32(l.n)) - 0.5))
+			if region.mass != nil {
+				mass_cell(g, c, x, z)
+				continue
+			}
 			if len(rocks.bodies) > 0 do g.soft[c] *= rock_weak(x, z)
 			u := rock_base(x, z, LAND_CELL)
 			g.base[c] = u.base
@@ -609,8 +664,8 @@ land_form :: proc() {
 	for p, i in history {
 		for g.d > f32(p.cell) do g = refine(g)
 		n := g.n
-		at :: proc(g: ^Grid, c: int) -> (x, z: f64) { return (f64(c%g.n) + 0.5)*f64(g.d) - region.size/2, (f64(c/g.n) + 0.5)*f64(g.d) - region.size/2 }
-		ground :: proc(g: ^Grid, x, z: f64) -> f32 { return g.z[clamp(int((z + region.size/2)/f64(g.d)), 0, g.n - 1)*g.n + clamp(int((x + region.size/2)/f64(g.d)), 0, g.n - 1)] }
+		at :: proc(g: ^Grid, c: int) -> (x, z: f64) { m := middle_of(g, c); return m.x, m.y }
+		ground :: proc(g: ^Grid, x, z: f64) -> f32 { return g.z[grid_cell(g, x, z)] }
 		// Where the sea moves, what lies below it now is sea bed and what it leaves is land: a
 		// rise floods the valley mouths into inlets.
 		if p.sea != 0 {
@@ -947,8 +1002,8 @@ patches :: proc(n: int, marked: []bool, reach: int) -> (group: []i32, sizes: [dy
 // four values never rises past its neighbours (Steffen 1990), so the edge of a face does not
 // bulge above the face's top.
 land_at :: proc(v: []f32, n: int, x, z: f64) -> f32 {
-	d := region.size/f64(n)
-	u, w := (x + region.size/2)/d - 0.5, (z + region.size/2)/d - 0.5
+	d, o := LAND_CELL*f64(land.n/n), land_corner()
+	u, w := (x - o.x)/d - 0.5, (z - o.y)/d - 0.5
 	fu, fw := math.floor(u), math.floor(w)
 	iu, iw := int(fu), int(fw)
 	curve :: #force_inline proc(p: [4]f32, t: f32) -> f32 {
@@ -972,5 +1027,6 @@ land_at :: proc(v: []f32, n: int, x, z: f64) -> f32 {
 
 // The finest grid's cell under a point.
 land_cell :: proc(x, z: f64) -> int {
-	return clamp(int((z + region.size/2)/LAND_CELL), 0, land.n - 1)*land.n + clamp(int((x + region.size/2)/LAND_CELL), 0, land.n - 1)
+	o := land_corner()
+	return clamp(int((z - o.y)/LAND_CELL), 0, land.n - 1)*land.n + clamp(int((x - o.x)/LAND_CELL), 0, land.n - 1)
 }

@@ -141,7 +141,8 @@ land_rain :: proc() {
 			up, all: f32
 			for w, k in s.weights {
 				i, j := int(math.floor(f32(c%n) + 0.5 + s.wind.x*f32(k))), int(math.floor(f32(c/n) + 0.5 + s.wind.y*f32(k)))
-				if i >= 0 && j >= 0 && i < n && j < n do up += w*max(z[j*n + i], 0)   // past the region's rim, the open sea
+				if region.mass != nil do up += w*max(mass_z64(i + land.at.x/4, j + land.at.z/4), 0)   // on a landmass, the coarse stage's ground upwind, past the piece's cut as well
+				else if i >= 0 && j >= 0 && i < n && j < n do up += w*max(z[j*n + i], 0)   // past the region's rim, the open sea
 				all += w
 			}
 			h := max(z[c], 0)

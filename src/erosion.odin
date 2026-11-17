@@ -104,11 +104,13 @@ route :: proc(g: ^Grid) #no_bounds_check {
 	// eight cells are read at once, a byte each in one word, so open sea and the land away from the
 	// shore are passed eight at a time.
 	seed :: #force_inline proc(g: ^Grid, c: int) {
+		if g.seen[c] do return   // held, and seeded at its own level (held_seed)
 		g.fill[c] = max(g.z[c], 0.05)
 		g.seen[c] = true
 		heap_push(&g.heap, {g.fill[c], i32(c)})
 	}
 	eight :: #force_inline proc(sea: []bool, c: int) -> u64 #no_bounds_check { return intrinsics.unaligned_load((^u64)(&sea[c])) }
+	if g.holding != nil do held_seed(g)
 	for y in 0..<n {
 		for x := 0; x < n; {
 			c := y*n + x
@@ -127,7 +129,7 @@ route :: proc(g: ^Grid) #no_bounds_check {
 	defer delete(sinks)
 	for v in region.vents do if v.fallen {
 		lowest := -1
-		x0, y0, r := int((v.at.x + region.size/2)/f64(g.d)), int((v.at.y + region.size/2)/f64(g.d)), int(v.crater/g.d)
+		x0, y0, r := int((v.at.x + region.size/2)/f64(g.d)) - g.at.x, int((v.at.y + region.size/2)/f64(g.d)) - g.at.z, int(v.crater/g.d)
 		for y in max(y0 - r, 0)..=min(y0 + r, n - 1) do for x in max(x0 - r, 0)..=min(x0 + r, n - 1) {
 			if c := y*n + x; (x - x0)*(x - x0) + (y - y0)*(y - y0) <= r*r && !g.seen[c] && (lowest < 0 || g.z[c] < g.z[lowest]) do lowest = c
 		}
@@ -181,6 +183,7 @@ route :: proc(g: ^Grid) #no_bounds_check {
 		}
 	})
 	for c in sinks do if g.next[c] < 0 do g.next[c] = SINK
+	if g.holding != nil do held_route(g)
 	#reverse for c in g.order {
 		if r := g.next[c]; r >= 0 do g.area[r] += g.area[c]
 	}
@@ -203,6 +206,10 @@ erode :: proc(g: ^Grid, dt: f32) #no_bounds_check {
 	for ci in g.order {
 		c := int(ci)
 		below, run: f32 = 0, g.d
+		if g.holding != nil && g.holding.held[c] {   // as the piece it was held to left it
+			g.z[c], g.load[c] = g.holding.vals[g.holding.index[c]].z1, 0
+			continue
+		}
 		if g.next[c] == SINK || (g.keep && g.fill[c] > g.z[c] + 0.01) {   // nothing runs on from a sink to cut it, and a lake's floor is still
 			g.z[c] += g.uplift[c]*g.lift*dt
 			g.load[c] = 0
@@ -220,6 +227,7 @@ erode :: proc(g: ^Grid, dt: f32) #no_bounds_check {
 		g.z[c] = clamp(z, below + 0.001*run, below + law.limit*run*g.face[c])
 		g.load[c] = max(was - g.z[c], 0)*g.d*g.d
 	}
+	if g.holding != nil do held_load(g, dt)
 	#reverse for c in g.order do if r := g.next[c]; r >= 0 do g.load[r] += g.load[c]
 }
 
@@ -235,7 +243,7 @@ creep :: proc(g: ^Grid, dt: f32) {
 			for y in max(lo, 1)..<min(hi, n - 1) {
 				for x in 1..<n - 1 {
 					c := y*n + x
-					if g.sea[c] do continue
+					if g.sea[c] || g.holding != nil && g.holding.held[c] do continue
 					// A mantle of ash creeps wherever it can lie, which is not on a face.
 					rate := wear(g, c, old[c]).creep
 					if m := region.story.mantle; m > rate do rate = math.lerp(m, rate, smoothstep(0.7, 1.2, math.hypot(old[c + 1] - old[c - 1], old[c + n] - old[c - n])/(2*g.d)))
@@ -311,7 +319,7 @@ coast :: proc(g: ^Grid, dt: f32) {
 		g, n := w.g, w.g.n
 		for c in lo*n..<hi*n {
 			if g.sea[c] && g.z[c] > -WAVE_BASE do g.z[c] -= ABRADE*w.dt*(1 + g.z[c]/WAVE_BASE)
-			if g.sea[c] do continue
+			if g.sea[c] || g.holding != nil && g.holding.held[c] do continue   // a held cell is the coast the piece it is held to left
 			beside := false
 			for o in OFFSETS do beside ||= g.sea[c + o.y*n + o.x]
 			g.seen[c] = beside
@@ -323,7 +331,7 @@ coast :: proc(g: ^Grid, dt: f32) {
 	back := max(int(100/g.d), 1)   // the cliff is the highest ground this many cells inland
 	for ci in g.order {
 		c := int(ci)
-		if !g.seen[c] do continue
+		if !g.seen[c] || g.holding != nil && g.holding.held[c] do continue
 		x, y := c%n, c/n
 		cliff, deep: f32   // the highest ground and the deepest water within 100 m
 		for j in max(y - back, 0)..=min(y + back, n - 1) do for i in max(x - back, 0)..=min(x + back, n - 1) do cliff, deep = max(cliff, g.z[j*n + i]), max(deep, -g.z[j*n + i])
@@ -347,7 +355,7 @@ coast :: proc(g: ^Grid, dt: f32) {
 	queue := make([dynamic][2]i32)   // a cell, and how many cells out from the mouth it lies
 	defer delete(queue)
 	for ci in g.order {
-		if g.next[ci] >= 0 || g.area[ci] < CHANNEL_AREA do continue
+		if g.next[ci] >= 0 || g.area[ci] < CHANNEL_AREA || g.holding != nil && g.holding.held[ci] do continue   // a held cell's water goes on in the piece it is held to
 		g.mouths += 1
 		left := g.load[ci]*f32(region.shape.silt)
 		clear(&queue)
@@ -385,17 +393,17 @@ exposure :: proc(open: []i32, n, x, y, r: int, ahead: [2]int) -> f32 {
 // The same land and sea bed at twice the detail: land and sea are where the coarse grid has
 // them, with the coast the waves cut and the sea bed they wore.
 refine :: proc(coarse: ^Grid) -> ^Grid {
-	g := grid_make(coarse.n*2)
+	g := grid_make(coarse.n*2, {coarse.at.x*2, coarse.at.z*2, coarse.at.n*2})
 	g.left = coarse.left
 	grids := [2]^Grid{g, coarse}
 	shared(g.n, rows(g.n), &grids, proc(grids: ^[2]^Grid, lo, hi: int) {
 		g, coarse := grids[0], grids[1]
-		n, m := g.n, coarse.n
+		n, m, l := g.n, coarse.n, g.at
 		for c in lo*n..<hi*n {
 			// Read the coarse land through a gentle warp, so a valley that ran straight along the
 			// coarse grid comes out winding. The steps that follow settle it.
-			wx, _, _ := noise(f64(c%n)/9, f64(c/n)/9, seed + 11 + u32(n))
-			wz, _, _ := noise(f64(c%n)/9, f64(c/n)/9, seed + 12 + u32(n))
+			wx, _, _ := noise(f64(c%n + l.x)/9, f64(c/n + l.z)/9, seed + 11 + u32(l.n))
+			wz, _, _ := noise(f64(c%n + l.x)/9, f64(c/n + l.z)/9, seed + 12 + u32(l.n))
 			u, v := (f32(c%n) + 0.5)/2 - 0.5 + 1.6*(wx - 0.5), (f32(c/n) + 0.5)/2 - 0.5 + 1.6*(wz - 0.5)
 			x0, y0 := clamp(int(math.floor(u)), 0, m - 2), clamp(int(math.floor(v)), 0, m - 2)
 			tu, tv := clamp(u - f32(x0), 0, 1), clamp(v - f32(y0), 0, 1)
@@ -408,7 +416,7 @@ refine :: proc(coarse: ^Grid) -> ^Grid {
 			}
 			g.face[c] = coarse.face[k]
 			// A little roughness, so the finer streams have something to start from.
-			g.z[c] = max(z, 0.3) + 0.03*g.d*(hash01(i32(c%n), i32(c/n), seed + 10) - 0.5)
+			g.z[c] = max(z, 0.3) + 0.03*g.d*(hash01(i32(c%n + l.x), i32(c/n + l.z), seed + 10) - 0.5)
 		}
 	})
 	grid_free(coarse)

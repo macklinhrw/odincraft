@@ -50,7 +50,7 @@ build/odincraft --bench=10 --fly --speed=60 --pos=500,700,-1000 --look=200,-35  
 build/odincraft --bench=15 --over=-2500,-600 --turn=90 --speed=120 --span=200 --cut=ground   # from above, the cut following the ground
 ```
 
-The first run of a world's seed runs the plates' history (about 2 s) and keeps the known world in `build/worlds/`, keyed by `plates.odin` and `known.odin`; later runs read it back.
+The first run of a world's seed runs the plates' history (about 2 s) and keeps the known world in `build/worlds/`, keyed by `plates.odin` and `known.odin`; later runs read it back. Where the land larger than a region nearest the start is small enough to form (seeds 1, 2, 4, 5 and 10 of 1 to 10 and 12; not seed 7), the first run also forms its coarse stage (about 5 to 7 min on seed 1) and keeps it there; `--continent=0` leaves it a record, and `--site=x,z` forms its pieces round a point.
 
 `--dwarves=seconds` runs the dwarves' world that long and exits. The same seed and orders must print the same hash twice. An orders file has a time and an order on each line: `120 go 2620 -1720` (the ground at a column), `6:40.0 go 2300 76 -1380` (a block to stand on), `300 block 2700 3 -1750 Air` (a block changed). The log prints an order it obeyed in this form, so a played game's log can be played again. Add `--shot` for a picture of that moment, `--why=x,z` to ask a dwarf standing there who it is, `--cursor=x,y --send` with `--bench` and `--over` to send the party to the block under the pointer as a right click does, or `--party=N` to measure a larger hold. Start-up says where the party lands. A bench with the dwarves on screen: `--bench=40 --over=2696,-1760 --span=80 --speed=0 --cut=ground --dwarves=115 --orders=file`.
 

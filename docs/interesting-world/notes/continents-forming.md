@@ -1,5 +1,117 @@
 # Forming land larger than one region
 
+## Step 21 continued, 2026-11-16: the known world's continents, staged
+
+Written 2026-11-16 for step 21 (the plan's N1), after the owner's goals of the same day: continents formed as land with no seam; the whole world's generation within 10 minutes, staged if need be (a coarse stage first, then the detail once the player is in the game or chooses a site, the rest later); no method that sacrifices the quality of the land. The section below this one is the experiment of 2026-11-15 that this continues. Every number was measured on this machine (an M3 Max, 12 performance cores and 4 efficiency, 128 GB), with other agents' work on it (load 5 to 12), unless it is marked as a guess or an inference.
+
+### The problem, measured
+
+**How much land is larger than a region.** Seeds 1 to 10 and 12, every land mass in the known world (1,000 km) over 400 km², which no region can hold:
+
+| Seed | All of it, km² | The landmass nearest the start: km² of land, its coast from the start, the history's highest ground | Land of it within 64 km of the start |
+|---|---|---|---|
+| 1 | 307,968 | 44,832; 51 km; 2,374 m | 404 km² |
+| 2 | 244,336 | 1,264; 128 km; 6,738 m | 0 |
+| 3 | 386,908 | 379,668; 82 km; 7,366 m | 0 |
+| 4 | 199,240 | 3,392; 114 km; 2,844 m | 0 |
+| 5 | 234,164 | 4,548; 112 km; 3,164 m | 0 |
+| 6 | 348,128 | 317,748; 171 km; 2,358 m | 0 |
+| 7 | 336,328 | 317,108; 175 km; 2,845 m | 0 |
+| 8 | 363,872 | 363,404; 31 km; 2,382 m | 1,476 km² |
+| 9 | 245,372 | 34,824; 42 km; 555 m | 2,600 km² (two masses) |
+| 10 | 118,080 | 2,184; 99 km; 2,551 m | 0 |
+| 12 | 193,524 | 187,312; 31 km; 7,375 m | 2,620 km² |
+
+So a known world holds 118,000 to 387,000 km² of land larger than a region, eight to twelve times the 30,000 to 50,000 km² the experiment below priced. Its largest mass is 28,000 to 380,000 km², and on seven seeds of eleven it runs off the known world's edge. On seven seeds no land larger than a region lies within 64 km of the start; on four it does, 400 to 2,600 km² of it.
+
+**What the history says of it.** The regional history's rise over the last 4 Myr, mean of its eight steps, on the large masses: medians of −0.01 to 0.84 mm/yr, 95th percentiles of 0.04 to 2.1. Most of a continent's land is old ground that hardly rises, worn from the height the plates floated it to (a median of 184 to 2,259 m on the 2 km samples, with the history's 350 m of relief noise in it).
+
+**What forming costs today** (after steps 31 and 33):
+
+| | Measured |
+|---|---|
+| The 64 m phases, a ridge island stretched to 131 km (7,250 km² of land, 159 steps) | 49.4 s alone, 42.0 s with helpers: 171 and 145 ns a land cell a step; 266 MB |
+| All phases, the ridge at 32 km (382 km² of land) | 12.8 s alone, 10.5 s with helpers: 34 and 27 ms a km² of land |
+| The finer phases alone (32 and 16 m) on the same | 8.6 s with helpers: 22 ms a km² |
+| The coarse stage of seed 1's landmass (39,433 km² of land on a lattice 385 km across, 64 m phases) | 251 to 260 s with helpers, before its rebound (below); 394 to 403 s with it, two formed at once; kept on disk, 941 MB, and read back in 1 to 2 s |
+
+*(Extrapolated.)* The whole known world's land at full detail, at those rates, is 13 to 44 core-minutes of 64 m phases and 45 to 140 core-minutes of finer phases, before the pieces' margins: over the 10 minutes on this machine however it is shared, so it has to be staged, as the owner allowed.
+
+### What the experiments found
+
+The method of the section below, ordered pieces, was rebuilt in the game's own code (`continents.odin`) and tested again, and then tested one level up, where it would have to work for the staging to be cheap: pieces that form the long 64 m phases themselves from a coarser pass.
+
+| Test (one seed each, seed 3) | Closed hollow over 2 m within 100 m of a cut (the whole) | Largest step across the cut (the whole) | Joined less whole, mean (a 1 mm nudge) | Verdict |
+|---|---|---|---|---|
+| **E2.** The 32 km ridge, the 64 m phases whole, ten ordered pieces (20 to 72 km²) taking up the 32 and 16 m phases, 6 km margins | 1 cell, 2.1 m (9, 3.4 m) | 47.2 m (51.9) | 0.12 m (0.16) | **No seam: the experiment of 2026-11-15 holds** |
+| **E3.** The ridge at 131 km, its 64 m phases at 256 m whole, ten ordered pieces (380 to 920 km²) forming the 64 m phases, 16 km margins held beyond to the 256 m pass through time | 5,528 cells, 325 m (56, 8.3 m) | 313 m (145) | 28 m (26) | **Seam** |
+| **E3, oracle.** The 32 km ridge, ten pieces forming the 64 m phases, held beyond their 6 km margins to the whole itself through time | 138 cells, 105 m (0) | 147 m (128) | 21 m (16) | **Seam** |
+| **E4.** The 32 km ridge, its long phase at 128 m whole, ten pieces forming 64, 32 and 16 m phases (0.7 Myr), 6 km margins | 703 cells, 78 m (0) | 135 m (43) | 1.2 m (0.25) | **Seam** |
+
+**Pieces cannot form the long phases.** Even held to the land formed whole beyond their margins, pieces that form the 64 m phases leave closed hollows 100 m deep along their cuts. *(Inference.)* Over 3 Myr on 64 m cells the forming is chaotic at the scale of whole valleys: a 1 mm nudge moves the 32 km ridge's 64 m land a mean 16 m and up to 379 m, and the 131 km ridge's a mean 26 m and up to 491 m. Its divides wander kilometres as streams capture each other, so a cut fixed in advance is crossed by streams both ways, and the piece formed second meets the first's land where its water ponds: the upstream-first failure of the section below, at every crossing the wandering made. Over the 0.4 Myr of the 32 and 16 m phases the divides move a cell or two, the cut stays a divide, and ordered pieces work.
+
+So **a landmass is formed whole through its long phases, and only its finer phases in pieces.** That fixes the coarse stage: it is the landmass pass at 64 m, over each landmass whole, which no decomposition can stand in for.
+
+### The design
+
+1. **The plates** (built, 2.5 s a seed, kept on disk): the known world.
+2. **The coarse stage, at world creation, kept on disk: every landmass formed whole through its 64 m phases** (`mainland_pass`). It starts from the history's ground at each place, lowered by the uplift still to come, roughened so the coast does not follow the 2 km samples; it rises at the history's own rate there; its rock is one story laid over the whole landmass; its history is the inlets kind's, since the sea rose 120 m on every coast at the end of the last ice age (row `mainland` in `KINDS`). It is then cut along its drainage into pieces of about 300 km² of land, ordered. This is the coarse world the plan's history (P9) can run on: a map at 64 m of real drainage, ranges and coasts.
+   *Its rebound.* A continent that the history barely raises is planed flat by the islands' erosion in the 64 m phases' 3 Myr: seed 1's, from the history's median of 1,156 m to 73 m (its top 225 m), so that the sea's last rise of 120 m drowned 82% of it. What holds a real continent up is that it floats: as rock is worn off, the crust rises by about 0.82 of it, the worn rock's weight over the mantle's (Airy). So the coarse stage rebounds (`rebound`), by that share of the rock worn off in a square 24 km across (the width is a guess). With it, seed 1's continent holds 39,433 km² of land before the sea's last rise, with a median of 462 m, a 90th percentile of 752 m and a top of 1,740 m, and 82% of it stays over that rise. Islands are too small for it to matter; the finer phases wear too little to need it.
+3. **The detail, on demand: pieces** formed by the ordered method (`piece_form`), each taking up the 32 and 16 m phases from the coarse stage in its window, then made a region as an island is, with its rivers, plants, trails, places and animals (`piece_finish`).
+4. **One world whatever the order.** The cut and the order come from the coarse stage alone, a pure function of the seed. A piece's land is a pure function of the coarse stage and the bands of its neighbours earlier in the order, which are pure functions in turn. To form any piece, the pieces it waits on (its earlier neighbours, and theirs) are formed first, in order (`mainland_form`). The order is: downstream first (a piece through which another's water leaves comes first); among pieces as many steps from the sea, by a colouring of their borders, so that no chain of neighbours at one depth waits on itself. On seed 1's landmass (171 pieces, up to 9 steps from the sea) a piece waits on a median of 6 others, 90% on 39 or fewer, at most 66. A site inland, chosen by the player, is formed with its drainage down to the sea and the neighbours its order puts first; nothing about it depends on what was visited before.
+5. **Never unformed ground.** A chunk over a piece not yet formed waits, as over an island not yet formed. The pieces within 16 km of the start (or of `--site=x,z`) are formed before entering, with what they wait on; the rest within 40 km of it on a thread of low priority beside play, nearest first (16 and 40 km, not the 64 km of the islands, for memory: below).
+6. **Rain on a piece is the coarse stage's.** Rain reads the ground 15 km upwind (`land_rain`), past a piece's cut; a piece reads it from the coarse stage's 64 m ground, which every piece shares, so the rain is the same on both sides of a cut. The climate (its latitude and the sea's temperature) is read once for the landmass, at its middle.
+7. **A site that stays formed** (the plan's holds): a formed piece is kept whole while the game runs. Keeping it on disk, and forming the far pieces again identically from the coarse stage and the kept bands when the player comes back, is the next part.
+
+**Why not trade edges (Schwarz) instead of ordering**, which needs no order and so has a fixed, small set of dependencies? Along divides it needs a second forming (2.5 times the cost) and across rivers four (5 times); and since the long phases cannot be pieced either way (the oracle above), it would only replace the finer level's ordering, at twice the cost, for a smaller set of pieces to form round an inland site. It stays the fallback where an order cannot be kept.
+
+![Seed 1's continent, 48 km of its coast: the pieces formed round two windows (green), the coarse stage where none is formed (grey), without and with the cuts drawn](../real/continent-seed1-map.jpg)
+
+![A detail, 19 km across: the cuts follow the divides](../real/continent-seed1-map-detail.jpg)
+
+### The time and memory budget
+
+**Entering**, measured under a load of 4 to 10 from other agents:
+
+| | Time |
+|---|---|
+| Seed 7, the default (its continent stays a record) | 2.29 to 2.36 s, against 2.27 to 2.30 for `main`, three rounds alternating |
+| Seed 1, its first run: the plates, then the coarse stage | 2.7 s, then 394 to 403 s (two formed at once; 283 s alone before a fault in its seed was fixed, below) |
+| Seed 1 once the coarse stage is kept: no piece lies within 16 km of the start (its coast is 54 km off) | 4.6 s |
+| Seed 1, two windows on its coast: 11 pieces, 2,110 km² of their own land | 595 s (18 to 95 s a piece), on one thread with helpers |
+
+*(Extrapolated:)* at that rate, 0.28 s a km² of a piece's own land, all of seed 1's continent at full detail is about 3 h on one thread; pieces that do not wait on each other could form side by side, which is not built.
+
+**The coarse stage of the whole world.** Measured on seed 1's nearest landmass, 37,555 km²: 251 to 260 s on the main thread with helpers. *(Extrapolated:)* the largest landmasses (317,000 to 380,000 km²) take 35 to 42 min the same way and 8 to 16 GB as a square grid over their extent. So **the goal of the whole world's coarse stage within 10 minutes is not met today**, and the game forms a landmass's coarse stage only where it is under 8 minutes and 2.5 GB (seeds 1, 2, 4, 5 and 10 of the eleven); elsewhere it stays a record, as before, and start-up says why. What meets it without touching the land's quality is engineering, not a different land: the flood that routes the water (two thirds of a 64 m step) made to run in parallel over tiles with exact results (Barnes 2016), the erosion run by drainage basin in parallel, and a grid of 25 bytes a land cell kept in tiles of land only. *(A guess:)* 3 to 6 min and about 2 GB for 380,000 km² on twelve cores.
+
+**Memory**, measured: the coarse stage's grid of seed 1's landmass, 36 million cells of 64 m on a square 385 km across, holds about 3.6 GB in the game (4.4 GB at most while it forms; its file 941 MB). A finished piece is kept whole at 16 m on a square round its own land, about 590 MB for each 1,000 km² of that square, which on seed 1's coast is 2 to 5 times the piece's own land (and up to 12 times for its long, narrow basins on a first forming): 9 pieces held the game at 18.6 GB at its peak on that first forming. The bands kept between pieces were estimated at 1 MB a km of cut; they held up to 520 MB while 11 pieces formed, and a piece's bands are let go once no piece still to form reads them. So the pieces are formed within 16 km of the start before entering and 40 km beside play, not the 64 km of the islands, until they are kept on disk.
+
+### No seam, and one world whatever the order
+
+Four windows of 8 km on seed 1's coast, each across cuts between two or three pieces, measured as the experiments were. No land formed whole can be set against them at this size, so a step across a cut is set against the land's own steps away from any cut, at the same slope (the experiment's measure: a step over the largest step elsewhere at that slope):
+
+| | a, 9.2 km² of land, to 51 m | b, 15.1 km², to 187 m | c, 29.1 km², to 145 m | d, 30.3 km², to 187 m |
+|---|---|---|---|---|
+| Cut on land | 7.2 km | 15.3 km | 30.6 km | 22.0 km |
+| Closed hollow over 2 m, near a cut or away from one | none | none | none | none |
+| Steps across the cut: 99th percentile, largest | 8.4, 9.1 m | 40.3, 50.3 m | 12.2, 19.9 m | 40.3, 50.3 m |
+| Steps more than 300 m from any cut | 8.3, 32.1 m | 25.7, 76.9 m | 9.4, 47.4 m | 15.7, 53.0 m |
+| Steps across the cut over the largest elsewhere at that slope | 0 of 251 | 0 of 531 | 0 of 1,023 | 1 of 760 |
+
+Windows b and d cross the same cut, along a steep crest. **One world whatever the order**: two runs that reached the windows' 11 pieces in opposite orders formed every one of them bit for bit the same (a hash of each piece's land), and the windows the same byte for byte. The first run of that check, on the way, failed: a piece held whatever cells of formed pieces lay in its window, so it depended on which had happened to form first; a piece now holds only its neighbours earlier in the order, and keeps its band for every later neighbour, whatever is formed. **The coarse stage is formed the same every time**: two formings of seed 1's, side by side, byte for byte. Its first version was not: the landmass's record was bound before it had its seed, so the forming thread drew its noise and phases from seed 0 and the helper threads from the landmass's, and each cell depended on which thread took it.
+
+### Weak points
+
+- **The coast near seed 1's start is far from the real stretches.** Measured as the real windows were (windows c and d, 29 and 30 km² of land, to 145 and 187 m), 75% of its land is under 50 m (Bōsō, Kii and Muroto 14 to 24%), its largest basin at the sea is small (5.3 and 4.6 km², real 11.8 to 26.2), its streams sparse in one (0.94 km a km², real 1.75 to 1.83) and its faces over 60° too many in the other (0.8%, real 0.0). Its shore's height, rise and slope, its crests and its closed hollows are within theirs. The history makes this coast an old, low margin that hardly rises, which the sea's last rise drowned into rias; the three real stretches rise fast on a forearc. Whether a low drowned coast should be judged against other real land, or the history should raise this one, is a question for the owner.
+- **One landmass, on one seed, formed in part**: 11 of seed 1's 171 pieces. The coarse stage of the largest landmasses (seven seeds of eleven) is not formed: 35 to 42 min today.
+- **No whole to judge the pieces against** at a continent's size: the seam is judged by closed hollows and steps against the land's own away from cuts, and by E2 on a 32 km ridge, where the whole could be formed.
+- **The rebound's square (24 km) is a guess**, and only the coarse stage rebounds.
+- **Square windows**: a piece forms on a square round its own land and 6 km of margin, 4 to 13 times its own land (a 70 km² piece on 30 km, a 251 km² one on 49 km), which is the cost of time and memory above.
+- **What reads past a cut**: the coast's exposure and a mouth's silt read the held band and the coarse stage beyond it, as in the experiment (approximate there); every field of the land is worked out on the piece's own window with its earlier neighbours' land in it, but its margin's land where its later neighbours are not yet formed; the climate is one for the landmass.
+- **The judge was Claude**, by the figures and the pictures.
+
+## The experiment of 2026-11-15
+
 Written 2026-11-15 for step 21 of Phase 2 (`foundations.md` section 8). Step 20 (`seam-test.md`) showed that basin pieces with their divides pinned to the 64 m solution leave a seam the map shows. The owner decided the same day that the world has continents where the plates make them, and that their story must not cost the land its quality. So the question here is how to form land larger than one region at 16 m with no seam, at a cost the game can bear, without making the land duller or less real.
 
 The experiment ran in a scratch copy of `src/`: a new file of 655 lines, about 160 changed lines in `land.odin` and 30 in `main.odin`, and about 400 lines of Python to measure. None of it is merged. Every number here was measured, unless it is marked as a guess or an inference.

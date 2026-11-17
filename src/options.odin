@@ -57,6 +57,9 @@ import "core:strings"
 //                   world's map and the comparison grids into dir, say what it made, and exit (plates.odin)
 //   plates-why=x,z  print what happened through that history at this point in the world (as for why), and exit
 //   place=N         look at named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
+//   site=x,z        an expedition site: the landmass's pieces within `near` km of this point in the world are
+//                   formed before entering, as the start's are, and the camera is put 60 m over it
+//   continent=0     leave the land larger than a region a record, as before step 21, even where it can be formed
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground; with over, the view from above
 //                   panned toward its picture's top at `speed` m/s
@@ -116,6 +119,9 @@ Options :: struct {
 	plates:        string,
 	plates_why:    [2]f64,
 	has_plates_why: bool,
+	site:          [2]f64,
+	has_site:      bool,
+	continent:     bool,
 	over:          [2]f64,
 	has_over:      bool,
 	span, tilt:    f64,
@@ -143,7 +149,7 @@ Options :: struct {
 	}
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING, continent = true}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -212,6 +218,8 @@ options :: proc() -> Options {
 		case "survey": o.survey = true
 		case "place": ok = numbers(value, ",", v[:1]); o.place = int(v.x)
 		case "show":  o.show = true
+		case "site":  ok = numbers(value, ",", o.site[:]); o.has_site = true
+		case "continent": ok = numbers(value, ",", v[:1]); o.continent = v.x != 0
 		case "dwarves": ok = numbers(value, ",", v[:1]); o.dwarves = v.x
 		case "orders": o.orders = value
 		case "send":  o.send = true

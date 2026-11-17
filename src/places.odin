@@ -180,7 +180,7 @@ places_make :: proc() {
 		add(.Slide, f.at, land_at(land.z[0], n, f.at.x, f.at.y), f.size/1e6, f.reach*clamp(1 - f.age/500, 0.05, 1), i, landslide.rock, fmt.aprintf("a slide %s years ago that took %.1f million m³ of %v from the hillside", years(f.age), f.size/1e6, landslide.rock))
 	case .Cave, .Notch:   // looked at from the sea before its mouth
 		at, by := f.at, f64(1e9)
-		for dy in -6..=6 do for dx in -6..=6 do if c := land_cell(f.at.x, f.at.y) + dy*n + dx; g.sea[c] && math.hypot(f64(dx), f64(dy)) < by do at, by = middle_of(g, c), math.hypot(f64(dx), f64(dy))
+		for dy in -6..=6 do for dx in -6..=6 do if c := land_cell(f.at.x, f.at.y) + dy*n + dx; c >= 0 && c < n*n && g.sea[c] && math.hypot(f64(dx), f64(dy)) < by do at, by = middle_of(g, c), math.hypot(f64(dx), f64(dy))   // a piece of a landmass may have one by its grid's edge
 		add(.Cave if f.kind == .Cave else .Notch, at, 3, f.reach, 10 if f.kind == .Cave else 3, i, rock_at(land_cell(f.at.x, f.at.y), 2), fmt.aprintf("a %s %.0f m long, cut by the swell", PLACE_ROWS[.Cave if f.kind == .Cave else .Notch].what, f.reach))
 	case .Shelter:
 		add(.Shelter, f.at, f.level, f.reach, 3, i, rock_at(land_cell(f.at.x, f.at.y), f.level + 1), fmt.aprintf("a rock shelter %.0f m long under %v", f.reach, rock_at(land_cell(f.at.x, f.at.y), f.level + 1)))
@@ -242,7 +242,7 @@ places_make :: proc() {
 			if s > long - own && s < long + 32 do continue   // the place itself
 			if s >= long + 32 && !skyline do return
 			q := e + d*s/long
-			if max(abs(q.x), abs(q.z)) > region.size/2 - LAND_CELL do return
+			if o := land_corner(); q.x < o.x + LAND_CELL || q.z < o.y + LAND_CELL || q.x > o.x + land_side() - LAND_CELL || q.z > o.y + land_side() - LAND_CELL do return
 			clear = min(clear, q.y - f64(screen(q.x, q.z)))
 			if clear < 3 do return
 		}
@@ -255,7 +255,7 @@ places_make :: proc() {
 		for a in 0..<24 do for r in 0..<5 {
 			bearing, d := f64(a)*math.PI/12, 1000 + 250*f64(r)
 			x, z := c.at.x + d*math.sin(bearing), c.at.y - d*math.cos(bearing)
-			if max(abs(x), abs(z)) > region.size/2 - 64 do continue
+			if o := land_corner(); x < o.x + 64 || z < o.y + 64 || x > o.x + land_side() - 64 || z > o.y + land_side() - 64 do continue
 			e := [3]f64{x, f64(max(land.z[0][land_cell(x, z)], 0) + row.eye), z}
 			clear := sight(e, t, f64(max(row.own, c.size/2)), row.skyline)
 			if clear < 3 do continue
@@ -384,7 +384,7 @@ places_mark :: proc(pixels: []u8, size: int) {
 	digits := DIGITS
 	for p, i in places {
 		c := candidates[p.c]
-		px, py := int((c.at.x + region.size/2)*f64(size)/region.size), int((c.at.y + region.size/2)*f64(size)/region.size)
+		px, py := int((c.at.x - land_corner().x)*f64(size)/land_side()), int((c.at.y - land_corner().y)*f64(size)/land_side())
 		label := fmt.tprintf("%d", i + 1)
 		for dy in -9..=9 do for dx in -7..=8 + 12*len(label) do if x, y := px + dx, py + dy; x >= 0 && y >= 0 && x < size && y < size {
 			r, ink := dx*dx + dy*dy, -1
