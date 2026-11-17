@@ -477,7 +477,7 @@ screen_draw :: proc(s: ^Screen) {
 			c := it.colour if it.colour.a > 0 else L.chalk
 			if hot && it.act != .None do c = {L.brass.r, L.brass.g, L.brass.b, c.a}   // words that lead somewhere, under the pointer
 			if .Shadow in it.state {   // words over the world itself
-				for o in ([4][2]f32{{-1, 0}, {1, 0}, {0, 1}, {0, 2}}) do text_block(it, r.x + o.x*edge, r.y + o.y*edge, {0, 0, 0, 150})
+				for o in ([4][2]f32{{-1, 0}, {1, 0}, {0, 1}, {0, 2}}) do text_block(it, r.x + o.x*edge, r.y + o.y*edge, {0, 0, 0, u8(150*int(c.a)/255)})   // the shadow fades with its words, or a fading line turns black
 			}
 			text_block(it, r.x, r.y, c)
 		case .Button:
