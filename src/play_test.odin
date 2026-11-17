@@ -115,7 +115,8 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	click(s, "ground.up")
 	testing.expect_value(t, s.a.level, level + 1)
 
-	// The hand: a block of the ground picked up says what it is, why, and the column it lies in.
+	// The hand: a block of the ground picked up says what it is in one line, and opens no card (I2);
+	// asked for, by its key or a second click, the card says why, with the column it lies in.
 	top := ground_top(s.a.at.x, s.a.at.z)
 	block := [3]i32{i32(math.floor(s.a.at.x)), top - 12, i32(math.floor(s.a.at.z))}
 	testing.expect(t, screen_says(&screen, .Hand) == "", "the hand holds something before anything is picked")
@@ -123,8 +124,22 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	frame(s)
 	title := mat_words(block_made(s.w, block))
 	testing.expect_value(t, strings.to_lower(says("hand.title"), context.temp_allocator), title)
-	testing.expect(t, strings.contains(says("hand.sub"), "11 m under the ground"), "the card does not say where the block lies")
-	testing.expect(t, len(says("hand.line")) > 20, "the card does not say why")
+	testing.expect(t, strings.contains(says("hand.sub"), "11 m under the ground"), "the line does not say where the block lies")
+	testing.expect(t, screen_find(&screen, "hand.line") == nil && screen_find(&screen, "hand.bed") == nil, "a click opened the card unasked")
+	testing.expect(t, strings.contains(screen_says(&screen, .Hand), "More [I]"), "the line has no way to its card")
+	shut := screen_find(&screen, "hand").rect
+	testing.expectf(t, shut.h <= 48, "the hand shut is %v pixels high: more than a line", shut.h)
+	key(s, .I)
+	testing.expect(t, play.card_open && len(says("hand.line")) > 20, "the card asked for does not say why")
+	hand_pick({block = block + {1, 0, 0}, ok = true, exact = true}, {0.5, 0.5})
+	frame(s)
+	testing.expect(t, !play.card_open && screen_find(&screen, "hand.line") == nil, "a click on other ground left the card open")
+	hand_pick({block = block + {1, 0, 0}, ok = true, exact = true}, {0.5, 0.5})
+	frame(s)
+	testing.expect(t, play.card_open, "a second click on the thing in the hand did not open its card")
+	hand_pick({block = block, ok = true, exact = true}, {0.5, 0.5})
+	key(s, .I)
+	testing.expect(t, play.card_open && len(says("hand.line")) > 20, "the card asked for does not say why")
 	testing.expect(t, screen_find(&screen, "hand.bed") != nil, "a block of ground shows no column")
 	testing.expect(t, s.a.marked && s.a.mark[0] == block, "the thing in the hand is not marked in the world")
 	testing.expect(t, strings.contains(screen_says(&screen, .Hand), "Put it down [Esc]"), "the hand's way out has no key on it")
@@ -148,16 +163,30 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	key(s, .D)
 	testing.expect_value(t, says("tool.title"), "Dig")
 	testing.expect(t, bar.tool == .Dig && play.hand.kind == .None && .Held in screen_find(&screen, "orders.dig").state, "D did not put the digging tool in the hand")
-	testing.expect(t, strings.contains(screen_says(&screen, .Hand), "A room") && strings.contains(screen_says(&screen, .Hand), "A stair down"), "the digging tool does not show its choices")
+	testing.expect(t, strings.contains(screen_says(&screen, .Hand), "Dig out") && strings.contains(screen_says(&screen, .Hand), "Stair down") && strings.contains(screen_says(&screen, .Hand), "Deep"), "the digging tool does not show its choices")
+	card := screen_find(&screen, "hand").rect
 	s.a.mark, s.a.marked, s.a.marking = {block, block + {4, 0, 6}}, true, true
+	bar.dragged = true
 	frame(s)
-	testing.expect(t, strings.has_prefix(says("tool.mark"), "A room 5 by 7, two blocks high: 70 blocks to dig"), says("tool.mark"))
-	play_act(.Plan, int(Plan.Stair))
+	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 2 deep: 70 blocks"), says("tool.says"))   // twelve blocks under the ground: too deep for a way in to be found for it
+	s.a.mark = {block + {0, 8, 0}, block + {4, 8, 6}}
 	frame(s)
-	testing.expect(t, strings.has_prefix(says("tool.mark"), "A stair of 7 steps down"), says("tool.mark"))
+	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 2 deep: ") && strings.contains(says("tool.says"), "With the way in"), says("tool.says"))   // four under it: the order digs its own way in
+	s.a.mark = {block, block + {4, 0, 6}}
+	frame(s)
+	testing.expect(t, screen_find(&screen, "hand").rect == card, "the tool's card moved when its line changed")
+	play_act(.Deep, 3)
+	frame(s)
+	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 3 deep: "), says("tool.says"))
+	play_act(.Plan, int(Plan.Down))
+	frame(s)
+	testing.expect(t, strings.has_prefix(says("tool.says"), "7 steps down, heading south"), says("tool.says"))
+	testing.expect(t, screen_find(&screen, "hand").rect == card, "the tool's card moved when its choice changed")
+	play_act(.Plan, int(Plan.Out))
+	play_act(.Deep, 2)
 	s.a.marking, s.a.marked = false, false
 	testing.expect(t, click(s, "orders.build") && bar.tool == .Build, "a click on Build did not take the tool")
-	testing.expect(t, strings.contains(screen_says(&screen, .Hand), "none in store: dig rock for it"), "building does not say what is in store")
+	testing.expect(t, strings.contains(screen_says(&screen, .Hand), "Stone 0") && strings.contains(screen_says(&screen, .Hand), "Timber 0"), "building does not say what is in store")
 	for module in 3..=8 {   // the tallest card, at every scale
 		play.scale = module
 		frame(s)
@@ -277,7 +306,10 @@ the_dwarves_are_on_screen :: proc(t: ^testing.T) {
 	testing.expect_value(t, says("hand.title"), name)
 	testing.expect_value(t, says("hand.sub"), fmt.tprintf("%s, %s", TRADES[first.trade].name, number_words(first.age)))
 	testing.expect(t, strings.contains(says("hand.line"), "Standing on the ground above the landing"), "the card does not say what the dwarf is doing")
+	testing.expect(t, !strings.contains(screen_says(&screen, .Hand), "Self") && strings.contains(screen_says(&screen, .Hand), "More [I]"), "a dwarf's short card shows its tabs unasked")
+	key(s, .I)
 	testing.expect(t, strings.contains(screen_says(&screen, .Hand), "* Trade") && strings.contains(screen_says(&screen, .Hand), "Self"), "the card has not the tabs for what exists")
+	key(s, .I)
 	testing.expect(t, screen_find(&screen, "hand.need") == nil, "a dwarf that needs nothing says it needs something")
 	testing.expect(t, math.hypot(s.a.at.x - seen.dwarves[0].at.x, s.a.at.z - seen.dwarves[0].at.z) > 1, "the view was at the dwarf before it was sent there")
 	click(s, "crowd.kept")

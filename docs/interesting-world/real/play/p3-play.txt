@@ -1,0 +1,187 @@
+# P3 played from the player's seat (open-decisions.md, 2026-11-16): each case as the owner met it.
+#   build/odincraft --play=docs/interesting-world/real/play/p3-play.txt --dwarves=60
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+view over=2680,-1755 span=70 tilt=50 turn=0 cut=off
+key 3
+
+print 1. Fell: the pointer on a log, then a click on that log, on leaves and on a limb
+key T
+move 819 715
+shot out/play/p3-01-fell-hover.png
+click 819 715
+click 1500 700
+click 800 1180
+shot out/play/p3-02-fell-clicks.png
+say
+timer
+until done 300
+
+print 2. Fell: a drag across a stand of ten trees on a slope, from above at a tilt
+view over=2658,-1736 span=64 tilt=45
+move 500 380
+press
+move 1200 700
+move 2000 1150
+move 2250 1300
+shot out/play/p3-03-fell-drag.png
+say
+release
+wait 0.4
+shot out/play/p3-04-fell-marked.png
+timer
+until done 600
+shot out/play/p3-05-fell-done.png
+
+print 3. Dig out: a drag on flat ground; then the order's card, and part of it taken back
+view over=2690,-1750 span=36 tilt=55
+key D
+move 1480 880
+shot out/play/p3-06-dig-hover.png
+press
+move 1540 920
+move 1600 960
+shot out/play/p3-07-dig-flat-drag.png
+say
+release
+key space
+key esc
+click 1500 900
+shot out/play/p3-08-order-card.png
+say
+key esc
+key X
+move 1560 900
+press
+move 1640 1000
+shot out/play/p3-09-remove-drag.png
+say
+release
+key esc
+key space
+timer
+until done 400
+shot out/play/p3-10-dig-flat-done.png
+
+print 4. Dig out: a drag from the foot of a rise into the hillside
+view over=2695,-1781 span=40 tilt=55 turn=180
+key D
+move 1280 420
+press
+move 1400 600
+move 1560 840
+shot out/play/p3-11-dig-hill-drag.png
+say
+release
+wait 0.4
+shot out/play/p3-12-dig-hill-marked.png
+timer
+until done 600
+view cut=2
+shot out/play/p3-13-dig-hill-done-cut.png
+
+print 5. Dig out: at a cut level, a room marked inside the hill, which gets its own way in
+view cut=3
+move 1900 1100
+shot out/play/p3-14-dig-inside-hover.png
+press
+move 2050 1200
+move 2200 1300
+shot out/play/p3-15-dig-inside-drag.png
+say
+release
+wait 0.4
+view cut=2
+shot out/play/p3-16-dig-inside-marked.png
+timer
+until done 900
+shot out/play/p3-17-dig-inside-done.png
+
+print 6. Build: a timber wall, a stone wall, and two timber blocks side by side
+view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
+key B
+part Timber*
+move 1060 760
+press
+move 1180 760
+move 1260 760
+shot out/play/p3-18-build-timber-drag.png
+say
+release
+part Stone*
+drag 1060 900 1060 1040
+part Timber*
+part tool.high
+drag 1150 620 1210 620
+timer
+until done 400
+shot out/play/p3-19-walls-above.png
+key esc
+foot 2693,1.4,-1743 305,-12
+shot out/play/p3-20-walls-afoot.png
+
+print 7. Dig: a stair down, then marks beside and above it with the dwarves in and about it
+view over=2690,-1750 span=36 tilt=55 cut=off
+key D
+part Stair down
+move 1150 880
+press
+move 1150 980
+move 1150 1080
+shot out/play/p3-21-stair-drag.png
+say
+release
+timer
+until done 300
+shot out/play/p3-22-stair-done.png
+part Dig out
+click 1090 920
+click 1220 920
+drag 1070 980 1100 1080
+wait 0.3
+shot out/play/p3-23-beside-marked.png
+timer
+until done 300
+shot out/play/p3-24-beside-done.png
+key esc
+
+print 8. the cut and the dwarves: a pit dug, the party sent into it, and the cut over their heads, at their chests and at their feet
+view over=2681,-1747 span=22 tilt=55 turn=0 cut=off
+key D
+drag 1080 600 1480 860
+timer
+until done 300
+key M
+click 1280 730
+run 10
+shot out/play/p3-25-pit-whole.png
+view cut=5
+shot out/play/p3-26-cut-over-heads.png
+view cut=3
+shot out/play/p3-27-cut-at-chests.png
+view cut=2
+shot out/play/p3-28-cut-at-feet.png
+under
+
+print 9. the hand: ten clicks about the world, then the card asked for, a click on bare ground, and a second click on a tree
+view over=2685,-1752 span=60 tilt=50 cut=off
+key 1
+click 700 500
+click 900 620
+click 1500 500
+click 1700 900
+click 1300 300
+click 600 1000
+click 1900 700
+click 1000 1100
+click 1400 760
+click 600 1000
+shot out/play/p3-29-ten-clicks.png
+say
+key I
+shot out/play/p3-30-card-asked.png
+click 1500 500
+shot out/play/p3-31-click-on-ground.png
+click 600 1000
+click 600 1000
+shot out/play/p3-32-second-click.png

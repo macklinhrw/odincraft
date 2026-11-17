@@ -43,7 +43,9 @@ Each is cheap to adopt now and expensive to change once screens stand on it.
 
 **I2. One grammar: select, read, order.**
 
-Click a thing and it is selected: a dwarf, a block, a tree, a stream, a store, a workshop. Its card opens in the hand: a line saying what it is, a line saying what it is doing or why it is there, then tabs for depth, then what can be done with it. Orders that are not about one thing (dig here, build that) begin from the orders bar, and their options appear in the same hand. A click on empty air clears the hand.
+Click a thing and it is selected: a dwarf, a block, a tree, a stream, a store, a workshop. **The hand then says what it is in one line, and opens no card**: a click is not a question. The card is asked for, by its key (I), by More on the line or by a second click on the thing: a line saying what it is, a line saying what it is doing or why it is there, then tabs for depth, then what can be done with it. It stays open or shut as the player last left it, and a click on bare ground shuts it. A dwarf, and ground with an order on it, show a short card at once, since that is what the click was for: who it is and what it is doing, or what is left of the work and what it waits for. Orders that are not about one thing (dig here, build that) begin from the orders bar, and their options appear in the same hand; with a tool held a click opens nothing. A click on empty air clears the hand.
+
+*Changed on 2026-11-16, after the owner played it:* "whenever i click on anything i get that bottom left popup menu which is annoying, i might want to see it sometimes but everytime i click anything it shows." RimWorld's inspect pane is 432 by 165 pixels and opens only on a thing selected, never on bare ground, which it reads out as a line of text under the pointer with no click (`../interesting-world/notes/colony-sim-reference.md`, section 8).
 
 *Evidence.* Tarn Adams on the Steam dwarf sheet: "The full data and options can be found in tabs, with a short summary at the top level", and it "can still run unpaused". "Hovering over anything on the map will now show a tool-tip popup."
 
@@ -152,9 +154,9 @@ At 2560 × 1440, standard scale. `interface-wireframes.html` draws it, with a no
 - **Top left: the hold and the clock.** The hold's name, the date in words, and one control for the clock: paused at its hour, or running at one of three speeds. Clicking the date opens the chronicle at today.
 - **Top middle: the dwarves.** Those in trouble first, each with a mark on its picture (a diamond for trouble, a triangle for caution); then those the player keeps in view; then the count of all, which opens the list (I14). Click selects, a second click goes there, and with Shift a click adds to the hand. *Built; section 11.*
 - **Top right: the stores, then what is wrong.** What the hold is living on, in a few words, each beside a block of the thing. Under it the alerts, worst first, each saying the problem and going to its cause.
-- **Left, under the hold: messages.** The last few things that happened, newest lowest, fading after a while.
-- **Left, lower: the hand.** The selected thing's card, or the tool's choices. Above the orders bar, so an order and its target are a short reach apart.
-- **Bottom left: the orders bar.** Dig, Fell, Gather, Build, Store, Remove. Each shows its key. Choosing one puts its choices in the hand and changes the pointer; the world shows what will be marked before the click is let go. Escape or the right button puts it down.
+- **Left, under the hold: messages.** The last few things that happened, newest lowest, each one short line, fading after a while. The whole of it is said beside the pointer that rests on it, and a click leads to where it happened.
+- **Left, lower: the hand.** The selected thing in a line, its card when asked for, or the tool's choices (I2). Above the orders bar, so an order and its target are a short reach apart.
+- **Bottom left: the orders bar.** Dig, Fell, Gather, Build, Store, Remove. Each shows its key. Choosing one puts its tool in the hand: its name, its few choices as buttons, and one live line. The world shows what will be marked, under the pointer before the press and through the drag. Escape puts it down. *Built and put right; section 12.*
 - **Right, middle: the ground here.** The column of the beds under the view's middle, named, with the cut marked on it. Dragging the mark, or its keys, moves the cut. Under it: lenses, the land's fields painted over it (rock, water in the ground, rain, livable ground, and later ore and danger), which exist today as `--overlay=`; and the walk, into first person where the view looks.
 - **Bottom right: the lists.** Dwarves, Work, Stores, Places, Chronicle, Menu. A list opens as a panel down the right side, a third of the screen wide, with the world still in view. Only the world's map and the menu take the whole screen, and they pause the game.
 
@@ -276,6 +278,23 @@ The design stood: who needs you, then who you keep, then the count; a list that 
 - **A list stands where the alerts do**, so they are not drawn while one is open; the Dwarves list by need says the same. Sections 3 and 4 give both the top right.
 - **The alerts narrow to leave the dwarves their count**, down to a least width. On a screen 2,560 wide that is enough up to 150%. At 175% with an alert standing the top is the count alone, with no pictures; at 200% it has no room at all, and two alerts are deep enough to take the ground's panel's place until they clear, though its keys still work. At 175% and 200% with a list open the top has no room for the dwarves either. The lists' button and F1 lead to them at every size.
 - **E in first person takes the dwarf aimed at in the hand**, and where none is aimed at the block, as Y does. It is a row of `BINDS`. G and the right click are still P2's, for P3.
+
+## 12. What putting the orders right changed
+
+The owner played P3 on 2026-11-16 and called it terrible (`../open-decisions.md`). These are the places where the screen now differs from sections 3, 4 and 11, and why. Each was played by script from the player's seat before it was kept (`../plan.md`, "P3, as put right"; pictures in `../interesting-world/real/play/`).
+
+- **The hand has two states** (I2, above): a line, and the card asked for. The line is a block of the thing, its name, where it lies, and More with its key. A dwarf's short card is its picture, name, trade and age, what it is doing and what it waits for, with Follow, Keep and Put down; its tabs are the card's.
+- **A tool's card is its name, its choices and one live line**, and is as high whatever the line says. P3's card held three paragraphs and grew and shrank with what the pointer was on, so its buttons moved from under the pointer as it came to them: a click on a choice after a click on the world missed. Nothing on a card may move because the pointer moved.
+- **The choices are named for what the player gets.** Dig: Dig out, with how deep (1 to 4); Stair down; Stair up. Build: Wall, with how high (1 or 2); Floor; Stair up; of stone or timber, each with what is in store written on it. What each leaves is the tip on its button.
+- **The live line** says, with nothing pressed, what a click here would do ("Basalt: hard rock, 10 s a block. Here: 2 blocks."; "Tabu tree, 7 m: 3 timber."), and through a drag what the drag would ("5 by 9, 2 deep: 93 blocks. With the way in, 3 of them."). It is the hold's own rule asked of the blocks the frame draws.
+- **A drag is flat.** It is a rectangle on the level of the block the press took, its far corner where the pointer's ray comes down on that level; a stair and a wall are lines. A tool takes the ground under the pointer through any leaf or limb, and a click on any part of a tree fells that tree.
+- **What is marked shows where the player looks**: the blocks to dig tinted, the ground over them tinted faintly where they lie under a hillside, a tree to fell with a brass band at its foot and a brass cap on its crown, which is what shows from above.
+- **An order's card is short**: what it is, how much is left and how many dwarves are at it, what it waits for, and Go there, Take it back, More.
+- **Remove trims**: it takes back the marks in the columns dragged over and no others, and says how many before the button is let go.
+- **Messages are one line.** "Marked to dig: 93 blocks, 3 of them the way in." "Dug: 93 blocks, 65 basalt." Who took up what, each tree felled and each arrival are the log's alone. They fade after eight seconds.
+- **The cut draws a dwarf whole or not at all** (ADR 0007): one whose feet stand under the level keeps its head, one standing at the level or over it is not drawn, and its picture at the top still leads to it.
+- **The clock's speeds are 1, 3 and 6 times**, the buttons' names as they were.
+- **The key I** asks for the card and shuts it. It is a row of `BINDS`.
 
 ## Sources
 

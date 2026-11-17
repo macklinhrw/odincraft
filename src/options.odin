@@ -24,7 +24,7 @@ import "core:strings"
 //                   it is marked and said, and with why its ground explained; cursor=x,y,x,y marks the
 //                   box of blocks between two points
 //   why             with cursor: print what the block under the pointer is and why its ground is so
-//   pace=N          how fast the world's clock runs: 0 paused, or 1, 2 or 4 times (default 1)
+//   pace=N          how fast the world's clock runs: 0 paused, or 1, 3 or 6 times (default 1)
 //   first           first person, at the start
 //   pos=x,y,z  above=x,height,z (over the ground)  look=yaw,pitch (degrees)  hour=0..24  fly  size=WxH
 //   day=N           day of the year, 0 on 1 January (default: the first fair day from 80, the March
@@ -72,7 +72,7 @@ import "core:strings"
 //   scale=percent   its size, from 75 to 200 in steps of 25 (default: by the picture's height, 100 at 1,440 pixels)
 //   tool=name       a tool in the hand: dig, fell, build, send or remove (bar.odin); with cursor=x,y,x,y the
 //                   box is its mark, shown as it is while the button is down, and with send the order is given
-//   plan=words      with tool: what is dug or built, and of what: room, stair, wall, floor, timber
+//   plan=words      with tool: what is dug or built, and of what: out, stair-down, stair-up, wall, floor, stair, timber
 //   select=x,y      as if that pixel of the picture had been clicked: the thing under it is in the hand
 //   tab=name        with select: the card's depth shown (rock, ground, plants, near, world, or the thing's own)
 //   list=name       that list open (dwarves, places); row=N chooses the Places list's Nth named place, which takes the view there
@@ -86,6 +86,9 @@ import "core:strings"
 //   lessons         the one-line lessons shown, as to someone who has learned none
 //   tell=words      a message; alert=words an alert (begin it with ? for a caution)
 //   say             with shot: print what the screen says, area by area
+//   play=file       play the game with no window by a script of what a player's hand does: pointer moves, presses,
+//                   drags and keys, through the code a real pointer and keyboard go through, with pictures taken
+//                   where it asks (script.odin)
 
 Options :: struct {
 	pos:           [3]f64,
@@ -144,6 +147,7 @@ Options :: struct {
 	has_select:    bool,
 	tab, list, lens, tell, alert, group, find: string,
 	who, keep:     [dynamic]int,
+	play:          string,
 	}
 
 options :: proc() -> Options {
@@ -207,7 +211,7 @@ options :: proc() -> Options {
 		case "bare":  o.bare = true
 		case "first": o.first = true
 		case "pace":
-			ok = numbers(value, ",", v[:1]) && (v.x == 0 || v.x == 1 || v.x == 2 || v.x == 4)
+			ok = numbers(value, ",", v[:1]) && (v.x == 0 || v.x == 1 || v.x == 3 || v.x == 6)
 			o.pace = int(v.x)
 		case "cursor":
 			o.has_cursor, o.cursor_box = true, numbers(value, ",", o.cursor[:])
@@ -245,6 +249,7 @@ options :: proc() -> Options {
 			}
 		case "lens":  o.lens = value
 		case "tell":  o.tell = value
+		case "play":  o.play = value
 		case "alert": o.alert = value
 		case:         ok = false
 		}

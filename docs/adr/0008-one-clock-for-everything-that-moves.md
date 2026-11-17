@@ -5,7 +5,7 @@ The world's time is one count of seconds (`Clock`, `clock.odin`), stepped each f
 ## Consequences
 
 - **A new thing that moves takes the world's time, never the wall clock.** The dwarves' world (`plan.md`, section 6) steps by the same count, on its own thread, and the same seed and orders must give the same events at any speed.
-- **The speeds are 1, 2 and 4.** The water steps thirty times a second of the world's time and at most twice a frame, so four times is as fast as it can follow at sixty frames a second. A faster speed needs a water step that can be skipped or shared out.
+- **The speeds are 1, 3 and 6**, which are RimWorld's (`TickManager`; `interesting-world/notes/colony-sim-reference.md`, section 5), since the owner found four times a snail's pace for a hold at work (2026-11-16). The water steps thirty times a second of the world's time and at most twice a frame, so at sixty frames a second it follows up to four times and at six runs a third behind the dwarves: a pool fills a little slower than they dig. A water step that can be skipped or shared out would close that.
 - **The date and the hour are not the clock's yet.** A picture's day and hour are set by options and keys, so two pictures can be compared. Days and seasons that pass (P4) will move them from this clock.
 - **A picture's animals are posed from `--after`, not from the clock**, as before, so two runs show the same ones.
 - A key or a panel pauses the world and sets its speed by writing the clock's two fields.

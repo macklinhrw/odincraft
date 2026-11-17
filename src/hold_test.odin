@@ -160,7 +160,7 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 		if testing.expect(t, far < max(i32), "a tree of the canopy stands within 40 m of the room") {
 			order(t, played, &text, now, "fell %d %d %d %d %d %d", wood.x + ox - 8, wood.base, wood.z + oz - 8, wood.x + ox + 8, wood.base, wood.z + oz + 8)
 		}
-		order(t, played, &text, now, "dig room %d %d %d %d %d %d", lo.x, floor, lo.z, hi.x, floor + 1, hi.z)
+		order(t, played, &text, now, "dig out %d %d %d %d %d %d", lo.x, floor, lo.z, hi.x, floor + 1, hi.z)
 		run_until(played, &now, 6000, idle)
 		for m in played.marks do testing.expectf(t, m.work == .Fell, "every block of the room is dug: %v is left, waiting because %s", m.at, WAITS[m.wait])
 		stone, _ := store_of(&played.store, .Stone)
@@ -176,7 +176,7 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 		door := room.front + room.across*2
 		for side in ([2][2]i32{{0, 1}, {3, 4}}) {
 			a, b := room.front + room.across*side[0], room.front + room.across*side[1]
-			order(t, played, &text, now, "build wall %s %d %d %d %d %d %d", STUFFS[wall], a.x, floor - 1, a.y, b.x, floor - 1, b.y)
+			order(t, played, &text, now, "build wall %s %d %d %d %d %d %d", STUFFS[wall], a.x, floor - 1, a.y, b.x, floor, b.y)
 		}
 		run_until(played, &now, 9000, idle)
 		for m in played.marks do testing.expectf(t, m.work == .Fell, "the roof and the walls are built: %v is left, waiting because %s", m.at, WAITS[m.wait])

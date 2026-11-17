@@ -86,14 +86,14 @@ dwarf_name :: proc(f: Facts) -> string {
 }
 
 // One box of a body, turned about a pivot by `swing` round the axis across the body, as a leg or an arm swings.
-limb :: proc(out: ^[dynamic]Box, feet: [3]f32, R: matrix[3, 3]f32, at, half: [3]f32, upper, under: u32, pivot: [3]f32 = {}, swing: f32 = 0) {
+limb :: proc(out: ^[dynamic]Box, feet: [3]f32, R: matrix[3, 3]f32, at, half: [3]f32, upper, under: u32, pivot: [3]f32 = {}, swing: f32 = 0, whole := true) {
 	c, m := at, linalg.MATRIX3F32_IDENTITY
 	if swing != 0 {
 		m = linalg.matrix3_rotate_f32(swing, [3]f32{1, 0, 0})
 		c = pivot + m*(at - pivot)
 	}
 	a := R*m
-	append(out, Box{feet + R*c, f32(upper), a*[3]f32{half.x, 0, 0}, f32(under), a*[3]f32{0, half.y, 0}, 0, a*[3]f32{0, 0, half.z}, 0})
+	append(out, Box{feet + R*c, f32(upper), a*[3]f32{half.x, 0, 0}, f32(under), a*[3]f32{0, half.y, 0}, 0, a*[3]f32{0, 0, half.z}, feet.y if whole else 0})
 }
 
 // The axes of a body heading `bearing` (radians from north), `scale` times its drawn size: right, up and forward.

@@ -74,7 +74,7 @@ FISH_FAR :: 40     // and no fish, which under water shows little past 20
 
 // One box as the GPU takes it (vs_box, shaders.metal): its middle from the eye and its three half
 // axes, with the colours and the depth of water over it in the spare places.
-Box :: struct { centre: [3]f32, upper: f32, x: [3]f32, under: f32, y: [3]f32, wet: f32, z: [3]f32, _: f32 }
+Box :: struct { centre: [3]f32, upper: f32, x: [3]f32, under: f32, y: [3]f32, wet: f32, z: [3]f32, feet: f32 }   // feet: the height the body it is of stands at, from the eye: the cut draws such a body whole or not at all. 0: cut where the cut falls
 Haunt :: struct { row, feature, n: int, at, out: [2]f64, a, b, y, nest: f32 }   // a bird's home: where it circles, how wide and high, and a nest
 Fauna :: struct {
 	barrier: []f32, over: []i32,   // on each land cell: the tallest fall between it and the sea, and that fall

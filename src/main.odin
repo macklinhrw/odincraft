@@ -188,7 +188,8 @@ main :: proc() {
 		opt.day, opt.hour, math.to_degrees(math.asin(sun_dir(12, opt.day).y)), daylight, cover, base, ", forced by --weather" if opt.weather.x >= 0 else "")
 	// A run that only takes a picture or measures opens no window and takes no focus: it draws
 	// unseen, at the size and pace it would have on a display.
-	unseen := (opt.shot != "" || opt.bench > 0) && !opt.show
+	if opt.play != "" do script_read(opt.play)
+	unseen := (opt.shot != "" || opt.bench > 0 || script.on) && !opt.show
 	// A window is opened only for a person: one asked for by --show, or a run started from a terminal.
 	// A script or an agent that forgets --shot or --bench is told so, and nothing appears on the owner's screen.
 	if !unseen && !opt.show && !posix.isatty(posix.STDIN_FILENO) {
@@ -221,7 +222,7 @@ main :: proc() {
 	}
 	if opt.has_over do a.at, a.yaw = {opt.over.x, 0, opt.over.y}, 0
 	if opt.has_turn do a.yaw = math.to_radians(opt.turn)
-	clock := Clock{speed = 2 if opt.pace == 4 else max(opt.pace - 1, 0), paused = opt.pace == 0}
+	clock := Clock{speed = 2 if opt.pace == 6 else 1 if opt.pace == 3 else 0, paused = opt.pace == 0}
 	hold_enter(&p, &a, &opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
 	islands_form(others[soon:], 3, .Low, false)
 	hour := opt.hour
@@ -248,6 +249,7 @@ main :: proc() {
 		seconds += dt
 		append(&intervals, f32(dt))
 		dt = min(dt, 0.1)
+		if script.on do dt = SCRIPT_FRAME   // a script's frame is a sixtieth of a second however long it took to draw
 
 		pw, ph: i32   // the picture's size in pixels, and the window's in the points the pointer is told in
 		points: [2]i32
@@ -258,8 +260,18 @@ main :: proc() {
 
 		break_block, place_block := false, false
 		shot := ""
-		e: sdl.Event
-		for sdl.PollEvent(&e) {
+		// The hand's events, and with a script playing the script's (script.odin): both go through the one loop.
+		events := make([dynamic]sdl.Event, context.temp_allocator)
+		polled: sdl.Event
+		for sdl.PollEvent(&polled) do append(&events, polled)
+		say_now, under_now := false, false
+		if script.on {
+			ended: bool
+			shot, say_now, under_now, ended = script_frame(&events, &a, &p, &afoot, idle_frames > 3, seconds, play.ratio)
+			if ended do running = false
+			g.hurry = script.hurry
+		}
+		for &e in events {
 			if play_event(&e) do continue   // the interface's: a key that is one of its rows, or the pointer on a panel
 			#partial switch e.type {
 			case .QUIT:
@@ -342,13 +354,14 @@ main :: proc() {
 		} else {
 			pointer := [2]f32{0.5, 0.5}   // in a run with no window, the middle, or where the options put it
 			if unseen && opt.has_cursor do pointer = {f32(opt.cursor[0])/f32(pw), f32(opt.cursor[1])/f32(ph)}
-			if !unseen {
+			if script.on do pointer = {script.pointer.x/f32(pw), script.pointer.y/f32(ph)}
+			else if !unseen {
 				mx, my: f32
 				_ = sdl.GetMouseState(&mx, &my)
 				pointer = {mx/f32(max(points.x, 1)), my/f32(max(points.y, 1))}
 			}
 			above_point(&a, w, eye, pitch, aspect, pointer)
-			hit, before, aiming = a.under.block, a.under.before, a.under.ok && a.shown && (!unseen || opt.has_cursor)
+			hit, before, aiming = a.under.block, a.under.before, a.under.ok && a.shown && (!unseen || opt.has_cursor || script.on)
 			if opt.cursor_box {
 				one := a.under
 				above_point(&a, w, eye, pitch, aspect, {f32(opt.cursor[2])/f32(pw), f32(opt.cursor[3])/f32(ph)})
@@ -404,7 +417,8 @@ main :: proc() {
 		// The interface's parts for this frame, with the pointer where it is: nowhere while the mouse turns the head, or in a picture with no --cursor.
 		at := [2]f32{-1, -1}
 		if unseen && opt.has_cursor do at = {f32(opt.cursor[0]), f32(opt.cursor[1])}
-		if !unseen && !(afoot && captured) {
+		if script.on do at = script.pointer if !afoot else {-1, -1}
+		else if !unseen && !(afoot && captured) {
 			mx, my: f32
 			_ = sdl.GetMouseState(&mx, &my)
 			at = {mx, my}*play.ratio
@@ -413,15 +427,28 @@ main :: proc() {
 		if unseen && opt.tool != "" && !afoot {   // a tool in the hand, as --tool= asks, the cursor's box its mark
 			for row, t in TOOL_ROWS do if strings.equal_fold(row.name, opt.tool) do bar.tool = t
 			for c in DIG_CHOICES do if bar.tool == .Dig && strings.contains(opt.plan, PLANS[c.plan]) do bar.dig = c.plan
-			for c in BUILD_CHOICES do if bar.tool == .Build && strings.contains(opt.plan, PLANS[c.plan]) do bar.build = c.plan
+			for c in BUILD_CHOICES do if bar.tool == .Build && strings.has_prefix(opt.plan, PLANS[c.plan]) do bar.build = c.plan
 			if strings.contains(opt.plan, "timber") do bar.stuff = .Timber
 			bar.posed = opt.cursor_box
+			if bar.posed && bar.tool != .Fell && bar.tool != .Send {   // as a drag lies: flat on the level it began on, and a line where the tool draws one
+				a.mark[1].y = a.mark[0].y
+				if tool_line() {
+					if abs(a.mark[1].x - a.mark[0].x) >= abs(a.mark[1].z - a.mark[0].z) do a.mark[1].z = a.mark[0].z
+					else do a.mark[1].x = a.mark[0].x
+				}
+				bar.press, bar.dragged = Pick{block = a.mark[0], ok = true}, true
+			}
 			a.marking = bar.posed && a.marked   // as while the button is down
 		}
 		listed := sdl.GetPerformanceCounter()
 		play_frame(f32(pw), f32(ph), at, dt, hour, opt.day, eye, yaw, pitch, fov, boxes)
 		append(&listing, f32(f64(sdl.GetPerformanceCounter() - listed)/frequency))
-		if shot == opt.shot && shot != "" && opt.say do play_say()
+		script_parts()
+		if shot == opt.shot && shot != "" && opt.say || say_now do play_say()
+		if under_now {
+			if a.under.ok do fmt.printfln("script: the pointer is on the block at %d, %d, %d: %v", a.under.block.x, a.under.block.y, a.under.block.z, block_made(w, a.under.block))
+			else do fmt.println("script: nothing is under the pointer")
+		}
 		view := View {
 			eye = eye, yaw = yaw, pitch = pitch, hour = hour, day = opt.day, weather = opt.weather, seconds = f32(clock.seconds),
 			target = hit, has_target = aiming, crosshair = shot == "", boxes = boxes,
