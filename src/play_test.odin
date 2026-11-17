@@ -43,7 +43,7 @@ stage_make :: proc(s: ^Stage) {
 frame :: proc(s: ^Stage, pointer := [2]f32{-1, -1}) {
 	above_update(&s.a, 1.0/60, {}, 0, 0, 0, false)
 	s.eye, s.pitch, _ = above_camera(&s.a, 2560.0/1440)
-	play_frame(2560, 1440, pointer, 1.0/60, 9.5, 95, s.eye, s.a.yaw, s.pitch, ABOVE_FOV, nil)
+	play_frame(2560, 1440, pointer, 1.0/60, 9.5, 95, date_at(watch.clock), s.eye, s.a.yaw, s.pitch, ABOVE_FOV, nil)
 }
 
 // Press a part as the pointer does: the left button down and up on its middle.
@@ -89,11 +89,11 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 
 	// Top left: the place, the date, and the clock, which a click and its key both work.
 	testing.expect(t, says("place.title") != "", "the place has no name")
-	testing.expect_value(t, says("place.date"), "16th of spring")
-	testing.expect_value(t, says("clock.pause"), "Running at 09:30")
+	testing.expect_value(t, says("place.date"), fmt.tprintf("%s, 1st of spring", isle_name(0)))
+	testing.expect_value(t, says("clock.pause"), "Running at 08:00")
 	testing.expect_value(t, screen_find(&screen, "clock.pause").key, "Space")
 	testing.expect(t, click(s, "clock.pause") && s.clock.paused, "a click on the clock did not pause it")
-	testing.expect_value(t, says("clock.pause"), "Paused at 09:30")
+	testing.expect_value(t, says("clock.pause"), "Paused at 08:00")
 	key(s, .SPACE)
 	testing.expect(t, !s.clock.paused, "Space did not let the clock go on")
 	click(s, "clock.fastest")
@@ -168,10 +168,7 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	s.a.mark, s.a.marked, s.a.marking = {block, block + {4, 0, 6}}, true, true
 	bar.dragged = true
 	frame(s)
-	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 2 deep: ") && strings.contains(says("tool.says"), "With the way in"), says("tool.says"))   // twelve blocks under the ground: a stair is found for it
-	s.a.mark = {block + {0, 8, 0}, block + {4, 8, 6}}
-	frame(s)
-	testing.expect(t, strings.has_prefix(says("tool.says"), "5 by 7, 2 deep: ") && strings.contains(says("tool.says"), "With the way in"), says("tool.says"))   // four under it: the order digs its own way in
+	testing.expect(t, says("tool.says") == "5 by 7, 2 deep: 70 blocks.", says("tool.says"))   // twelve blocks under the ground: what was dragged and no block besides, no way in with it
 	s.a.mark = {block, block + {4, 0, 6}}
 	frame(s)
 	testing.expect(t, screen_find(&screen, "hand").rect == card, "the tool's card moved when its line changed")
@@ -198,6 +195,26 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	play.scale = 0
 	key(s, .ESCAPE)
 	testing.expect(t, bar.tool == .None && !play.menu, "Escape did not put the tool down")
+	// A stockpile is taken whole by a click on its ground: its card says how large it is and what lies
+	// in it by kind, and gives its three buttons; it is put down when its ground is no stockpile's.
+	{
+		zs := &watch.seen
+		append(&zs.zones, Zone_Seen{id = 3, takes = .All, cells = 4, full = 2})
+		append(&zs.zone_boxes, Tint{block, block + {1, 0, 1}, 3})
+		append(&zs.piles, Pile_Seen{block + {0, 1, 0}, .Basalt, 8, true}, Pile_Seen{block + {1, 1, 0}, .Basalt, 5, true}, Pile_Seen{block + {1, 1, 1}, .Wood, 3, true})
+		play.card_open = false
+		hand_take({kind = .Zone, block = block, lo = block, hi = block})
+		frame(s)
+		testing.expect(t, bar.zone == 3 && says("zone.title") == "Stockpile" && says("zone.size") == "4 places, 2 in use", says("zone.size"))
+		hand := screen_says(&screen, .Hand)
+		testing.expect(t, strings.contains(hand, "Basalt") && strings.contains(hand, "13") && strings.contains(hand, "Timber") && strings.contains(hand, "Make larger") && strings.contains(hand, "Remove"), hand)
+		testing.expect(t, click(s, "zone.grow") && bar.tool == .Store && bar.takes == .All, "Make larger did not take up Store")
+		key(s, .ESCAPE)
+		hand_take({kind = .Zone, block = block, lo = block, hi = block})
+		clear(&zs.zones); clear(&zs.zone_boxes); clear(&zs.piles)
+		frame(s)
+		testing.expect(t, play.hand.kind == .None && bar.zone == -1, "a stockpile that is gone stayed in the hand")
+	}
 	hand_pick({block = block, ok = true, exact = true}, {0.5, 0.5})
 	frame(s)
 
@@ -271,7 +288,7 @@ hold_shown :: proc(s: ^Stage, n: int) {
 	clear(&watch.seen.dwarves)
 	for f, i in party {
 		at := s.a.at + {f64(i%10)*2 - 9, 0, f64(i/10)*2 + 4}
-		append(&watch.seen.dwarves, Seen{who = f, was = at, at = at, doing = .Waiting})
+		append(&watch.seen.dwarves, Seen{who = f, was = at, at = at, doing = .Waiting, want = {.Drink = 1, .Food = 1, .Sleep = 1, .Warm = 1}})
 	}
 	watch.seen.place = "ground above the landing"
 	play.greeted, play.alerted = false, {}
@@ -382,7 +399,7 @@ the_dwarves_are_on_screen :: proc(t: ^testing.T) {
 	// The Dwarves list: a row each; it groups by need, by trade or by place, and finds by name, trade or place.
 	key(s, .F1)
 	testing.expect_value(t, says("list.title"), "Dwarves")
-	testing.expect(t, count("list.row") == 7 && says("list.group.name") == "Waiting for word", "the list has not a row for each dwarf, grouped by need")
+	testing.expect(t, count("list.row") == 7 && says("list.group.name") == "Idle", "the list has not a row for each dwarf, grouped by need")
 	testing.expect(t, strings.has_prefix(says("list.row.doing"), "Waiting for word at"), "a row does not say what its dwarf is doing")
 	testing.expect_value(t, says("list.row.how"), "well")
 	click(s, "list.row")   // every row takes the view to its dwarf and puts it in the hand
@@ -483,3 +500,138 @@ the_dwarves_are_on_screen :: proc(t: ^testing.T) {
 	}
 	play.scale, play.list = 0, .None
 }
+
+// What each dwarf feels is on the screen (plan.md, P4; foundations/interface.md, section 17): its
+// three meters on its card, the word for how it is in the list, who is dying among those who need
+// the player, the dead counted out of the hold and told as an alert, and the two tools that feed it.
+the_dwarves_feel :: proc(t: ^testing.T) {
+	s := new(Stage)
+	stage_make(s)
+	hold_shown(s, 7)
+	seen := &watch.seen
+	// A thirsty dwarf walking to water needs nobody: its card says so, and its meter says thirsty.
+	seen.dwarves[0].want[.Drink], seen.dwarves[0].caring, seen.dwarves[0].care, seen.dwarves[0].doing = 0.3, true, .Drink, .Walking
+	frame(s)
+	testing.expect(t, screen_says(&screen, .Wrong) == "", "a thirsty dwarf on its way to water raised an alert")
+	dwarf_take(0)
+	frame(s)
+	testing.expect_value(t, count("hand.feel"), 4)
+	testing.expect_value(t, says("hand.feel"), "thirsty")
+	testing.expect_value(t, says("hand.line"), "Walking to fresh water, to drink.")
+	// One with nothing left to drink is first among those who need the player, with the trouble sign, and an alert says so.
+	seen.dwarves[1].want[.Drink] = 0
+	frame(s)
+	testing.expect(t, count("crowd.need") == 1 && strings.has_suffix(says("crowd.need"), "parched"), "a parched dwarf is not first at the top")
+	testing.expect(t, strings.contains(screen_says(&screen, .Wrong), "is parched"), "no alert says a dwarf is parched")
+	// One that looked for food and found none needs the player too, less gravely.
+	seen.dwarves[2].lacks = {.Food}
+	frame(s)
+	testing.expect_value(t, count("crowd.need"), 2)
+	// The list groups by what they are at, and says how each is.
+	seen.dwarves[3].doing, seen.dwarves[3].caring, seen.dwarves[3].care = .Sleeping, true, .Sleep
+	key(s, .F1)
+	frame(s)
+	groups := make([dynamic]string, context.temp_allocator)
+	hows := make([dynamic]string, context.temp_allocator)
+	for it in screen.items {
+		if it.id == "list.group.name" do append(&groups, it.text)
+		if it.id == "list.row.how" do append(&hows, it.text)
+	}
+	testing.expectf(t, len(groups) == 3 && groups[0] == "Need you" && groups[1] == "Seeing to themselves" && groups[2] == "Idle", "the list's groups are %v", groups)
+	testing.expectf(t, len(hows) == 7 && hows[0] == "parched" && hows[1] == "no food" && hows[2] == "thirsty" && hows[3] == "asleep" && hows[4] == "well", "the list says how each dwarf is: %v", hows)
+	key(s, .F1)
+	// A death: the hold is one fewer, the death stands as an alert until it is looked at, and the card says what it died of.
+	seen.dwarves[1].doing, seen.dwarves[1].died, seen.dwarves[1].died_on = .Dead, .Drink, 30000
+	frame(s)
+	testing.expect_value(t, says("crowd.count"), "6")
+	testing.expect(t, strings.contains(screen_says(&screen, .Wrong), fmt.tprintf("%s has died of thirst.", who_name(1))), "a death raised no alert")
+	testing.expect(t, !strings.contains(screen_says(&screen, .Wrong), "is parched"), "the dead still need the player")
+	dwarf_take(1)
+	frame(s)
+	testing.expect(t, strings.has_prefix(says("hand.line"), "Dead of thirst since the 3rd of spring"), "a dead dwarf's card does not say what it died of and when")
+	testing.expect_value(t, count("hand.feel"), 0)
+	hand_take({})
+	// The stores say how long the food lasts, and the orders bar has the two tools that bring it.
+	seen.tick, seen.food_days = 100, 2.2
+	seen.store[.Shii_Nuts] = 30
+	frame(s)
+	testing.expect_value(t, says("stores.food"), "Food for about two days")
+	testing.expect_value(t, says("stores.kind"), "Shii nuts")
+	testing.expect(t, screen_find(&screen, "orders.gather") != nil && screen_find(&screen, "orders.fish") != nil, "the orders bar has no Gather or no Fish")
+	key(s, .G)
+	frame(s)
+	testing.expect_value(t, says("tool.title"), "Gather")
+	key(s, .N)
+	frame(s)
+	testing.expect_value(t, says("tool.title"), "Fish")
+	key(s, .N)
+	seen.store, seen.food_days = {}, 0
+	// Shelter and warmth (shelter.odin; foundations/interface.md, section 19). A dwarf with no warmth left is
+	// among those who need the player, with the trouble sign; one that found no fire and no roof is
+	// counted in an alert; and the fourth meter says how each is.
+	seen.dwarves[4].want[.Warm], seen.dwarves[4].felt, seen.dwarves[4].wet = 0, 2, 1
+	seen.dwarves[5].want[.Warm], seen.dwarves[5].lacks = 0.3, {.Warm}
+	seen.dwarves[6].want[.Warm], seen.dwarves[6].lacks = 0.3, {.Warm}
+	frame(s)
+	wrong := screen_says(&screen, .Wrong)
+	testing.expect(t, strings.contains(wrong, "is numb with cold") && strings.contains(wrong, "Two dwarves are cold: no fire burns and no roof stands within their reach."), wrong)
+	dwarf_take(4)
+	frame(s)
+	feels := make([dynamic]string, context.temp_allocator)
+	for it in screen.items do if it.id == "hand.feel" do append(&feels, it.text)
+	testing.expectf(t, len(feels) == 4 && feels[3] == "numb with cold", "the fourth meter says how cold a dwarf is: %v", feels)
+	hand_take({})
+	for &d in seen.dwarves do d.want[.Warm], d.lacks = 1, {}
+	// The weather stands under the date; the orders bar has Sleep; Build has Fire; and Shelter is among the lenses.
+	play.sky = Weather{cover = 0.9, rain = 0.6, air = 8.4, wind = 9.5}
+	frame(s)
+	testing.expect(t, strings.has_prefix(says("place.weather"), "Rain, 8 °C, strong wind from the"), says("place.weather"))
+	testing.expect(t, screen_find(&screen, "orders.sleep") != nil, "the orders bar has no Sleep")
+	key(s, .Z)
+	frame(s)
+	testing.expect_value(t, says("tool.title"), "Sleep")
+	key(s, .B)
+	frame(s)
+	testing.expect(t, click_words(s, "tool.choice", "Fire") && bar.build == .Fire, "Build has no Fire to choose")
+	bar.build = .Wall
+	key(s, .B)
+	key(s, .L)
+	frame(s)
+	testing.expect(t, click_words(s, "lens.row", "Shelter") && play.lens >= 0 && LENSES[play.lens].blocks, "Shelter is not among the lenses")
+	frame(s)
+	testing.expect(t, strings.contains(screen_says(&screen, .Lenses), "indoors: dry, out of the wind"), screen_says(&screen, .Lenses))
+	play.lens, play.lenses = -1, false
+	// A sleeping place is taken whole by a click on its ground, as a stockpile is, and says how it is sheltered; a fire says how it burns.
+	{
+		block := [3]i32{i32(math.floor(s.a.at.x)), 3, i32(math.floor(s.a.at.z))}
+		append(&seen.zones, Zone_Seen{id = 5, cells = 5, sleep = true, roofed = 4, walled = 3})
+		append(&seen.zone_boxes, Tint{block, block + {2, 0, 1}, 5})
+		play.card_open = false
+		hand_take({kind = .Zone, block = block, lo = block, hi = block})
+		frame(s)
+		hand := screen_says(&screen, .Hand)
+		testing.expect(t, says("zone.title") == "Sleeping place" && strings.contains(hand, "Indoors: dry and out of the wind") && strings.contains(hand, "Open to the sky") && strings.contains(hand, "Fewer places than dwarves"), hand)
+		testing.expect(t, click(s, "zone.grow") && bar.tool == .Sleep, "Make larger did not take up Sleep")
+		key(s, .ESCAPE)
+		clear(&seen.zones); clear(&seen.zone_boxes)
+		at := block + {4, 1, 0}
+		append(&seen.fires, Fire_Seen{at = at, fuel = 4.2, lit = true, fed = true, roof = true, walled = true})
+		hand_take({kind = .Fire, block = at, lo = at, hi = at})
+		frame(s)
+		hand = screen_says(&screen, .Hand)
+		testing.expect(t, bar.fire == 0 && says("fire.title") == "Fire" && strings.contains(hand, "Burning: timber for a day and a half.") && strings.contains(hand, "Indoors: it warms 4 steps round it.") && strings.contains(hand, "Let it go out"), hand)
+		seen.fires[0].lit, seen.fires[0].fuel = false, 0
+		frame(s)
+		testing.expect(t, strings.contains(screen_says(&screen, .Hand), "Out: no timber was brought to it in time."), screen_says(&screen, .Hand))
+		testing.expect(t, strings.contains(screen_says(&screen, .Wrong), "A fire is out and no timber lies anywhere"), screen_says(&screen, .Wrong))
+		clear(&seen.fires)
+		frame(s)
+		testing.expect(t, play.hand.kind == .None && bar.fire == -1, "a fire that is gone stayed in the hand")
+	}
+	// The date is the clock's: a day is DAY seconds, the year YEAR_DAYS days, and it begins at LANDS_AT on the 1st of spring.
+	testing.expect_value(t, date_words(date_at(0)), "1st of spring")
+	testing.expect_value(t, date_words(date_at(13*DAY)), "2nd of summer")
+	testing.expect_value(t, date_words(date_at((YEAR_DAYS + 47)*DAY)), "12th of winter, year 2")
+	testing.expect(t, abs(date_at(DAY/2).hour - (LANDS_AT + 12)) < 0.01 && night(23) && night(3) && !night(12), "the hour is not read from the seconds")
+}
+

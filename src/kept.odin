@@ -175,6 +175,12 @@ store_open :: proc(st: ^Store, path: string, n: int) -> bool {
 	return true
 }
 
+// Let go of a coarse stage that was opened: the file is no longer mapped.
+store_close :: proc(st: ^Store) {
+	if len(st.file) > 0 do posix.munmap(raw_data(st.file), c.size_t(len(st.file)))
+	st^ = {}
+}
+
 // A cell's square among those kept, or -1, and its place in the square.
 store_at :: #force_inline proc(st: ^Store, i, j: int) -> (slot, k: int) #no_bounds_check {
 	if i < 0 || j < 0 || i >= st.n || j >= st.n do return -1, 0
@@ -185,6 +191,12 @@ store_at :: #force_inline proc(st: ^Store, i, j: int) -> (slot, k: int) #no_boun
 store_z :: proc(st: ^Store, i, j: int) -> f32 #no_bounds_check {
 	slot, k := store_at(st, i, j)
 	return st.z[slot][k] if slot >= 0 else MASS_SHELF
+}
+
+// The land a cell of the coarse stage drains, m²; none in the sea.
+store_area :: proc(st: ^Store, i, j: int) -> f32 #no_bounds_check {
+	slot, k := store_at(st, i, j)
+	return st.area[slot][k] if slot >= 0 && st.next[slot][k] != NEXT_SEA else 0
 }
 
 // The piece a cell is of, or -1.

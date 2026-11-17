@@ -33,7 +33,7 @@ timer
 until done 600
 shot out/play/p3-05-fell-done.png
 
-print 3. Dig out: a drag on flat ground; then the order's card, and part of it taken back
+print 3. Dig out: a drag on flat ground, two deep, whose last block is left standing as the step out; then the order's card, and part of it taken back
 view over=2690,-1750 span=36 tilt=55
 key D
 move 1480 880
@@ -80,10 +80,11 @@ until done 600
 view cut=2
 shot out/play/p3-13-dig-hill-done-cut.png
 
-print 5. Dig out: at a cut level, a room marked inside the hill, which gets its own way in
+print 5. Dig out: at a cut level, a room marked inside the hill with no way to it: what was dragged is marked and no block besides; the dwarves dig what they can reach from the ground over it, and the alert says no dwarf has a way to the rest
 view cut=3
 move 1900 1100
 shot out/play/p3-14-dig-inside-hover.png
+say
 press
 move 2050 1200
 move 2200 1300
@@ -93,9 +94,12 @@ release
 wait 0.4
 view cut=2
 shot out/play/p3-16-dig-inside-marked.png
-timer
-until done 900
-shot out/play/p3-17-dig-inside-done.png
+run 60
+shot out/play/p3-17-dig-inside-waits.png
+say
+key X
+drag 1850 1050 2250 1350
+key D
 
 print 6. Build: a timber wall, a stone wall, and two timber blocks side by side
 view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
@@ -185,3 +189,124 @@ shot out/play/p3-31-click-on-ground.png
 click 600 1000
 click 600 1000
 shot out/play/p3-32-second-click.png
+
+print 10. Fell: a click on the trunk of a young tree under taller ones (the owner's, at 2670, -1726), which is felled as any tree is
+# Played whole, case 2's drag has felled this tree already and the tool says so; played alone from here it is felled by this click.
+key esc
+view over=2670,-1726 span=30 tilt=55 turn=0 cut=off
+key T
+move 1280 720
+wait 0.3
+shot out/play/p3-33-young-tree.png
+say
+click 1280 720
+timer
+until done 200
+key esc
+shot out/play/p3-34-young-tree-felled.png
+say
+
+print 11. a timber wall laid across where that tree stood: the tree stays felled (it grew back through the wall when the owner built one)
+view over=2670,-1726 span=30 tilt=55 turn=0 cut=off
+key B
+part Timber*
+drag 1180 720 1380 720
+timer
+until done 400
+key esc
+shot out/play/p3-36-wall-on-a-stump.png
+say
+
+print 12. Fell: a drag across the hill of scrub south-west of the landing (the owner's: trees marked, every dwarf waiting), worked to its last bush
+view over=2659,-1763 span=211
+key 3
+key T
+move 820 420
+press
+move 1200 900
+move 1620 1320
+wait 0.3
+shot out/play/p3-37-hill-drag.png
+say
+release
+timer
+until done 1500   # a night falls in it since the dwarves sleep (P4): felling goes on at dawn
+shot out/play/p3-38-hill-cleared.png
+move 820 420
+press
+move 1200 900
+move 1620 1320
+wait 0.3
+say
+release
+key esc
+
+print 13. Dig: the pointer on one block of a pit's wall lights that block and no other (the owner's: one block under the pointer and two lit)
+# (No Escape here: the tool was put down above, and a second Escape opens the menu, in which D leaves the game. Found on 2026-11-16: with it, cases 13 to 15 were played at the front door.)
+view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
+key D
+part tool.deep
+move 1480 880
+press
+move 1540 920
+move 1600 960
+release
+timer
+until done 400
+view over=2693,-1747 span=14 tilt=50
+move 1250 730
+wait 0.4
+shot out/play/p3-39-one-block-lit.png
+say
+key esc
+
+print 14. marks side by side, and the view moved: three digs and two stockpiles dragged against each other read as two shapes, each with one outline, and stay lit when the view moves off, pulls back to 160 m and to 700 m, and turns (the owner's: marked ground vanishing as the camera moves, and boxes that did not join)
+view over=2690,-1750 span=30 tilt=55 turn=0 cut=off
+key 1
+key D
+drag 1380 800 1560 900
+drag 1560 840 1700 980
+drag 1300 900 1500 1020
+key S
+drag 1100 1000 1300 1100
+drag 1300 1040 1420 1180
+key esc
+wait 0.6
+shot out/play/p3-40-marks-joined.png
+view over=2700,-1740 span=30 tilt=55
+wait 0.3
+shot out/play/p3-41-marks-view-moved.png
+view over=2690,-1750 span=160 tilt=55
+wait 0.5
+shot out/play/p3-42-marks-pulled-back.png
+view over=2690,-1750 span=700 tilt=55
+wait 1.5
+shot out/play/p3-43-marks-far.png
+view over=2690,-1750 span=30 tilt=30 turn=120
+wait 0.5
+shot out/play/p3-44-marks-turned.png
+view over=2690,-1750 span=30 tilt=55 turn=0 cut=2
+wait 0.4
+shot out/play/p3-45-marks-cut.png
+view cut=off
+
+print 15. a wood felled, and the view pulled back to 1,500 m and 2,600 m across: it stays felled (the owner's: "when i zoom out a bit, the trees reappear")
+view over=2640,-1740 span=130 tilt=55 turn=0 cut=off
+key 3
+key T
+move 300 250
+press
+move 1500 900
+move 2300 1250
+wait 0.3
+release
+timer
+until done 900
+key esc
+key 1
+view over=2640,-1740 span=1500 tilt=55
+wait 4
+shot out/play/p3-46-felled-from-1500.png
+view over=2640,-1740 span=2600 tilt=55
+wait 4
+shot out/play/p3-47-felled-from-2600.png

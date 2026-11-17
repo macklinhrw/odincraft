@@ -22,10 +22,14 @@ struct Frame {
     float4 mark;        // xyz: the low corner of the marked box of blocks, from the eye; w: 1 when there is one
     float4 mark_size;   // xyz: its size in blocks
     float4 lens;        // xy: the eye from the corner of the island a lens is painted over, z: one over that island's side, w: 1 while a lens is on (play.odin)
-    float4 tint[48];    // boxes of ground marked for the dwarves (bar.odin): xyz the low corner from the eye; w: 0 none, 1 to be dug, 2 the box being dragged, 3 to be taken back, 4 the order in the hand, 5 the ground over what is being dragged, 6 over what is marked, 7 a stockpile's ground
+    float4 marked;      // xyz: the eye from the low corner of the map of marked blocks, w: 1 while anything is on it (bar.odin)
+    float4 tint[48];    // boxes of ground over a mark (bar.odin): xyz the low corner from the eye; w: 0 none, 5 the ground over what is being dragged, 6 over what is marked
     float4 tint_size[48];
     float4 live;        // the interface's brass and its cinnabar, lit
     float4 wrong;
+    float4 rain;        // x: how hard rain falls over the view, 0 to 1, under 0 for snow; y: how wet the ground is; z: how far the wind leans it; w: seconds, for it to fall by
+    float4 kinds[4];    // the colours of ground marked to sleep on, of ground under a roof and of ground indoors, lit (bar.odin)
+    float4 fire[8];     // the fires that burn: xyz from the eye, w: how far its light reaches, 0 for none (shelter_view.odin)
 };
 
 struct Draw { float4 origin; };   // xyz: chunk origin, w: cell size in metres
@@ -64,6 +68,26 @@ static float vnoise(float2 p) {
 
 static float daylight(float3 sun) { return smoothstep(-0.12, 0.2, sun.y); }
 
+// How much of the sun's own light comes through: under rain the land is lit by its sky alone.
+static float through_rain(constant Frame &f) { return 1.0 - 0.85 * saturate(f.kinds[3].x * 2.5); }
+
+// The light of the fires on a face: warm, falling away to nothing at each fire's reach, and all
+// but drowned by the day.
+static float3 fire_glow(float3 rel, float3 N, constant Frame &f) {
+    float3 sum = float3(0.0);
+    for (int i = 0; i < 8; i++) {
+        float4 fire = f.fire[i];
+        if (fire.w <= 0.0) break;
+        float3 d = fire.xyz - rel;
+        float far = length(d);
+        if (far >= fire.w) continue;
+        float fall = 1.0 - far / fire.w;
+        float flicker = 0.86 + 0.14 * sin(f.sun.w * 9.0 + float(i) * 2.3) * sin(f.sun.w * 5.3 + 1.7);
+        sum += float3(1.0, 0.52, 0.2) * (fall * fall * (0.3 + 0.7 * saturate(dot(N, d / max(far, 0.01)))) * flicker);
+    }
+    return sum * (1.5 - 1.25 * daylight(f.sun.xyz));
+}
+
 static float3 sun_light(float3 sun) {
     float3 c = mix(float3(1.0, 0.42, 0.18), float3(1.0, 0.95, 0.88), smoothstep(0.0, 0.4, sun.y));
     return c * 1.7 * smoothstep(-0.04, 0.12, sun.y);
@@ -85,8 +109,11 @@ static float3 sky_color(float3 d, float3 sun, float cover) {
 
 static float3 sky_ambient(float3 N, float3 sun, float cover) {
     float day = daylight(sun);
-    float3 sky = mix(float3(0.008, 0.011, 0.024), mix(float3(0.44, 0.55, 0.76), float3(0.62, 0.64, 0.68), cover), day);
-    float3 ground = mix(float3(0.003, 0.004, 0.006), float3(0.27, 0.25, 0.20), day);
+    // At night the land is lit as by a full moon, far brighter than a true one against the day: a hold
+    // is kept through the night, and the player must see it (plan.md, P4). RimWorld's night keeps about
+    // a third of the day's light.
+    float3 sky = mix(float3(0.18, 0.22, 0.32), mix(float3(0.44, 0.55, 0.76), float3(0.62, 0.64, 0.68), cover), day);
+    float3 ground = mix(float3(0.07, 0.085, 0.12), float3(0.27, 0.25, 0.20), day);
     return mix(ground, sky, N.y * 0.5 + 0.5);
 }
 
@@ -328,6 +355,66 @@ static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<fl
     return c == 3u ? mix(lit, 1.0, smoothstep(0.75, 0.9, dist / r)) : lit;
 }
 
+// A block's texel of the map of marked blocks. Its low three bits say what it is marked as: 0 not,
+// 1 to be dug, 2 what the tool would mark, 3 what it would take back, 4 the order in the hand, 5 a
+// stockpile's ground, 6 the stockpile in the hand, 7 a sleeping place's ground, 8 the sleeping place
+// in the hand, 9 ground under a roof and 10 ground indoors (the shelter lens). The second byte's
+// five bits say which of the blocks beside it are open air: east, west, south, north, and over it.
+static uint marked_as(texture3d<float> marks, float3 cell) {
+    if (any(cell < 0.0) || cell.x >= 256.0 || cell.y >= 64.0 || cell.z >= 256.0) return 0u;
+    float2 t = marks.read(uint3(cell)).rg;
+    return uint(round(t.r * 255.0)) | (uint(round(t.g * 255.0)) << 8u);
+}
+
+// The colour a kind of marked ground is lined and tinted with, and how strongly it is tinted.
+static float4 marked_look(uint kind, constant Frame &f) {
+    if (kind == 3u) return float4(f.wrong.rgb, 0.22);
+    if (kind < 5u) return float4(f.live.rgb, kind == 1u ? 0.09 : 0.22);
+    if (kind < 7u) return float4(0.42, 1.25, 1.0, kind == 5u ? 0.2 : 0.42);
+    if (kind < 9u) return float4(f.kinds[0].rgb, kind == 7u ? 0.22 : 0.45);
+    return float4(f.kinds[kind == 9u ? 1 : 2].rgb, kind == 9u ? 0.3 : 0.38);
+}
+
+// A marked block's face: tinted, and lined along a side only where the mark ends there. Across a
+// side the face goes on as the block's own next face, where the block beside it is open air; as
+// the face of the block beside it, level with it; or as the face of the block that stands in front
+// of that one, at the foot of a step. Where the one it goes on as is marked the same there is no
+// line, so marks side by side are one shape, whatever boxes they were given as and however the
+// ground under them steps.
+static float3 marked_face(float3 col, float3 rel, float3 N, float cell_size, constant Frame &f, texture3d<float> marks) {
+    float3 p = rel + f.marked.xyz;            // in the map's blocks
+    float3 cell = floor(p - N * 0.5);
+    uint here = marked_as(marks, cell);
+    uint kind = here & 255u;
+    if (cell_size > 1.5) {                    // far ground stands on cells of two metres and more: the block under or over it may be the one marked
+        kind = max(kind, max(marked_as(marks, cell - N) & 255u, marked_as(marks, cell + N) & 255u));
+        if (kind == 0u) return col;
+        float4 far_look = marked_look(kind, f);
+        return mix(col, far_look.rgb, max(far_look.a, 0.14) + 0.02);
+    }
+    if (kind == 0u || (kind >= 5u && N.y < 0.5)) return col;   // a stockpile, a sleeping place and sheltered ground are their floor: the faces that look up
+    float4 look = marked_look(kind, f);
+    float3 line = look.rgb;
+    float tint = look.a;
+    float3 a = abs(N.x) > 0.5 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);   // the two ways along the face
+    float3 b = abs(N.z) > 0.5 ? float3(0.0, 1.0, 0.0) : float3(0.0, 0.0, 1.0);
+    float3 in_cell = p - cell;
+    float2 at = float2(dot(in_cell, a), dot(in_cell, b));
+    float2 w = max(1.5 * fwidth(at), 0.03);
+    float edge = 0.0;
+    for (int i = 0; i < 4; i++) {
+        float3 side = (i < 2 ? a : b) * ((i & 1) == 0 ? -1.0 : 1.0);
+        uint bit = side.x > 0.5 ? 1u : side.x < -0.5 ? 2u : side.z > 0.5 ? 4u : side.z < -0.5 ? 8u : side.y > 0.5 ? 16u : 0u;
+        if (((here >> 8u) & bit) != 0u) continue;                         // open air beside it: the face goes on round the block's own corner
+        if ((marked_as(marks, cell + side) & 255u) == kind) continue;      // the block beside it is marked the same
+        if ((marked_as(marks, cell + side + N) & 255u) == kind) continue;  // or the one standing in front of that, at the foot of a step
+        float e = i < 2 ? ((i & 1) == 0 ? at.x : 1.0 - at.x) : ((i & 1) == 0 ? at.y : 1.0 - at.y);
+        float wide = i < 2 ? w.x : w.y;
+        edge = max(edge, 1.0 - smoothstep(0.6 * wide, wide, e));
+    }
+    return mix(col, line, max(tint, 0.85 * edge));
+}
+
 // A box of blocks shown on the faces of the blocks inside it: tinted, and lined where they meet
 // the box's sides, the line no thinner than a pixel and a half.
 static float3 outlined(float3 col, float3 rel, float3 N, float4 box, float3 size, float3 line, float tint) {
@@ -346,6 +433,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
                            texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]],
                            texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]], texture2d<float> seen [[texture(3)]],
                            texture2d<float> lens [[texture(4)]], sampler lens_smp [[sampler(4)]],
+                           texture3d<float> marks [[texture(5)]], sampler marks_smp [[sampler(5)]],
                            bool outside [[front_facing]]) {
     uint face = in.info & 7u;
     uint mat = (in.info >> 8u) & 0xFFFFu;
@@ -405,11 +493,13 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     bool turned = dot(N, sun) <= 0.0;
     float3 probe = turned ? in.rel + in.soft * (1.5 * in.cell) : in.rel;
     float shade = cloud_shade(in.rel, f, lifted, smp);   // under a cloud the sky round the sun is dimmed too
-    float lit = ndl > 0.0 && outside ? shadow_at(probe, turned ? in.soft : N, f, shadow_map, shadow_smp) * shade : 0.0;   // only a leaf is seen from inside, and the inside of a crown is in its own shade
+    float lit = ndl > 0.0 && outside ? shadow_at(probe, turned ? in.soft : N, f, shadow_map, shadow_smp) * shade * through_rain(f) : 0.0;   // only a leaf is seen from inside, and the inside of a crown is in its own shade
     float ao = mix(0.5, 1.0, in.ao);
     float sky = 1.0 - float((in.info >> 4u) & 15u) / 15.0;   // the share of the sky a face under a roof sees (mesh.odin); far off, of the sunlight too
+    albedo *= 1.0 - 0.34 * f.rain.y * sky * saturate(N.y + 0.55);   // wet ground is darker, where the sky is over it: under a roof it is dry
     if (f.cut.x < 1e8) sky = 1.0;   // the cut has taken the roof off, for the light as well
     float3 col = albedo * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) * (in.cell > 1.0 ? sky : 1.0) + sky_ambient(in.soft, sun, f.weather.x) * ao * sky * mix(0.7, 1.0, shade));
+    if (f.fire[0].w > 0.0) col += albedo * fire_glow(in.rel, N, f);
 
     // Light lost on the way down through water.
     float depth = f.cam.w - world.y;
@@ -420,11 +510,14 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     if (in.cell < 1.5) {
         col = outlined(col, in.rel, N, f.target, float3(1.0), f.target.w > 1.5 ? float3(2.2, 2.0, 1.2) : float3(0.0), 0.0);
         col = outlined(col, in.rel, N, f.mark, f.mark_size.xyz, float3(1.9, 1.2, 0.25), 0.12);
-        for (int i = 0; i < 48 && f.tint[i].w > 0.5; i++) {
-            float kind = f.tint[i].w;
-            col = outlined(col, in.rel, N, float4(f.tint[i].xyz, 1.0), f.tint_size[i].xyz, kind > 6.5 ? float3(0.42, 1.25, 1.0) : kind > 2.5 && kind < 3.5 ? f.wrong.rgb : f.live.rgb, kind < 1.5 ? 0.09 : kind > 6.5 ? 0.2 : kind > 5.5 ? 0.035 : kind > 4.5 ? 0.13 : 0.22);
+        if (N.y > 0.5) for (int i = 0; i < 48 && f.tint[i].w > 0.5; i++) {   // the ground over a mark: on the faces that look up, and no block's side, which would read as a block marked
+            if (f.tint[i].w > 5.5) {   // over an order's marks: a faint wash and no line, which would box each order by itself
+                float3 local = in.rel - N * 0.5 - f.tint[i].xyz;
+                if (all(local > -0.001) && all(local < f.tint_size[i].xyz + 0.001)) col = mix(col, f.live.rgb, 0.035);
+            } else col = outlined(col, in.rel, N, float4(f.tint[i].xyz, 1.0), f.tint_size[i].xyz, f.live.rgb, 0.13);
         }
     }
+    if (f.marked.w > 0.5) col = marked_face(col, in.rel, N, in.cell, f, marks);   // the blocks marked, at any distance
 
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, cut);
 }
@@ -497,10 +590,11 @@ fragment float4 fs_plant(PlantV in [[stage_in]], constant Frame &f [[buffer(0)]]
     float3 sun = f.sun.xyz;
     float ndl = saturate(dot(in.soft, sun)) * mix(0.55, 1.15, abs(dot(in.facing, normalize(sun.xz + 1e-4))));   // a picture turned to the sun takes more of it, as a block's faces do
     float shade = cloud_shade(in.rel, f, lifted, smp);
-    float lit = ndl > 0.0 ? shadow_at(in.rel, in.soft, f, shadow_map, shadow_smp) * shade : 0.0;
+    float lit = ndl > 0.0 ? shadow_at(in.rel, in.soft, f, shadow_map, shadow_smp) * shade * through_rain(f) : 0.0;
     float ao = mix(0.5, 1.0, in.ao) * mix(0.6, 1.0, saturate(in.up / 0.6));   // darker toward the root, in the plant's own shade
     float sky = 1.0 - float((in.info >> 4u) & 15u) / 15.0;
     float3 col = tex.rgb * (sun_light(sun) * ndl * lit * mix(1.0, ao, 0.45) + sky_ambient(in.soft, sun, f.weather.x) * ao * sky * mix(0.7, 1.0, shade));
+    if (f.fire[0].w > 0.0) col += tex.rgb * fire_glow(in.rel, float3(0.0, 1.0, 0.0), f);
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, a);
 }
 
@@ -555,9 +649,11 @@ fragment float4 fs_box(BoxV in [[stage_in]], constant Frame &f [[buffer(0)]],
     float3 sun = f.sun.xyz;
     float ndl = saturate(dot(N, sun));
     float shade = cloud_shade(in.rel, f, lifted, smp);
-    float lit = ndl > 0.0 ? shadow_at(in.rel, N, f, shadow_map, shadow_smp) * shade : 0.0;
+    float lit = ndl > 0.0 ? shadow_at(in.rel, N, f, shadow_map, shadow_smp) * shade * through_rain(f) : 0.0;
     float3 col = albedo * (sun_light(sun) * ndl * lit + sky_ambient(N, sun, f.weather.x) * mix(0.7, 1.0, shade));
-    col *= exp(-in.wet * float3(0.30, 0.11, 0.08));   // light lost on the way down through water
+    if (f.fire[0].w > 0.0) col += albedo * fire_glow(in.rel, N, f);
+    if (in.wet < 0.0) col = albedo * -in.wet;   // a flame: it shines by itself, so much
+    col *= exp(-max(in.wet, 0.0) * float3(0.30, 0.11, 0.08));   // light lost on the way down through water
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, 1.0);
 }
 
@@ -764,6 +860,29 @@ fragment float4 fs_water(WaterV in [[stage_in]], constant Frame &f [[buffer(0)]]
     col = mix(col, whitish * (0.75 + 0.35 * carried), white);
     alpha = mix(alpha, 0.9, max(white, 0.8 * sheet * saturate(in.kind.y)));
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, alpha);
+}
+
+// Rain falling over the view, or snow: streaks in three depths, leaning with the wind, the more of
+// them the harder it falls. It is laid over the finished picture of the world, under the interface:
+// what a roof keeps off is said by the ground under it staying dry.
+fragment float4 fs_rain(ScreenV in [[stage_in]], constant Frame &f [[buffer(0)]]) {
+    float fall = abs(f.rain.x);
+    bool snow = f.rain.x < 0.0;
+    float2 at = in.position.xy / f.screen.y;
+    float streaks = 0.0;
+    for (int l = 0; l < 3; l++) {
+        float across = (snow ? 46.0 : 34.0) + 24.0 * float(l);   // columns to a screen's height
+        float2 q = float2(at.x + at.y * f.rain.z, at.y);
+        float column = floor(q.x * across);
+        float h = hash21(float2(column, 17.0 * float(l) + 3.0));
+        if (h > 0.25 + 0.75 * fall) continue;
+        float speed = snow ? 0.22 + 0.1 * h : 1.9 + 0.8 * float(l) + 0.7 * h;
+        float along = fract(q.y * (snow ? 3.0 : 1.3 + h) - f.rain.w * speed + 9.0 * h);
+        float len = snow ? 0.035 : 0.16 + 0.14 * h;
+        float across_it = abs(fract(q.x * across) - 0.5);
+        streaks = max(streaks, smoothstep(0.0, len, along) * step(along, len) * (1.0 - smoothstep(snow ? 0.12 : 0.04, snow ? 0.3 : 0.11, across_it)) * (1.0 - 0.25 * float(l)));
+    }
+    return float4(snow ? float3(0.93, 0.95, 0.97) : float3(0.74, 0.8, 0.88), streaks * (snow ? 0.75 : 0.42) * (0.55 + 0.45 * fall));
 }
 
 fragment float4 fs_present(ScreenV in [[stage_in]], constant Frame &f [[buffer(0)]],

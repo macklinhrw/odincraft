@@ -75,10 +75,10 @@ Each step is one change on one branch that the owner can look at, as before. The
 | I-1 (built) | **The interface's ground and the play screen's frame** (`foundations/interface.md`). Text and panels; the screen's four fixed regions; the clock and speeds; the hand, which answers what any block, tree, stream or place is and why; messages; the cut's level, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there | |
 | P2 (built) | **Seven dwarves.** Named, drawn simply, walking the block ground by a path they find. Any one can be asked who it is and what it is doing | Watches them come ashore and follow where they are sent | |
 | The dwarves on screen (built) | **Their place at the top, their list, and several in the hand** (`foundations/interface.md`, I14). Who needs you first, then who you keep in view, then the count of all; a list that finds, groups and folds; alerts that count; messages that lead to their place. Made for a hold that grows | Clicks a dwarf's picture and is taken to her | |
-| I-2 | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
-| E-1 | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
+| I-2 (built, and played) | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
+| E-1 (built, and played) | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
 | P3 (built) | **Orders.** Mark ground to dig, trees to fell, blocks to build. Dwarves take the work themselves. Goods go to a store without being carried at first, as RimWorld's first version did; carrying follows in P5, since Bellwright's makers found that work done in the abstract "didn't feel inspiring" | Has a first room dug and roofed | 2 |
-| P4 | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown | Gets through a first season, or does not | 1 |
+| P4 (built, and played, in two halves: thirst, hunger, sleep, the day and the year, death; then the weather, cold, roofs, a place to sleep and fire) | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown. Weather that harms what is built is N6's | Gets through a first season, or does not | 1 |
 | P5 | **Materials and making.** What the rock and the woods give is what can be built and made: stone by its kind, timber, clay, a first metal. Goods are carried and stored. A workshop | Builds from the island's own stone | 2 |
 | P6 | **The world is kept.** A world is saved and reopened with what was dug and built. Leaving or losing a hold writes it into the world. A new party can land in the same world and walk into it | Finds the last game's hall | 3 |
 | P7 | **Trouble.** Dangerous animals, then a hostile band, then one great beast with a lair. Fighting and wounds. The pacing rule | Loses a dwarf to something with a name | 4 |
@@ -134,7 +134,7 @@ New:
 
 None blocks P1. Each has a recommendation and is asked when its step is reached.
 
-1. **How long a day and a year last in play** (P4). *Recommendation: a day of about 20 minutes at normal speed and a year of 48 days, with faster speeds.* It is a guess to be changed by playing.
+1. **How long a day and a year last in play** (P4). *Recommendation: a day of about 20 minutes at normal speed and a year of 48 days, with faster speeds.* It is a guess to be changed by playing. *Built so ("P4, first half, as built"): 20 minutes and 48 days, beside RimWorld's 16:40 and 60.*
 2. **How tall a dwarf is in metre blocks** (P2), which sets how high a tunnel must be. *Recommendation: under one and a half blocks, so a tunnel two blocks high is roomy and one block high is a crawl.*
 3. **Where the first hold stands** (P2). *Recommendation: the default island, until embark (P10) chooses.*
 4. **What the first great beast is** (P7). The owner called fantastic creatures very important, so its nature is the owner's.
@@ -496,7 +496,7 @@ Pictures: `interesting-world/real/i1-*.jpg` (the bed and the Places list at 2,56
 - **A dwarf in the hand is marked by a brass square round it**, drawn over the land, not in it: it shows through a hill.
 - **The Places list is of the island under the view** and its find field has never been typed in by hand.
 - **Three keys are P2's and not rows**: G, E and the right click are read from the keyboard and the mouse inside `hold_frame`, so no button can show them. G is the letter the design gives Gather. They should become acts when P3 brings the orders bar.
-- **Lessons and the scale are kept in `build/interface.txt`**, beside the binary, until the game has settings (I-2).
+- **Lessons and the scale are kept in `build/interface.txt`**, beside the binary, until the game has settings (I-2). *I-2 gave it settings and kept the file.*
 - **At 200% on a screen 2,560 wide** the list narrows to 126 modules and the card's depth to about 24: usable, and tight.
 - **The step is 2,900 lines** in five files, more than any step before it. The play screen is 1,335 of them.
 
@@ -616,7 +616,7 @@ Pictures, each 2,560 × 1,440: `interesting-world/real/crowd-*.jpg`. `crowd-besi
 
 P3 was merged unplayed, and the owner, playing it, called it terrible (`open-decisions.md`, 2026-11-16). This section says what is true after it was put right. The first part of the work (A) made what existed right and is written here; the second (B) gives goods a place and is noted at the section's end. What P3 first was is in this file's history.
 
-**What can now happen that could not before:** the owner drags a rectangle over a hillside and a room is dug under it, while watching, with its own way in; clicks any part of a tree, or drags over a wood, and has timber; builds a wall of sawn timber that is a wall; and is shown, before letting go, exactly what will be marked.
+**What can now happen that could not before:** the owner drags a rectangle over a hillside and a room is dug under it, while watching (with its own way in, until that was withdrawn); clicks any part of a tree, or drags over a wood, and has timber; builds a wall of sawn timber that is a wall; and is shown, before letting go, exactly what will be marked.
 
 **What the owner does and sees.** From above, the orders stand at the bottom left: **Dig (D), Fell (T), Build (B), Send (M), Remove (X)**. Taking one puts its tool in the hand: its name, its few choices as buttons, and one live line. Under the pointer the world shows what a click would mark, and through a drag what the drag would; letting go gives the order. Marked ground is tinted brass, and the ground over it faintly where it lies under a hill; a tree to fell wears a brass band and a brass cap on its crown; a block to lay stands as a small block of what it will be. The dwarves go to it at once and work. A click on marked ground shows the order's short card: what is left, who is at it, what it waits for, Go there, Take it back. A click on anything else says what it is in one line; its card is asked for with I, with More, or with a second click.
 
@@ -624,7 +624,7 @@ P3 was merged unplayed, and the owner, playing it, called it terrible (`open-dec
 
 | Order | The drag | What it leaves |
 |---|---|---|
-| **Dig out**, 1 to 4 deep | A rectangle on the level of the block the press took | Every block of ground in it gone, from that level down: into a hillside a room under the hill, on flat ground a pit. With it, where it needs one, the way in and out |
+| **Dig out**, 1 to 4 deep | A rectangle on the level of the block the press took | Every block of ground in it gone, from that level down: into a hillside a room under the hill, on flat ground a pit, less the last step out of it. Nothing outside the rectangle is marked (the way in it once added is withdrawn, 2026-11-16) |
 | **Stair down**, **Stair up** | A line; a click is three steps the way the view faces | A block down, or up, for each block along, with room over each step to walk it |
 | **Fell** | A rectangle on the ground, read through leaf and limb; a click on any part of a tree | Every tree whose trunk stands in it felled; its timber in the store |
 | **Wall**, 1 or 2 high | A line | A wall standing on the ground along the line, following it where it steps, of stone or of timber |
@@ -670,7 +670,7 @@ An orders file says them as `dig out`, `dig stair-down`, `dig stair-up`, `fell`,
 | Fell: a drag across a stand on a slope, 16 m down to 2 m, from above at a tilt | The box ran between two crowns and went vertical | Eleven trees marked, each with a brass cap on its crown, and felled in 52 s, 9 s at the fastest speed | [drag](interesting-world/real/play/p3-03-fell-drag.jpg), [marked](interesting-world/real/play/p3-04-fell-marked.jpg), [felled](interesting-world/real/play/p3-05-fell-done.jpg) |
 | Dig out: a drag on flat ground; the order's card; part taken back | "A room", two blocks whatever was meant; Remove took the whole order | 3 by 2, 2 deep: 11 blocks, one of them the step out. The card is three lines. Remove takes six marks back and the five left are dug in 27 s | [hover](interesting-world/real/play/p3-06-dig-hover.jpg), [drag](interesting-world/real/play/p3-07-dig-flat-drag.jpg), [card](interesting-world/real/play/p3-08-order-card.jpg), [remove](interesting-world/real/play/p3-09-remove-drag.jpg), [dug](interesting-world/real/play/p3-10-dig-flat-done.jpg) |
 | Dig out: a drag from the foot of a rise into the hillside | The box climbed the hill with the pointer | A flat rectangle, 5 by 9: 93 blocks under the hill, 3 of them the way in, the ground over it tinted. Dug in 97 s, 16 s at the fastest | [drag](interesting-world/real/play/p3-11-dig-hill-drag.jpg), [marked](interesting-world/real/play/p3-12-dig-hill-marked.jpg), [dug, cut open](interesting-world/real/play/p3-13-dig-hill-done-cut.jpg) |
-| Dig out: at a cut level, a room inside the hill | "No dwarf can reach" it: reproduced, seven idle over it | 5 by 4: 43 blocks, 3 of them the way in, shown before the button is let go. Dug in 65 s | [hover](interesting-world/real/play/p3-14-dig-inside-hover.jpg), [drag](interesting-world/real/play/p3-15-dig-inside-drag.jpg), [marked](interesting-world/real/play/p3-16-dig-inside-marked.jpg), [dug](interesting-world/real/play/p3-17-dig-inside-done.jpg) |
+| Dig out: at a cut level, a room inside the hill | "No dwarf can reach" it: reproduced, seven idle over it | 5 by 4: 43 blocks, 3 of them the way in, shown before the button is let go. Dug in 65 s | [hover](interesting-world/real/play/p3-14-dig-inside-hover.jpg), [drag](interesting-world/real/play/p3-15-dig-inside-drag.jpg), [marked](interesting-world/real/play/p3-16-dig-inside-marked.jpg), [since, with no way in made for it: it waits and says so](interesting-world/real/play/p3-17-dig-inside-waits.jpg) |
 | Build: a timber wall, a stone wall, two timber blocks side by side | The timber wall was a tree's trunk, and two logs grew moss | Sawn boards and basalt, built in 43 s; no moss, no rings, no leaves | [drag](interesting-world/real/play/p3-18-build-timber-drag.jpg), [from above](interesting-world/real/play/p3-19-walls-above.jpg), [on foot](interesting-world/real/play/p3-20-walls-afoot.jpg) |
 | Dig: a stair down, then marks beside and above it with the dwarves in and about it | "No dwarf can reach three orders" | Four steps dug in 22 s; the marks beside it dug in 9 s | [drag](interesting-world/real/play/p3-21-stair-drag.jpg), [dug](interesting-world/real/play/p3-22-stair-done.jpg), [marked beside](interesting-world/real/play/p3-23-beside-marked.jpg), [dug](interesting-world/real/play/p3-24-beside-done.jpg) |
 | The cut over a pit with the party in it: over their heads, at their chests, at their feet | Heads and bodies cut off | Whole at every level that leaves their feet under it; at their feet, gone | [no cut](interesting-world/real/play/p3-25-pit-whole.jpg), [over heads](interesting-world/real/play/p3-26-cut-over-heads.jpg), [at chests](interesting-world/real/play/p3-27-cut-at-chests.jpg), [at feet](interesting-world/real/play/p3-28-cut-at-feet.jpg) |
@@ -735,7 +735,7 @@ An orders file says a stockpile as `store all|stone|timber x y z x y z`.
 
 - **Hands at one face.** The real games' answer is that friends do not block: RimWorld's pawns and Ingnomia's gnomes pass through one another. So a dwarf now takes up a floor only where it stands still, and a walker goes by whoever is on its way; it still goes round a stander where there is room, and no two come to rest on one floor. The room of 93 blocks, given at six different moments, took 97 to 215 s before and takes 75 to 98 s now. P2's stepping round and squeezing past, which the owner asked for when dwarves stuck on each other, is gone: they can no longer stick.
 - **A stair's preview says how deep it goes**: a figure on the ground over each step, "-1" to "-4".
-- **A room marked deep gets its way in.** Where the search every way at once finds none within about ten blocks, a straight stair or passage is tried the four ways from each cell stood in, rising, level and falling, up to 64 blocks. Where none is found, the message, the mark and the order's card say: dig a stair or a passage to it first.
+- **A room marked deep gets its way in.** Where the search every way at once finds none within about ten blocks, a straight stair or passage is tried the four ways from each cell stood in, rising, level and falling, up to 64 blocks. Where none is found, the message, the mark and the order's card say: dig a stair or a passage to it first. *Withdrawn the same day, with every way in an order made for itself, on the owner's playing it: an order marks what was dragged and no block besides, a dig leaves the last step out of its pit standing, and work no dwarf can reach is said in an alert (`adr/0011`; `open-decisions.md`).*
 
 **Played** (`docs/interesting-world/real/play/goods-play.txt` and `goods-thirty.txt`; the pictures are beside them)
 
@@ -781,3 +781,434 @@ Frame times, our own work, each bench once on the finished build:
 - **No Stores list**: the top right shows the five kinds there are most of.
 - **Timber is one row at the top right but three kinds in the world** (tabu, shii, sawn), and a wall of timber is always sawn boards whatever tree it came from.
 - **Still unplayed by a hand.** Every case was played by script and every picture looked at.
+
+### I-2, as built: the front door and the world (2026-11-16)
+
+*This is the step as it was first built, before anyone had played it. It was then held out of `main`, played, and changed: "I-2, as played", after this section, says what the player now sees, and where the two differ that section is the one that holds. Its pictures are those of the step before it was played (`interesting-world/real/i2-*.jpg`).*
+
+**What can now happen that could not before:** the owner starts the game and stands at a front door over the last world's start island; presses Enter and is in play as soon as the land is made; or makes a world from a seed and watches its history run, its map appear and its islands arrive one by one; looks over the islands near its start, asks what any of them is, paints the world's fields over the sea; founds a hold on one or walks it; and leaves play for the world's map or the front door without leaving the game.
+
+Pictures, each 2,560 × 1,440: `interesting-world/real/i2-*.jpg`. `i2-beside-drawing.jpg` puts the built front door, formed and while forming, beside the design's drawing.
+
+**What the owner sees and does**
+
+- **`./build.sh run`** opens the front door: the game's name, a line saying what the world in hand is, and five choices, the first in focus in brass with its key. Behind them the start island's map moves slowly. The last world begins forming at once, and a panel at the lower right names each stage and how far it has come.
+- **Enter** on "Enter the last world" goes into play at the landing, as the game began before this step. Pressed before the land is made, it waits and says so: "two of its five islands near the start are made. You go in when they are". Escape takes the wish back.
+- **Up, Down and the pointer** move the focus. **Worlds** lists every world with a history kept on this machine and what was written down of it; a row opens that world's map. **Make a new world** takes a seed, typed or drawn with D; Enter makes it and goes to its map. **Settings** has the interface's size and the keys. **Quit** quits.
+- **The world's map.** The known world's sea and land, with each island near the start drawn once it is formed and ringed until then. A drag or the arrows pan, the wheel or = and - zoom about the pointer, Home goes back over the start. A click on an island takes it in the hand, lower left, in the card's shape: what it is, why it is so, then Land, Rock, Climate, Life and Places. The mainland can be clicked too. The lenses stand at the upper right; the pointer on the map says what the lens says there.
+- **Found a hold** (Enter) lands the party on the island in the hand, where the land's rule puts it. **Walk the world** (W) stands the player on it on foot, with no party. Both wait for the island and those within 64 km to be formed, and the card says what is still to come.
+- **Stop making it** (S) begins no more islands, and **Go on making it** takes it up again.
+- **In play, Escape's menu** has **Leave to the world** (W) and **Leave to the front door** (D).
+
+**What was built**
+
+- **The world in hand** (`making.odin`, `adr/0013`): one world at a time, ordered and made on a thread of its own in four stages (`STAGES`), each the procedure the command line runs. Forming threads are pools that can be waited for and stopped. The worlds on disk and what was written down of each.
+- **The way through** (`main.odin`): play is a procedure, `game`, entered and left more than once in a run; `main` goes straight in where an option names where to go and to the front door otherwise.
+- **The screens before play** (`door.odin`): the front door, Worlds, a new world, settings, and the panel of a world being made, each a procedure that lists parts (`adr/0010`). Their keys are rows of `BINDS` in two new views. What is kept between runs is still `build/interface.txt`: the interface's size, the lessons learned, the world last entered, the keys changed, and how long a world last took.
+- **The world's screen** (`chart.odin`): the map as pictures painted on a thread of their own and put on the GPU by the frame; the world's lenses as rows (`WORLD_LENSES`); the island's card; the doors.
+- **The interface's ground** (`ui.odin`, `ui.metal`): a picture of the world's map as a part, a ring, a choice, a dark that clears toward its right, and the game's name in a style of its own, with their figures in `LOOK`. `render.odin` gives a frame's beginning and end to a screen with no world.
+- **The map's colour at a point** is one procedure (`map_at`, `land_report.odin`) that `--map` and the island's picture both draw with.
+- **Without a window**: `--door[=screen]` draws any of these, `--when=` chooses how far the making has come, `--pick=`, `--lens=`, `--tab=`, `--focus=` and `--find=` set a state, and `--press=id,id` presses parts in turn, through play and out again (`AGENTS.md`). `src/door_test.odin` stands at the door, goes through every screen, and checks each at every scale.
+
+**Keys.** At the front door: Up and Down move the focus, Enter takes it, Escape goes back, D draws a seed, S stops the making or goes on. On the world's map: Enter founds a hold, W walks, Home the start, = and - zoom, the arrows pan, S as before, Escape puts the island down and then goes to the front door. In play's menu: W and D leave. Any row of `BINDS` can be given another key in settings.
+
+**How long a world takes, and how the screen stays alive.** Measured once, the machine at a load of 6 from other agents, with the front door drawn throughout (`--door --seed=3 --bench=25`, a seed never made before):
+
+| Stage | Seed 3, new | Others |
+|---|---|---|
+| The plates' history | 2.47 s | 2.6 s (seed 9), 2.8 s (seed 13); nothing where it is kept |
+| The region round the start | 0.27 s | 0.3 s; 0.01 s to read a kept world back and make its records |
+| The islands near the start | 1.08 s for three | 1.11 s for seed 7's five; 0.7 s for seed 13's |
+| The far islands | nine more within the 25 s | seed 7's other six within 8 s of starting |
+
+Seed 7, kept, can be entered 1.1 s after the front door is up, where the game before this step showed nothing for about 4 s. In those 25 s the door drew 2,993 frames: our own work 0.18 ms at the median, 0.73 ms at the 99th hundredth and 6.77 ms at worst, none over 12.5 ms; the interface's share of it 0.03, 0.08 and 2.35 ms. Five frames came more than 12.5 ms after the one before, the worst 16.7 ms, while the history's crew had every core: the frame's thread was kept off the processor, as in every bench at this load. The screen never waits for the making: it reads a few words each frame.
+
+**What was tried and dropped**
+
+- *The start island whole in a dark sea behind the door.* Handsome, and half the picture was empty. The view is nearer: the land fills the height and runs in under the words, as the drawing has it.
+- *The known world drawn as its samples are.* The history's 6 km cells showed as steps along every slope of the sea floor, and the shading of each 2 km sample as stripes. Its heights are smoothed first.
+- *An unformed island marked by a ring as large as its square.* At the door's scale it was a brass ring 800 pixels across.
+- *A lens that multiplied an island's own colours.* Dark grey islands on a pale sea. An island under a lens is its relief in grey, lit, times the lens's colour.
+- *The world being made shown beside every screen.* At 175% and over it lay on the Worlds, new world and settings panels. A screen's own panel has the room first.
+- *The picture taken when nothing was waiting to be painted.* The painter takes islands one at a time, so that held between any two. A picture waits for every formed island's picture.
+
+**Costs**
+
+- **Benches**, once each on the parent (`main` at ca77356, with P3) and on this step, as the owner asked on 2026-11-16; the machine at a load of 6.5 to 7.4 from other agents. Our work in ms as median / 99% / worst, and frames over 12.5 ms:
+
+| Bench | Parent | This step |
+|---|---|---|
+| Forest flank, first person | 1.93 / 5.74 / 7.34 (0) | 1.80 / 5.48 / 7.03 (0) |
+| Down through cloud, first person | 1.87 / 4.50 / 5.84 (0) | 1.83 / 5.43 / 7.17 (0) |
+| From above, cut following the ground | 2.29 / 6.07 / 6.89 (0) | 2.23 / 6.52 / 9.54 (0) |
+
+- **Pictures**: the known world's is 2,048 pixels square with its smaller copies, 21 MB on the GPU, painted in bands on six threads; an island's is 1,024 square, 5.3 MB, painted in about 0.4 s on one thread of low priority. Seed 7's eleven are 59 MB.
+- **The atlas**: the game's name takes 190 rows more at the standard scale (567 of 2,048) and the text 1,756 at 200%. With every glyph of that style it was 2,035, so the style is letters alone.
+- **Memory**: a world put down leaves its formed islands, about 40 MB each (below).
+- The step is 2,220 lines in three new files, 245 of test, and about 150 changed elsewhere.
+- `odin check src -vet-unused` passes; `./build.sh test` passes with `GOLDEN` unchanged and the dwarves' three logs alike; `--dwarves=900 --orders=build/hold_test_orders.txt` prints the parent's hash, `6066913dffdaa756`; the start island's map is the parent's byte for byte. The start island's land hashes to `GOLDEN`'s figure when the world is made from the front door, and seed 12's to one figure whether it is made alone or after seed 7 in the same run.
+
+**Weak points**
+
+- **Nobody has used it.** No window was opened. The keys, the pointer's clicks and drags, the wheel and the typing of a seed were run by the test and by `--press`, through the procedures the window's events go through; the arrows' pan on the map, read from the keyboard's state, has not been run at all.
+- **The look has not been judged**, and beside the drawing (`i2-beside-drawing.jpg`) it falls short in these ways: the game's name is three quarters the drawing's size; the island's picture is 1,024 pixels for ten kilometres and is drawn at more than twice that, so it is softer than the land deserves; the drawing has the island's named places marked and ours has none; the bay-head flats show as square notches in the north coast, which is the land's own fault seen larger; and the drawing's first choice names a hold and a year, where ours has a seed.
+- **A world put down stays in memory.** Opening five worlds in one run leaves five worlds' islands, half a gigabyte or more each when every island was formed.
+- **Stop is not at once.** An island in hand takes up to two seconds more, and a history under way up to three.
+- **The world's lenses of rain and warmth are bands by latitude**, since nothing else exists at that scale, and say little over 200 km.
+- **The setting's lens shows the history's 6 km cells** as steps where the shelf meets the back-arc: a kind cannot be smoothed.
+- **A lens's key is dropped** where the picture is small for the interface's size (175% and over on 1,440 pixels with a world being made). The pointer on the map still says the figure.
+- **The mainland is a pale shape and one card.** It is not formed (N1), so it cannot be entered or walked.
+- **The island's card says its rock only once it is formed**, and its Life in the game's own figures of kilometres.
+- **The worlds' notes are written when a world's records are made**, so a history kept before this step is listed with nothing else said of it until it is opened once.
+- **Leaving play lets go what was dug and built.** The menu says so. Keeping it is P6.
+- **A key changed to one another row has** is marked and not refused, and the row before it in `BINDS` is the one obeyed.
+- **The start that segfaulted more than 64 km from the start did not do so here**: `--above=-89786,60,-38808` and `--pos=-89786,300,-38808`, 98 km off on seed 7's island 10, both drew their pictures, and Walk the world on that island went in. Nothing was changed for it. If it is seen again, its options are wanted.
+
+**For the steps that follow**
+
+- **Expedition planning** (E-1) begins from an island in the hand on the world's map: `chart.pick`, with `forming_toward` already forming its neighbours first. Its site card is the island's card one scale down, and `isle_paint` is the island's picture.
+- **Read its history** has its place in the world's own panel, top left (`world_build`), and is not drawn.
+- **A kept hold** (P6) is a row of the front door's first choice and a mark on the world's map; `Kept_World.says` is where a world's holds and ruins would be listed.
+- **Another world's field** is a row of `WORLD_LENSES`.
+- **Another stage of making** (N1's continents) is a value of `Stage` and a row of `STAGES`; the panel, the door's note and the bench's line follow from the row.
+
+**Pictures**
+
+![The front door: the last world's start island behind the choices, the first in focus with its key](interesting-world/real/i2-door.jpg)
+
+![The front door while the last world is formed: four of its five islands near the start are made, and the start is ringed until it is](interesting-world/real/i2-door-forming.jpg)
+
+![Worlds: the worlds this machine has made, and what was written down of each](interesting-world/real/i2-worlds.jpg)
+
+![A new world: its seed typed](interesting-world/real/i2-new-seed.jpg)
+
+![A new world a second in: the plates' history half run, and nothing yet to draw](interesting-world/real/i2-new-plates.jpg)
+
+![Another new world about three seconds in: its map is drawn, two of four islands near the start are made, and the start's card says its land is being formed](interesting-world/real/i2-new-islands.jpg)
+
+![A new world that can be entered: each stage with how long it took, and the far islands still arriving](interesting-world/real/i2-new-ready.jpg)
+
+![The world's map with an island in the hand, and who reached it](interesting-world/real/i2-world-island.jpg)
+
+![The same with the lens of setting on: the forearc, the arc, the shelf and the back-arc](interesting-world/real/i2-world-lens.jpg)
+
+![Settings: the interface's size and the keys](interesting-world/real/i2-settings.jpg)
+
+![The design's drawing, the built front door, and the built front door while the world is formed](interesting-world/real/i2-beside-drawing.jpg)
+
+### I-2, as played: the front door and the world, put right (2026-11-16)
+
+I-2 was held out of `main` when the owner called the step merged before it terrible: nobody had played either. It was merged onto today's `main` (the play script, goods, and step 21's continents), read against what a player of Dwarf Fortress and RimWorld expects of these screens (`interesting-world/notes/colony-sim-reference.md`, section 12, from their code and data), and then played by script from the player's seat through every door, each picture looked at. This section says what the player now sees; where it differs from "I-2, as built" above, this holds. What each change was and why is in `foundations/interface.md`, section 15.
+
+The scripts and their 46 pictures are in `interesting-world/real/play/`: `i2-door.txt` (the front door, Worlds, settings, into the last world and out), `i2-world.txt` (the world's screen: islands, the card, the list, the mainland, a lens, both doors), `i2-new.txt` (a new world made and watched). Run one with `build/odincraft --door --play=file`.
+
+**What the owner sees and does**
+
+- **The front door stands over land from its first frame** (`i2-01`): the start island as the game last painted it, kept beside its world. The choices can be used at once; the first names where it leads, "Enter the last world: East Firths, seed 7", and pressed too soon it waits and says so (`i2-03`).
+- **Worlds** is a few words a world: its start, its islands, its mainland, when it was kept (`i2-07`). **A new world** lists the stages it will go through with how long each took here last time (`i2-51`).
+- **The world's screen opens framed on the islands there are**, each named, with the start in the hand (`i2-20`). At the right is the list of them: a picture, a name, its kind and how far, its land and its highest ground. The wheel zooms about the pointer, a drag moves the map, Home shows them all again.
+- **A click on an island, on its name or on its row takes it in the hand and goes to it** (`i2-24`): it fills the picture between the panels, and its named places are written on it.
+- **Its card is rows**, in six depths: Land, Water, Rock, Climate, Life, Places (`i2-25` to `i2-29`). The why of a row is said beside the pointer (`i2-30`) and under the row when it is clicked (`i2-31`). The depth that is open stays open from island to island.
+- **"Land the party here"** (Enter) lands the seven on the island in the hand, and **"Walk it"** (W) stands the player there with no party (`i2-38`, `i2-40`). Over them a line says what to look at twice. Escape's menu in play leads back to the world or the front door.
+- **The mainland** is the list's last row and a name on the map. It says how it stands: known and not formed, with why (`i2-34`: seed 7's is 175 km from the start, beyond the 80 km a world's large lands are formed within when it is made); being formed, with how far (`i2-53`); or formed on 64 m cells, drawn with its ranges and rivers.
+- **Lenses** (L) open under the list (`i2-35`, `i2-36`).
+- **A new world** shows its islands by name as soon as its records are made, while the mainland's stage runs, and that stage can be left (`i2-53` to `i2-56`).
+
+**What was wrong, and what was done**
+
+| Fault | What was done |
+|---|---|
+| The world's screen was mostly empty sea, the islands a few pixels each | It opens framed on the islands; an island taken is gone to and fills the free picture; the islands are also a list with a picture and two figures a row |
+| Islands were named by their kind, and several shared a label | Each has a name of its own, made before it is formed from what the world knows of it; its kind is said second |
+| The card answered in paragraphs | Rows of a thing and a word or a figure in every depth; the why on asking. A test fails a row that is a sentence |
+| The front door was a blank field until its picture was painted | The start island's picture is kept and shown from the first frame |
+| "Found a hold" was offered with no expedition to plan | "Land the party here", which is what it does; its tip says what is not built |
+| The mainland exists as land on some seeds | It is a stage of the making and is said as it stands, in three states, with why |
+
+**Found by playing, not on the list**
+
+- A click on an island's **name** on the map did nothing; the name is what a hand goes to. It takes the island now.
+- The mainland taken in the hand left the map where it was, on an island 86 km away. It goes to a view of the islands and the coast.
+- A lens tinted an island gone to one flat colour, and nothing could be read of it. An island keeps its colours unless the lens has a figure of its own for it.
+- The mainland's reason for not being formed **printed garbage**: step 21 wrote it in memory let go each frame. Kept now, and said in a player's words.
+- Settings named two keys by their act's name ("Order", "More") and the speeds as two and four times, which they have not been since the orders were put right. A test now fails a key with no words.
+- "No of its five islands are made"; "one of its five islands are made".
+- The world being made was 760 pixels wide and lay over the islands' names; in its column its words lay on each other. It is the column's width and its rows break.
+- While one world was put down for another, the panel showed the old world's stages under the new one's name, and "Stopping".
+- Two names on the map lay on each other. A name gives way.
+- A tip stood over its row and hid the words above it.
+- A script's picture waited for ever at the front door after leaving the map with a lens on.
+- Birds that cannot live on an island were listed as a caution to a founder.
+- Leaving the map with a lens on painted the front door's sea by it.
+- At 200% with a lens on and a world being made the right column's panels lay on each other; they give way in an order, which the test holds at every size.
+
+**What was built**
+
+- **The merge** (`main.odin`, `making.odin`, `continents.odin`): the mainland as `Stage.Mainland`, its coarse stage counted and leavable, the list of regions made in one place (`regions_make`) and again by the frame's thread once the mainland is cut, its pieces formed through the pools (`adr/0013`).
+- **Names** (`names_make`, `making.odin`). **The world's screen** (`chart.odin`): the view that frames and goes (`chart_frame`, `chart_go`, `chart_move`), the list (`isles_build`), the card's rows (`card_write`, `Card_Row`), the mainland's picture in tiles from its coarse stage (`mass_paint`), names that give way (`map_name`). **The front door** (`door.odin`): the kept picture (`door_keep`, `door_kept`), Worlds and a new world as rows, the making panel's mainland stage.
+- **The play script before play** (`script.odin`, `door_run`): `--door --play=file`, with `type`, `snap`, `until ready`, `until made`, `until mainland`.
+
+**Costs and checks**
+
+- `odin check src -vet-unused` passes. `./build.sh test` passes: `GOLDEN` unchanged, the dwarves' three logs alike (hash `8c5e885fd39409b`). `--dwarves=900 --orders=build/hold_test_orders.txt` prints the parent's hash, `3496ed7decd3f5f3`, and the start island's `--map` is the parent's byte for byte.
+- **Benches**, one round, the machine at a load of 11 from other agents. Our work in ms as median / 99% / worst, and frames of it over 12.5 ms: forest flank 1.41 / 6.98 / 11.23 (0); down through cloud 2.00 / 5.35 / 8.14 (0); from above 2.35 / 6.70 / 8.67 (0).
+- **How long**: seed 7, kept, can be entered about 4 s after the front door is up (load 7 to 12). Seed 1, never made, 5.4 min, nearly all of it the mainland's coarse stage, which is 943 MB on disk and 2 s to read back after. Seed 4's mainland, 3,392 km², takes about 12 s by the panel's own estimate; the script leaves it.
+- **Pictures on the GPU**: an island's layer each as before, and up to sixteen more of the same size for the mainland's tiles, those that hold land.
+
+**Weak points**
+
+- **No hand has used it.** Script and pictures only. The arrows' pan on the map is read from the keyboard's state and was not played.
+- **A new world's screen is empty for the seconds its plates' history runs**: two panels on the sea's dark.
+- **On a machine's first run the front door has no picture**: nothing is kept yet.
+- **A first opening of a world with a mainland that can be formed waits minutes before it can be entered**, unless the stage is left. The screen can be used meanwhile.
+- **The mainland cannot be entered from the world's screen**, and its formed pieces are drawn no finer than its coarse stage.
+- **In the overview an island is still small**: the list and the journey to it carry the comparing and the reading. From far out (over 900 km across) the islands have no names on the map.
+- **The names lean on few causes**: of seed 7's eleven islands three are named for a bird.
+- **The landing on the card is the first row that holds on the shore**, as the hold chooses; whether a boat can come in at a cell of it is found only on landing.
+- **A world put down still leaves its formed islands in memory**, as before.
+- **Walking an island shows the play screen's Dwarves button**, with no dwarves.
+
+**For the steps that follow**
+
+- **Expedition planning** (E-1) begins where "Land the party here" stands: the island in the hand, its card's Land depth as the site card's first lines, the cautions' line as its warnings.
+- **A finder** (DF's site finder) belongs with E-1, once a world has more places than can be read one by one.
+- **A door onto the mainland** wants the choice of ground E-1 gives; `pieces_begin(at, reach)` already forms the land round a point.
+
+### E-1, as built: expedition planning (2026-11-16)
+
+Built on a branch from `main` at dacce79 and held to the way of working set after P3 (`open-decisions.md`, 2026-11-16): what a player of Dwarf Fortress and RimWorld expects of this screen was written down first, from their code and data (`interesting-world/notes/colony-sim-reference.md`, section 13); where everything lands was designed before it was drawn (`foundations/interface.md`, section 16); and it was played by script from the player's seat, every picture looked at, before anything was called done.
+
+The scripts and their 25 pictures are in `interesting-world/real/play/`: `e1-plan.txt` (an island taken, the landing offered read, the pointer along the shore, a bad place chosen anyway, the party and one dwarf drawn again, back and in again, set out, and out of play and in again) and `e1-danger.txt` (the start island: a sheltered landing by fresh water under a slide's lake, read, chosen, asked why, landed on). Run one with `build/odincraft --door --play=file`.
+
+**What can now happen that could not before:** the owner takes an island on the world's map, presses "Plan an expedition", and stands over the island with the landing the game would choose already in the hand and the seed's seven already in the boat. Enter sets out as the game always did. Or they move the pointer along the shore and read each place as it passes; click an open shore with no water, steep ground behind it and a 160 m climb to the nearest flat, see its four cautions named over the button, and set out all the same; draw the party again until it has a mason, or one dwarf until it is not a weaver of 45; go back to the map and come in again to find it all as they left it; and watch the boat come in where they said, with who they chose.
+
+**What the owner sees and does**
+
+- **On the world's map** the island's card has "Plan an expedition" (Enter) where "Land the party here" stood, as soon as that island's land is formed (`e1-01`).
+- **Planning** (`e1-02`): the island fills the picture between the panels, where it stood on the world's map. Its shore is marked where a boat lies sheltered; four landings stand on it by their numbers, the game's own first and chosen. Lower left is the place chosen: its name, what landing it is, the beds under the ground the party would gather on, and rows: Shelter, Fresh water, Ground to live on, Slope, Timber, Rock, Under it, and what the land may do there. Right is the expedition: 1 Where, the landings; 2 Who, the party; what work it has hands for; what to look at twice; Back and Set out.
+- **The pointer along the shore** puts the place under it on the card at once (`e1-05`), and the card goes back to the place chosen when the pointer leaves. On a shore too high for a boat it says so and how high (`e1-06`): that is the one thing refused.
+- **A click chooses the shore**, however bad (`e1-08`): it stands among the landings as "your own", and its cautions are named over Set out. Keys 1 to 4 choose a landing offered (`e1-09`). The wheel brings a bay nearer and Home shows the island whole (`e1-09b`).
+- **A row's why** is beside the pointer and, clicked, under the row (`e1-03`, `e1-04`, `e1-22`).
+- **A (All)** draws the whole party again; **D** draws the dwarf in focus again, and its button names it (`e1-10` to `e1-13`). The rows under them say who digs, fells and builds.
+- **Escape** goes back to the world's map with the island in the hand; Enter comes in again with the place and the party as they were left (`e1-14`, `e1-15`), and so does leaving a game for the world (`e1-19`).
+- **Set out** (Enter): the boat comes in at the place chosen with the party chosen (`e1-16` to `e1-18`, `e1-23`, `e1-24`). The play screen names the place as the card did.
+- **"Enter the last world" at the front door** is unchanged: straight in, at the game's own landing with the seed's own party.
+
+**What was built**
+
+- **A party is a function of the seed, its count and its draws** (`party_draw`, `dwarves.odin`): how often the whole of it was drawn again, and then which of its dwarves, in order. One drawn again is another dwarf in the same seat, with a trade no other of the party has; nobody else changes.
+- **A landing an expedition chose** (`landing_near`, `landing.odin`): the low shore nearest a column of the world that a boat can come in to, by the rule the game's own landing is tried by. Where no way leads from the shore to the ground beside it, the party gathers where it lands (`landing_take`).
+- **What a place offers and lacks, as rows** (`SHORE`, `landing.odin`): a thing, the fields it is read from, where they hold well and where they are lacking, the word for it, and its name among the cautions. Four fields were made for it (`fields.odin`): ground to live on within 300 m, the mean slope within 150 m, timber within 300 m, and how far the stream from a slide's lake passes.
+- **What a hold is started with** (`Expedition`, `hold.odin`; `adr/0009`): the hold is made with the shore and the draws, and says them at its first tick in the lines an orders file takes, `land x z` and `party n i ..`. Played again from those lines it is the same game. With nothing chosen it says neither and is the hold the game always made.
+- **The planning screen** (`plan.odin`, 580 lines): the island's shore read once when it is come to, the landings offered, the place's card, the party's rows, and the column that gives way in an order where the picture is small. It asks whether a boat can come in of a walk of its own, never of the hold.
+- **The card's rows are one procedure** for the island's card and the place's (`rows_put`, `chart.odin`). The column of beds is drawn with no block volume (`column_runs`, `hand.odin`).
+- **Keys** in a view of their own (`BINDS`, `Views.Plan`), named in Settings.
+- **Without a window**: `--door=plan` with `--pick=N` and `--party=N`; the script's `under` says the place under the pointer, or why no boat lands there (`AGENTS.md`). `src/door_test.odin` plans an expedition: every case above, at every size.
+
+**Found by playing, and put right** (each reproduced by the script first; `foundations/interface.md`, section 16, has the list): the party's line ran across the map once drawn again; a why was cut off at the card's foot; the seventh dwarf was half hidden; the chosen landing was hard to find among the others; a click on a landing's ring chose the shore beside it; a button's words were cut; a tip lay over the party; rows stood that were not true there; the game's own best landing was cautioned as steep; a why ended in a field's name.
+
+**Costs and checks**
+
+- `odin check src -vet-unused` passes. `./build.sh test` passes: `GOLDEN` unchanged; the dwarves' three logs alike at the parent's hash, `698fc3b965110ddf`; a planned expedition's log `fa379fb75eb08cc3`, and the same played again from its own lines. `--dwarves=900 --orders=build/hold_test_orders.txt` prints the parent's hash, `3496ed7decd3f5f3`, and `--dwarves=30` the parent's `711d8a9cbf815678`: a hold with nothing planned is the hold it was.
+- **Opening planning on an island takes one frame of about 50 ms** (54 ms on East Firths, 47 on North Back), while its 5,800 cells of shore are read and its landings found. After that the screen costs 0.10 ms a frame at the median and 0.25 at the 99th hundredth (`--door=plan --bench=8`). A click on the shore asks the ground whether a boat can come in and the party walk up: about 30 to 70 ms, once.
+- **Benches**, one round at the end, the machine at a load of 7 to 8 from other agents. Our work in ms as median / 99% / worst, and frames over 12.5 ms: forest flank 1.20 / 4.96 / 12.60 (1, by a tenth of a millisecond); down through cloud 1.08 / 3.05 / 3.85 (0); from above 1.61 / 4.74 / 6.87 (0). Nothing in play's drawing or streaming was changed, and the one frame was not chased.
+
+**Weak points**
+
+- **No hand has used it.** Script and pictures only, as with I-2.
+- **The island's picture is ten metres to a pixel.** Brought near with the wheel a bay is soft, and the marks on the shore are a few pixels: the card and the pointer carry the reading.
+- **The why of a place is read only once it is chosen**: a row cannot be pointed at while the pointer is on the shore.
+- **The camp of a hard site can be far up a hill.** On the open shore the script chose, the party lands and climbs 137 m to the nearest ground to live on, since a way leads there. The card says "1.8 ha, 160 m off" and not how high.
+- **In play the landing is under the trees.** From above with the leaves on, a party landed in a wood cannot be seen until V takes the leaves off. That is P1's, seen again here.
+- **One frame of 50 ms** when planning opens on an island for the first time.
+- **Three of the cautions are guesses at where a line falls**: a short walk to water is 300 m, steep ground is a mean of 35° within 150 m, and a slide's lake matters within 200 m of its stream.
+- **What the land may do is three things**: a slide's lake above, ground that slid, a stream's fan. The world knows no flood, storm or beast yet (N6, P7).
+- **A dwarf is a name, a trade and an age.** There is nothing else of it to choose by until P8.
+
+**For the steps that follow**
+
+- **What they bring** (P5) is a third head in the expedition's column, under Who.
+- **A home hold and its history** (P9, P10) is where the party is drawn from: `party_draw` takes the seed today and would take the hold's people.
+- **A finder** reads `SHORE`'s rows over every island's shore: the rows are data.
+- **A door onto the mainland** is this screen over a piece of it, once pieces have pictures.
+- **A danger of a new kind** is a field and a row of `SHORE` marked `may`.
+
+### P4, first half, as built: needs and the year (2026-11-16)
+
+**What can now happen that could not before:** a party lands in the morning with nothing to eat, drinks at the stream, strips the bracken and the gobies near the landing, sleeps on the ground, and is hungry by the second day unless the player has food gathered and stored; and a dwarf shut in a pit is warned of stage by stage and dies of thirst on the third day unless a stair is dug to it.
+
+The design is `adr/0014`; the real games' figures, with their files, are `interesting-world/notes/colony-sim-reference.md`, section 14; where everything stands on the screen is `foundations/interface.md`, section 17. Shelter and warmth are the second half ("P4, second half, as built", below).
+
+**What the owner sees.** The date and the hour move, top left: the boat stands off at 08:00 on the 1st of spring. The first word of the hold says what the land within a walk bears, season by season. By early afternoon dwarves walk down to the stream and stand in it to drink; toward evening the hungry look for food. With none stored they mark the nearest shoots and fish themselves, gather them and eat, and an alert says the hold lives from hand to mouth and what to do. Gather (G) and Fish (N) drag a rectangle; pins stand up where something would be taken, and the tool's line says what, or why nothing. Store has a fourth choice, Food. The stores say "Food for two days". At 22:00 the party lies down where it is; the land is lit as by a moon. At dawn one message says the day, what was eaten and how long the food will last. A click on a dwarf shows three meters, Drink, Food and Sleep. The Dwarves list groups by what they are at.
+
+**What was built**
+
+- **The calendar** (`clock.odin`): `date_at` reads the day, the hour, the season and the day of the sun's year from the seconds since the boat stood off. A day is 1,200 s, the year 48 days. The dwarves' world reads its own tick; the frame reads the same count, and gives the sun and the creatures that day of the sun's year.
+- **Needs** (`needs.odin`): three rows of `WANTS`; each dwarf's own pace; `care_look` before work, `care_calls` between two blocks, and the urgent need that takes a dwarf from its work; drinking, eating and sleeping as things a dwarf walks to and does; the stages of dying and death; the day's one line.
+- **Food** (`food.odin`): seven rows of `FOODS` on the plants, the tree and the fish the world has; `bearing_of`, the one rule of what a box bears, asked by the hold and by the frame; `larder_round`, what the land within a walk bears through the year, which the hold's first word and the landing's card are both read from.
+- **Gather and Fish** as rows of `WORKS` and marks like any (`orders.odin`); food as things that lie, in heaps of 24 (`goods.odin`); a stockpile that takes food.
+- **On the screen** (`crowd.odin`, `play.odin`, `bar.odin`, `hand.odin`): four more causes for needing the player, the list's groups, the meters, the stores' food, two tools, the alerts for a death and for foraging, and the Food row of a landing's card (`landing.odin`).
+- **Without a window**: an orders file takes `gather x y z x y z` and `fish x y z x y z`, and `store food ...`; the run's summary says the date, who is alive, how each dwarf's needs stand and where it is, and the places to drink the party found.
+
+**The figures, beside the real games'** (their files are in the reference note)
+
+| | RimWorld | Dwarf Fortress | Ingnomia | Here |
+|---|---|---|---|---|
+| A day at normal speed | 16:40 | 12 s | 12 min | 20 min (6:40 at 3 times, 3:20 at 6) |
+| A year | 60 days, 16.7 h | 336 days, 67 min | 48 days, 9.6 h | 48 days, 16 h (2.7 h at 6 times) |
+| Hunger: full to hungry | 11 h | 42 days | 1.9 days | 10 h; two meals a day of two or three things |
+| With nothing to eat, dead after | 2.2 days | when its fat is gone | 2.8 days | 3 days |
+| Thirst | none | twice as fast as hunger | as hunger | full to thirsty in 6.6 h, about three drinks a day; dead a day and a half after running dry |
+| Sleep | tired after 18 h; sleeps 22 to 6 by its timetable; 10.5 h mends it | about once a month | very sleepy after 1.7 days | tired after 16 h; lies down from 22:00 under three quarters rested; 8 h mend 16 |
+| One eating, one drink | 8 s | | | 10 s a thing, 6 s a drink |
+| A plant gathered | a bush: 10 berries, a third of a day, 4 s of work, again in 4 days | | | a plant's shoots: a tenth of a day, 4 s, again next year; a shii's nuts: up to nine fifths of a day, 30 s |
+| A catch | fish of 0.05 to 0.5 of a day | | | gobies, a tenth of a day, 20 s; fished water holds fish again in 4 days |
+
+Twenty minutes was chosen over RimWorld's 16:40 because a dwarf here walks to water and over pathless slopes to its work; 48 days because four seasons of twelve are short enough to see a year in an evening at the fastest speed and long enough that a season's food has to be stored. Death was made slower than RimWorld's because here the remedy may be a walk and an order away.
+
+**What the start island bears** (seed 7, as the hold says when the party stands ashore): bracken and bamboo shoots in spring, wild rice stems late in summer, shii nuts in autumn, gobies all year. No ayu: none reached the island, across 163 km of sea. Summer and winter are lean: gobies only, a twentieth of a day each.
+
+**Found by playing, and put right**
+
+- *Night was black.* For eight hours of every twenty-four nothing could be seen or ordered. The night is now lit as by a full moon (`sky_ambient`).
+- *A hungry dwarf looked 36 m round itself and gave up*, saying nothing bore food, with a wood of shoots a hundred metres off. It now looks over the land's cells within a short walk, the nearest that the rows say bear something first.
+- *A starving party starved beside the stream.* Run for a year with no orders, all seven died on the 6th of summer. Reproduced at that moment from the run's own summary: hunger that would not wait took each dwarf from its fishing every three seconds, so no catch was ever landed. The work that is the remedy is no longer left for the need.
+- *A dwarf shut in a pit had the land stripped for it.* It could reach no food, so it marked more, and the others gathered 221 things it never ate. A dwarf shut in, or with food lying where it has no way to, marks nothing and says it has no way to food.
+- *The dead still needed the player*: a dwarf dead in a pit stood among those who need you as "shut in". The dead need nothing.
+- *The party on a dry shore died with a stream 400 m off.* Six cells of one unreachable water used up every try. Waters are now tried, not cells, and a place to drink once found is known to all.
+- *The marks to gather could not be seen*: a tile on the ground was lost under the tint of the ground dragged over, and a pin a metre high stood inside grass taller than itself. A pin now stands two metres.
+- *"Starving" was said four times an hour* of a dwarf that ate a goby between. A stage is said again only after the need was met.
+- *The orders bar ran into the lists' buttons* at 175% with eight tools. It wraps.
+
+**Played** (`interesting-world/real/play/`; every picture looked at)
+
+- `p4-play.txt`: the first day from the landing to the next dawn, at the fastest speed: the first word; a card; Gather on bare shore and on the wood's edge; Fish on the sea and on the stream; a food stockpile; a day's felling left for a drink; evening; the night and a sleeper; an order that waits while they sleep; the morning's word (`p4-01` to `p4-17`).
+- `p4-pit-orders.txt` and `p4-pit-saved-orders.txt`, with no window: a dwarf shut in a pit, left (thirsty with no way at 13:00, parched at 16:30, dead on the 3rd of spring) and saved by a stair dug to it (`p4-20` to `p4-23`).
+- With no window and no orders: five days, four days on a shore 400 m from fresh water, and a whole year (`--dwarves=57600`, 5 s to run). Left wholly alone on the start island the seven live through the year, hungry and 45 times said to be starving or parched, doing nothing but feeding themselves: 25 to 100 gobies a day in summer and winter. It is a near thing: an earlier build of the same day, in which marks the hungry could not reach were tried for ever, lost four of the seven on the 8th and 9th of summer.
+- Pictures of a moment: the seventh day of summer, autumn and winter at noon (`p4-30` to `p4-32`), and the landing's card with its Food row (`p4-40`).
+
+**Costs.** A tick of seven costs 3 to 5 µs with their needs, against 0.3 before: most of it is the hungry looking for food and work. A year with no orders is 576,000 ticks, 560 lines of log and 7,400 ways looked for, and runs in 5 s. A hungry dwarf's look over the land is up to 120 cells of 256 columns, a few tens of milliseconds at worst, on the hold's thread, at most once in thirty seconds.
+
+Benches, one round, the machine at a load of 8 to 13 from other work, not run against the parent in the same minutes. Our work in ms, median / 99% / worst, and frames over 12.5 ms:
+
+| Bench | This step |
+|---|---|
+| Forest flank, first person | 2.11 / 9.77 / 33.16, 6 over |
+| Down through cloud, first person | 1.92 / 6.02 / 10.87, 0 over |
+| From above, the cut following the ground | 1.93 / 5.96 / 7.49, 0 over |
+| From above over the landing, the seven on screen, 40 s | 1.00 / 2.77 / 5.54, 0 over |
+
+The interface listed in 0.04 to 0.06 ms a frame. The six late frames of the forest flank were under the heavier load and were not chased, as agreed; that bench should be run once on a quiet machine. Nothing this step added runs on the frame's thread but the date and the meters.
+
+**Determinism.** `./build.sh test` plays gather, fish and a food stockpile into the second day, three ways, and the logs agree (`cc87256386a20280` at this step's first commit; it changes on purpose, since a hold that drinks, eats and sleeps does everything at other moments). `GOLDEN` is unchanged: forming was not touched.
+
+**Weak points**
+
+- **Nothing spoils.** Shoots gathered in spring are eaten in winter. Spoiling, drying and smoking belong with P5's making; until then a season's food is a matter of labour and stockpile room only.
+- **The party brings no stores.** By the first evening it is hungry. It was asked not to invent a food that is not the island's; provisions come with what an expedition brings (E-1 with P5). *Changed on merging, the same day: the party brings provisions for four days, since played through the owner's cases a party that forages from its first afternoon does little else, and neither game starts so (`open-decisions.md`).*
+- **Left alone the party survives a year on the start island.** It forages well enough to live, badly, and does no other work. Whether neglect should kill sooner is the owner's (asked).
+- **The sea has no fish and the shore no shellfish**, since the world has no rows for them: the osprey "fishes the sea round it" and nothing swims there. That is the natural track's.
+- **Sleepers lie where they stood**, in a heap by the stockpile, and a sleeping body differs from a dead one only by its colour. Beds and a place to sleep come with shelter.
+- **Hunger and thirst cost nothing until they kill.** A starving dwarf works and walks as fast as a fed one.
+- **A plant gathered looks as it did**: only its mark goes. The tool then says "What was here has been taken".
+- **Fish are a draw on each square metre of water**, by the creature's own density, not the fish the eye sees swimming.
+- **The seasons of the plant foods are from memory** of Japanese gathering calendars, not from a source.
+- **The year shows on the land only by the sun**: the wood is evergreen, and no plant's look changes.
+- **No lens shows where food grows**: the field behind the landing's Food row costs a thousand reads a point. The Gather tool's pins under the pointer are the way to look.
+- **Not tried by hand**: no pointer has dragged Gather across a wood in a window.
+
+
+### P4, second half, as built: shelter and warmth (2026-11-16)
+
+**What can now happen that could not before:** a party sleeps its first spring nights on open ground and is none the worse; rain comes on the fourth evening and wets it through; the player has timber felled, a fire laid, a hut walled and roofed and its floor marked to sleep on, and at dawn the hold says seven slept indoors; and a party left to itself is warned on the first day of winter that it is numb with cold, and is dead of it on the fifth.
+
+The design is `adr/0015`; the real games' figures, with their files, are `interesting-world/notes/colony-sim-reference.md`, section 15; where everything stands on the screen is `foundations/interface.md`, section 19.
+
+**What the owner sees.** Under the date, top left, a line: "Fair, 14 °C, wind from the east". The pointer resting on it is told why. When it rains, rain falls across the picture and the ground darkens, but not under a roof. A dwarf's card has a fourth meter, Warmth, and says where it sleeps: on open ground, under a roof, indoors, by a fire. Build has two more choices: Roof, which lays a layer over the level it is dragged on, so on the tops of walls; and Fire, laid with a click. A fire burns with flames that light the night round it; a click on it says how long its timber lasts and what it warms. Sleep (Z) drags a place to sleep, shown in dusk blue; a click on it says how many of its places are indoors. The lens Shelter tints ground under a roof and ground indoors. At dawn the hold says the weather that was and how the party slept. In winter, with no fire and no roof, every picture at the top wears the trouble sign and an alert counts them.
+
+**What was built**
+
+- **The weather** (`weather.odin`): one function of the island's climate, the place and the seconds since the boat stood off: air, rain, wind, sky, snow. The dwarves' world asks it of its tick and the frame of the same count. Start-up prints the year's weather where the party gathers, season by season, and when the first rains fall.
+- **Shelter** (`shelter.odin`, `shelter_of`): a roof within sixteen blocks over the head, walls within five steps, indoors with three ways shut; asked by the hold of its ground and by the frame of the blocks it draws.
+- **Cold**: a fourth row of `WANTS`; what a dwarf feels (`feel_at`); getting wet and drying; warming itself (`warm_find`); the stages and death by the first half's code.
+- **Where a dwarf sleeps** (`sleep_find`): a sleeping place, a roof, a fire, where it is. A sleeping place is a zone with `sleep` set, on the stockpiles' own orders and map.
+- **Fire** (`Fire`, `fires_tick`, `fire_feed`): laid by the Build work of one log, fed from the nearest timber, burning down, going out, lit again when fed; let go out and removed by orders.
+- **Roof** as a plan of Build, and a block laid on the top of a wall two high from the ground beside it.
+- **On the screen** (`shelter_view.odin`, `crowd.odin`, `bar.odin`, `play.odin`, `shaders.metal`): the weather's line, rain and wet ground, the fourth meter, two causes for needing the player, the Sleep tool, Roof and Fire, the two cards, the lens, firelight, the alert for a fire with no timber.
+- **Without a window**: an orders file takes `sleep x y z x y z`, `build fire timber x y z x y z`, `build roof stone|timber x y z x y z`, `fire feed|leave x y z x y z`; `unstore` removes a sleeping place and `unmark` puts a fire out; the summary says each dwarf's warmth, what it feels and where, the weather and why, each fire, and the sleeping places' shelter. A script takes `until hour h`.
+
+**The figures, beside the real games'** (their files are in the reference note)
+
+| | RimWorld | Dwarf Fortress | Here |
+|---|---|---|---|
+| The day's swing of the air | 7 °C either way | block by block | 3.5 °C either way under a clear sky, 1.4 under an overcast one: an island's |
+| Rain | one draw in eight in a temperate forest, held a quarter of a day to nearly three | rain or snow, by the region | showers of three hours, for the share of the hours the place's own rain makes at 1.8 mm an hour: 15% where the party lands |
+| Comfortable from | 16 °C with nothing on; lower by clothes | no need | 12 °C felt: clothed as it landed |
+| Wet | "soaking wet", a mood, for 2.4 hours | a thought | 5 °C colder and the wind's chill doubled; dry in 3 hours, half an hour by a fire |
+| Wind | none on a pawn | none | 0.4 °C for each m/s, less by a quarter for each way walled |
+| Harm begins | 10 °C under comfortable | only where water freezes | under 6 °C felt, once no warmth is left |
+| Dead of cold after | a day and a third at most | | a day and a half of such hours |
+| Roof | a grid, built by itself over a closed room, 6.9 cells from a wall at most | a tile is outside if the sky sees it | a block within 16 over the head; nothing falls |
+| Indoors | a closed room, three quarters roofed | inside, dark, subterranean: three flags | a roof, and three of four ways walled within five steps |
+| A room under rock | drawn toward 15 °C | | halfway from the air outside to the year's mean: 13 °C on a winter night here |
+| A fire | 20 wood; burns 10 a day; 4.6 times in rain; warms a closed room only | none to sit by | one log to lay, holds six, burns three a day, three times in rain; warms two steps in the open and four indoors |
+| A place to sleep | the sleeping spot, free, before any bed | a dormitory zone | ground dragged like a stockpile |
+
+Twelve degrees was chosen because the start island is mild: 9.8 °C in its coldest month, 7 to 14 through winter. With RimWorld's figures nothing on it would ever be cold. It is the rain and the wind that make a winter night there dangerous, as on a real hill, so they are what chills. A day and a half was chosen as thirst's was: the remedy is an order and a walk away.
+
+**What the start island's weather is** (seed 7, where the party gathers, as start-up says): spring 10 to 25 °C with rain 54 of its 288 hours; summer 21 to 29; autumn 10 to 25; winter 7 to 14, its nights' coldest hour 8.5 on average, rain 36 hours. The first rain falls on the evening of the 4th of spring. No snow.
+
+**Found by playing, and put right**
+
+- *A hut could not be roofed.* With walls two blocks high, Floor pressed on a wall's top laid its layer at head height. Build has Roof, a layer over the level pressed, and a mason lays a block on the top of such a wall from the ground beside it.
+- *The roof's timber was carried to the top of the wall and dropped, for ever.* Stuff for a block was brought to the floor nearest it, which for a roof is the wall's top, where no way leads. It is brought to a floor the block can be laid from that the carrier has a way to (`site_haul`). Reproduced from the hut's orders: 25 marks waiting for timber with 40 logs lying.
+- *A dwarf was moved onto the roof and died there of thirst*, on the 4th of spring. A wall's upper block was laid where it walked on the lower; it was moved "to the nearest ground", which was the wall's top, two blocks up with no way down. Reproduced from the same orders. No block is laid where a dwarf stands or walks (`trodden`), and one moved aside goes beside or below before above. This is the fault left on merging the first half.
+- *Nobody slept in the hut.* A bush filled its doorway. The dwarves lay outside and said nothing. The hold now says, once a night, that no way leads to the sleeping place.
+- *The fire ordered in winter was never lit.* A cold dwarf left the laying of it for the cold, every two minutes; its log was fetched only when nothing else was marked, and 25 trees were; and the fire went unfed while marks remained, since a dwarf that finishes a block takes the next without standing idle. The fire's work is not left for cold, a cold dwarf takes a fire's mark first, and the log and a dying fire come before marked work.
+- *A fire was fed only from the nearest pile*, which may lie where no way leads. It tries five.
+- *Tips on parts that do nothing were never shown*: the meters' and the stores' from the first half, and the weather's. A resting pointer is told them now.
+- *Three meters across had no room for a fourth.* They stand two to a row.
+- *"Seven slept by a fire"* was said of seven in a room with a fire: indoors is said first.
+
+**Played** (`interesting-world/real/play/`; every picture looked at)
+
+- `p4-shelter-play.txt`, from the player's seat, two days at the fastest speed: the weather's line and its why; a wood felled; the first night on open ground and its dawn; Fire chosen, placed, lit, and its card; four walls dragged and built; Roof dragged from wall top to wall top; the hut; the lens with the view cut under the roof; Sleep dragged on its floor; the second night indoors, a sleeper's card, and the dawn; the sleeping place taken, made larger through the door, trimmed, removed; the fire let go out (`p4s-01` to `p4s-20`).
+- `p4-hut-orders.txt`, with no window: the same hut by orders, three days, which is where three of the faults above were reproduced before each was put right.
+- `p4-rain-orders.txt`, with no window: the first rain, on the evening of the 4th of spring, with a trench to dig: seven wet through, warmth down a tenth (`p4s-30`).
+- No orders at all, a year: nobody is cold before the 9th of autumn; numb with cold on the 1st of winter, dying on the 2nd, dead on the 5th and 6th (`p4s-31`, `p4s-32`).
+- `p4-winter-saved-orders.txt`: the same year, answered at the first warning: the party sent back to its camp, trees felled, a fire laid in the open, the ground round it marked to sleep on. The fire is lit in half a minute; nobody dies of cold; three of the seven starve, as a party that stored nothing does in winter (`p4s-33`).
+- `p4-winter-room-orders.txt`: a room dug and roofed on the first day, slept in, with a fire, food gathered and fished every fourth day, timber felled twice more: seven of seven alive at the next spring. The fire goes out four times for want of timber, and the room alone keeps them (`p4s-34`).
+- The first half's and P3's scripts played again on this build: see "Checked" below.
+
+**Weak points**
+
+- **The cold has two speeds**: nothing in three seasons, death in a week of winter. A dwarf that is chilled works and walks as fast as a warm one, and nothing but the meter and the alert says winter is coming. Start-up prints the year's weather; the screen does not.
+- **Food is still what kills a hold that plays well.** With a room, a fire and the land gathered every fourth day the seven live; with the room and no orders for food all seven starved in summer on `main`'s rule as on this one. Storing a season's food is the first half's open matter, and winter makes it sharper.
+- **A roof is any block within sixteen overhead**, so the foot of a cliff is "under a roof", truly, and a floor five blocks up shelters as well as one at the head.
+- **Indoors needs no door**, since there are none: a doorway a block wide leaves a room indoors, and so does a wall with one block out of it.
+- **Rain is drawn over everything**, cut rooms as well; from above an overcast day with no rain is as sunny as a clear one, since the cloud's shade is not drawn there.
+- **The wind's bearing never changes**, and its strength changes only with the spell.
+- **The dwarves lie in a heap** in a sleeping place, nearest the door first, and tall grass grows on through a hut's floor.
+- **A fire is walked round only where there is room**; a dwarf may still step through one.
+- **Firelight passes through walls**, and a fire inside lights the ground outside.
+- **A fire burns three logs a day whether or not anyone is cold.** The player lets it go out in summer by hand.
+- **Nothing here was played by a hand in a window.**
+
+**Checked.** `odin check src -vet-unused`; `./build.sh`; `./build.sh test`, which now marks the room it digs to sleep in, lays a fire in it, and asks that its floor is indoors by the rule, that the dawn says the party slept indoors, that the fire was fed and that every dwarf is warm on the second day; and presses Sleep, Fire and the Shelter lens, takes a sleeping place and a fire in the hand, and reads the fourth meter, the weather's line and the two alerts. The earlier scripts were played again on this build: `p4-play.txt` (the first day: seven alive, every order done), `zones-play.txt`, `goods-play.txt` (its five works done; its last case ends on a stair just marked, as written), and `p3-play.txt` (24 orders given and none left, seven alive, nobody shut in, fallen or moved aside). **`p3-play.txt` was found to leave the game at its thirteenth case, on `main` as here**: a second Escape there opens the menu, in which the script's D, meant for Dig, is "Leave to the front door", so its cases 13 to 15 were being played at the front door. The Escape is taken out, and all fifteen cases now play; the thirteenth, which now falls at dusk, waits on dwarves gone to eat and sleep.
+
+**Determinism.** The dwarves' logs agree three ways, 8d74e83926414943 (it changes on purpose: the dawn's line says the weather and the night, and the test plays a sleeping place and a fire). `GOLDEN` is unchanged: forming was not touched.
+
+**Costs.** A tick of seven costs 6 to 8 µs through a year with no orders, against 3 to 5 before: each dwarf asks the weather once a second and its shelter when it has moved. A year with no orders runs in 10 s, where it ran in 5. The shelter lens reads 89 by 89 columns round the view when the view has moved eight blocks or a block has changed, at most four times a second.
+
+Benches, one round, the machine at a load of 5 to 6.5 from other work. Our work in ms, median / 99% / worst, and frames over 12.5 ms:
+
+| Bench | This step |
+|---|---|
+| Forest flank, first person | 1.21 / 3.65 / 4.69, 0 over |
+| Down through cloud, first person | 1.08 / 3.06 / 3.82, 0 over |
+| From above, the cut following the ground | 1.65 / 4.49 / 6.70, 0 over |
+| The same with rain falling (`--rain=0.8`) | 1.77 / 5.63 / 11.73, 0 over |
+| From above over the landing, the seven on screen, 40 s | 0.73 / 2.91 / 4.99, 0 over |
+| Over the hut, cut under its roof, the Shelter lens on, 20 s | 0.64 / 2.78 / 3.50, 0 over |
+
+The interface listed in 0.03 to 0.06 ms a frame. The one frame of 11.7 ms under rain was not chased.

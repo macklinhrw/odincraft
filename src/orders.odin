@@ -25,8 +25,8 @@ import "core:time"
 //   wall         one or two blocks high, standing on the ground along the line dragged, which it
 //                follows where the ground steps; floor, one layer at the level the drag began on,
 //                which over a space is its roof; a built stair, up a block a column.
-// Where no block of an order to dig can be come at from ground that is there, a way in is marked
-// with it: a passage two blocks high from the nearest floor, stepping up or down as it must.
+// An order marks what the player dragged and nothing more. Blocks no floor reaches wait for a way
+// to them, which is the player's to mark: a stair, or a passage from ground that is there.
 //
 // A dwarf works a block beside it, at its feet, its head, a block over or a block under them, or
 // right over its head; and one two under or over in the next column where the block between is open,
@@ -47,10 +47,12 @@ import "core:time"
 //   dig stair-down|stair-up x y z x y z   from the first block toward the second, as wide as the box is across (the tool gives one wide)
 //   fell x y z x y z                  every tree whose trunk stands in the box's columns
 //   build wall|floor|stair stone|timber x y z x y z   a wall as high as the box, on the ground of its columns
+//   build fire timber x y z x y z     a fire, on the block the box begins on
+//   build roof stone|timber x y z x y z   one layer over the level of the block the box begins on: begun on a wall's top, the roof that lies on the walls
 //   unmark x y z x y z                take back every mark in the box's columns
 
-Work  :: enum u8 { Dig, Fell, Build }
-Plan :: enum u8 { Out, Down, Up, Wall, Floor, Stair }
+Work  :: enum u8 { Dig, Fell, Build, Gather, Fish }
+Plan :: enum u8 { Out, Down, Up, Wall, Floor, Stair, Fire, Roof }   // Fire: no block is laid: a fire is laid and lit in the cell (shelter.odin)
 Stuff :: enum u8 { Stone, Timber }
 
 // A kind of work is a row: what it is called, whose trade it is, and how much faster those hands are.
@@ -65,8 +67,11 @@ WORKS := [Work]Work_Row{
 	.Dig   = {"dig", "digging", "dug", {"miner", "miner"}, 1.5},
 	.Fell  = {"fell", "felling", "felled", {"woodcutter", "carpenter"}, 1.5},
 	.Build = {"build", "building", "built", {"mason", "carpenter"}, 1.5},
+	// What bears food and what swims (food.odin): the grower's and the cook's hands know a plant; the fisher's the water.
+	.Gather = {"gather", "gathering", "gathered", {"grower", "cook"}, 1.5},
+	.Fish   = {"fish", "fishing", "fished", {"fisher", "fisher"}, 1.5},
 }
-PLANS := [Plan]string{.Out = "out", .Down = "stair-down", .Up = "stair-up", .Wall = "wall", .Floor = "floor", .Stair = "stair"}
+PLANS := [Plan]string{.Out = "out", .Down = "stair-down", .Up = "stair-up", .Wall = "wall", .Floor = "floor", .Stair = "stair", .Fire = "fire", .Roof = "roof"}
 STUFFS := [Stuff]string{.Stone = "stone", .Timber = "timber"}
 
 // How long work takes, from RimWorld's figures at its common speed of work (JobDriver_Mine: a pick
@@ -87,11 +92,9 @@ TRIES      :: 24     // marks a dwarf looks at, the nearest first, before it res
 REST       :: 10     // ticks a dwarf that found no work waits before it looks again
 AGAIN      :: 20     // ticks before a mark that could not be worked is looked at again
 ORDER_MOST :: 8000   // blocks one order may mark
-WAY_IN     :: 32     // steps a way in may be long where it is searched for every way at once,
-WAY_FAR    :: 64     // and where a straight stair or passage is tried: a room sixty blocks under flat ground gets its stair
 
 // Why a mark is not being worked, as the hold last found it.
-Waits :: enum u8 { None, Front, No_Way, No_Room, Too_Hard, Rooted, No_Stuff, Loose, Stood_On, Shuts_In }
+Waits :: enum u8 { None, Front, No_Way, No_Room, Too_Hard, Rooted, No_Stuff, Loose, Stood_On, Shuts_In, Way_Out }
 // (No_Stuff: the stone or timber for a block has not been brought to it; goods.odin.)
 WAITS := [Waits]string{
 	.None     = "",
@@ -104,6 +107,7 @@ WAITS := [Waits]string{
 	.Loose    = "nothing lies beside them to lay them against",
 	.Stood_On = "a dwarf stands in the way",
 	.Shuts_In = "the work would shut a dwarf in",
+	.Way_Out  = "they are the last step out of a pit",
 }
 
 Mark :: struct {
@@ -113,9 +117,12 @@ Mark :: struct {
 	taker: int,         // the dwarf that has taken it, or -1
 	wait:  Waits,
 	tried: int,         // the tick it was last found unworkable
+	as_of: int,         // and, of a last step out of a pit, how many changes the ground had seen then (Hold.ground)
 	by:    int,         // and by which dwarf, where the cause is that dwarf's own: no way, or its places taken. Others still try it
 	tall:  i32,         // a tree's height
 	tree:  Tree_Kind,
+	food:  Food_Kind,   // to gather or to fish: what it gives, and how many (food.odin)
+	n:     i32,
 }
 Got :: struct { mat: Mat, n: int }
 Site :: struct {
@@ -133,6 +140,7 @@ Site :: struct {
 	coming:      int,               // and what dwarves are on their way with
 	promised:    int,               // of what lies at it, what marks in hand will use
 	down:        bool,              // it takes built blocks down
+	steps:       int,               // blocks of it left standing, as the way out of the pit it dug
 	over:        bool,
 }
 
@@ -191,126 +199,9 @@ ground_at :: proc(src: Blocks, c: [3]i32) -> bool { m := src.at(src.data, c); re
 // Whether a dwarf could stand with its feet in a cell today.
 stands_at :: proc(src: Blocks, c: [3]i32) -> bool { return src.floor(src.data, c) }
 
-// Whether a floor is open ground and no ledge: ROOMY floors or more are joined to it by steps, level
-// or a block up or down. A way in must end on ground the dwarves walk, not on a shelf of a sea
-// cliff that happens to lie beside the dig.
-ROOMY :: 150
-roomy :: proc(src: Blocks, c: [3]i32) -> bool {
-	seen := make(map[[3]i32]bool, context.temp_allocator)
-	queue := make([dynamic][3]i32, context.temp_allocator)
-	append(&queue, c)
-	seen[c] = true
-	for k := 0; k < len(queue); k += 1 {
-		if len(queue) >= ROOMY do return true
-		for side in ([4][3]i32{{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) do for dy in ([3]i32{0, 1, -1}) {
-			q := queue[k] + side + {0, dy, 0}
-			if seen[q] do continue
-			seen[q] = true
-			if stands_at(src, q) do append(&queue, q)
-		}
-	}
-	return false
-}
-
-// The way in to blocks marked to be dug, and out of them: from the cells a dwarf will stand in once
-// they are dug, outward through the ground a step at a time, level or a block up or down, to the
-// nearest place a dwarf can stand today. The blocks of that passage, two high and three where it
-// steps, are added to the marks: a notch of steps in the rim of a pit, a passage and stair to a room
-// marked inside a hill. So no dig leaves a bare pit, as Ingnomia's hole makes its own ramps and
-// Dwarf Fortress pairs its stairs (colony-sim-reference.md, section 2). Nothing is added where a
-// dwarf will step straight in from ground that is there, or no such ground lies within WAY_IN steps.
-way_in :: proc(src: Blocks, cells: ^[dynamic][3]i32) -> (found: bool) {
-	if len(cells) == 0 || len(cells) > 4000 do return true
-	marked := make(map[[3]i32]bool, context.temp_allocator)
-	for c in cells do marked[c] = true
-	Node :: struct { at: [3]i32, back: int, far: i32 }
-	nodes := make([dynamic]Node, context.temp_allocator)
-	seen := make(map[[3]i32]bool, context.temp_allocator)
-	for c in cells do if !marked[c - {0, 1, 0}] && ground_at(src, c - {0, 1, 0}) {   // the cells stood in once the order is dug
-		append(&nodes, Node{c, -1, 0})
-		seen[c] = true
-	}
-	goal := -1
-	search: for k := 0; k < len(nodes) && len(nodes) < 8000; k += 1 {
-		n := nodes[k]
-		if n.far >= WAY_IN do break
-		for dy in ([3]i32{0, -1, 1}) do for side in ([4][3]i32{{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) {
-			q := n.at + side + {0, dy, 0}
-			if seen[q] || marked[q] do continue
-			if dy != 0 do if low := n.at if dy > 0 else q; !passable(src, &marked, low + {0, 2, 0}) do continue   // room over the lower one's head to step
-			seen[q] = true
-			if stands_at(src, q) {   // a floor that is there: the way's end if it is open ground, and a shelf to walk on if it is not
-				append(&nodes, Node{q, k, n.far + 1})
-				if !roomy(src, q) do continue
-				goal = len(nodes) - 1
-				break search
-			}
-			if !ground_at(src, q - {0, 1, 0}) || !passable(src, &marked, q) || !passable(src, &marked, q + {0, 1, 0}) do continue   // something to stand on, and a way through
-			if !ground_at(src, q) && !ground_at(src, q + {0, 1, 0}) do continue   // ground to cut through: no bridge over open air
-			append(&nodes, Node{q, k, n.far + 1})
-		}
-	}
-	// None within the search's reach: a room marked deep. A straight stair or passage is tried from
-	// each cell stood in, the four ways, rising, level and falling, as far as WAY_FAR; the shortest
-	// that comes out on open ground is the way. Under flat ground that is a stair as long as the room is deep.
-	if goal < 0 {
-		starts := len(nodes)
-		for k := 0; k < len(nodes) && k < starts; k += 1 do if nodes[k].back >= 0 {
-			starts = k
-			break
-		}
-		best_start, best_side, best_dy, best_len := -1, [3]i32{}, i32(0), i32(WAY_FAR + 1)
-		for k in 0..<min(starts, 96) do for side in ([4][3]i32{{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) do for dy in ([3]i32{1, 0, -1}) {
-			p := nodes[k].at
-			for step in i32(1)..<best_len {
-				q := p + side + {0, dy, 0}
-				if dy != 0 do if low := p if dy > 0 else q; !passable(src, &marked, low + {0, 2, 0}) do break
-				if marked[q] do break
-				if stands_at(src, q) {
-					if roomy(src, q) do best_start, best_side, best_dy, best_len = k, side, dy, step
-					break
-				}
-				if !ground_at(src, q - {0, 1, 0}) || !passable(src, &marked, q) || !passable(src, &marked, q + {0, 1, 0}) do break
-				if !ground_at(src, q) && !ground_at(src, q + {0, 1, 0}) do break
-				p = q
-			}
-		}
-		if best_start < 0 do return false
-		at := best_start
-		for step in i32(1)..=best_len {
-			append(&nodes, Node{nodes[at].at + best_side + {0, best_dy, 0}, at, step})
-			at = len(nodes) - 1
-		}
-		goal = at
-	}
-	add :: proc(src: Blocks, marked: ^map[[3]i32]bool, cells: ^[dynamic][3]i32, c: [3]i32) {
-		if marked[c] || !ground_at(src, c) do return
-		marked[c] = true
-		append(cells, c)
-	}
-	for k := goal; k >= 0; k = nodes[k].back {
-		n := nodes[k]
-		if k != goal {
-			add(src, &marked, cells, n.at)
-			add(src, &marked, cells, n.at + {0, 1, 0})
-		}
-		if n.back >= 0 do if o := nodes[n.back].at; o.y != n.at.y {   // a step: room over the lower one's head
-			low := o if o.y < n.at.y else n.at
-			add(src, &marked, cells, low + {0, 2, 0})
-		}
-	}
-	return true
-}
-
-// Open air, or ground the picks cut: a dwarf passes neither leaf nor limb, nor rock too hard.
-passable :: proc(src: Blocks, marked: ^map[[3]i32]bool, c: [3]i32) -> bool {
-	m := src.at(src.data, c)
-	return m == .Air || marked[c] || !is(m, PLANT_BLOCKS) && MATERIALS[m].strength <= TOOLS
-}
-
 // The blocks an order marks, of the blocks as they stand: to dig, the ground in its boxes that is
-// no plant's, with a way in where it has none; to build, the open cells of its shape.
-cells_of :: proc(work: Work, shape: Plan, a, b: [3]i32, src: Blocks, out: ^[dynamic][3]i32, lost: ^bool = nil) {
+// no plant's, and no block besides; to build, the open cells of its shape.
+cells_of :: proc(work: Work, shape: Plan, a, b: [3]i32, src: Blocks, out: ^[dynamic][3]i32) {
 	open :: proc(src: Blocks, c: [3]i32) -> bool { m := src.at(src.data, c); return m == .Air || is(m, LEAVES) }
 	lo, hi := box_of(a, b)
 	if (i64(hi.x - lo.x) + 1)*(i64(hi.z - lo.z) + 1)*(i64(hi.y - lo.y) + 3) > 8*ORDER_MOST do return
@@ -321,13 +212,14 @@ cells_of :: proc(work: Work, shape: Plan, a, b: [3]i32, src: Blocks, out: ^[dyna
 		for box in boxes do for y := box[1].y; y >= box[0].y; y -= 1 do for z in box[0].z..=box[1].z do for x in box[0].x..=box[1].x {
 			if ground_at(src, {x, y, z}) do append(out, [3]i32{x, y, z})
 		}
-		if found := way_in(src, out); !found && lost != nil do lost^ = true   // no way in was found for it: it says so
-	case .Fell:
+	case .Fell, .Gather, .Fish:   // trees, and what bears food and swims, are found by their own rules (trees_standing; bearing_of, food.odin)
 	case .Build:
 		switch shape {
 		case .Out, .Down, .Up:
 		case .Floor:
 			for z in lo.z..=hi.z do for x in lo.x..=hi.x do if open(src, {x, a.y, z}) do append(out, [3]i32{x, a.y, z})
+		case .Roof:   // the layer over the level the drag began on: over a wall's top, the roof that lies on the walls and spans what they stand round
+			for z in lo.z..=hi.z do for x in lo.x..=hi.x do if open(src, {x, a.y + 1, z}) do append(out, [3]i32{x, a.y + 1, z})
 		case .Wall:   // as high as the box, standing on the ground of each column near the level it began on: it follows the ground, so a mason reaches all of it
 			high := hi.y - lo.y + 1
 			for z in lo.z..=hi.z do for x in lo.x..=hi.x {
@@ -336,6 +228,8 @@ cells_of :: proc(work: Work, shape: Plan, a, b: [3]i32, src: Blocks, out: ^[dyna
 				for foot > lo.y - 3 && open(src, {x, foot - 1, z}) do foot -= 1     // down to ground that lies lower
 				for y in foot..<foot + high do if open(src, {x, y, z}) do append(out, [3]i32{x, y, z})
 			}
+		case .Fire:   // one, in the cell over the block the drag began on, where a dwarf could stand
+			if c := a + {0, 1, 0}; stands_at(src, c) do append(out, c)
 		case .Stair:
 			axis, way, steps := stair_run(a, b)
 			for i in 0..<steps do for y in a.y + 1..=a.y + 1 + i do for across in lo[2 - axis]..=hi[2 - axis] {
@@ -389,6 +283,7 @@ cut_words :: proc(m: Mat) -> string {
 
 // What the store holds of a kind, in words: "basalt", "shii timber".
 store_words :: proc(m: Mat) -> string {
+	if is(m, FOOD) do return FOODS[food_of(m)].name
 	if is(m, bit_set[Trait]{.Bark}) do for sp in SPECIES do if sp.bark == m do return fmt.tprintf("%s timber", sp.name)
 	return "timber" if m == .Timber else mat_words(m)
 }
@@ -421,7 +316,7 @@ hold_blocks :: proc(h: ^Hold) -> Blocks {
 }
 
 site_thing :: proc(work: Work, shape: Plan) -> string {
-	return "trees" if work == .Fell else "stair down" if shape == .Down else "stair up" if shape == .Up else "digging" if work == .Dig else PLANS[shape]
+	return "trees" if work == .Fell else "gathering" if work == .Gather else "fishing" if work == .Fish else "stair down" if shape == .Down else "stair up" if shape == .Up else "digging" if work == .Dig else PLANS[shape]
 }
 
 // The order as an orders file and the log give it.
@@ -433,6 +328,12 @@ order_words :: proc(o: Order) -> string {
 	case .Build:  return fmt.tprintf("build %s %s %s", PLANS[o.shape], STUFFS[o.stuff], box)
 	case .Unmark: return fmt.tprintf("unmark %s", box)
 	case .Store:  return fmt.tprintf("store %s %s", TAKES[o.takes], box)
+	case .Sleep:  return fmt.tprintf("sleep %s", box)
+	case .Tend:   return fmt.tprintf("fire %s %s", "feed" if o.on else "leave", box)
+	case .Unstore: return fmt.tprintf("unstore %s", box)
+	case .Takes:  return fmt.tprintf("takes %s %s", TAKES[o.takes], box)
+	case .Gather: return fmt.tprintf("gather %s", box)
+	case .Fish:   return fmt.tprintf("fish %s", box)
 	}
 	return ""
 }
@@ -466,13 +367,15 @@ mark_remove :: proc(h: ^Hold, k: int, done: bool) {
 	s.over = true
 	for kind in s.brought do good_drop(h, m.at + {0, 1, 0}, kind, 1)   // what was brought and not laid lies where the order was
 	clear(&s.brought)
-	if !done do return
+	if !done || s.work == .Build && s.shape == .Fire do return   // a fire lit has been said
 	// What was done, and by whom.
 	b := strings.builder_make(context.temp_allocator)
 	n := 0   // what was done of it: a mark taken back is not
 	for count in s.tally do n += count
-	fmt.sbprintf(&b, "The %s %s %s: %d %s.", s.name, "are" if s.work == .Fell else "is", "done" if s.down else WORKS[s.work].done, n, "trees" if s.work == .Fell && n != 1 else "tree" if s.work == .Fell else "blocks" if n != 1 else "block")
-	verb := "cut" if s.work == .Dig else "felled" if s.work == .Fell else "laid"
+	units := work_units(s.work, n) if s.thing != "foraging" else "plant, tree or place of water" if n == 1 else "plants, trees and places of water"
+	h.aside = s.thing == "foraging"   // the log's alone: the hungry feeding themselves is no news each time
+	fmt.sbprintf(&b, "The %s %s %s: %d %s.", s.name, "are" if s.work == .Fell else "is", "done" if s.down || s.work == .Gather || s.work == .Fish else WORKS[s.work].done, n, units)
+	verb := "cut" if s.work == .Dig else "felled" if s.work == .Fell else "took" if s.thing == "foraging" else "gathered from" if s.work == .Gather else "fished" if s.work == .Fish else "laid"
 	first := true
 	for count, i in s.tally do if count > 0 {
 		fmt.sbprintf(&b, "%s %s %s %s %d", "" if first else ",", h.party[i].given, h.party[i].byname, verb, count)
@@ -484,14 +387,50 @@ mark_remove :: proc(h: ^Hold, k: int, done: bool) {
 		for g, i in s.got do fmt.sbprintf(&b, "%s %d of %s", "" if i == 0 else " and" if i == len(s.got) - 1 else ",", g.n, store_words(g.mat))
 		fmt.sbprint(&b, ".")
 	}
+	if s.steps > 0 do fmt.sbprintf(&b, " %d %s left standing as the step out of the pit: a stair dug into it would free %s.", s.steps, "block is" if s.steps == 1 else "blocks are", "it" if s.steps == 1 else "them")
 	h.at = site_middle(s)
 	short := strings.builder_make(context.temp_allocator)
-	head := "Felled" if s.work == .Fell else "Taken down" if s.down else "Dug" if s.thing == "digging" else fmt.tprintf("%s %s", s.thing, WORKS[s.work].done)
-	fmt.sbprintf(&short, "%s: %d %s", sentence(head)[:len(head)], n, "trees" if s.work == .Fell && n != 1 else "tree" if s.work == .Fell else "blocks" if n != 1 else "block")
+	head := "Felled" if s.work == .Fell else "Gathered" if s.work == .Gather else "Fished" if s.work == .Fish else "Taken down" if s.down else "Dug" if s.thing == "digging" else fmt.tprintf("%s %s", s.thing, WORKS[s.work].done)
+	fmt.sbprintf(&short, "%s: %d %s", sentence(head)[:len(head)], n, units)
 	for g in s.got do fmt.sbprintf(&short, ", %d %s", g.n, store_words(g.mat))
+	if s.steps > 0 do fmt.sbprintf(&short, ". %d left as the step out", s.steps)
 	h.short = fmt.tprintf("%s.", strings.to_string(short))
 	say(h, "%s", strings.to_string(b))
 }
+
+// What a kind of work counts its marks in: blocks, trees, plants, places of water.
+work_units :: proc(work: Work, n: int) -> string {
+	one := n == 1
+	switch work {
+	case .Dig, .Build: return "block" if one else "blocks"
+	case .Fell:        return "tree" if one else "trees"
+	case .Gather:      return "plant" if one else "plants and trees"
+	case .Fish:        return "place" if one else "places"
+	}
+	return ""
+}
+
+// An order's marks to gather or to fish, of what a box bears (bearing_of, food.odin): a new order of
+// its own, which is returned. It is the player's, or a hungry dwarf's (forage, needs.odin).
+gather_site :: proc(h: ^Hold, work: Work, found: []Bearing, a, b: [3]i32, thing: string) -> (id: int) {
+	lo, hi := box_of(a, b)
+	middle := [3]i32{(lo.x + hi.x)/2, a.y, (lo.z + hi.z)/2}
+	id = len(h.sites)
+	append(&h.sites, Site{work = work, a = a, b = b, place = place_say(h, middle), thing = thing})
+	for f in found {
+		if f.at in h.marked do continue
+		row := FOODS[f.food]
+		mark_add(h, Mark{at = f.at, site = id, work = .Fish if row.from == .Fish else .Gather, taker = -1, by = -1, tall = f.tall, tree = row.tree, food = f.food, n = f.n})
+	}
+	s := &h.sites[id]
+	s.name = fmt.aprintf("%s at %s", thing, s.place)
+	if s.total == 0 do s.over = true
+	for &d in h.dwarves do if !d.job do d.rest = min(d.rest, 2)
+	return
+}
+
+// Whether a mark is worked from beside a tree's stem, or from beyond its leaves (in_reach).
+mark_tree :: proc(m: Mark) -> bool { return m.work == .Fell || m.work == .Gather && FOODS[m.food].from == .Tree }
 
 site_middle :: proc(s: ^Site) -> Maybe([3]f64) { return [3]f64{f64(s.lo.x + s.hi.x + 1)/2, f64(s.lo.y + s.hi.y + 1)/2, f64(s.lo.z + s.hi.z + 1)/2} }
 
@@ -527,14 +466,52 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 			say(h, `The hold says "%s": %d built %s marked to be taken down at %s.`, words, s.total, "block is" if s.total == 1 else "blocks are", s.place)
 			return
 		}
-		// Nor a built block: the ground there is taken out of its stockpile.
+		// Nor a built block: a fire there is put out and taken up.
+		if fires := fires_remove(h, lo, hi); fires > 0 {
+			h.short = "The fire is put out and taken up." if fires == 1 else fmt.tprintf("%d fires are put out and taken up.", fires)
+			say(h, `The hold says "%s": %s put out and taken up; what timber was left lies there.`, words, "the fire there is" if fires == 1 else fmt.tprintf("%d fires there are", fires))
+			return
+		}
+		// Nor a fire: the ground there is taken out of its stockpile, or its sleeping place.
 		if cells := zone_remove(h, lo, hi); cells > 0 {
-			h.short = fmt.tprintf("Stockpile: %d %s taken out of it.", cells, "place" if cells == 1 else "places")
-			say(h, `The hold says "%s": %d %s taken out of the stockpile there; what lies on them lies loose.`, words, cells, "place is" if cells == 1 else "places are")
+			h.short = fmt.tprintf("%d %s taken out of what was marked there.", cells, "place" if cells == 1 else "places")
+			say(h, `The hold says "%s": %d %s taken out of the stockpile or the sleeping place there; what lies on them lies loose.`, words, cells, "place is" if cells == 1 else "places are")
 			return
 		}
 		h.short = "Nothing is marked there."
 		say(h, `The hold says "%s": nothing is marked there.`, words)
+		return
+	}
+	if o.kind == .Gather || o.kind == .Fish {   // what the box bears now, by the rows of FOODS (food.odin)
+		work := Work.Gather if o.kind == .Gather else .Fish
+		h.at = feet_on({(lo.x + hi.x)/2, o.at.y + 1, (lo.z + hi.z)/2})
+		if (i64(hi.x - lo.x) + 1)*(i64(hi.z - lo.z) + 1) > ORDER_MOST {
+			h.short = "Too much for one order: mark less at a time."
+			say(h, `The hold says "%s": that is more ground than one order may mark, %d columns: mark less at a time.`, words, ORDER_MOST)
+			return
+		}
+		date := date_tick(h.tick)
+		found := make([dynamic]Bearing, context.temp_allocator)
+		barren: Barren
+		bearing_of(work, o.at, o.to, date.sun, date.day, hold_blocks(h), &h.picked, &found, &barren)
+		for k := len(found) - 1; k >= 0; k -= 1 do if found[k].at in h.marked do ordered_remove(&found, k)
+		if len(found) == 0 {
+			why := barren_words(work, barren)
+			h.short = why
+			say(h, `The hold says "%s": %s so nothing is marked.`, words, fmt.tprintf("%s,", strings.to_lower(why[:len(why) - 1], context.temp_allocator)))
+			return
+		}
+		id := gather_site(h, work, found[:], o.at, o.to, site_thing(work, .Out))
+		s := &h.sites[id]
+		h.at = site_middle(s)
+		h.ground += 1   // idle dwarves look to themselves: one standing on what is marked steps off it
+		if work == .Gather {
+			h.short = fmt.tprintf("Marked to gather: %s.", bearing_words(found[:]))
+			say(h, `The hold says "%s": %d %s marked to be gathered at %s, for %s.`, words, s.total, "plant or tree is" if s.total == 1 else "plants and trees are", s.place, bearing_words(found[:]))
+		} else {
+			h.short = fmt.tprintf("Marked to fish: %s.", bearing_words(found[:]))
+			say(h, `The hold says "%s": %d %s of water %s marked to be fished at %s, for %s.`, words, s.total, "place" if s.total == 1 else "places", "is" if s.total == 1 else "are", s.place, bearing_words(found[:]))
+		}
 		return
 	}
 	work := Work.Dig if o.kind == .Dig else .Fell if o.kind == .Fell else .Build
@@ -542,12 +519,11 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 	site := Site{work = work, shape = o.shape, stuff = o.stuff, a = o.at, b = o.to, place = place_say(h, middle)}
 	id := len(h.sites)
 	append(&h.sites, site)
-	hard, rooted, way := 0, 0, 0
-	lost := false
+	hard, rooted := 0, 0
 	switch work {
 	case .Dig, .Build:
 		cells := make([dynamic][3]i32, context.temp_allocator)
-		cells_of(work, o.shape, o.at, o.to, hold_blocks(h), &cells, &lost)
+		cells_of(work, o.shape, o.at, o.to, hold_blocks(h), &cells)
 		if size := (i64(hi.x - lo.x) + 1)*(i64(hi.z - lo.z) + 1)*(i64(hi.y - lo.y) + 3); len(cells) > ORDER_MOST || size > 8*ORDER_MOST {
 			pop(&h.sites)
 			h.short = "Too much for one order: mark less at a time."
@@ -559,8 +535,6 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 		for c in cells {
 			if c in h.marked do continue
 			m := Mark{at = c, site = id, work = work, taker = -1, by = -1}
-			inside := c.x >= box_lo.x && c.x <= box_hi.x && c.z >= box_lo.z && c.z <= box_hi.z && c.y >= box_lo.y && c.y <= box_hi.y
-			way += int(work == .Dig && !inside)   // a block of the way in
 			if work == .Dig {
 				was, _ := walk_block(w, c)
 				if MATERIALS[was].strength > TOOLS do m.wait, hard = .Too_Hard, hard + 1
@@ -577,25 +551,28 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 				foot := [3]i32{t.x + ox, t.base, t.z + oz}
 				under := false   // its foot, or the root a block or two under it, stands on a block of the order
 				for down in i32(1)..=3 do under ||= foot - {0, down, 0} in h.marked
-				if t.form == .Fallen || !under || foot in h.marked || foot in w.edited do continue
+				if t.form == .Fallen || !under || foot in h.marked || ([3]i32{foot.x, FELLED, foot.z} in w.edited) do continue
 				if b, _ := walk_block(w, foot); !is(b, PLANT_BLOCKS) do continue
 				mark_add(h, Mark{at = foot, site = id, work = .Fell, taker = -1, by = -1, tall = t.height, tree = t.kind})
 				rooted += 1
 			}
 		}
+	case .Gather, .Fish:   // marked above
 	case .Fell:
 		trees := make([dynamic]Tree, context.temp_allocator)
 		ox, oz := region.origin.x, region.origin.y
-		trees_in(lo.x - ox, lo.z - oz, hi.x - ox, hi.z - oz, &trees)
+		trees_standing(lo.x - ox, lo.z - oz, hi.x - ox, hi.z - oz, &trees)
 		for t in trees {
 			foot := [3]i32{t.x + ox, t.base, t.z + oz}
-			if t.form == .Fallen || foot in h.marked || foot in w.edited do continue
+			if t.form == .Fallen || foot in h.marked || ([3]i32{foot.x, FELLED, foot.z} in w.edited) do continue
 			if m, _ := walk_block(w, foot); !is(m, PLANT_BLOCKS) do continue   // no stem or bush stands there
 			mark_add(h, Mark{at = foot, site = id, work = .Fell, taker = -1, by = -1, tall = t.height, tree = t.kind})
 		}
 	}
 	s := &h.sites[id]
 	thing := site_thing(work, o.shape)
+	if work == .Build && o.shape == .Fire do s.stuff = .Timber   // whatever was asked: a fire burns timber
+	if work == .Build && o.shape == .Roof do thing = "roof"
 	if work == .Build && o.shape == .Floor {   // a roof where most of it lies over open air
 		over := 0
 		for m in h.marks do if m.site == id do if under, _ := walk_block(w, m.at - {0, 1, 0}); under == .Air do over += 1
@@ -612,12 +589,11 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 		return
 	}
 	more, less := "", ""
-	if way > 0 do more, less = fmt.tprintf("%s; %d of them are the way in and out of it", more, way), fmt.tprintf(", %d of them the way in", way)
 	if hard > 0 do more, less = fmt.tprintf("%s; %d of them are of rock too hard for the party's picks", more, hard), fmt.tprintf("%s, %d too hard for the picks", less, hard)
 	if rooted > 0 do more, less = fmt.tprintf("%s; %d %s on it, and felled first", more, rooted, "tree stands" if rooted == 1 else "trees stand"), fmt.tprintf("%s, %d %s to fell first", less, rooted, "tree" if rooted == 1 else "trees")
-	if lost do more, less = fmt.tprintf("%s; no way in was found for it within %d blocks: dig a stair or a passage to it first", more, WAY_FAR), fmt.tprintf("%s. No way in found: dig a stair or a passage to it first", less)
 	blocks := "block" if s.total - rooted == 1 else "blocks"
 	switch work {
+	case .Gather, .Fish:
 	case .Dig:
 		h.short = fmt.tprintf("Marked to dig: %d %s%s.", s.total - rooted, blocks, less)
 		say(h, `The hold says "%s": %s is marked at %s, %d %s of it%s.`, words, "digging" if thing == "digging" else fmt.tprintf("a %s", thing), s.place, s.total - rooted, blocks, more)
@@ -625,6 +601,11 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 		h.short = fmt.tprintf("Marked to fell: %d %s.", s.total, "tree" if s.total == 1 else "trees")
 		say(h, `The hold says "%s": %d %s marked to be felled at %s.`, words, s.total, "tree is" if s.total == 1 else "trees are", s.place)
 	case .Build:
+		if o.shape == .Fire {
+			h.short = "Marked: a fire, to be laid of timber and lit."
+			say(h, `The hold says "%s": a fire is marked to be laid and lit at %s, of a log brought to it; it is fed from then on with what timber the hold has.`, words, s.place)
+			break
+		}
 		h.short = fmt.tprintf("Marked to build: a %s of %s, %d %s.", thing, STUFFS[o.stuff], s.total, blocks)
 		say(h, `The hold says "%s": a %s is marked to be built of %s at %s, %d %s of it.`, words, thing, STUFFS[o.stuff], s.place, s.total, blocks)
 	}
@@ -634,15 +615,21 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 
 // Whether a dwarf standing on a floor can work a block: beside it from a block under its feet to a
 // block over its head, right over its head, or two under or over where the block between is open.
-in_reach :: proc(h: ^Hold, cell, b: [3]i32) -> bool {
+// A tree is felled from beside its stem, or, where its own leaves fill every floor beside it as a
+// bush's do, from the floor beyond them: two off, with leaves or air between at the dwarf's chest.
+in_reach :: proc(h: ^Hold, cell, b: [3]i32, tree := false, lay := false) -> bool {
 	dx, dy, dz := b.x - cell.x, b.y - cell.y, b.z - cell.z
+	if tree && max(abs(dx), abs(dz)) == 2 {
+		m, _ := walk_block(&h.walk, cell + {clamp(dx, -1, 1), 1, clamp(dz, -1, 1)})
+		return abs(dy) <= 2 && (m == .Air || is(m, PLANT_BLOCKS))
+	}
 	if abs(dx) > 1 || abs(dz) > 1 do return false
 	if dx == 0 && dz == 0 do return dy == 2
 	open :: proc(h: ^Hold, c: [3]i32) -> bool { m, _ := walk_block(&h.walk, c); return m == .Air || is(m, LEAVES) }
 	switch dy {
 	case -1, 0, 1: return true
 	case -2: return open(h, b + {0, 1, 0})
-	case 2:  return open(h, b - {0, 1, 0})
+	case 2:  return lay || open(h, b - {0, 1, 0})   // a block is laid on the top of a wall two high from the ground beside it, at arm's stretch
 	}
 	return false
 }
@@ -650,16 +637,18 @@ in_reach :: proc(h: ^Hold, cell, b: [3]i32) -> bool {
 // The floors a block can be worked from, that no other dwarf holds or is bound for: to dig, the
 // highest first, so a pit is dug from its rim; to lay, the lowest, so a wall is built from the
 // ground beside it and no mason is left standing on it. Then the nearest the dwarf.
-stands_of :: proc(h: ^Hold, i: int, b: [3]i32, out: ^[dynamic][3]i32, low := false) -> (any: bool) {
+stands_of :: proc(h: ^Hold, i: int, b: [3]i32, out: ^[dynamic][3]i32, low := false, tree := false) -> (any: bool) {
 	w, d := &h.walk, &h.dwarves[i]
-	for dz in i32(-1)..=1 do for dx in i32(-1)..=1 {
+	// The floors beside it; for a tree with none, the floors beyond its leaves (in_reach).
+	for r in i32(1)..=(2 if tree else 1) do for dz in -r..=r do for dx in -r..=r {
+		if r == 2 && (any || max(abs(dx), abs(dz)) < 2) do continue
 		x, z := b.x + dx, b.z + dz
 		p := patch_at(w, x >> CHUNK_SHIFT, z >> CHUNK_SHIFT)
 		if p == nil do continue
 		col := (z & (CHUNK - 1))*CHUNK + x & (CHUNK - 1)
 		for k in p.first[col]..<p.first[col + 1] {
 			cell := [3]i32{x, i32(w.floors[p.base + i32(k)].y), z}
-			if !in_reach(h, cell, b) do continue
+			if !in_reach(h, cell, b, tree, low) do continue
 			any = true
 			if o, held := h.held[cell]; held && o != i {
 				if b := &h.dwarves[o]; !b.job && (b.doing == .Waiting || b.doing == .Stopped) do b.rest = 0   // an idle dwarf stands where the work is done from: it looks at once, and the work is its own
@@ -699,7 +688,17 @@ mark_waits :: proc(h: ^Hold, k: int, why: Waits, by := -1) {
 	m := &h.marks[k]
 	if m.taker >= 0 do job_drop(h, m.taker, 5)
 	if m.wait != why do h.marks_v += 1
-	m.wait, m.tried, m.by = why, h.tick, by
+	m.wait, m.tried, m.by, m.as_of = why, h.tick, by, h.ground
+	// An order with nothing left but the last steps out of its pit, each found so as the ground now
+	// stands, is done: they are left standing, and it says so.
+	if why == .Way_Out {
+		site := m.site
+		for o in h.marks do if o.site == site && (o.wait != .Way_Out || o.taker >= 0 || o.as_of != h.ground) do return
+		for j := len(h.marks) - 1; j >= 0; j -= 1 do if h.marks[j].site == site {
+			h.sites[site].steps += 1
+			mark_remove(h, j, true)
+		}
+	}
 }
 
 // An idle dwarf looks for work: of the marks nobody has taken, the nearest it its trade suits
@@ -721,6 +720,8 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 		if m.wait != .None && h.tick - m.tried < AGAIN && (m.by < 0 || m.by == i) do continue   // what one dwarf could not come at, another may
 		dx, dy, dz := f32(m.at.x - d.cell.x), f32(m.at.y - d.cell.y), f32(m.at.z - d.cell.z)
 		score := (abs(dx) + abs(dz) + 2*abs(dy))*(1 if skilled(h.party[i], m.work, h.sites[m.site].stuff) else 2)
+		if (m.work == .Gather || m.work == .Fish) && d.want[.Food] < WANTS[.Food].seeks do score *= 0.1   // a hungry dwarf takes food first
+		if m.work == .Build && h.sites[m.site].shape == .Fire && d.want[.Warm] < WANTS[.Warm].seeks do score *= 0.1   // and a cold one a fire to be laid
 		if n == TRIES && score >= best[n - 1].score do continue
 		at := min(n, TRIES - 1)
 		for at > 0 && best[at - 1].score > score {
@@ -746,13 +747,13 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 				mark_waits(h, k, .Rooted)
 				continue
 			}
-		case .Fell:
+		case .Fell, .Gather, .Fish:
 		case .Build:
 			if len(s.brought) - s.promised <= 0 {   // its stuff is fetched by whoever has nothing more pressing (haul_look)
 				mark_waits(h, k, .No_Stuff)
 				continue
 			}
-			if m.at in h.held || m.at - {0, 1, 0} in h.held {
+			if trodden(h, m.at, i) || trodden(h, m.at - {0, 1, 0}, i) {   // standing there, or on its way over it
 				mark_waits(h, k, .Stood_On)
 				continue
 			}
@@ -766,7 +767,7 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 			}
 		}
 		clear(&stands)
-		if any := stands_of(h, i, m.at, &stands, m.work == .Build); len(stands) == 0 {
+		if any := stands_of(h, i, m.at, &stands, m.work == .Build, mark_tree(m)); len(stands) == 0 {
 			mark_waits(h, k, .No_Room if any else .Front, i if any else -1)
 			continue
 		}
@@ -774,13 +775,14 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 		for stand in stands[:min(len(stands), 8)] {
 			if stand != d.cell {
 				clear(&w.shun)
-				for o, j in h.dwarves do if j != i && o.doing != .Aboard && o.doing != .Walking do append(&w.shun, o.cell)
+				for o, j in h.dwarves do if j != i && o.doing != .Aboard && o.doing != .Walking && o.doing != .Dead do append(&w.shun, o.cell)
+				for f in h.fires do append(&w.shun, f.at)   // and round a fire, where there is room
 				_, why, _, _ := way_timed(h, d.cell, stand, &d.path)
 				clear(&w.shun)
 				if why != .Way do continue
 			} else do clear(&d.path)
 			// One whose trade it is not leaves it once for an idle dwarf whose trade it is.
-			if !skilled(h.party[i], m.work, s.stuff) && !d.gave {
+			if !skilled(h.party[i], m.work, s.stuff) && !d.gave && !((m.work == .Gather || m.work == .Fish) && d.want[.Food] < WANTS[.Food].seeks) {
 				for o, j in h.dwarves do if j != i && !o.job && !o.shut && (o.doing == .Waiting || o.doing == .Stopped) && skilled(h.party[j], m.work, s.stuff) {
 					d.gave = true
 					h.dwarves[j].rest = 0
@@ -800,10 +802,11 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 				append(&s.joined, false)
 				append(&s.tally, 0)
 			}
-			if !s.joined[i] {
+			if !s.joined[i] && s.thing != "foraging" {   // what the hungry mark for themselves is said once, by the one who marked it
 				s.joined[i] = true
 				h.aside = true
-				say(h, "%s %s takes up the %s of the %s.", h.party[i].given, h.party[i].byname, WORKS[m.work].doing, s.name)
+				if s.thing == WORKS[m.work].doing do say(h, "%s %s takes up the %s.", h.party[i].given, h.party[i].byname, s.name)
+				else do say(h, "%s %s takes up the %s of the %s.", h.party[i].given, h.party[i].byname, WORKS[m.work].doing, s.name)
 			}
 			h.marks_v += 1
 			found = true
@@ -819,10 +822,15 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 	// can mend, it says which: a way, something in store, softer rock. Work others are at, or that
 	// waits its turn, is no lack.
 	lacks: [Waits]int
-	for m in h.marks do if m.taker < 0 do lacks[m.wait if m.by < 0 || m.by == i else .None] += 1
+	in_hand := false
+	for m in h.marks {
+		if m.taker < 0 do lacks[m.wait if m.by < 0 || m.by == i else .None] += 1
+		else do in_hand = true
+	}
 	d.lack = .None
-	if lacks[.None] + lacks[.No_Room] + lacks[.Stood_On] + lacks[.Loose] + lacks[.Rooted] + lacks[.Shuts_In] == 0 {
-		d.lack = .No_Way if lacks[.No_Way] > 0 else .No_Stuff if lacks[.No_Stuff] > 0 else .Too_Hard if lacks[.Too_Hard] > 0 else .None
+	if lacks[.None] + lacks[.No_Room] + lacks[.Stood_On] + lacks[.Loose] + lacks[.Rooted] + lacks[.Shuts_In] + lacks[.Way_Out] == 0 {
+		// Blocks no floor reaches wait for those in front of them; with none of those in anyone's hand, nothing will bring a floor to them.
+		d.lack = .No_Way if lacks[.No_Way] > 0 || !in_hand && lacks[.Front] > 0 else .No_Stuff if lacks[.No_Stuff] > 0 else .Too_Hard if lacks[.Too_Hard] > 0 else .None
 	}
 	return false
 }
@@ -831,7 +839,7 @@ work_look :: proc(h: ^Hold, i: int) -> bool {
 work_begin :: proc(h: ^Hold, i: int) {
 	d := &h.dwarves[i]
 	k, ok := h.marked[d.job_at]
-	if !ok || h.marks[k].taker != i || !in_reach(h, d.cell, d.job_at) {
+	if !ok || h.marks[k].taker != i || !in_reach(h, d.cell, d.job_at, mark_tree(h.marks[k]), h.marks[k].work == .Build) {
 		job_drop(h, i, 10)
 		d.doing = .Waiting
 		return
@@ -839,12 +847,17 @@ work_begin :: proc(h: ^Hold, i: int) {
 	m := h.marks[k]
 	s := &h.sites[m.site]
 	// Would the block shut a dwarf in? Asked before the work is begun, not only at its end.
-	if m.work != .Fell {
+	if m.work == .Dig || m.work == .Build {
 		w := &h.walk
 		was, _ := walk_block(w, m.at)
-		if m.work == .Build || walk_floor(w, m.at.x, m.at.y + 1, m.at.z) >= 0 {
+		if m.work == .Dig && walk_floor(w, m.at.x, m.at.y + 1, m.at.z) >= 0 && closes(h, m.at, was) {   // the last step out of a pit: left standing
+			mark_waits(h, k, .Way_Out)
+			d.doing = .Waiting
+			return
+		}
+		if m.work == .Build && s.shape != .Fire {   // a fire is no block: it shuts nobody in
 			before, _ := pockets(h, m.at)
-			walk_edit(w, {m.at.x, m.at.y, m.at.z, .Air if m.work == .Dig else .Stone})
+			walk_edit(w, {m.at.x, m.at.y, m.at.z, .Stone})
 			after, who := pockets(h, m.at)
 			walk_edit(w, {m.at.x, m.at.y, m.at.z, was})
 			if after > before {
@@ -863,8 +876,10 @@ work_begin :: proc(h: ^Hold, i: int) {
 	case .Fell:
 		seconds, d.cut = FELL_BASE + FELL_TALL*f32(m.tall), SPECIES[m.tree].bark
 	case .Build:
-		seconds = LAY_TIMBER if s.stuff == .Timber else LAY_STONE
+		seconds = FIRE_WORK if s.shape == .Fire else LAY_TIMBER if s.stuff == .Timber else LAY_STONE
 		d.cut = s.brought[len(s.brought) - 1] if len(s.brought) > 0 else .Air
+	case .Gather, .Fish:
+		seconds, d.cut = FOODS[m.food].work, FOODS[m.food].thing
 	}
 	if skilled(h.party[i], m.work, s.stuff) do seconds /= WORKS[m.work].quick
 	d.doing, d.work = .Working, i32(seconds*1000)
@@ -880,7 +895,7 @@ work_tick :: proc(h: ^Hold, i: int) {
 		d.doing = .Waiting
 		return
 	}
-	if !in_reach(h, d.cell, d.job_at) {   // moved off its place, by a fall or by one squeezing past: it goes back
+	if !in_reach(h, d.cell, d.job_at, mark_tree(h.marks[k]), h.marks[k].work == .Build) {   // moved off its place, by a fall or by one squeezing past: it goes back
 		h.spots[i] = d.stand
 		d.doing, d.seek, d.wait = .Walking, true, 0
 		return
@@ -896,22 +911,16 @@ work_tick :: proc(h: ^Hold, i: int) {
 	case .Dig:
 		was, _ := walk_block(w, m.at)
 		if was != .Air {
-			if o, stood := h.held[up]; stood && o != i {
+			if trodden(h, up, i) {
 				mark_waits(h, k, .Stood_On)
 				return
 			}
-			// If a dwarf could stand on it, digging it may shut one in: counted before and after.
-			stood := walk_floor(w, up.x, up.y, up.z) >= 0
-			before, after, who := 0, 0, -1
-			if stood do before, _ = pockets(h, m.at)
-			walk_edit(w, {m.at.x, m.at.y, m.at.z, .Air})
-			if stood do after, who = pockets(h, m.at)
-			if after > before {
-				walk_edit(w, {m.at.x, m.at.y, m.at.z, was})
-				mark_waits(h, k, .Shuts_In)
-				make_way(h, who, i)
+			// If a dwarf could stand on it, it may be the last step out of a pit: then it is left standing (closes).
+			if walk_floor(w, up.x, up.y, up.z) >= 0 && closes(h, m.at, was) {
+				mark_waits(h, k, .Way_Out)
 				return
 			}
+			walk_edit(w, {m.at.x, m.at.y, m.at.z, .Air})
 			ground_changed(h, m.at, .Air, false)
 			if kind := rock_kind(was); kind != .Air {   // it lies where it was dug (goods.odin)
 				site_got(s, kind, 1)
@@ -930,9 +939,16 @@ work_tick :: proc(h: ^Hold, i: int) {
 			return
 		}
 		mat := s.brought[len(s.brought) - 1]
-		if m.at in h.held || m.at - {0, 1, 0} in h.held {
+		if trodden(h, m.at, i) || trodden(h, m.at - {0, 1, 0}, i) {   // a dwarf stands in the block's place or on its way through it, or would have it laid on its head
 			mark_waits(h, k, .Stood_On)
 			return
+		}
+		if s.shape == .Fire {   // no block is laid: the log is the fire's first, and it burns
+			pop(&s.brought)
+			fire_light(h, m.at, mat)
+			h.at, h.short = feet_on(m.at), fmt.tprintf("%s lights a fire.", who(h, i))
+			say(h, "%s lays a fire at %s and lights it: it burns a log in eight hours, and is fed from the timber the hold has.", who(h, i), place_say(h, m.at))
+			break
 		}
 		was, _ := walk_block(w, m.at)
 		before, _ := pockets(h, m.at)
@@ -953,7 +969,7 @@ work_tick :: proc(h: ^Hold, i: int) {
 	case .Fell:
 		grain := GRAIN
 		bark := SPECIES[m.tree].bark
-		walk_edit(w, {m.at.x, m.at.y, m.at.z, grain[bark][0]})
+		walk_edit(w, {m.at.x, FELLED, m.at.z, grain[bark][0]})   // kept apart from the block it stood on, which may be built on
 		ground_changed(h, m.at, grain[bark][0], false)
 		h.at, h.aside = feet_on(m.at), true   // the order's end says how many: one line, not one a tree
 		if m.tree == .Scrub do say(h, "%s %s clears a bush of scrub.", h.party[i].given, h.party[i].byname)   // brush: no timber in it
@@ -963,6 +979,12 @@ work_tick :: proc(h: ^Hold, i: int) {
 			good_drop(h, m.at, bark, i32(timber))   // its logs lie where it stood
 			say(h, "%s %s fells a %s tree %d m tall: %d logs lie where it stood.", h.party[i].given, h.party[i].byname, SPECIES[m.tree].name, m.tall, timber)
 		}
+	case .Gather, .Fish:   // what it took lies at its feet, and the plant, the tree or the water is taken for its time (food.odin)
+		row := FOODS[m.food]
+		h.picked[{m.at.x, m.at.z}] = date_tick(h.tick).day
+		h.picked_v += 1
+		site_got(s, row.thing, int(m.n))
+		good_drop(h, d.cell, row.thing, m.n)
 	}
 	s.tally[i] += 1
 	h.work.done += 1
@@ -970,7 +992,7 @@ work_tick :: proc(h: ^Hold, i: int) {
 	d.doing = .Waiting
 	if k2, still := h.marked[m.at]; still do mark_remove(h, k2, true)
 	// It looks for the next at once, before any that stand idle: the one at the face goes on at the face.
-	if len(h.marks) > 0 && !work_look(h, i) do d.rest = 5
+	if len(h.marks) > 0 && !care_calls(h, i) && !fire_first(h, i) && !work_look(h, i) do d.rest = 5   // unless thirst, hunger or the night call it away (needs.odin), or a fire is about to go out
 }
 
 // What an order's work yielded, for its end to say.
@@ -988,12 +1010,17 @@ ground_changed :: proc(h: ^Hold, at: [3]i32, mat: Mat, frame: bool) {
 	h.ground += 1
 	if !frame {
 		sync.lock(&h.mutex)
-		append(&h.out, Edit{at.x, at.y, at.z, mat})
+		append(&h.out, Edit{at.x, FELLED if is(mat, RINGS) else at.y, at.z, mat})
 		sync.unlock(&h.mutex)
 	}
 	felled := is(mat, RINGS)
 	r := i32(TREE_REACH + 1) if felled else 0
-	for d, i in h.dwarves do if d.doing != .Aboard && (d.adrift || abs(d.cell.x - at.x) <= r && abs(d.cell.z - at.z) <= r) do settle(h, i, felled || mat == .Air && at.y < d.cell.y)
+	for &d, i in h.dwarves do if d.doing == .Dead {   // a body comes down with the ground it lay on
+		if d.cell.x == at.x && d.cell.z == at.z && mat == .Air && at.y == d.cell.y - 1 do for _ in 0..<64 {
+			if under, _ := walk_block(&h.walk, d.cell - {0, 1, 0}); under != .Air && !is(under, LEAVES) do break
+			d.cell.y -= 1
+		}
+	} else if d.doing != .Aboard && (d.adrift || abs(d.cell.x - at.x) <= r && abs(d.cell.z - at.z) <= r) do settle(h, i, felled || mat == .Air && at.y < d.cell.y)
 	// A way laid over the old ground may not hold: each dwarf whose way still passes the block
 	// stops at the end of its step and looks again, one a tick.
 	turn := 0
@@ -1006,6 +1033,8 @@ ground_changed :: proc(h: ^Hold, at: [3]i32, mat: Mat, frame: bool) {
 		}
 	}
 	goods_settle(h, at, mat)   // a pile on a block dug away falls with it; one where a block was laid is moved out
+	fires_settle(h, at, mat)   // and so a fire
+	if len(h.zones) > 0 do h.goods_v += 1   // a sleeping place's roof may have come or gone: it is shown again
 	// The marks beside it may be workable now, and a dwarf resting for want of work looks again soon.
 	for dy in i32(-2)..=2 do for dz in i32(-1)..=1 do for dx in i32(-1)..=1 do if k, ok := h.marked[at + {dx, dy, dz}]; ok && h.marks[k].wait != .Too_Hard && h.marks[k].taker < 0 {
 		h.marks[k].wait, h.marks[k].tried, h.marks[k].by = .None, 0, -1
@@ -1056,12 +1085,66 @@ pockets :: proc(h: ^Hold, at: [3]i32) -> (count: int, who: int) {
 		for k in p.first[col]..<p.first[col + 1] {
 			seed := p.base + i32(k)
 			if w.seen[seed] >= first || !flood(w, seed, first, &queue) do continue
-			for d, i in h.dwarves do if d.doing != .Aboard {
+			for d, i in h.dwarves do if d.doing != .Aboard && d.doing != .Dead {
 				if f := walk_floor(w, d.cell.x, d.cell.y, d.cell.z, false); f >= 0 && w.seen[f] == w.stamp do count, who = count + 1, i
 			}
 		}
 	}
 	return
+}
+
+// The floors in the columns round a block, each with whether its ground is closed: fewer than POCKET
+// floors joined by steps and no step out of them, a pit.
+Beside :: struct { cell: [3]i32, closed: bool }
+beside :: proc(h: ^Hold, at: [3]i32, out: ^[dynamic]Beside) {
+	w := &h.walk
+	w.budget = ASKING
+	first := w.stamp + 1
+	queue := make([dynamic]i32, context.temp_allocator)
+	closed := make([dynamic]bool, context.temp_allocator)   // of each flood from `first` on
+	for dz in i32(-1)..=1 do for dx in i32(-1)..=1 {
+		x, z := at.x + dx, at.z + dz
+		p := patch_at(w, x >> CHUNK_SHIFT, z >> CHUNK_SHIFT)
+		if p == nil do continue
+		col := (z & (CHUNK - 1))*CHUNK + x & (CHUNK - 1)
+		for k in p.first[col]..<p.first[col + 1] {
+			seed := p.base + i32(k)
+			if w.seen[seed] < first do append(&closed, flood(w, seed, first, &queue))
+			append(out, Beside{floor_block(w, seed), closed[w.seen[seed] - first]})
+		}
+	}
+}
+
+// Whether digging a block would take the last step out of a pit: a floor beside it and no higher
+// than it, with a way out today, would have none; or the floor on the block, with a way out today,
+// would become one under it with none, a hole dug straight down; or a dwarf would be shut in. The
+// block is taken out, the ground round it asked again, and it is put back. A ledge left on a slope
+// over the block is no pit: nothing is dug from it and no dwarf comes to it.
+closes :: proc(h: ^Hold, at: [3]i32, was: Mat) -> bool {
+	w := &h.walk
+	before := make([dynamic]Beside, context.temp_allocator)
+	after := make([dynamic]Beside, context.temp_allocator)
+	beside(h, at, &before)
+	in_before, _ := pockets(h, at)
+	walk_edit(w, {at.x, at.y, at.z, .Air})
+	beside(h, at, &after)
+	in_after, _ := pockets(h, at)
+	walk_edit(w, {at.x, at.y, at.z, was})
+	if in_after > in_before do return true
+	on_it := false   // the floor on the block had a way out
+	for b in before do on_it ||= !b.closed && b.cell == at + {0, 1, 0}
+	for a in after do if a.closed && a.cell.y <= at.y {
+		if on_it && a.cell.x == at.x && a.cell.z == at.z do return true
+		for b in before do if !b.closed && b.cell == a.cell do return true
+	}
+	return false
+}
+
+// Whether a dwarf other than one is on a block, standing or on its way over it: the block is not
+// dug from under it.
+trodden :: proc(h: ^Hold, up: [3]i32, but: int) -> bool {
+	for d, j in h.dwarves do if j != but && d.doing != .Aboard && d.doing != .Dead && d.cell == up do return true
+	return false
 }
 
 // A dwarf with nothing to do that work would shut in walks out toward the one doing the work.
@@ -1105,7 +1188,10 @@ idle_care :: proc(h: ^Hold, i: int) {
 }
 
 // Whether a dwarf standing in a cell stands on a block marked to be dug, in one to be laid, or in a stockpile.
-on_mark :: proc(h: ^Hold, c: [3]i32) -> bool { return c - {0, 1, 0} in h.marked || c in h.marked || c + {0, 1, 0} in h.marked || c in h.zoned }   // nor does an idle dwarf stand in a stockpile, on what lies there
+on_mark :: proc(h: ^Hold, c: [3]i32) -> bool {   // nor does an idle dwarf stand in a stockpile, on what lies there; a sleeping place is to be stood and lain in
+	if z, zoned := h.zoned[c]; zoned && !h.zones[z.zone].sleep do return true
+	return c - {0, 1, 0} in h.marked || c in h.marked || c + {0, 1, 0} in h.marked
+}
 
 // A dwarf with nothing in hand: it looks for work when its rest is over, a few dwarves a tick, and
 // one dwarf a tick looks to itself where the ground has changed, or where it stands on what is
@@ -1117,14 +1203,17 @@ idle_tick :: proc(h: ^Hold, i: int) {
 		idle_care(h, i)
 		if d.doing == .Walking do return
 	}
+	if care_look(h, i) do return   // thirst, hunger and sleep come before work (needs.odin)
 	if d.rest > 0 {
 		d.rest -= 1
 		return
 	}
 	if h.looked >= LOOKS do return
 	h.looked += 1
+	if fire_first(h, i) do return   // a fire about to go out is fed, and the log one is to be laid of is brought, before any marked work
 	if len(h.marks) > 0 && work_look(h, i) do return
-	if len(h.goods) > 0 && haul_look(h, i) do return   // nothing marked that it can take: it carries
+	if len(h.fires) > 0 && fire_feed(h, i, false) do return  // nothing marked that it can take: it feeds a fire that is low,
+	if len(h.goods) > 0 && haul_look(h, i) do return   // or it carries
 	d.rest = REST + i%7
 }
 

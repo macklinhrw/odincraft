@@ -1,0 +1,52 @@
+# A new world whose mainland lies within reach of its start, made and watched through the mainland's
+# stage, played from the player's seat (step N1, second part; open-decisions.md, 2026-11-17): seed 1,
+# whose nearest large land is 51 km from the start. Its coarse stage takes about half a minute the
+# first time and is kept; a second playing reads it back and the stage passes at once, so to watch the
+# stage again remove what was kept first:
+#   rm -f build/worlds/landmass-1-*
+#   build/odincraft --door --play=docs/interesting-world/real/play/n1-new.txt
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+print 1. a new world of seed 1
+part Make a new world
+type 1
+wait 0.2
+key Enter
+wait 0.8
+
+print 2. the mainland's stage: its steps counted and the time left said, while the map is looked at
+until mainland 120
+wait 4
+snap out/play/n1-01-stage.png
+say
+print the mainland in the hand while it is formed: its card says so, with how far it has come
+part isles.mainland
+wait 0.6
+snap out/play/n1-02-stage-card.png
+say
+
+print 3. the world can be entered: the mainland is drawn from its 64 m cells, rivers and all
+until ready 300
+part All islands
+wait 0.6
+shot out/play/n1-03-ready.png
+say
+part isles.mainland
+wait 0.6
+part As land
+shot out/play/n1-04-mainland.png
+say
+part Ground to walk on
+shot out/play/n1-05-mainland-ground.png
+
+print 4. a large land farther off: known, not formed, why, and what forming it would take
+part The west land
+wait 0.6
+part As land
+shot out/play/n1-06-west-land.png
+say
+
+print 5. the mainland's coast looked at near: the valleys of its 64 m cells
+view over=75000,-8000 span=70000
+wait 0.6
+shot out/play/n1-07-coast.png

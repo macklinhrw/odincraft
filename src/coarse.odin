@@ -1101,6 +1101,7 @@ mass_phases :: proc(g: ^Grid, upto: int) {
 	for p in region.history[:upto] {
 		g.lift, g.rise = p.uplift, rise
 		for _ in 0..<int(p.steps) {
+			if sync.atomic_load(&lands_state.leave) do return   // to be left where it stands (continents.odin): the caller keeps nothing of it
 			co.keeping = 1/(p.years*ROSE_STEPS) if steps - co.steps <= ROSE_STEPS else 0
 			t := time.now()
 			lap :: proc(co: ^Coarse, t: ^time.Time, i: int) {
@@ -1122,6 +1123,7 @@ mass_phases :: proc(g: ^Grid, upto: int) {
 			lap(co, &t, 5)
 			g.left -= p.years*p.uplift
 			co.steps += 1
+			sync.atomic_add(&lands_state.step, 1)   // how far it has come, for the screen
 			if co.steps%16 == 0 do fmt.printfln("  %d steps of %d, %.0f s", co.steps, steps, time.duration_seconds(time.since(began)))
 		}
 	}

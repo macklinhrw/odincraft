@@ -1,0 +1,33 @@
+# Expedition planning on the start island, where the land has a danger to name (step E-1): a
+# sheltered landing by fresh water whose stream comes down from a lake a slide dammed. It is read
+# under the pointer, chosen, asked why, and landed on.
+#   build/odincraft --door --play=docs/interesting-world/real/play/e1-danger.txt
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+until ready 120
+print 1. the start island's door is the same: Plan an expedition
+part Worlds
+key Enter
+wait 0.5
+key Enter
+wait 0.8
+shot out/play/e1-20-start.png
+print 2. the pointer on the shore under the Great Slip: a good landing, and what the land may do there
+move 1074 420
+wait 0.6
+snap out/play/e1-21-hover-danger.png
+under
+print 3. chosen: the danger is named over the button, and its row says why
+click 1074 420
+move 760 420
+wait 0.4
+part Slide's lake
+shot out/play/e1-22-danger-why.png
+say
+print 4. set out all the same
+key Enter
+wait 3
+shot out/play/e1-23-danger-boat.png
+view over=-2233,-2310 span=90 bare
+run 26
+shot out/play/e1-24-danger-ashore.png

@@ -13,7 +13,7 @@ import "core:strings"
 // what `--why` says of its ground is a tab away, in its own words, and under a block of ground
 // stands the column of rock it lies in.
 
-Thing_Kind :: enum u8 { None, Ground, Tree, Stream, Lake, Sea, Place, Animal, Box, Dwarf, Dwarves, Pile, Zone }   // Dwarves: several of them, as a group (Play.several); Pile: things lying in a cell; Zone: a stockpile's ground (goods.odin)
+Thing_Kind :: enum u8 { None, Ground, Tree, Stream, Lake, Sea, Place, Animal, Box, Dwarf, Dwarves, Pile, Zone, Fire }   // Dwarves: several of them, as a group (Play.several); Pile: things lying in a cell; Zone: a stockpile's ground (goods.odin)
 Thing :: struct {
 	kind:     Thing_Kind,
 	island:   ^Formed,
@@ -32,7 +32,7 @@ Thing :: struct {
 // A dwarf's are its trade and what it knows of itself (dwarf_says, crowd.odin).
 Depth :: enum u8 { Own, Rock, Ground, Plants, Near, World, Self }
 DEPTHS := [Depth]string{.Own = "", .Rock = "Rock", .Ground = "Ground", .Plants = "Plants", .Near = "Near", .World = "World", .Self = "Self"}
-OWN := [Thing_Kind]string{.None = "", .Ground = "", .Tree = "Tree", .Stream = "Stream", .Lake = "Water", .Sea = "Sea", .Place = "Place", .Animal = "Animal", .Box = "Blocks", .Dwarf = "Trade", .Dwarves = "", .Pile = "", .Zone = ""}
+OWN := [Thing_Kind]string{.None = "", .Ground = "", .Tree = "Tree", .Stream = "Stream", .Lake = "Water", .Sea = "Sea", .Place = "Place", .Animal = "Animal", .Box = "Blocks", .Dwarf = "Trade", .Dwarves = "", .Pile = "", .Zone = "", .Fire = ""}
 
 Hand_Card :: struct {
 	title, sub, line: string,
@@ -257,7 +257,8 @@ column_runs :: proc(w: ^World, x, z, top, foot: i32) -> []Run {
 	was := here
 	defer bind(was)
 	if f != nil do bind(f)
-	c := w.chunks[Key{0, x >> CHUNK_SHIFT, z >> CHUNK_SHIFT}] or_else nil
+	c: ^Chunk
+	if w != nil do c = w.chunks[Key{0, x >> CHUNK_SHIFT, z >> CHUNK_SHIFT}] or_else nil   // before play there is no block volume: the generator's ground
 	if c != nil && !c.ready do c = nil
 	k := int(x & (CHUNK - 1) + 1) + int(z & (CHUNK - 1) + 1)*P
 	surface, bed_top, under := Mat.Sand, i32(SEA_BED), Under{}
@@ -315,17 +316,33 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 	c.mat = t.mat
 	switch t.kind {
 	case .None, .Dwarf, .Dwarves:
+	case .Fire:   // a fire: its own card says how it stands (fire_card, shelter_view.odin)
+		c.title, c.sub, c.line = strings.clone("Fire"), strings.clone("laid of timber"), strings.clone("A fire warms those by it and dries them, and lights the night round it. It is fed from the timber the hold has.")
+		c.mat, c.tint = .Air, LOOK.ember
+		return
 	case .Pile:   // things lying in a cell: what, how many, and whether the hold counts them
 		title = store_words(t.mat)
 		in_store := false
 		for p in watch.seen.piles do if p.at == t.block do in_store = p.stored
 		sub = fmt.tprintf("%d, in a stockpile", t.feature) if in_store else fmt.tprintf("%d, lying loose: not counted", t.feature)
 		what := "Timber, felled and lying where the tree stood" if is_stuff(t.mat, .Timber) else "Stone, lying where it was dug"
+		if is(t.mat, FOOD) {   // what is eaten says what it is, and that a hungry dwarf takes it wherever it lies (food.odin)
+			row := FOODS[food_of(t.mat)]
+			line = fmt.tprintf("Food: %s. One is %s of a day's eating. A hungry dwarf eats it where it lies%s", row.why, "a twentieth" if row.feeds <= 0.06 else "a tenth" if row.feeds <= 0.13 else "a fifth" if row.feeds <= 0.25 else "two fifths", "; in a stockpile it is counted at the top right" if in_store else ", and a dwarf with nothing more pressing carries it to a stockpile that takes food; Store (S) marks one")
+			c.title, c.sub, c.line = strings.clone(sentence(title)[:len(sentence(title)) - 1]), strings.clone(sub), strings.clone(sentence(line))
+			return
+		}
 		line = fmt.tprintf("%s. It is counted at the top right, and a wall or floor marked near it is built of it", what) if in_store else fmt.tprintf("%s. A dwarf with nothing more pressing carries it to a stockpile that takes it; Store (S) marks one", what)
 		c.title, c.sub, c.line = strings.clone(sentence(title)[:len(sentence(title)) - 1]), strings.clone(sub), strings.clone(sentence(line))
 		return
 	case .Zone:   // a stockpile's ground
 		z, _ := zone_under(t.block + {0, 1, 0})
+		if z.sleep {
+			c.title, c.sub = strings.clone("Sleeping place"), strings.clone(fmt.tprintf("%d places, %d under a roof", z.cells, z.roofed))
+			c.line = strings.clone("The dwarves lie down here at night, under its roof first. Sleep (Z) beside it makes it larger; Remove (X) takes ground out of it.")
+			c.mat, c.tint = .Air, LOOK.sleep
+			return
+		}
 		title = "stockpile"
 		sub = fmt.tprintf("%s; %d of %d full", TAKES_SAYS[z.takes], z.full, z.cells)
 		line = "What lies in it is what the hold has, counted at the top right. Dwarves carry what lies loose to the nearest place that takes it. Store (S) beside it makes it larger; Remove (X) takes ground out of it, and what lies there then lies loose"
@@ -360,6 +377,10 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 			r := SURFACES[surface_row(&p)]
 			line = r.why
 			if k, _ := community_at(x, z, 1); len(r.host) == 0 do title, line = COMMUNITIES[k].name, COMMUNITIES[k].why
+			q: Point
+			if g, cover, plants := surface_at(x, z, 1, &q); true do if kind, stands := plant_at(&q, cover, plants); stands && g.water - g.h <= GROUND_PLANTS[kind].wet {   // the plant standing on it, where a dwarf eats of it (food.odin)
+				for row in FOODS do if row.from == .Plant && row.plant == kind do line = fmt.tprintf("%s. %s stands on it, which is food: %s. Gathered in %s (Gather, G)", line, capital(GROUND_PLANTS[kind].name), row.why, row.comes)
+			}
 		case:
 			line = fmt.tprintf("The soil here is %s, %.1f m deep: %s", SOILS[row].name, depth, SOILS[row].why)
 		}
@@ -369,6 +390,7 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 			sub = "built by the hold"
 			line = fmt.tprintf("The dwarves laid it, of %s brought to it. Remove (X) takes it down, and the %s lies where it stood", "timber" if t.mat == .Timber else "stone", of)
 		}
+		if says := shelter_says(w, t.block); says != "" do line = fmt.tprintf("%s. %s", line, says)   // what stands over it and round it, for a dwarf standing on it (shelter_of)
 		c.column = true
 	case .Tree:
 		o := t.tree
@@ -379,6 +401,7 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 		age := land.age[land_cell(f64(o.x), f64(o.z))]
 		why := fmt.tprintf("the slide laid its ground bare") if abs(land.slid[cell]) > 0.5 && age == region.features[landslide.feature].age else fmt.tprintf("a typhoon threw the canopy then")
 		line = fmt.tprintf("%s. Its stand is about %s years old: %s", WHY[o.form], years(max(age, 1)), why)
+		for row in FOODS do if row.from == .Tree && row.tree == o.kind && (o.form == .Canopy || o.form == .Between) do line = fmt.tprintf("%s. It bears food: %s. Gathered in %s (Gather, G)", line, row.why, row.comes)
 		k, _ := community_at(x, z, 1)
 		own = fmt.tprintf("It stands in %s: %s.", COMMUNITIES[k].name, COMMUNITIES[k].why)
 		c.mat = SPECIES[o.kind].leaf if o.form < .Dead else SPECIES[o.kind].bark

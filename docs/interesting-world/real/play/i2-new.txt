@@ -1,0 +1,49 @@
+# A new world made and watched, played from the player's seat (step I-2; open-decisions.md,
+# 2026-11-16): a seed typed, its stages, the mainland's long stage left as known, and the world entered.
+# Seed 12 is one whose mainland lies within reach of its start (31 km off), so its coarse stage is run when the world is made, and
+# large enough to take a minute or two; leaving it keeps nothing, so the script plays the same a second time but for the plates'
+# history, which is then read back. (It was seed 4 until step N1's second part, which forms a world's large lands only within
+# 80 km of its start: seed 4's nearest is 114 km off.)
+#   build/odincraft --door --play=docs/interesting-world/real/play/i2-new.txt
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+print 1. a new world: nothing typed, a bad seed, a good one
+part Make a new world
+snap out/play/i2-50-new.png
+type 12x
+wait 0.2
+snap out/play/i2-51-new-typed.png
+say
+
+print 2. made: its map is empty while the plates' history runs
+key Enter
+wait 0.8
+snap out/play/i2-52-new-plates.png
+say
+
+print 3. its records are known: the map, its islands named and ringed, and the mainland's stage begun
+until mainland 120
+wait 1.5
+snap out/play/i2-53-new-mainland-stage.png
+say
+print the world can be looked at meanwhile: an island's card before it is formed
+part Life
+snap out/play/i2-54-new-unformed-card.png
+
+print 4. the mainland left as known: the islands are made
+part Leave it as known
+until ready 300
+shot out/play/i2-55-new-ready.png
+say
+
+print 5. the mainland says why it is not formed
+part isles.mainland
+wait 0.6
+part As land
+shot out/play/i2-56-new-mainland-left.png
+
+print 6. every island made
+until made 600
+key Home
+wait 0.6
+shot out/play/i2-57-new-made.png

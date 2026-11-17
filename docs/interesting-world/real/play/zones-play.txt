@@ -1,0 +1,56 @@
+# A stockpile taken in the hand, played from the player's seat (open-decisions.md, 2026-11-16, the
+# owner: "i want to be able to select zones (and remove them), and can see resources inside"):
+#   build/odincraft --play=docs/interesting-world/real/play/zones-play.txt --dwarves=60
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
+key 3
+print 1. a dig for stone, a few trees for timber, and two stockpiles side by side: one for everything, one for stone
+key D
+drag 1480 880 1600 960
+key T
+drag 900 500 1300 760
+key S
+drag 950 800 1150 900
+part Stone
+drag 1250 960 1400 1080
+key esc
+timer
+until done 500
+key 1
+shot out/play/z1-stored.png
+say
+print 2. a click on the first stockpile's ground: the whole of it is taken, lit, and its card says what lies in it
+click 1000 830
+wait 0.3
+shot out/play/z2-selected.png
+say
+print 3. it is told to take timber alone: the stone in it is carried out to the stockpile that takes stone
+part Timber
+key 3
+run 40
+key 1
+shot out/play/z3-timber-only.png
+say
+print 4. Make larger takes up Store with what it takes; a drag beside it joins it
+part Make larger
+shot out/play/z4-grow-tool.png
+say
+drag 1150 800 1250 900
+key esc
+wait 0.5
+click 1000 830
+wait 0.3
+shot out/play/z5-larger.png
+say
+print 5. Remove: the whole stockpile goes, what lay in it lies loose, and the stores no longer count it
+part Remove
+wait 0.5
+shot out/play/z6-removed.png
+say
+print 6. the other stockpile taken by a click, and put down with Escape
+click 1320 1010
+wait 0.3
+shot out/play/z7-other.png
+say
+key esc

@@ -37,6 +37,10 @@ import "core:time"
 //   block x y z M   the block there is now the material M (Air for dug out)
 //   dig, fell, build, unmark   mark ground to dig, trees to fell and blocks to lay, or take marks back (orders.odin)
 //   store            mark ground as a stockpile (goods.odin)
+// and two that say what the expedition set out with (plan.md, E-1), read before anything is drawn
+// or chosen, whatever time they give:
+//   land x z         the boat is brought in at the low shore nearest that column of the world
+//   party n [i ..]   the party is the seed's, drawn again n times, and after that its ith dwarves, from 1, each again
 // A line of the log that begins `The hold says "..."` gives the order in this form, with its time
 // before it, so the log of a played game can be played again.
 
@@ -53,7 +57,7 @@ SQUEEZE   :: 2.5     // how many times longer a step takes two dwarves who squee
 ASIDE     :: 0.22    // metres each keeps to its right as they do
 ADRIFT    :: 6       // steps round a dwarf with no floor that ground is looked for
 
-Doing :: enum u8 { Aboard, Ashore, Walking, Waiting, Stopped, Working }
+Doing :: enum u8 { Aboard, Ashore, Walking, Waiting, Stopped, Working, Drinking, Eating, Sleeping, Warming, Dead }   // the last five are needs.odin's
 Dwarf :: struct {
 	doing:       Doing,
 	cell:        [3]i32,              // the floor it stands on, or is stepping onto
@@ -87,8 +91,33 @@ Dwarf :: struct {
 	carrying:    i32,                 // and how many
 	shut:        bool,                // it stands in a pit with no way out
 	checked:     int,                 // the ground's changes when it last looked to itself
+	// Its needs (needs.odin).
+	want:        [Want]f32,           // how well each is met, from 1 down to nothing
+	pace:        [Want]f32,           // its own pace at each
+	spent:       [Want]f32,           // days it has gone with nothing
+	told:        [Want]u8,            // the stage of each that was last said
+	retry:       [Want]int,           // the tick before which it does not look again for what it found no way to
+	lacks:       bit_set[Want],       // what it looked for and found none of
+	forages:     bit_set[Want],       // what it has marked the land's own for, to gather
+	caring:      bool,                // it is seeing to a need, or on its way to
+	care:        Want,                // which
+	care_at:     [3]i32,              // where: the floor it drinks or sleeps on, the heap it eats from
+	eats:        bool,                // one thing of that heap is kept for it
+	died:        Want,                // what it died of, and when
+	died_on:     int,
+	// What it feels of the weather (shelter.odin).
+	wet:         f32,                 // how wet it is, from dry to wet through
+	felt:        f32,                 // °C it feels where it stands: the air, less the wind's chill and the wet's, or a fire's warmth
+	rained:      f32,                 // the rain falling on it
+	roof:        bool,                // it stands under a roof,
+	walls:       u8,                  // with so many of the four ways out shut by a wall,
+	by_fire:     bool,                // and within a fire's warmth
+	felt_cell:   [3]i32,              // the cell and the state of the ground its shelter was read for
+	felt_ground: int,
+	felt_any:    bool,
+	slept:       Slept,               // how it lay down last night, for the dawn's word
 }
-Order_Kind :: enum u8 { Go, Block, Dig, Fell, Build, Unmark, Store }
+Order_Kind :: enum u8 { Go, Block, Dig, Fell, Build, Unmark, Store, Unstore, Takes, Gather, Fish, Sleep, Tend }   // Unstore: the whole stockpile or sleeping place at a block is removed; Takes: it takes something else from now (goods.odin); Sleep: ground is a place to sleep; Tend: a fire is kept fed, or let go out (shelter.odin)
 Order :: struct {
 	tick:   int,
 	kind:   Order_Kind,
@@ -100,6 +129,7 @@ Order :: struct {
 	column: bool,   // go: only the column was given, and its ground is meant
 	mat:    Mat,
 	frame:  bool,   // block: the frame changed it and told the hold; otherwise the frame is to be told (Hold.out)
+	on:     bool,   // tend: the fire is kept fed
 }
 
 // What the frame may know: who each dwarf is, where it stood at a tick and at the tick before, and what it was doing.
@@ -121,6 +151,17 @@ Seen :: struct {
 	carry:          Mat,      // what it carries, and how many: none when it carries nothing (goods.odin)
 	carrying:       i32,
 	fetching:       bool,     // it walks to fetch something
+	want:           [Want]f32,       // how well each need is met (needs.odin)
+	spent:          [Want]f32,       // and the share of the days it lasts with nothing that are gone
+	lacks:          bit_set[Want],   // what it looked for and found none of
+	caring:         bool,            // it is seeing to a need, or on its way to
+	care:           Want,
+	died:           Want,            // of a dead dwarf: what it died of, and on which tick
+	died_on:        int,
+	wet, felt:      f32,             // how wet it is, and what it feels where it stands, °C (shelter.odin)
+	roof:           bool,            // it stands under a roof, with so many ways out walled, and by a fire
+	walls:          u8,
+	by_fire:        bool,
 }
 Shown :: struct {
 	tick:      int,
@@ -139,11 +180,28 @@ Shown :: struct {
 	zones:     [dynamic]Zone_Seen,
 	zone_boxes: [dynamic]Tint,
 	marks:     int,
+	foraging:  bool,            // a hungry dwarf marked food for itself today or yesterday: the hold has none lying
+	food_days: f32,             // days the food in the stockpiles feeds those alive
+	taken:     [dynamic]Taken,  // the plants, trees and water gathered and fished, and on which day (food.odin)
+	taken_v:   int,             // counts every change to them
+	fires:     [dynamic]Fire_Seen,   // the fires, burning and out (shelter.odin)
+}
+Taken :: struct { col: [2]i32, day: int }
+
+// What an expedition sets out with (plan.md, E-1): where its boat is brought in, and which draw of
+// the seed's party it is. With nothing chosen the landing is the island's rows' and the party the
+// seed's first, as the game began before there was anything to plan.
+Expedition :: struct {
+	lands: bool,            // a shore was chosen:
+	shore: [2]i32,          // the column of the world the boat is brought in nearest
+	draws: int,             // how often the whole party was drawn again
+	again: [dynamic]int,    // and after the last of those, which of its dwarves were, one at a time, from 0, in order
 }
 
 Hold :: struct {
 	island:   ^Formed,
 	walk:     Walk,
+	set:      Expedition,     // what it set out with
 	landed:   Landed,
 	found:    bool,           // the island has a landing
 	boat_from, boat_to: [2]f64,
@@ -167,6 +225,22 @@ Hold :: struct {
 	built:    map[[3]i32]Plan,        // the blocks the dwarves laid, and what each was laid as
 	goods_v, goods_shown: int,        // counts every change to the goods, and the count shown
 	claims:   map[[3]i32]int, // the floors dwarves are bound for to work from
+	// Needs and food (needs.odin, food.odin).
+	wells:    [dynamic][3]i32,   // places to drink that a dwarf has found a way to
+	picked:   map[[2]i32]int,    // the columns gathered and fished, and the day each was
+	picked_v, picked_shown: int, // counts every change to them, and the count shown
+	tally:    Day_Tally,         // what the dwarves drank and ate today
+	today:    int,               // the day last said
+	foraged:  int,               // the tick before which no hungry dwarf looks over the land again
+	foraged_on, forages: int,    // the day a hungry dwarf last marked food for itself, and how often one has
+	// Fire (shelter.odin).
+	fires:    [dynamic]Fire,     // every fire, burning or out
+	burning:  map[[3]i32]int,    // and which of them is in each cell
+	fires_v:  int,               // counts every change to them but their burning down
+	chilled:  bool,              // a dwarf has said it is cold and found no fire and no roof,
+	chilled_on: int,             // and the day one last did
+	bedless:  bool,              // a dwarf found no way to a sleeping place,
+	bedless_on: int,             // and the day one last did
 	ground:   int,            // changes to the blocks so far
 	looked:   int,            // dwarves that have looked for work this tick
 	cared:    bool,           // an idle dwarf has looked to itself this tick
@@ -198,17 +272,30 @@ hold: Hold   // the player's hold
 
 // ---- making it ------------------------------------------------------------------------------
 
-// Make the hold on an island: draw the party the boat brings, choose the landing and say both, and read the orders.
-hold_make :: proc(h: ^Hold, island: ^Formed, orders: string, count := LANDING) {
+// Make the hold on an island: draw the party the boat brings, choose the landing and say both, and
+// read the orders. `set` is what an expedition planned before play chose (plan.odin); an orders file
+// may say the same in its own lines, and what the hold set out with it says again in its log.
+hold_make :: proc(h: ^Hold, island: ^Formed, orders: string, count := LANDING, set: ^Expedition = nil) {
 	started := time.now()
 	bound(island)
 	h.island = island
 	walk_init(&h.walk, island)
-	party_draw(world_seed, count, &h.party)
+	if set != nil {
+		h.set = {lands = set.lands, shore = set.shore, draws = set.draws}
+		append(&h.set.again, ..set.again[:])
+	}
+	orders_read(h, orders)
+	party_draw(world_seed, count, &h.party, h.set.draws, h.set.again[:])
 	builtin.resize(&h.dwarves, count)
 	builtin.resize(&h.spots, count)
+	needs_init(h)
 	h.walk.budget = ASKING
-	h.landed, h.found = landing_choose(&h.walk)
+	if h.set.lands do h.landed, h.found = landing_near(&h.walk, h.set.shore)
+	if !h.found {
+		if h.set.lands && !h.quiet do fmt.printfln("the hold: no boat can come in to the shore near %d, %d that the expedition chose, so the landing is the island's own", h.set.shore.x, h.set.shore.y)
+		h.walk.budget = ASKING
+		h.landed, h.found = landing_choose(&h.walk)
+	}
 	if !h.found {
 		if !h.quiet do fmt.println("the hold: no boat can come in to any shore of this island, so no dwarves land")
 		return
@@ -219,9 +306,8 @@ hold_make :: proc(h: ^Hold, island: ^Formed, orders: string, count := LANDING) {
 	h.boat_from = h.boat_to + l.out*f64(min(l.run - 6, 60))
 	h.boat_ticks = int(math.hypot(h.boat_from.x - h.boat_to.x, h.boat_from.y - h.boat_to.y)/ROWING/TICK)
 	spots_take(h, l.camp)
-	h.place = "ground above the landing"
+	h.place = "ground above the landing" if !l.shut else "the shore it landed on"
 	for &d in h.dwarves do d.facing = f32(math.atan2(-l.out.x, l.out.y))
-	orders_read(h, orders)
 	hold_show(h)
 	if h.quiet do return
 	fmt.printfln("the hold: %s dwarves come by boat, their landing chosen in %.0f ms:", count_words(count), time.duration_milliseconds(time.since(started)))
@@ -231,9 +317,35 @@ hold_make :: proc(h: ^Hold, island: ^Formed, orders: string, count := LANDING) {
 	fmt.printfln("  the boat comes in %.0f m from the %s and grounds at %d, %d, %d; the party gathers at %d, %d, %d, %.0f m from the boat and %.0f m from fresh water",
 		math.hypot(h.boat_from.x - h.boat_to.x, h.boat_from.y - h.boat_to.y), compass(l.out.x, l.out.y), l.at.x, l.at.y, l.at.z, l.camp.x, l.camp.y, l.camp.z,
 		math.hypot(f64(l.camp.x - l.at.x), f64(l.camp.z - l.at.z)), fresh_water(c))
-	fmt.printf("  the %s:", count_words(count))
+	if l.shut do fmt.println("  no way leads from the shore to the ground to live on near it, so the party gathers where it lands")
+	weather_say(stand_of(l.camp), "where the party gathers")
+	fmt.printf("  the %s%s:", count_words(count), party_words(h.set))
 	for f, i in h.party do fmt.printf("%s %s", "" if i == 0 else ";", dwarf_name(f))
 	fmt.println()
+}
+
+// Which draw of the seed's party an expedition's is, in words: nothing for the seed's first.
+party_words :: proc(set: Expedition) -> string {
+	if set.draws == 0 && len(set.again) == 0 do return ""
+	whole := fmt.tprintf("the seed's party drawn again %s", "once" if set.draws == 1 else "twice" if set.draws == 2 else fmt.tprintf("%d times", set.draws)) if set.draws > 0 else "the seed's party"
+	if len(set.again) == 0 do return fmt.tprintf(", %s", whole)
+	return fmt.tprintf(", %s, and then %s of them one at a time", whole, count_words(len(set.again)))
+}
+
+// What the expedition set out with, as the lines of an orders file that say it: none where it chose nothing.
+set_lines :: proc(set: Expedition, lines: ^[2]string) -> (n: int) {
+	if set.lands {
+		lines[n] = fmt.tprintf("land %d %d", set.shore.x, set.shore.y)
+		n += 1
+	}
+	if set.draws > 0 || len(set.again) > 0 {
+		b := strings.builder_make(context.temp_allocator)
+		fmt.sbprintf(&b, "party %d", set.draws)
+		for i in set.again do fmt.sbprintf(&b, " %d", i + 1)
+		lines[n] = strings.to_string(b)
+		n += 1
+	}
+	return
 }
 
 // A count in a word, while a word will do.
@@ -273,15 +385,38 @@ order_read :: proc(h: ^Hold, line: string) -> bool {
 		when_, rest := strings.trim(words[0], "[]"), words[2:] if len(words) > 2 else nil
 		seconds := 0.0
 		for part in strings.split(when_, ":", context.temp_allocator) do seconds = seconds*60 + (strconv.parse_f64(part) or_else -1e9)
+		if seconds >= 0 && len(words) >= 3 && (words[1] == "land" || words[1] == "party") {   // what the expedition set out with: no order, and read before the party is drawn
+			n := make([dynamic]int, context.temp_allocator)
+			for w in words[2:] {
+				k, good := strconv.parse_int(w)
+				if !good do return false
+				append(&n, k)
+			}
+			if words[1] == "land" {
+				if len(n) != 2 do return false
+				h.set.lands, h.set.shore = true, {i32(n[0]), i32(n[1])}
+			} else {
+				if n[0] < 0 do return false
+				h.set.draws = n[0]
+				clear(&h.set.again)
+				for i in n[1:] {
+					if i < 1 do return false
+					append(&h.set.again, i - 1)
+				}
+			}
+			return true
+		}
 		v: [3]i32
 		ok := seconds >= 0 && len(words) >= 4
-		marking := len(words) > 1 && (words[1] == "dig" || words[1] == "fell" || words[1] == "build" || words[1] == "unmark" || words[1] == "store")
+		marking := len(words) > 1 && (words[1] == "dig" || words[1] == "fell" || words[1] == "build" || words[1] == "unmark" || words[1] == "store" || words[1] == "unstore" || words[1] == "takes" || words[1] == "gather" || words[1] == "fish" || words[1] == "sleep" || words[1] == "fire")
 		if ok && marking {   // a mark: its kind, what it is to be, and the six figures of its box
-			o.kind = .Dig if words[1] == "dig" else .Fell if words[1] == "fell" else .Build if words[1] == "build" else .Store if words[1] == "store" else .Unmark
+			o.kind = .Dig if words[1] == "dig" else .Fell if words[1] == "fell" else .Build if words[1] == "build" else .Store if words[1] == "store" else .Unstore if words[1] == "unstore" else .Takes if words[1] == "takes" else .Gather if words[1] == "gather" else .Fish if words[1] == "fish" else .Sleep if words[1] == "sleep" else .Tend if words[1] == "fire" else .Unmark
 			rest = words[2:]
-			named := 1 if o.kind == .Dig || o.kind == .Store else 2 if o.kind == .Build else 0
+			named := 1 if o.kind == .Dig || o.kind == .Store || o.kind == .Takes || o.kind == .Tend else 2 if o.kind == .Build else 0
 			ok = len(rest) == named + 6
-			if ok && o.kind == .Store {
+			if ok && o.kind == .Tend {   // fire feed, fire leave
+				o.on, ok = rest[0] == "feed", rest[0] == "feed" || rest[0] == "leave"
+			} else if ok && (o.kind == .Store || o.kind == .Takes) {
 				ok = false
 				for name, takes in TAKES do if name == rest[0] do o.takes, ok = takes, true
 			} else if ok && named > 0 {
@@ -379,8 +514,15 @@ hold_show :: proc(h: ^Hold) {
 		if h.tick > 0 && i < len(h.shown.dwarves) do was, trod = h.shown.dwarves[i].at, h.shown.dwarves[i].stride
 		h.showing[i] = {who = h.party[i], was = was, at = at, trod = trod, stride = d.stride, facing = d.facing, doing = d.doing, left = len(d.path) - d.next, of = len(d.path), said = d.said, fall = d.fall,
 			job = d.job, working = d.doing == .Working, shut = d.shut, site = -1, cut = d.cut, toil = d.toil,
-			carry = d.carry, carrying = d.carrying, fetching = d.haul.on && !d.haul.bringing}
+			carry = d.carry, carrying = d.carrying, fetching = d.haul.on && !d.haul.bringing,
+			want = d.want, lacks = d.lacks, caring = d.caring, care = d.care, died = d.died, died_on = d.died_on,
+			wet = d.wet, felt = d.felt, roof = d.roof, walls = d.walls, by_fire = d.by_fire}
+		for row, w in WANTS do if row.kills > 0 do h.showing[i].spent[w] = d.spent[w]/row.kills
 		if k, ok := h.marked[d.job_at]; ok && d.job do h.showing[i].site = h.marks[k].site
+		if d.doing == .Dead {   // nothing is wrong with where the dead lie that the player can mend
+			h.showing[i].shut = false
+			continue
+		}
 		h.showing[i].plight = plight_of(h, i)
 		if !d.job && !d.shut && (d.doing == .Waiting || d.doing == .Stopped) && len(h.marks) > 0 do h.showing[i].lack = d.lack
 	}
@@ -388,9 +530,17 @@ hold_show :: proc(h: ^Hold) {
 	sync.lock(&h.mutex)
 	h.shown.boat_was, h.shown.boat = h.shown.boat if h.tick > 0 else boat, boat
 	h.shown.tick, h.shown.errand, h.shown.place, h.shown.grounded = h.tick, h.errand, h.place, h.tick >= h.boat_ticks
+	h.shown.foraging = h.forages > 0 && date_tick(h.tick).day - h.foraged_on <= 1
+	if h.tick%16 == 0 || h.goods_shown != h.goods_v do h.shown.food_days, _ = food_days(h)
+	if h.picked_shown != h.picked_v {
+		h.picked_shown, h.shown.taken_v = h.picked_v, h.picked_v
+		clear(&h.shown.taken)
+		for col, day in h.picked do append(&h.shown.taken, Taken{col, day})
+	}
 	h.shown.dwarves, h.showing = h.showing, h.shown.dwarves
 	orders_show(h)
 	goods_show(h)
+	fires_show(h)
 	sync.unlock(&h.mutex)
 }
 
@@ -398,9 +548,19 @@ hold_show :: proc(h: ^Hold) {
 shown_copy :: proc(to: ^Shown, from: Shown) {
 	dwarves, sites, tints, ghosts := to.dwarves, to.sites, to.tints, to.ghosts
 	piles, zones, zone_boxes := to.piles, to.zones, to.zone_boxes
+	taken, taken_v := to.taken, to.taken_v
+	fires := to.fires
 	to^ = from
+	to.fires = fires
+	builtin.resize(&to.fires, len(from.fires))
+	copy(to.fires[:], from.fires[:])
 	to.dwarves, to.sites, to.tints, to.ghosts = dwarves, sites, tints, ghosts
 	to.piles, to.zones, to.zone_boxes = piles, zones, zone_boxes
+	to.taken = taken
+	if taken_v != from.taken_v || len(taken) != len(from.taken) {   // only when one was taken: the list is long
+		builtin.resize(&to.taken, len(from.taken))
+		copy(to.taken[:], from.taken[:])
+	}
 	builtin.resize(&to.piles, len(from.piles))
 	copy(to.piles[:], from.piles[:])
 	builtin.resize(&to.zones, len(from.zones))
@@ -429,19 +589,35 @@ hold_tick :: proc(h: ^Hold) {
 		obey(h, h.orders[h.taken])
 		h.taken += 1
 	}
+	if h.tick == 0 {   // what the expedition set out with, in the form an orders file takes, so that the log can be played again
+		lines: [2]string
+		for line in lines[:set_lines(h.set, &lines)] {
+			h.aside = true
+			if strings.has_prefix(line, "land") do say(h, `The hold says "%s": the boat is brought in at the shore the expedition chose%s.`, line, fmt.tprintf(", %.0f m from there, the nearest a boat can come in to", h.landed.off) if h.landed.off > 1.5*LAND_CELL else "" if h.landed.chosen else ", but no boat can come in near it, so the landing is the island's own")
+			else do say(h, `The hold says "%s": the party is %s.`, line, party_words(h.set)[2:])
+		}
+	}
 	if h.tick == 0 do say(h, "A boat with %s dwarves stands %.0f m off the shore, to the %s, and pulls for the landing.", count_words(len(h.dwarves)), math.hypot(h.boat_from.x - h.boat_to.x, h.boat_from.y - h.boat_to.y), compass(h.landed.out.x, h.landed.out.y))
 	if h.tick == h.boat_ticks do say(h, "The boat grounds at %d, %d, on %s.", h.landed.at.x, h.landed.at.z, ground_words(h.landed.at)[4:])
 	h.looked, h.cared = 0, false
+	day_tick(h)
+	fires_tick(h)
 	for &d, i in h.dwarves {
-		if d.takes == 0 && (d.doing == .Waiting || d.doing == .Stopped || d.doing == .Working) do if o, ok := h.held[d.cell]; !ok do h.held[d.cell] = i   // come to rest: the floor is its own,
-		else if o != i {                                                                                                                              // or another's, and it moves to the nearest that is free
+		if d.doing == .Dead do continue
+		if ashore(d) {   // its needs: thirst, hunger and sleep (needs.odin)
+			needs_tick(h, i)
+			if d.doing == .Dead do continue
+		}
+		if d.takes == 0 && stands(d) do if o, ok := h.held[d.cell]; !ok do h.held[d.cell] = i   // come to rest: the floor is its own,
+		else if o != i {                                                                       // or another's, and it moves to the nearest that is free
 			h.walk.budget = ASKING
-			if f := walk_near(&h.walk, d.cell.x, d.cell.y, d.cell.z, 4, false, &h.held); f >= 0 && !d.job && !d.haul.on {
+			if f := walk_near(&h.walk, d.cell.x, d.cell.y, d.cell.z, 4, false, &h.held); f >= 0 && !d.job && !d.haul.on && !d.caring {
 				h.spots[i] = floor_block(&h.walk, f)
 				d.doing, d.seek, d.wait, d.errand = .Walking, true, 0, false
 			}
 		}
 		if d.takes == 0 && d.doing == .Working do work_tick(h, i)
+		else if d.takes == 0 && (d.doing == .Drinking || d.doing == .Eating || d.doing == .Sleeping || d.doing == .Warming) do care_tick(h, i)
 		else if d.takes == 0 && (d.doing == .Waiting || d.doing == .Stopped) && !d.adrift do idle_tick(h, i)
 		if d.doing == .Aboard && h.tick >= h.boat_ticks + 20 + STEP_OUT*i {   // over the bow, one at a time
 			// Onto the landing once the one before has stepped off it; if that one stands there, onto the nearest free floor.
@@ -626,6 +802,7 @@ settle :: proc(h: ^Hold, i: int, dropped: bool) {
 		return
 	}
 	at := feet_of(h, i)
+	care_drop(h, i)   // the ground went from under it: it is awake, and its meal waits
 	to := i32(-1)
 	if dropped do if p := patch_at(w, d.cell.x >> CHUNK_SHIFT, d.cell.z >> CHUNK_SHIFT); p != nil {
 		col := (d.cell.z & (CHUNK - 1))*CHUNK + d.cell.x & (CHUNK - 1)
@@ -634,7 +811,8 @@ settle :: proc(h: ^Hold, i: int, dropped: bool) {
 	fell := to >= 0 && floor_block(w, to) not_in h.held
 	if !fell {
 		from := floor_block(w, to) if to >= 0 else d.cell
-		to = walk_near(w, from.x, from.y, from.z, ADRIFT, false, &h.held)
+		to = walk_near(w, from.x, from.y, from.z, ADRIFT, false, &h.held, true)   // beside it or below before over it: one moved onto the top of a wall two high has no way down
+		if to < 0 do to = walk_near(w, from.x, from.y, from.z, ADRIFT, false, &h.held)
 	}
 	clear(&d.path)
 	if to < 0 {
@@ -668,6 +846,10 @@ settle :: proc(h: ^Hold, i: int, dropped: bool) {
 // A dwarf has come to the end of its way.
 arrive :: proc(h: ^Hold, i: int) {
 	d := &h.dwarves[i]
+	if d.caring {   // it came to drink, to eat or to sleep (needs.odin)
+		care_arrive(h, i)
+		return
+	}
 	if d.job {   // it came to work
 		work_begin(h, i)
 		return
@@ -688,13 +870,14 @@ arrive :: proc(h: ^Hold, i: int) {
 
 // Once no dwarf is still on its way, say how the errand ended.
 errand_sum :: proc(h: ^Hold) {
-	there, stopped := 0, 0
-	for d in h.dwarves {
-		there += int(d.doing == .Waiting)
-		stopped += int(d.doing == .Stopped)
+	all, stopped, on_way := 0, 0, 0   // one who has come and gone on to drink or to sleep is there
+	for d in h.dwarves do if d.doing != .Dead {
+		all += 1
+		if d.doing == .Stopped do stopped += 1
+		else if d.doing == .Aboard || d.doing == .Ashore || d.errand do on_way += 1
 	}
-	all := len(h.dwarves)
-	if h.summed || there + stopped < all do return
+	if h.summed || on_way > 0 || all == 0 do return
+	there := all - stopped
 	h.summed = true
 	if stopped == all {
 		h.short = "None of the party found a way there."
@@ -705,6 +888,7 @@ errand_sum :: proc(h: ^Hold) {
 	} else if h.errand == 0 {
 		h.short = fmt.tprintf("The %s are ashore, and wait for word.", count_words(all))
 		say(h, "The %s stand on the %s, and wait for word.", count_words(all), h.place)
+		larder_tell(h)
 	} else {
 		h.short = fmt.tprintf("All %s are there.", count_words(all))
 		say(h, "All %s stand at %s.", count_words(all), h.place)
@@ -742,10 +926,15 @@ find :: proc(h: ^Hold, i: int) {
 	}
 	if g := h.spots[i]; walk_floor(w, g.x, g.y, g.z) < 0 do if f := walk_near(w, g.x, g.y, g.z, 3, false, &h.held); f >= 0 do h.spots[i] = floor_block(w, f)   // its place is no longer a floor: the nearest that is
 	clear(&w.shun)
-	for o, j in h.dwarves do if j != i && o.doing != .Aboard && o.doing != .Walking do append(&w.shun, o.cell)
+	for o, j in h.dwarves do if j != i && o.doing != .Aboard && o.doing != .Walking && o.doing != .Dead do append(&w.shun, o.cell)
+	for f in h.fires do append(&w.shun, f.at)   // and round a fire, where there is room
 	_, why, _, _ := way_timed(h, d.cell, h.spots[i], &d.path)
 	clear(&w.shun)
 	if why != .Way && !d.errand {   // on its way to work, or stepping aside: it gives that up
+		if d.caring {
+			d.retry[d.care] = h.tick + RETRY
+			care_drop(h, i)
+		}
 		haul_drop(h, i)
 		if k, ok := h.marked[d.job_at]; ok && d.job do mark_waits(h, k, .No_Way)
 		clear(&d.path)
@@ -773,7 +962,10 @@ no_way :: proc(h: ^Hold, why: Found) -> string {
 }
 
 // Whether a dwarf has landed: an order is for those who have, and the rest follow as they land.
-ashore :: proc(d: Dwarf) -> bool { return d.doing != .Aboard && d.doing != .Ashore }
+ashore :: proc(d: Dwarf) -> bool { return d.doing != .Aboard && d.doing != .Ashore && d.doing != .Dead }
+
+// Whether a dwarf is at rest on a floor of its own: standing, at work, or seeing to itself.
+stands :: proc(d: Dwarf) -> bool { return d.doing == .Waiting || d.doing == .Stopped || d.doing == .Working || d.doing == .Drinking || d.doing == .Eating || d.doing == .Sleeping || d.doing == .Warming }
 
 obey :: proc(h: ^Hold, o: Order) {
 	w := &h.walk
@@ -783,10 +975,14 @@ obey :: proc(h: ^Hold, o: Order) {
 		walk_edit(w, {o.at.x, o.at.y, o.at.z, o.mat})
 		say(h, `The hold says "block %d %d %d %v": the ground is changed there.`, o.at.x, o.at.y, o.at.z, o.mat)
 		ground_changed(h, o.at, o.mat, o.frame)
-	case .Dig, .Fell, .Build, .Unmark:
+	case .Dig, .Fell, .Build, .Unmark, .Gather, .Fish:
 		mark_obey(h, o)
-	case .Store:
+	case .Store, .Sleep:
 		zone_obey(h, o)
+	case .Unstore, .Takes:
+		zone_change(h, o)
+	case .Tend:
+		fire_tend(h, o)
 	case .Go:
 		at := o.at
 		if o.column do at.y = i32(math.round(ground(f64(at.x - region.origin.x) + 0.5, f64(at.z - region.origin.y) + 0.5, 1).h)) - 1
@@ -802,7 +998,7 @@ obey :: proc(h: ^Hold, o: Order) {
 		// the ground the others will cross. One shut in where it stands, as in a pit, does not speak
 		// for the rest: one from each stretch of joined ground the party stands on is asked, until a
 		// way is found. If there is none, the party stays as it is.
-		for d, i in h.dwarves do if d.adrift do settle(h, i, false)
+		for d, i in h.dwarves do if d.adrift && d.doing != .Dead do settle(h, i, false)
 		shut := make([dynamic]i32, context.temp_allocator)   // the rooms no way leads from
 		refused := Found.Way
 		asking: for d in h.dwarves do if ashore(d) && !d.adrift {
@@ -830,6 +1026,7 @@ obey :: proc(h: ^Hold, o: Order) {
 		say(h, `The hold says "go %d %d %d": the party is sent to %s.`, at.x, at.y, at.z, h.place)
 		turn := 0
 		for &d, i in h.dwarves do if ashore(d) {   // each looks for its own way when its turn in the file comes
+			care_drop(h, i)   // the hold's word wakes a sleeper and takes a dwarf from its meal
 			job_drop(h, i, 0)
 			haul_drop(h, i)
 			clear(&d.path)
@@ -922,11 +1119,40 @@ hold_report :: proc(h: ^Hold) {
 		len(h.dwarves), time.duration_microseconds(h.work.walking)/f64(h.tick), time.duration_milliseconds(h.work.worst_tick), h.work.ways, time.duration_milliseconds(h.work.finding)/f64(max(h.work.ways, 1)),
 		time.duration_milliseconds(h.work.worst_way), h.work.patches, h.walk.made)
 	fmt.printfln("  dwarves went round another %d times and squeezed past one %d times; %d fell", h.work.round, h.work.squeezed, h.work.fell)
+	{   // the day, and how each dwarf is (needs.odin)
+		date := date_tick(h.tick)
+		days, loose := food_days(h)
+		fmt.printfln("  it is the %s, %02d:%02d; %d of %d alive; food in the stockpiles for %.1f days, %d things of food loose; %d places to drink known", date_words(date), int(date.hour), int(date.hour*60)%%60, living(h), len(h.dwarves), days, loose, len(h.wells))
+		for well in h.wells do fmt.printfln("    a place to drink at %d, %d, %d: %s", well.x, well.y, well.z, place_say(h, well))
+		for d, i in h.dwarves {
+			if d.doing == .Dead do fmt.printfln("    %s: dead of %s since the %s", who(h, i), WANTS[d.died].of, date_words(date_tick(d.died_on)))
+			else do fmt.printfln("    %s, at %d, %d, %d: drink %.2f, food %.2f, sleep %.2f, warmth %.2f (feels %.0f °C, %s%s%s)%s%s%s", who(h, i), d.cell.x, d.cell.y, d.cell.z, d.want[.Drink], d.want[.Food], d.want[.Sleep], d.want[.Warm], d.felt,
+				"indoors" if indoors({d.roof, d.walls}) else "under a roof" if d.roof else "in the open", ", by a fire" if d.by_fire else "", fmt.tprintf(", wet %.1f", d.wet) if d.wet > 0.05 else "",
+				fmt.tprintf("; %v", d.doing) if d.doing >= .Drinking else "", "; shut in" if d.shut else "", fmt.tprintf("; finds no %v", d.lacks) if d.lacks != {} else "")
+		}
+		at := stand_of(h.landed.camp)
+		now := weather(f64(h.tick)*TICK, at)
+		fmt.printfln("  the weather where the party gathered: %s. %s", weather_line(now), weather_why(now, at, date))
+		for f in h.fires do fmt.printfln("    a fire at %d, %d, %d: %s, %.1f logs, %s%s%s", f.at.x, f.at.y, f.at.z, "burning" if f.lit else "out", f.fuel, "indoors" if f.roof && f.walled else "under a roof" if f.roof else "in the open", ", in the rain" if f.rained else "", "" if f.fed else ", let go out")
+		sleeping, roofed, walled := 0, 0, 0
+		for c, cell in h.zoned do if h.zones[cell.zone].sleep {
+			s := shelter_of(hold_blocks(h), c)
+			sleeping, roofed, walled = sleeping + 1, roofed + int(s.roof), walled + int(indoors(s))
+		}
+		if sleeping > 0 do fmt.printfln("    %d places marked to sleep in: %d of them indoors, %d more under a roof", sleeping, walled, roofed - walled)
+	}
 	if len(h.sites) > 0 {
 		left := 0
 		for site in h.sites do left += int(!site.over)
 		fmt.printfln("  orders: %d given, %d with work left; %d blocks and trees worked, %d marks left; %d looks for work, %.2f ms each; %d counts of dwarves a change would shut in, %.2f ms each",
 			len(h.sites), left, h.work.done, len(h.marks), h.work.looks, time.duration_milliseconds(h.work.looking)/f64(max(h.work.looks, 1)), h.work.counts, time.duration_milliseconds(h.work.counting)/f64(max(h.work.counts, 1)))
+		if len(h.marks) > 0 {   // what the marks left wait for
+			waits: [Waits]int
+			for m in h.marks do waits[m.wait if m.taker < 0 else .None] += 1
+			fmt.print("  the marks left:")
+			for n, why in waits do if n > 0 do fmt.printf(" %d %s;", n, WAITS[why] if why != .None else "in hand or free to take")
+			fmt.println()
+		}
 		fmt.print("  the store:")
 		any := false
 		for n, m in h.store do if n > 0 {
@@ -934,6 +1160,14 @@ hold_report :: proc(h: ^Hold) {
 			any = true
 		}
 		fmt.println("" if any else " nothing")
+		loose: [Mat]i32
+		for g in h.goods do if !stored(h, g) do loose[g.kind] += g.n
+		any = false
+		for n, m in loose do if n > 0 {
+			fmt.printf("%s %d of %s", "  lying loose:" if !any else ",", n, store_words(m))
+			any = true
+		}
+		if any do fmt.println()
 	}
 	w := &h.walk
 	fmt.printfln("  the ground read: %d floors in %d rooms of %d chunks, %.1f MB kept", len(w.floors), len(w.rooms), w.made,
@@ -1114,7 +1348,7 @@ dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
 		c.doing, c.next = fmt.tprintf("Standing %s %s, %s", "on" if s.errand == 0 else "at", to, why), "Waits for word from the hold"
 	case .Stopped:
 		c.doing, c.next = fmt.tprintf("Stopped where it stands: %s", d.said), "Waits for word from the hold"
-	case .Working:
+	case .Working, .Drinking, .Eating, .Sleeping, .Warming, .Dead:
 	}
 	// Its work, and the order it is for (orders.odin).
 	if d.job do for site in s.sites do if site.id == d.site {
@@ -1127,8 +1361,20 @@ dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
 	if !d.job && (d.doing == .Waiting || d.doing == .Stopped) && s.marks > 0 && !d.shut do c.next = "Looks for work it can reach among what is marked"
 	if d.carrying > 0 do c.doing, c.next = fmt.tprintf("Carrying %d of %s to where it is wanted", d.carrying, store_words(d.carry)), "Will look for more to carry, or for marked work"
 	else if d.fetching do c.doing, c.next = "Going to fetch something that lies loose", "Will carry it to a stockpile, or to a block marked to be laid"
+	// Its needs (needs.odin): what it is doing for itself, and what it lacks.
+	if d.caring do switch d.care {
+	case .Drink: c.doing, c.next = "Drinking at fresh water" if d.doing == .Drinking else "Walking to fresh water, to drink", "Will go back to what the hold wants done"
+	case .Food:  c.doing, c.next = fmt.tprintf("Eating %s", store_words(d.cut)) if d.doing == .Eating else "Walking to food, to eat", "Will go back to what the hold wants done"
+	case .Sleep:
+		lies := "by a fire" if d.by_fire else "indoors" if indoors({d.roof, d.walls}) else "under a roof" if d.roof else "in the rain, on open ground" if d.wet > 0.3 else "on open ground"
+		c.doing, c.next = fmt.tprintf("Asleep %s", lies) if d.doing == .Sleeping else "Going to where it will lie down for the night", "Will wake when it is rested, or when thirst, hunger or the cold wake it"
+	case .Warm:
+		at := "by a fire" if d.by_fire else "indoors" if indoors({d.roof, d.walls}) else "under a roof" if d.roof else "out of the wind"
+		c.doing, c.next = fmt.tprintf("Warming itself %s", at) if d.doing == .Warming else "Going to where it can warm itself", "Will go back to what the hold wants done when it is warm"
+	}
 	if d.shut do c.doing, c.next = "Shut in: no way leads out of where it stands", "Waits for a stair to be dug or built to it"
 	if d.fall do c.doing = "Falling: the ground went from under it"
+	if d.doing == .Dead do c.doing, c.next = fmt.tprintf("Dead of %s since the %s; the body lies where it fell", WANTS[d.died].of, date_words(date_tick(d.died_on))), ""
 
 	return
 }
@@ -1140,6 +1386,12 @@ dwarf_card :: proc(s: ^Shown, i: int) -> (c: Card) {
 
 // How many dwarves the hold has.
 hold_count :: proc() -> int { return len(watch.seen.dwarves) }
+
+// How many of them are alive: what the hold is.
+hold_living :: proc() -> (n: int) {
+	for d in watch.seen.dwarves do n += int(d.doing != .Dead)
+	return
+}
 
 // Select a dwarf, or none with -1. The card of the one selected is hold_card's.
 hold_select :: proc(i: int) { watch.selected = i if i >= 0 && i < hold_count() else -1 }
@@ -1204,7 +1456,8 @@ hold_pose :: proc(boxes: []Box, eye: [3]f64, dt: f64) -> []Box {
 		watch.feet[i] = at
 		turn := math.mod(d.facing - watch.turned[i] + 3*math.PI, math.TAU) - math.PI   // the short way round
 		watch.turned[i] = d.facing if !watch.drawn || !watch.live else watch.turned[i] + turn*f32(min(10*dt, 1))
-		dwarf_boxes(&out, d.who, rel(at, eye), watch.turned[i], math.lerp(d.trod, d.stride, a), d.at != d.was && !d.fall && d.doing != .Aboard, d.doing == .Aboard, f32(d.toil + (watch.clock - f64(s.tick)*TICK if watch.live else 0)) if d.working else -1, d.carry, d.carrying)
+		dwarf_boxes(&out, d.who, rel(at, eye), watch.turned[i], math.lerp(d.trod, d.stride, a), d.at != d.was && !d.fall && d.doing != .Aboard, d.doing == .Aboard, f32(d.toil + (watch.clock - f64(s.tick)*TICK if watch.live else 0)) if d.working else -1, d.carry, d.carrying,
+			.Dead if d.doing == .Dead else .Asleep if d.doing == .Sleeping else .Stooped if d.doing == .Drinking || d.doing == .Eating || d.doing == .Warming else .Up)
 	}
 	watch.drawn = true
 	return out[:]

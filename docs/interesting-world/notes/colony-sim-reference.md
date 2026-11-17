@@ -102,6 +102,12 @@ dwarfcorp: walk 0.75 × Dexterity 5 = 3.75 voxels/s, climb half. Voxel health di
 
 **For OdinCraft.** Dug blocks become goods on the floor. One stockpile tool, filter by kind, and a count of what is stored.
 
+### A stockpile selected
+
+- RimWorld: a click takes the zone under the pointer where no thing is to be taken (`RW/RimWorld/Selector.cs:351`, `ZoneAt(UI.MouseCell())`); a drag takes several. The zone selected gives gizmos: Hide, **Delete zone** (`Zone.Delete`, the whole zone at once), Shrink and **Expand** (the add tool taken up for this zone), and copy and paste of its settings (`RW/Verse/Zone.cs:250`, `RW/RimWorld/Zone_Stockpile.cs:70`). Its inspect line is "Size: N"; its Storage tab, 300 by 480, holds the priority and the filter (`RW/RimWorld/ITab_Storage.cs`). `Designator_ZoneDelete` takes cells out by a drag. What lies in a zone is not listed on it: each thing is clicked.
+- Dwarf Fortress: a stockpile is a building with settings, storage and links (`building_stockpilest`, `DF/df.building.xml:990`); a click on it opens its own panel, from which it is repainted, erased or removed (`stockpile_interfacest`: `repainting`, `erasing`, `cur_bld`; `stockpile_tools_interfacest` for its barrels, bins and wheelbarrows; `DF/df.d_interface.xml:479`, `:1030`).
+- For OdinCraft: a click on a stockpile's ground takes the whole of it; its card lists what lies in it and gives Remove (the whole), Make larger (Store taken up with what it takes) and what it takes.
+
 ## 7. Building
 
 RimWorld: a `Blueprint`; `WorkGiver_ConstructDeliverResourcesToBlueprints` hauls to it and it becomes a `Frame`; `WorkGiver_ConstructFinishFrames` works it. Walls drag as lines, floors as rectangles (draw styles `Default1D` and `Default2D`, `RD/DrawStyleCategoryDefs/`). Ingnomia: phases `PENDING`, `HAULING`, `READY`; one item a block (`StoneWall` 1 RawStone, `PlankFloor` 1 Plank, `Scaffold` 2 Plank), so a mined wall builds a wall. `BuildStairs` needs a floor here and nothing above. Dwarf Fortress: `construction_type` FORTIFICATION, WALL, FLOOR, STAIR_UP, STAIR_DOWN, STAIR_UPDOWN, RAMP, tracks; a `construction` record keeps the item and `original_tile` (`DF/df.event.xml:191`). dwarfcorp: one resource a voxel, lowest first.
@@ -134,3 +140,176 @@ Ingnomia (`IG/src/game/worldgetters.cpp:691`): a cell is a floor with or without
 - Ingnomia: tables `Needs`, `Needs_States`; Hunger, Thirst, Sleep, Happiness, with thresholds 30, 15, 0.
 - Dwarf Fortress: `hunger_timer`, `thirst_timer`, `sleepiness_timer` (`DF/df.unit.xml:2945`); `need_type` and `stress` (`DF/df.personality.xml:1374,1503`).
 - dwarfcorp: `DC/Components/AI/CreatureStats-Status.cs`; Hunger, Energy, Happiness, Boredom.
+
+## 12. Before play: the main menu, making a world, the world's map, choosing a site
+
+Read on 2026-11-16 for step I-2 (the front door and the world's screen), before any of it was changed. What a player of the two games expects of these screens, with where it was read. Lines marked "(as played)" are from the games as played and their wikis, since `df-structures` holds the screens' fields and not their drawing.
+
+### What a player expects
+
+1. **The menu is usable at once and is a short list.** RimWorld draws its list over a still picture, with nothing to wait for: in the entry scene it is Tutorial, New colony, Load game, Options, Mods, Credits, Quit (`RW/RimWorld/MainMenuDrawer.cs:114-210`, a `List<ListableOption>`). The same procedure is the menu in play, with Save, Review scenario, Quit to main menu in the list instead. Dwarf Fortress's title has modes `MAIN_MENU`, `CONTINUE_INACTIVE`, `CONTINUE_ACTIVE_WORLD`, `CONTINUE_ACTIVE`, `ABOUT` (`DF/df.d_interface.xml:6334`): **Continue is its own state, first, and names the game it goes on with**, and the worlds are a list of headers with a name each (`region_headerst`, `DF/df.region.xml:485`: `name`, `display_name`), sortable by name, folder or how lately played (`save_game_sort_type`).
+2. **A world has a name of its own, and so has every place in it.** DF names the world, each region (`world_region.name`, a `language_name`, `DF/df.region.xml:328`), each site and each civilisation; the embark screen's first line of a biome is the region's name, "The Hills of Ringing", and its kind, "Temperate conifer forest", is the second (as played). RimWorld names the planet (`WITab_Planet`, `Find.World.info.name`), and titles a tile by its biome because a tile is one of thousands and is not a place anyone goes back to; a settlement, which is, has a name.
+3. **Making a world asks little, says how long, and can be watched.** RimWorld: one page, a seed as words with Randomize, how much of the planet (30% by default; choosing 100% raises a caution about performance, `RW/RimWorld/Page_CreateWorldParams.cs:112-131`), and three sliders, rain, temperature, population; then Generate. DF's simple page is seven choices of a few steps each: world size, history, number of civilisations, site cap, beasts, savagery, minerals (`viewscreen_new_regionst`, `simple_world_size` to `simple_minerals`, `DF/df.d_interface.xml:6090`), with the seed and every figure behind an advanced page. While it runs DF draws the map as it is made and counts the years of history, and the making can be stopped and the world used as far as it came (`abort_world_gen_dialogue`); a world that fails its own tests is rejected and begun again with a reason (`reject_dialogue_type`).
+4. **Choosing a site opens on land that can be chosen, with one already in the hand.** RimWorld's page chooses a random valid tile on opening and jumps the camera to it (`RW/RimWorld/Page_SelectStartingSite.cs:47-50`, `ChooseRandomStartingTile`; "Select random site" does it again and `JumpTo`s the tile, line 213). The camera starts at 550 of 125 to 1,100 (`RW/RimWorld/Planet/WorldCameraDriver.cs:40-48`), about half way in: a tile is large enough to read. DF opens on three maps at once, the world, the region and the local square, the cursor on a place (as played).
+5. **The wheel zooms by a share of how far out you are, the drag and the arrows move.** RimWorld: each notch changes the altitude by `zoomSpeed * altitude / 12` (`WorldCameraDriver.cs:140`), clamped to the range; four dolly keys and the screen's edges move. DF: the map is dragged with the mouse (`mouse_scrolling_map` and its anchors, `DF/df.d_interface.xml:6668`) and `zoomed_in` toggles the nearer view.
+6. **What is said of a site is rows: a thing on the left, a word or a figure on the right, the why on hovering.** RimWorld's Terrain tab is a title (the biome), one sentence, and then `LabelDouble(left, right, tip)` rows between rules (`RW/RimWorld/Planet/WITab_Terrain.cs:38-120`): Terrain (hilliness), Road, River, Movement difficulty (the tip is the sum explained), Stone types here, Elevation; then Average temperature, Growing period, Rainfall, Forageability, Animals can graze now; then Disease frequency, Time zone, Special features (coast, caves). The pane itself, bottom left, says in one line each: latitude and longitude, hilliness, road, river, movement difficulty, average temperature (`RW/RimWorld/Planet/WorldInspectPane.cs:88-125`). No row is a sentence.
+7. **DF says of a site, by tab** (`choose_start_site_view_mode`, `DF/df.d_interface.xml:6624`): Biome (each biome of the rectangle by F-key: its region's name, its kind, temperature, trees, other vegetation, surroundings; then the site's aquifer, soil, clay, sand, flux stone, shallow and deep metals as present or not, and the rock layers), Neighbors (each civilisation, how far, at war or not: `def_candidate`, `def_candidate_mindist`, `embark_neighbor_state_type`), Civilization, Elevation, Cliffs, Reclaim, Find, Notes. Each line is a noun and a word ("Trees: Heavily forested"; as played).
+8. **It warns before you commit, by cause.** DF's `warn_flag` (`DF/df.d_interface.xml:6645`): water table, heavy water table, salt water, large, small, dead civilisation, savage, evil, undead; the player sees them as a list on pressing Embark and may go on (as played). RimWorld refuses with one line of why (`TileFinder.IsValidTileForNewSettlement`: cannot land on this biome, impassable mountains, tile occupied, a faction base adjacent) and Next does nothing more.
+9. **A site can be searched for by what it has.** DF's finder takes a wish for each of `embark_finder_option` (`DF/df.region.xml:2`): size, savagery, evil, elevation, temperature, rain, drainage, flux stone, aquifer, river, underground river, pool, magma pool and pipe, chasm, pit, soil, clay, sand; and marks what matched wholly or in part (`find_results`: none, partial, suitable).
+10. **The button says what happens next, and the next thing is preparing, not playing.** RimWorld's is Next, to choosing colonists; DF's is Embark, to "Prepare for the journey carefully" or "Play now" (`viewscreen_setupdwarfgamest`). Neither lands anyone from the map.
+11. **The world's own facts are one small tab.** RimWorld's Planet tab is the name, the seed and the coverage, three lines (`RW/RimWorld/Planet/WITab_Planet.cs`).
+
+### For OdinCraft
+
+- **The front door**: a short list over a picture that is there from the first frame, the first choice the game to go on with, named. Nothing may stand between the player and the list.
+- **Names.** An island is a place a hold is founded on and gone back to, as a DF region or site is: it wants a name of its own, first, and its kind second. A world wants one too; a seed is its number, as RimWorld's Planet tab has both.
+- **The world's screen opens on the land there is to choose from**, with the start in the hand, near enough that an island reads as land. The wheel zooms by a share; a drag and the arrows move.
+- **An island's card is rows**, a thing, then a figure or a word, with the why on asking; ordered as the Terrain tab is, by what a founder asks first: how much land and how steep, water, stone, climate, who lives there, then what is special.
+- **A caution before a door is taken** belongs on the card as rows that say why, in DF's manner: no landing, no stream, no large animal.
+- **The door's words say what happens**: with no expedition to prepare (E-1), the honest words are those of what is done today.
+- **Making a world**: one field, the seed, with a way to draw one; each stage named with how far it has come, the map drawn as it is known; a way to stop. Where a stage is long it says how long and can be left.
+- **A finder** (9) is not built: eleven islands can be read one by one. It belongs with E-1, once a world has more places than can be looked through.
+
+## 13. Before play: choosing the ground and the party
+
+Read on 2026-11-16 for step E-1 (expedition planning), before any of it was built. What a player of the two games expects of the screen that stands between the world's map and the first moment of play, with where it was read. Lines marked "(as played)" are from the games as played and their wikis.
+
+### What a player expects
+
+1. **A place is already chosen, and a party is already drawn.** RimWorld's site page chooses a valid tile as it opens (`RW/RimWorld/Page_SelectStartingSite.cs:52`, `ChooseRandomStartingTile`), and its colonists are generated before their page is shown (`RW/Verse/StartingPawnUtility.cs`, `NewGeneratedStartingPawn`). DF's preparation begins with a choice between "Play now" and preparing carefully (`initial_selection`, `DF/df.d_interface.xml:6812`), and its seven are there either way. A player who only wants to begin presses one button.
+2. **The ground is chosen on the map itself, and what is said of it follows the pointer.** DF moves a rectangle over the local map (`embark_dx`, `embark_dy`, `viewscreen_choose_start_sitest`, `DF/df.d_interface.xml:6700`) and the site's lines change as it moves (as played). RimWorld's selected tile is whatever was clicked, read each frame (`Page_SelectStartingSite.DoWindowContents`, line 127), and the inspect pane says the tile. Neither makes the player open anything to read a place.
+3. **The game offers, the player overrules.** RimWorld has "Select random site" beside Next (line 215), which jumps the view to the tile it chose. DF has the finder, which marks what matched (section 12, item 9). Both leave every other place a click away.
+4. **A hard site is allowed, and warned of by cause.** DF's `warn_flag` (`DF/df.d_interface.xml:6645`: water table, heavy water table, salt water, large, small, dead civilisation, savage, evil, undead) is shown as a list when Embark is pressed, and the player may go on (as played). RimWorld refuses only what cannot be done at all, with one line of why (`RW/RimWorld/Planet/TileFinder.cs:51`, `IsValidTileForNewSettlement`: the biome cannot be landed on, impassable mountains, the tile is occupied, a faction's base is adjacent). The difference is the rule: what is impossible is refused with its reason, what is merely bad is said and allowed.
+5. **The party is a list down one side, and one of them is looked at.** RimWorld: a column 140 wide of entries 60 high, each a faint portrait, a name and a title, under the heading "selected" (`RW/RimWorld/Page_ConfigureStartingPawns.cs:150-213`, `PawnEntryHeight`); the one clicked fills the rest of the page with its card: name, age, the two backstories, traits, what it cannot do, its skills (`RW/RimWorld/CharacterCardUtility.cs`, `DrawCharacterCard`). DF: the seven as rows, name and profession, with a skills pane by tab for the one in focus (`dwarf_info`, `embark_skills` by `embark_skill_tab_type`: crucial, labor, combat, other; `DF/df.d_interface.xml:6781-6804`).
+6. **One of them can be drawn again, as often as wanted.** RimWorld's Randomize is a button 200 wide at the top right of the card of the one in focus (`CharacterCardUtility.cs:42`, `:143`), and does that one alone (`StartingPawnUtility.RandomizePawn`, line 195). It has no button for all of them. DF has neither: its dwarves' names and persons are given, and what the player changes is their skills, by points (`skill_picks_left`, `points_remaining`).
+7. **The party is summed for what it can do.** RimWorld draws "Team skills" under the card, four columns of every skill with the level of the best of the party at it and that one's name (`StartingPawnUtility.DrawSkillSummaries`, line 145; `FindBestSkillOwner`). It stops Next where a kind of work nobody can do is required, in the tutorial, and elsewhere asks once and lets the player go on (`Page_ConfigureStartingPawns.cs:313`, `CheckWarnRequiredWorkTypesDisabledForEveryone`). DF lists its objections before leaving (`objection`, `viewing_objections`, line 6823).
+8. **The last button says what happens, and it happens.** RimWorld's is "Start" (`DoBottomButtons(rect, "Start".Translate())`, line 120); DF's is Embark, with a last confirmation (`embark_confirmation`). Back is the other button, at the other end of the same row, and Escape does it (`KeyBindingDefOf.Cancel`, `Page_SelectStartingSite.cs:206`).
+9. **Going back loses nothing.** RimWorld's pages are a chain: Back from the colonists returns to the site with the tile still selected, and forward again finds the same colonists (`Find.GameInitData` holds both until the game starts). DF keeps an embark profile by name (`embark_profile`, `saving_profile`).
+10. **What they bring is its own long list, after who.** DF: items by category, bought with the points left from skills, and animals (`s_item` by `entity_sell_category`, `chosen_pet_index`). RimWorld: fixed by the scenario, shown as possessions on each card. Not this step's (P5).
+
+### For OdinCraft
+
+- **The screen opens with the landing the game would choose in the hand and the seed's party drawn**, so Enter alone sets out. Everything else is a wish to do better or worse than that.
+- **The ground is the island's shore, chosen on the island's own picture.** Our unit of choice is where a boat comes in: the shore, a land cell at a time, with the camp beside it. The site card follows the pointer along the shore and returns to what is chosen when the pointer leaves the map; a click chooses. The landings the island has are marked on its shore and listed, the game's first.
+- **The site card is rows**, as the island's is: a thing, a word or a figure, a sign, the why on asking. In a founder's order: can a boat lie there, is there water, is there ground to live on and how steep, is there timber, what is the rock. Then what the world knows that may harm, by name, in a place of its own.
+- **Refuse only what cannot be done, and say why.** A shore that stands as a cliff takes no boat, and the pointer on it says so. An open shore, a dry one, a steep one, one with no tree in sight is chosen like any other and lands the party there, with its cautions named beside the button.
+- **The party is rows down the side that says what is chosen**, each a picture, a name, a trade and an age, and each with its own way to be drawn again; and one way to draw them all, which RimWorld lacks and seven rows of buttons ask for. A dwarf has a trade and no skills yet, so there is no card to fill the middle with: the row is the card.
+- **The party is summed by the kinds of work there are** (`WORKS`): who digs, who fells, who builds, by name, and "no one's trade" where it is so. It is what "Team skills" is for: the reason to draw again.
+- **Set out is one button, bottom right, with its key; Back is at the other end with Escape.** What was chosen is kept when the player goes back and comes in again.
+- **No list of what they bring, no home hold, no finder**: P5, P9, and a world with more places than can be read.
+
+## 14. Needs and the year: hunger, thirst, sleep, gathering, fishing, the calendar
+
+Read on 2026-11-16 for step P4's first half, before it was built. Every figure has its file; "(from memory)" marks what is not in these folders.
+
+### The calendar
+
+| | A day | A year | Real time of a day | Real time of a year |
+|---|---|---|---|---|
+| RimWorld | 60,000 ticks, 2,500 an hour (`RW/RimWorld/GenDate.cs:16,28`) | 60 days, four quadrums of 15 (`GenDate.cs:25,27`) | 16:40 at normal speed, 5:33 at 3 times, 2:47 at 6 (60 ticks a second times `TickRateMultiplier` 1, 3, 6, or 12 when nothing is happening: `RW/Verse/TickManager.cs:58-90`) | 16.7 hours at normal, 2.8 at 6 times |
+| Dwarf Fortress | 1,200 ticks (`DH/docs/set-timeskip-duration.rst:57`) | 403,200 ticks: 12 months of 28 days, 336 days (`:59-60`) | 12 s at the default 100 ticks a second (the cap from memory) | 67 minutes |
+| Ingnomia | 14,400 ticks, 10 a game minute (`IG/src/base/util.h:96-99`) | 48 days, four seasons of 12 (`util.h:100`) | 12 minutes at its slow 50 ms a tick, 72 s at its fast 5 ms (`IG/src/game/game.h:134-135`) | 9.6 hours slow |
+
+RimWorld's pawns and Ingnomia's gnomes live by the hour: they work by day and sleep by night. Dwarf Fortress's day is too short to live by: a dwarf sleeps about once a month and eats twice a season, and the season is what the player feels. RimWorld's default timetable sleeps from 22:00 to 06:00 (`RW/RimWorld/Pawn_TimetableTracker.cs:31`: `index <= 5 || index > 21`).
+
+### Hunger
+
+- **RimWorld** (`RW/RimWorld/Need_Food.cs`, `HungerLevelUtility.cs`, `JobGiver_GetFood.cs`; `RW/Verse/RaceProperties.cs:150-170`). A person's food holds 1.0 and falls 2.6667e-5 a tick, 1.6 a day: full to nothing in 15 hours. It falls at half that once hungry, a quarter once urgently hungry, and not at all at nothing (`HungerMultiplier`: 1, 0.5, 0.25, 0). A pawn looks for food under 0.3 (`FoodLevelPercentageWantEat` for an omnivore; `GetPriority` 9.5, over rest's 8), is "hungry" under 0.24 and "urgently hungry" under 0.12. A new colonist starts at 0.8. Eating takes 500 ticks, 8 s (`IngestibleProperties.baseIngestTicks`); a simple meal is 0.9 (`RD/ThingDefs_Items/Items_Food.xml`), so a pawn eats a little under twice a day. At nothing, malnutrition grows 0.453 a day, a fifth more or less by the pawn, and kills at 1 (`BaseMalnutritionSeverityPerDay`; `RD/HediffDefs/Hediffs_Global_Needs.xml`: stages at 0.2, 0.4, 0.6, 0.8, `lethalSeverity` 1): 2.2 days. From a full belly to death is about 3.1 days, 52 minutes at normal speed and under 9 at 6 times.
+- **Dwarf Fortress** (`DF/df.unit.xml:2945-2953`; `DH/internal/notify/notifications.lua:93-95`). `hunger_timer` counts up every tick and eating sets it back. DFHack calls a unit in dire need over 75,000, which is the game's "starving": 62 days. Hungry is 50,000 (from memory). Death comes only when `stored_fat` is gone ("hunger leads to death only when 0"). The status flags are drowsy, very drowsy, dehydrated and starving (`DF/df.d_interface.xml:7241-7245`).
+- **Ingnomia** (`IG/content/db/ingnomia.db.sql:10582-10585,10596`). Hunger holds 100 and loses 0.025 a game minute, 36 a day: hungry at 30 (1.9 days), very hungry at 15, starving at 0 (2.8 days: "EatClosest"), dead at -100 (5.6 days).
+
+### Thirst
+
+- **RimWorld has none.**
+- **Dwarf Fortress**: `thirst_timer`; dire over 50,000 ("dehydrated", 42 days), thirsty at 25,000 (from memory): thirst runs twice as fast as hunger, so a dwarf drinks about twice for each meal. The job is `Drink`, "from drink area", or `DrinkItem` from a container (`DF/df.job.xml:205-217`): a dwarf with no drink in store walks to water and drinks there.
+- **Ingnomia** (`:10586-10589,10597`): the same figures as hunger.
+
+### Sleep
+
+- **RimWorld** (`RW/RimWorld/Need_Rest.cs:20-28,42-55,94`; `JobGiver_GetRest.cs:28-58`). Rest holds 1.0 and falls 1.5833e-5 a tick, 0.95 a day: full to tired (0.28) in 18 hours, very tired at 0.14. Asleep it gains 3.8095e-5 a tick times the bed's worth, a full sleep in 10.5 hours. A pawn lies down under 0.3 at any hour, and whatever its rest in the hours its timetable gives to sleep, where it falls asleep under 0.75 (`DefaultFallAsleepMaxLevel`) and wakes at 1.0. At nothing it falls asleep where it stands, on average within a quarter of a day. With no bed it sleeps on the ground where it is.
+- **Dwarf Fortress**: `sleepiness_timer`; dire over 150,000 ("very drowsy"); drowsy at 57,600 (from memory), 48 days.
+- **Ingnomia** (`:10580-10581,10595`): loses 0.03 a minute, 43 a day; very sleepy at 25, asleep on the spot at 0; sleep gives 0.35 a minute.
+
+### Gathering and fishing
+
+- **RimWorld**: plants are harvested by a designation dragged over them, one mark a plant, done once. A wild berry bush gives 10 berries of 0.05, half a nutrition, for 250 ticks of work, four seconds, and bears again 4.2 days later (`RD/ThingDefs_Plants/Plants_Wild_Temperate.xml`, `Plant_Berry`: `harvestYield` 10, `harvestWork` 250, `growDays` 6, `harvestAfterGrowth` 0.30; `Items_Resource_RawPlant.xml`). Rice gives 6 in 3 days, potatoes 11 in 5.8, corn 22 in 11.3 (`Plants_Cultivated_Farm.xml`). A hungry pawn with no meal eats from a bush itself. Fishing came with Odyssey (data only here, 1.6): water holds a population by its biome and size (`maxFishPopulation` 480 to 600, `Rimworld_Data/Odyssey/Defs/BiomeDefs/`), fish are 0.05 to 0.5 nutrition (`Items_Resource_Fish.xml`), and "larger ponds yield more fish per catch" (`TipSetDefs/Tips.xml`); it is marked as a zone on water (inference from its work type and stats).
+- **Dwarf Fortress**: `GatherPlants` and `Fish` are jobs (`DF/df.job.xml:167,235`); plants are designated by dragging (`DesignateGatherPlants`, `DF/df.plotinfo.xml:131`) and there are zones for gathering and for fishing (`PlantGathering`, `FishingArea`, `DF/df.d_basics.xml:139,145`). A fisher fishes any water it can reach.
+
+### What a player expects
+
+- **Dwarves look after themselves.** Nobody is told to eat, drink or sleep. A thirsty dwarf walks to water; a hungry one to food; a tired one lies down, at night for choice.
+- **Work waits, and the screen says why.** A pawn that left a wall to eat is "eating", and the wall's card does not say "waiting for a dwarf".
+- **Food is a count at the top, with how long it lasts.** RimWorld's resource readout and Dwarf Fortress's "Food" and "Drink" figures are the first thing looked at each morning.
+- **Gathering is a drag across the bushes**, and what would be taken shows before the button is let go. A bush with nothing on it is not marked.
+- **Needs are words and bars on the pawn's card**, worst first, and a list of the colony sorts by them. "Hungry", "starving", "drowsy" are words a player learns in a minute.
+- **Death is not sudden.** There is a stage with a name before it, an alert that stays, and time to act; and the death itself is a message nobody can miss, with the body left where it fell.
+- **Time can be hurried**, and a night at the fastest speed is under a minute.
+
+### For OdinCraft (as built, `plan.md`, "P4, first half, as built")
+
+- **A day of 20 minutes and a year of 48 days.** RimWorld's day and a fifth: a dwarf here walks to a stream to drink and over pathless slopes to its work. The year is Ingnomia's, four seasons of twelve days, and takes 16 hours at the clock's own pace where RimWorld's takes 16.7.
+- **Needs are rows** (`WANTS`, `src/needs.odin`): thirst falls two wholes a day, so a dwarf drinks about three times; hunger 1.2, two meals of two or three things; sleep 1.05 awake and mends 2.1 asleep, eight hours for sixteen. A dwarf sees to a need under about half when it has nothing in hand, and leaves its work for one under a fifth.
+- **Death takes a day and a half of thirst after running dry and three days of hunger**: longer than RimWorld's 2.2, because the remedy here may be a walk and an order away, and the first of it is said when the need reaches nothing.
+- **Gather and Fish are marks dragged like any order**, done once: a plant bears again next year, fished water holds fish again in four days. A hungry dwarf with no food lying anywhere marks the nearest for itself, as RimWorld's eats from a bush.
+- **A plant's shoots are a tenth of a day, a shii's nuts a day and a third, an ayu two fifths of a day**: one drag of ten by ten on a wood's floor feeds a dwarf two or three days, where RimWorld's bush is a third of one.
+
+## 15. Shelter and warmth: the weather, cold, roofs and rooms, where a pawn sleeps, fire
+
+Read on 2026-11-16 for step P4's second half, before it was built. Every figure has its file; "(from memory)" marks what is not in these folders.
+
+### The weather and the temperature
+
+- **RimWorld's outdoor temperature is the tile's own mean, a season's swing and a day's swing** (`RW/Verse/GenTemperature.cs:190-218`): the day's share is `cos(2π(dayPercent + 0.32))·7`, seven degrees either way, coldest a little after four in the morning and warmest a little after four in the afternoon; the season's swing grows with latitude. The weather adds its own offset.
+- **Its weather is a draw among the biome's kinds, each held for a while** (`RW/RimWorld/WeatherDecider.cs:80`; `RW/Verse/WeatherDef.cs:15`: 16,000 to 160,000 ticks, a quarter of a day to two and two thirds). A temperate forest draws clear 18, fog 1, rain 2, dry thunder 1, rainy thunder 1, foggy rain 1 and snow 8 where it is cold enough (`RD/BiomeDefs/Biomes_Temperate.xml:121-129`): about one draw in eight is rain. Rain may fall only over 0 °C and snow only under -0.5 (`RD/WeatherDefs/Weathers.xml:93,316`). Rain slows walking to 0.9 and shooting to 0.8, and raises the wind 1.5 times (`:94-100`).
+- **Dwarf Fortress has three states of weather**, clear, rain and snow (`DF/df.d_basics.xml:10700-10704`, `weather_type`; DFHack's `weather clear|rain|snow`, `DH/docs/weather.rst`), and a temperature kept block by block (`DF/df.block.xml:301-306`, `current_temperature` and `normal_temperature`). Temperature is largely harmless to dwarves outdoors on any embark that is not freezing or scorching (from memory): it matters as water that freezes and magma that burns. A tile keeps `rained` (`DF/df.d_basics.xml:11014`).
+
+### Cold
+
+- **RimWorld's person is comfortable from 16 to 26 °C with nothing on** (`RD/ThingDefs_Races/Races_Humanlike.xml:11-12`); clothes move both ends (`Insulation_Cold`, `RD/Stats/Stats_Pawns_General.xml:197-213`; a parka's is 2.0 times its stuff's, `RD/ThingDefs_Misc/Apparel_Various.xml:231`). Outside the comfortable range the pawn is unhappy and no more. **Ten degrees past it is the safe range's end** (`GenTemperature.cs:85-91`), and only beyond that does hypothermia grow.
+- **Hypothermia** (`RW/Verse/HediffGiver_Hypothermia.cs:27-40`; every 60 ticks, `RW/Verse/Pawn_HealthTracker.cs:1001`): under the safe range its severity grows by the larger of 0.00075 and 0.0000645 a degree under it, each interval of a thousand a day: 0.75 of the whole a day at the least, so **death in a day and a third at most**, and in 14 hours at 26 degrees under. Back over the comfortable minimum it mends 1.5 to 15 of the whole a day. Its stages are shivering (0.04), minor (0.2: moving -10%, hands -20%), serious (0.35: moving -30%, hands -50%), extreme (0.62: all but unconscious), death at 1 (`RD/HediffDefs/Hediffs_Global_Temperature.xml:73-150`). Under 0 °C with a severity over 0.37 a pawn may lose a finger or a toe to frostbite.
+- **A pawn with hypothermia looks for a place whose temperature is safe** and goes there by itself (`RW/RimWorld/JobGiver_SeekSafeTemperature.cs:28`).
+- **Wet**: every 123 ticks a pawn whose own cell has no roof, in weather that rains, is given "soaking wet", -3 to its mood for a tenth of a day (`RW/Verse/AI/Pawn_MindState.cs:355-369`; `RD/ThoughtDefs/Thoughts_Memory_Misc.xml:328-339`). It does not chill.
+- **Where it slept**: "slept outside" -4, "slept on ground" -4, "slept in the cold" -4, each for a day (`Thoughts_Memory_Misc.xml:68-111`; given on waking, `RW/RimWorld/Toils_LayDown.cs:171-198`: in the cold where the air was under its comfortable range, outside where its room is `PsychologicallyOutdoors`).
+- **Dwarf Fortress** gives a dwarf caught in the rain an unhappy thought and one that slept without a bed or a room another (from memory), and kills by cold only where water freezes on a body.
+
+### Roofs and rooms
+
+- **RimWorld keeps a roof for every cell** (`RW/Verse/RoofGrid.cs`: `Roofed(c)`), three kinds: built, thin rock and thick rock, the last over mountains. A built roof must lie within 6.9 cells of something that holds it up, a wall or a column, or it falls (`RW/Verse/RoofCollapseUtility.cs:14-31`, `RoofMaxSupportDistance`). **Roofs are built without being asked for** over any closed room of up to 320 cells (`RW/Verse/AutoBuildRoofAreaSetter.cs:37`). The player shows them by a toggle that tints every roofed cell green (`RoofGrid.Color`, the "roof overlay").
+- **A room is the cells joined without passing a wall or a door** (`RW/Verse/RegionAndRoomUpdater.cs`, `Room.cs`, `District.cs`). It **uses the outdoor temperature if it touches the map's edge or a quarter of its cells have no roof** (`Room.cs:54-58`, `UsesOutdoorTemperature`); it is **outdoors to the mind** with 300 unroofed cells, or touching the edge and half unroofed (`:210-214`). The pane at the bottom left says "Indoors" or "Outdoors" and the temperature of the cell under the pointer.
+- **A closed room holds its own temperature**, pulled toward the outdoors through its walls, faster through cells without a roof (`RW/Verse/RoomTempTracker.cs:25-27`: 0.0007 a tick for no roof against 0.00005 for a thin one), and **under thick rock toward 15 °C** (`:202-209`, "deep equalization"): a room dug into a mountain is cool in summer and mild in winter.
+- **Dwarf Fortress keeps three flags a tile** (`DF/df.d_basics.xml:11006-11008`, `tile_designation`): `light` (open to the sun), `subterranean` and `outside` (the sky is seen from it). Looking at a tile says Outside or Inside, Light or Dark, Above Ground or Subterranean. A tile that was once roofed over stays "inside" when the roof goes (from memory). There are no rooms for warmth, only zones.
+- **Ingnomia's room is the tiles the player dragged**, and it asks of them two things: `checkRoofed`, a solid floor over every tile, and `checkEnclosed` (`IG/src/game/room.cpp:288-330`).
+
+### Where a pawn sleeps
+
+- **RimWorld**: a bed first; with none, on the ground near where it is (`RW/RimWorld/JobGiver_GetRest.cs`). The first thing a new colony is given to place is the **sleeping spot**: "Designates a spot on the ground where people should sleep. Not comfortable." (`RD/ThingDefs_Buildings/Buildings_Furniture.xml:86-87`), free and instant, before any bed. A room with several beds is a barracks (`RoomRoleWorker_Barracks.cs`).
+- **Dwarf Fortress**: zones named Bedroom and Dormitory (`DF/df.d_basics.xml:133,146`), dragged like a stockpile; a dormitory is slept in by anyone without a room of their own, and a dwarf with neither sleeps where it drops.
+- **Ingnomia**: a Dorm is a room type, and a gnome is found a free bed in one (`IG/src/game/roommanager.h:69`).
+
+### Fire
+
+- **RimWorld's campfire** (`RD/ThingDefs_Buildings/Buildings_Temperature.xml`, `Campfire`): 20 wood and 200 ticks of work to build, the wood being its first fuel; it holds 20 and burns 10 a day, so a full fire lasts two days; **in rain with no roof over it, 0.0006 a tick more, 36 a day: 4.6 times as fast** (`RW/RimWorld/CompRefuelable.cs:59,175`: only where the rain's rate is over 0.4 and its cell is unroofed). It pushes 21 units of heat a second into its room until the room is 28 °C (`RW/Verse/CompHeatPusher.cs:25-34`), and lights 10 cells round it. Its own text says "As with all heat sources, it must be placed indoors so it has a closed space to heat": outdoors its heat is lost. It is fed by haulers from the stockpile without being asked, and the player can stop that with a toggle on the fire. Burnt out, it stands cold until fed.
+- **Dwarf Fortress has no fire to sit by**: warmth is not a need there.
+
+### What a player expects
+
+- **The weather is said where the date is**: its name, and the temperature outdoors in degrees. Nobody is surprised by cold: the figure was in the corner all day.
+- **Rain is seen falling**, and everything under a roof is dry.
+- **A roof is something the game can show.** One key, and every roofed cell is tinted.
+- **A room is walls all round and a roof.** A hole in the wall or the roof and it is the outdoors again; the game says which it is for the cell under the pointer.
+- **A room dug into rock is the safe first shelter**: mild whatever the season.
+- **Pawns sleep where the player marked**, before any bed is made; with nothing marked, where they drop.
+- **A fire is built of wood, burns wood and goes out.** It is fed without orders while wood is in store. It warms a closed room, and little or nothing in the open.
+- **Cold is slow and loud.** A word on the pawn's card first (shivering), then an alert that stays, then harm, then death, over a day or more; and a pawn in danger goes to the warm by itself if there is any.
+- **A first night outdoors costs nothing that lasts.** Both games let a party sleep rough in a mild season.
+
+### For OdinCraft (as built, `plan.md`, "P4, second half, as built")
+
+- **The weather is where the date is**, a line of its name, the air in degrees and the wind, with why behind it. It is a function of the island's own climate, so it is the same on the screen and in the dwarves' world.
+- **A dwarf is comfortable from 12 °C felt, clothed as it landed**; the wind and the wet take from what it feels, which neither game does, because the start island's winter is 7 to 14 °C and only its rain and wind are dangerous. Harm begins 6 degrees under that, once no warmth is left, and death comes after a day and a half of it: RimWorld's ten degrees and a day and a third.
+- **A roof is a block overhead, walls are blocks at the head within five steps, indoors is a roof and three walls.** No rooms are kept: there are no doors yet to close one, and a rule on the blocks is the same for the hold and for the picture. Nothing falls for want of a wall.
+- **Shelter is shown by a lens**, RimWorld's roof overlay with a second colour for indoors, and said on a block's card, Dwarf Fortress's "Inside".
+- **A room under ground or behind walls is halfway to the year's mean**, RimWorld's 15 °C under rock made the island's own.
+- **A place to sleep is dragged like a stockpile before any bed exists**: RimWorld's sleeping spot and Dwarf Fortress's dormitory. With none, a dwarf looks for a roof or a fire within a short walk, where RimWorld's lies down where it stands.
+- **A fire is laid of one log, holds six, burns three a day and three times that in rain**, where RimWorld's is 20 wood, 10 a day and 4.6 times: a tree here is three to six logs. It is fed from the store without orders, and a toggle on its card stops that, as in RimWorld. Unlike RimWorld's it warms those beside it in the open, two steps round, and four indoors.
+- **A cold dwarf goes to the warm by itself**, as RimWorld's pawn with hypothermia seeks a safe temperature; and the fire's own work is not left for the cold.

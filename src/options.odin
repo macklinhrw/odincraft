@@ -31,6 +31,7 @@ import "core:strings"
 //                   equinox, on): sets the sun's path
 //   weather=c[,b]   force the cloud cover, 0 clear to 1 overcast, and the cloud base in metres (default
 //                   1000, too high for a cap); otherwise both are drawn from the seed, the day and the hour
+//   rain=r          draw rain falling so hard, 0 to 1, whatever the weather is: for a picture or a measure
 //   shot=file.png   wait for the world to load, save one frame and exit
 //   after=seconds   with shot: let this much time pass first, so water can move; with bench as
 //                   well, the frame is saved then without waiting, in mid-flight. A picture's birds and
@@ -101,6 +102,22 @@ import "core:strings"
 //   play=file       play the game with no window by a script of what a player's hand does: pointer moves, presses,
 //                   drags and keys, through the code a real pointer and keyboard go through, with pictures taken
 //                   where it asks (script.odin)
+//
+// Before play (door.odin, chart.odin). With none of these, and nothing that names where to go (over, pos,
+// above, look, fly, first, place, island, kind, origin, bench, shot, enter, or a tool that exits), the game
+// opens at the front door, which makes the world of seed (default: the world last entered) while it is looked at.
+//   enter           go straight in, as every option that names where to go does
+//   door[=screen]   the front door, or one of its screens: worlds, new, settings, or world, the world's map.
+//                   With shot or bench it is drawn unseen. find=digits is the seed typed for a new world
+//   when=state      with door and shot: take the picture when the world being made has come so far: plates or
+//                   region (half way through that stage), islands:N (N of those near the start formed), ready
+//                   (it can be entered and its pictures are drawn: the default), all (every island formed), now
+//   focus=N         the front door's Nth choice, or the Nth world of the list, in focus, from 1
+//   pick=N          on the world's map: island N in the hand (0 the start; -2 the mainland, -3 and below the other large lands); tab=land, rock,
+//                   climate, life or places chooses its card's depth; lens=name puts a lens of the world on
+//                   (setting, depth, rain, temperature, age, rising, front, crust); over=x,z and span=metres place it
+//   press=id[,id]   press these parts one after another, each by its name as say prints it, and then take the
+//                   picture: door.enter goes from the front door into play, menu.leave.world out of play to the world's map
 
 Options :: struct {
 	pos:           [3]f64,
@@ -109,7 +126,9 @@ Options :: struct {
 	yaw, pitch:    f32,
 	hour, day:     f32,
 	has_day:       bool,
+	has_hour:      bool,   // --hour: the sun is held at that hour, for a picture of the land
 	weather:       [2]f32,
+	rain:          f32,    // --rain: rain is drawn falling so hard, 0 to 1, whatever the weather is, for a picture or a measure; under 0 for the weather's own
 	fly, show:     bool,
 	width, height: i32,
 	shot:          string,
@@ -168,10 +187,14 @@ Options :: struct {
 	tab, list, lens, tell, alert, group, find: string,
 	who, keep:     [dynamic]int,
 	play:          string,
+	door, at_when: string,
+	has_door, enter, has_seed, has_pick: bool,
+	focus, pick:   int,
+	press:         [dynamic]string,
 	}
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING, continent = -1, reach = BACKGROUND_REACH/1000}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, rain = -1, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING, continent = -1, reach = BACKGROUND_REACH/1000}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -185,7 +208,7 @@ options :: proc() -> Options {
 		switch name {
 		case "pos":   ok = numbers(value, ",", v[:]); o.pos, o.has_pos = v, true
 		case "above": ok = numbers(value, ",", v[:]); o.pos, o.has_pos, o.above = v, true, true   // the ground is added once the land is formed
-		case "seed":  ok = numbers(value, ",", v[:1]); world_seed = u32(v.x)
+		case "seed":  ok = numbers(value, ",", v[:1]); world_seed, o.has_seed = u32(v.x), true
 		case "overlay": o.overlay = value
 		case "kind":  o.kind = value
 		case "origin": ok = numbers(value, ",", v[:2]); o.origin = {i32(v.x), i32(v.y)}
@@ -193,8 +216,9 @@ options :: proc() -> Options {
 		case "near":  ok = numbers(value, ",", v[:1]); o.near = v.x
 		case "look":  ok = numbers(value, ",", v[:2]); o.yaw, o.pitch, o.has_look = f32(v.x), f32(v.y), true
 		case "size":  ok = numbers(value, "x", v[:2]); o.width, o.height = i32(v.x), i32(v.y)
-		case "hour":  ok = numbers(value, ",", v[:1]); o.hour = f32(v.x)
+		case "hour":  ok = numbers(value, ",", v[:1]); o.hour, o.has_hour = f32(v.x), true
 		case "day":   ok = numbers(value, ",", v[:1]); o.day, o.has_day = f32(v.x), true
+		case "rain":  ok = numbers(value, ",", v[:1]); o.rain = f32(v.x)
 		case "weather":
 			ok = numbers(value, ",", v[:2]) || numbers(value, ",", v[:1])
 			o.weather = {f32(v.x), f32(v.y) if strings.contains(value, ",") else SKY.base[1]}
@@ -279,6 +303,12 @@ options :: proc() -> Options {
 		case "tell":  o.tell = value
 		case "play":  o.play = value
 		case "alert": o.alert = value
+		case "enter": o.enter = true
+		case "door":  o.door, o.has_door, ok = value, true, value == "" || value == "worlds" || value == "new" || value == "settings" || value == "world" || value == "plan"
+		case "when":  o.at_when = value
+		case "focus": ok = numbers(value, ",", v[:1]) && v.x >= 1; o.focus = int(v.x)
+		case "pick":  ok = numbers(value, ",", v[:1]); o.pick, o.has_pick = int(v.x), true
+		case "press": for id in strings.split(value, ",") do append(&o.press, id)
 		case:         ok = false
 		}
 		if !ok {

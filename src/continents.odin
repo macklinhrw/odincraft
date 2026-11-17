@@ -48,6 +48,9 @@ Landmass :: struct {
 	mutex:  sync.Mutex,   // pieces are formed one at a time, each after those it waits on
 	seconds: f64,      // spent forming its pieces
 	ready:  bool,      // its coarse stage is at hand
+	kept:   bool,      // it was read back from where an earlier run kept it,
+	took:   f64,       // or formed in this many seconds
+	left:   bool,      // its coarse stage was stopped before it had run (lands_state.leave): it stays a record until the world is opened again
 }
 
 MASS_ROUGH :: 80     // metres the starting ground wanders over a few km, so the coast does not follow the history's 2 km samples
@@ -830,6 +833,101 @@ COARSE_REACH :: 80_000
 
 lands: []Landmass   // every land mass of the known world larger than a region, the nearest the start first
 
+// How the land larger than a region stands as a whole, for the thread that makes a world and the
+// screens that watch it (making.odin, chart.odin): each a word, stored whole.
+Lands_State :: struct {
+	regions: bool,      // the pieces of the land masses at hand are regions in `formed` (regions_make): until then no point is anybody's piece
+	step, steps: i32,   // how far the coarse stages being formed have come, of how many steps of their histories: for the eye
+	forming: i32,       // the land mass whose coarse stage is being formed, or 0
+	leave:   bool,      // the coarse stage being formed is to be left where it stands, and those after it: they stay records
+	expect:  f64,       // seconds the coarse stages to be formed are expected to take in all (mass_seconds)
+	began:   time.Time, // when the first of them was begun
+}
+lands_state: Lands_State
+
+// Seconds a land mass's coarse stage takes to form on this kind of machine, about: 25 s for 45,000 km²
+// and 200 to 360 s for 317,000 km², by the load (continents-forming.md). For the screen that says
+// what forming one would cost.
+mass_seconds :: proc(m: ^Landmass) -> f64 { return 5 + 0.0008*f64(m.area) }
+
+// The coarse stages of the world's land masses (mass_pass), as start-up and the making of a world
+// both ask for them: one that is kept is read back; one that is not is formed if `all` is asked for
+// or it lies within COARSE_REACH of the start or of one of `views`; none is touched with `none`.
+// How far the forming has come is counted for the screen, and it can be left (lands_state).
+// Returns how many pieces the land masses at hand are cut into.
+lands_pass :: proc(views: [][2]f64, all, none: bool) -> (pieces: int) {
+	ls := &lands_state
+	if none || len(lands) == 0 do return
+	began := time.now()
+	form := make([]bool, len(lands), context.temp_allocator)
+	steps, expect := 0, f64(0)
+	for &m, i in lands {
+		near := m.near
+		for v in views do near = min(near, mass_from(&m, v))
+		form[i] = all || near <= COARSE_REACH
+		if form[i] && !os.exists(pass_path(&m)) {
+			mass_bind(&m, &m.frame, -1, m.origin, m.side)
+			for p in region.history do if p.cell >= 64 do steps += int(p.steps)
+			expect += mass_seconds(&m)
+		}
+	}
+	ls.expect, ls.began = expect, time.now()
+	sync.atomic_store(&ls.step, 0)
+	sync.atomic_store(&ls.steps, i32(steps))
+	left, left_area := 0, f32(0)
+	for &m, i in lands {
+		if mass_pass(&m, form[i] && !sync.atomic_load(&ls.leave)) do pieces += len(m.cut.size)
+		else do left, left_area = left + 1, left_area + m.area
+	}
+	if left > 0 do fmt.printfln("land larger than a region: %d land masses, %.0f km², lie beyond what is drawn from here and their coarse stage is not kept, or were left: they stay records until a view comes within %.0f km of them or --continent=1 forms the whole world's", left, left_area, f64(COARSE_REACH)/1000)
+	if pieces > 0 do fmt.printfln("land larger than a region: the coarse stages at hand in %.1f s, %d pieces in all", time.duration_seconds(time.since(began)), pieces)
+	return
+}
+
+// Put the land masses down with their world: each one's coarse stage is let go of (it is a file,
+// mapped) and its cut freed. The pieces formed stay where they lie, as formed islands do, and so do
+// the records themselves, which those pieces still point at (making.odin). No thread is forming.
+lands_drop :: proc() {
+	sync.atomic_store_explicit(&lands_state.regions, false, .Release)
+	for &m in lands {
+		if !m.ready do continue
+		m.ready = false
+		store_close(&m.store)
+		cut := &m.cut
+		delete(cut.down); delete(cut.depth); delete(cut.rank); delete(cut.size); delete(cut.box); delete(cut.window)
+		for l in cut.near do delete(l)
+		delete(cut.near)
+		cut^ = {}
+		delete(m.all.formed)
+		m.all = {}
+	}
+	lands = nil
+	lands_state = {}
+}
+
+// How many pieces of the land masses at hand lie within `reach` metres of a point and are not formed.
+masses_near :: proc(at: [2]f64, reach: f64) -> (count: int) {
+	if !sync.atomic_load_explicit(&lands_state.regions, .Acquire) do return
+	for &m in lands do if m.ready do for p in mass_order(&m, at, reach) do count += int(!is_formed(&formed[m.first + int(p)]))
+	return
+}
+
+// Form the pieces within `reach` metres of a point, each after those it waits on, side by side: what
+// must stand before a world is entered there. Returns how many were asked for.
+masses_form :: proc(at: [2]f64, reach: f64) -> (count: int) {
+	if !sync.atomic_load_explicit(&lands_state.regions, .Acquire) do return
+	for &m in lands do if m.ready {
+		near := mass_order(&m, at, reach, context.allocator)   // its own memory: forming frees the temporary as it goes
+		was := quiet
+		quiet = true
+		mass_form(&m, near, max(os.get_processor_core_count() - 2, 1))
+		quiet = was
+		count += len(near)
+		delete(near)
+	}
+	return
+}
+
 // Every land mass of the known world larger than a region can hold: their records.
 lands_make :: proc() {
 	list := make([dynamic]Landmass)
@@ -896,10 +994,20 @@ mass_pass :: proc(m: ^Landmass, form: bool) -> bool {
 	m.path = pass_path(m)
 	path := m.path
 	kept := store_open(&m.store, path, n)
+	m.kept, m.left = kept, false
 	if !kept {
 		if !form do return false
 		fmt.printfln("land mass %d: %.0f km² of land in the known world, on a lattice %.0f km across, its middle at %d, %d: its coarse stage, the whole of it through the 64 m phases", m.mass, m.area, m.side/1000, m.origin.x, m.origin.y)
+		sync.atomic_store(&lands_state.forming, m.mass)
 		g := coarse_form(n, m.from)
+		sync.atomic_store(&lands_state.forming, 0)
+		if sync.atomic_load(&lands_state.leave) {   // left where it stood: nothing of it is kept, and it stays a record
+			coarse_free(g)
+			grid_free(g)
+			m.left = true
+			fmt.printfln("land mass %d: its coarse stage was left before it had run; it stays a record", m.mass)
+			return false
+		}
 		cutting := time.now()
 		cut, own := cut_make(g, PIECE_KM2*1e6/4096, MARGIN)
 		cut_time := time.duration_seconds(time.since(cutting))
@@ -925,7 +1033,8 @@ mass_pass :: proc(m: ^Landmass, form: bool) -> bool {
 	for k in st.pairs { append(&c.near[k.x], k.y); append(&c.near[k.y], k.x) }
 	for &l in c.near do slice.sort(l[:])
 	m.all = Pieces{m = m, from = m.from, margin = MARGIN, formed = make([]bool, count)}
-	m.ready = true
+	m.took = time.duration_seconds(time.since(started))
+	sync.atomic_store(&m.ready, true)
 	// How many pieces each waits on: the cost of forming one alone, anywhere.
 	waits := make([]int, count, context.temp_allocator)
 	deepest := i32(0)
@@ -952,6 +1061,7 @@ mass_pass :: proc(m: ^Landmass, form: bool) -> bool {
 // The landmass whose lattice holds a point in the world and the piece the point lies in, or nil: off
 // every lattice, or out on the open sea.
 mass_piece :: proc(x, z: f64) -> (^Landmass, int) {
+	if !sync.atomic_load_explicit(&lands_state.regions, .Acquire) do return nil, -1
 	for &m in lands do if m.ready {
 		n := m.store.n
 		u, v := int(math.floor((x - f64(m.origin.x))/64 + f64(n)/2)), int(math.floor((z - f64(m.origin.y))/64 + f64(n)/2))
@@ -1021,8 +1131,10 @@ mass_form :: proc(m: ^Landmass, want: []i32, threads: int) {
 		for {
 			sync.lock(&w.mutex)
 			for len(w.ready) == 0 && w.todo > 0 do sync.cond_wait(&w.wake, &w.mutex)
+			if sync.atomic_load(&forming.stop) do w.todo = 0   // told to stop (making.odin): no piece is begun; those in hand are finished
 			if w.todo == 0 {
 				sync.unlock(&w.mutex)
+				sync.cond_broadcast(&w.wake)
 				return
 			}
 			p := pop(&w.ready)
@@ -1406,23 +1518,24 @@ KEEP_THREADS :: 3   // threads that form pieces beside play
 LET_GO   :: 1.5   // a piece this many times the reach from the player is let go,
 GRACE    :: 8     // and its land's memory freed this many seconds later, when nothing that was reading it still is
 
-// Keep the landmasses' pieces within `reach` of the player formed, nearest first, on one thread of low
-// priority beside play; and let go those the player has left far behind, which are read back from
-// where they were kept when the player comes near again, so that what is held does not grow with
-// how far the player has been.
-masses_keep :: proc(reach: f64) {
-	Keep :: struct { reach: f64 }
-	k := new(Keep)
-	k.reach = reach
-	thread.create_and_start_with_poly_data(k, proc(k: ^Keep) {
+// Keep the landmasses' pieces within reach of the view (`mass_focus`, `mass_reach`) formed, nearest
+// first, on one thread of low priority beside play or the screens before it; and let go those left
+// far behind, which are read back from where they were kept when the view comes near again, so that
+// what is held does not grow with how far the player has been. Asked for more than once, it is begun
+// once; it ends when forming is told to stop.
+masses_keep :: proc() {
+	sync.guard(&forming.mutex)
+	if keeper != nil || mass_reach <= 0 || !sync.atomic_load_explicit(&lands_state.regions, .Acquire) do return
+	keeper = thread.create_and_start(proc() {
 		alone, quiet = true, true
 		Gone :: struct { f: ^Formed, at: time.Time }
 		gone := make([dynamic]Gone)
-		for {
+		defer delete(gone)
+		for !sync.atomic_load(&forming.stop) {
 			at := mass_focus
 			formed_one := false
 			for &m in lands do if m.ready && !formed_one {
-				for p in mass_order(&m, at, k.reach, context.allocator) do if f := &formed[m.first + int(p)]; !is_formed(f) {   // its own memory: forming frees the temporary as it goes
+				for p in mass_order(&m, at, mass_reach, context.allocator) do if f := &formed[m.first + int(p)]; !is_formed(f) {   // its own memory: forming frees the temporary as it goes
 					waiting := false
 					for g in gone do waiting ||= g.f == f   // let go a moment ago, and not yet freed
 					if waiting do continue
@@ -1432,7 +1545,7 @@ masses_keep :: proc(reach: f64) {
 				}
 			}
 			for &m in lands do if m.ready do for p in 0..<i32(len(m.cut.size)) {
-				if f := &formed[m.first + int(p)]; is_formed(f) && mass_off(&m, p, at) > LET_GO*k.reach {
+				if f := &formed[m.first + int(p)]; is_formed(f) && mass_off(&m, p, at) > LET_GO*mass_reach {
 					sync.atomic_store_explicit(&f.ready, false, .Release)
 					append(&gone, Gone{f, time.now()})
 				}
@@ -1444,7 +1557,21 @@ masses_keep :: proc(reach: f64) {
 			free_all(context.temp_allocator)
 			if !formed_one do time.sleep(250*time.Millisecond)
 		}
-	}, priority = .Low, self_cleanup = true)
+	}, priority = .Low)
+}
+keeper: ^thread.Thread   // the thread that keeps pieces formed; made and ended under forming.mutex
+mass_reach: f64          // metres round the view within which pieces are kept formed (--reach); none are kept at 0
+
+// Wait for the keeper, which forming.stop has told to end (forming_stop, making.odin).
+masses_end :: proc() {
+	sync.lock(&forming.mutex)
+	k := keeper
+	keeper = nil
+	sync.unlock(&forming.mutex)
+	if k != nil {
+		thread.join(k)
+		thread.destroy(k)
+	}
 }
 
 // Free what a piece's land holds for each of its cells, once the piece has been let go and nothing reads

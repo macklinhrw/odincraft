@@ -1077,6 +1077,14 @@ Built 2026-11-16 and 17 by Claude: the rest of the plan's N1 that could be built
 
 **What is not done.** The real ria coast on an old margin is not measured, so the continent's coast is still judged against the three forearc coasts, and the rebound's 24 km is still a guess. Memory while forming is 9.6 to 11.8 GB, not small. The flood over the whole lattice is still on one thread (31% of seed 7's continent's time). Formed land and land drawn from afar differ: by a median 21 m on seed 7's coast, and on seed 1's capped ridges by 150 m and more over a fifth of the land. A landmass whose ground starts under the sea is formed as nothing (856 km² of seed 7's 336,000). The reaches for formed pieces stay at 16 and 40 km. Letting pieces go has not been run over a long journey.
 
+**Brought onto the front door, 2026-11-17.** `main` had meanwhile gained a front door, a world made on a thread of its own and a map of the world (I-2, E-1; `adr/0013`), all speaking of the first part's one mainland. They now speak of every large land (`open-decisions.md`, Claude's call of 2026-11-17 on the merge): making a world reads back each coarse stage that is kept and forms what lies within 80 km of its start, as a stage whose steps are counted and which can be left; the map draws each large land at hand from its 64 m cells and names the rest as known and not formed, with why and about how long forming would take; each has a row and a card. Played by script on seed 1 (its mainland 51 km off, formed in 26 s while watched) and seed 7 (none within reach): `interesting-world/real/play/n1-new.txt`, `n1-far.txt`.
+
+![Seed 1 being made: the mainland's stage, 29 of 162 steps, with the way to leave it](interesting-world/real/play/n1-01-stage.jpg)
+
+![Seed 1 made: the mainland drawn from its 64 m cells, its card saying how it stands](interesting-world/real/play/n1-04-mainland.jpg)
+
+![Seed 7, where no large land lies within reach: the mainland known, not formed, with why and what forming it would take](interesting-world/real/play/n1-11-far-mainland.jpg)
+
 ### Step 31, as built
 
 Built 2026-11-15 by Claude: forming faster, every island coming out bit for bit as before. The owner has not yet looked at it; there is nothing new to see but the time it takes.
