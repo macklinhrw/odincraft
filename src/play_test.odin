@@ -89,7 +89,7 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 
 	// Top left: the place, the date, and the clock, which a click and its key both work.
 	testing.expect(t, says("place.title") != "", "the place has no name")
-	testing.expect_value(t, says("place.date"), "16th of spring")
+	testing.expect_value(t, says("place.date"), fmt.tprintf("%s, 16th of spring", isle_name(0)))
 	testing.expect_value(t, says("clock.pause"), "Running at 09:30")
 	testing.expect_value(t, screen_find(&screen, "clock.pause").key, "Space")
 	testing.expect(t, click(s, "clock.pause") && s.clock.paused, "a click on the clock did not pause it")

@@ -1,0 +1,67 @@
+# The front door, played from the player's seat (step I-2; open-decisions.md, 2026-11-16): what stands
+# there from the first frame, its choices by key and by pointer, Worlds, settings, into the last world
+# and out of it again.
+#   build/odincraft --door --play=docs/interesting-world/real/play/i2-door.txt
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+print 1. the first frame a player sees, and the door a quarter of a second in
+snap out/play/i2-01-door-first-frame.png
+say
+wait 0.25
+snap out/play/i2-02-door-making.png
+
+print 2. Enter pressed before the land is made: it waits and says so, and Escape takes it back
+key Enter
+wait 0.15
+snap out/play/i2-03-door-waiting.png
+say
+key Esc
+
+print 3. the door once the world can be entered
+until ready 120
+shot out/play/i2-04-door.png
+say
+
+print 4. the arrows and the pointer move the focus
+key Down
+key Down
+snap out/play/i2-05-door-focus-key.png
+move 220 690
+wait 0.7
+snap out/play/i2-06-door-focus-pointer.png
+
+print 5. Worlds: what is kept on this machine, a few words a world
+part Worlds
+shot out/play/i2-07-worlds.png
+say
+key Esc
+
+print 6. Settings: the interface's size changed and put back, and a key changed and put back
+part Settings
+shot out/play/i2-08-settings.png
+part 125%
+shot out/play/i2-09-settings-125.png
+part 100%
+part Stop the world, or let it go on
+snap out/play/i2-10-settings-waits.png
+key J
+shot out/play/i2-11-settings-key.png
+part The keys as they were
+move 500 1100
+wheel -8
+wait 0.3
+shot out/play/i2-12-settings-scrolled.png
+key Esc
+
+print 7. into the last world by its choice, and out by the menu to the world's screen, then to the door
+part Enter the last world
+wait 2
+shot out/play/i2-13-entered.png
+say
+key Esc
+shot out/play/i2-14-menu.png
+part Leave to the world
+shot out/play/i2-15-left-to-world.png
+key Esc
+key Esc
+shot out/play/i2-16-door-again.png

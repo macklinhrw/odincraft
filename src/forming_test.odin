@@ -33,6 +33,7 @@ world_make :: proc() {
 	known_make()   // the plates' history, which places the islands near the start
 	archipelago_make(false)
 	arrivals_make()
+	names_make()
 	formed = make([]Formed, len(archipelago))
 	for &f, i in formed do f.island = archipelago[i]
 	home = &formed[0]
@@ -67,4 +68,7 @@ forming_is_deterministic :: proc(t: ^testing.T) {
 	the_play_screen_says_what_is_so(t)
 	bind(home)
 	the_dwarves_are_on_screen(t)
+	// And the screens before play (door_test.odin), over the same world.
+	bind(home)
+	the_front_door_and_the_world(t)
 }

@@ -75,7 +75,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 | I-1 (built) | **The interface's ground and the play screen's frame** (`foundations/interface.md`). Text and panels; the screen's four fixed regions; the clock and speeds; the hand, which answers what any block, tree, stream or place is and why; messages; the cut's level, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there | |
 | P2 (built) | **Seven dwarves.** Named, drawn simply, walking the block ground by a path they find. Any one can be asked who it is and what it is doing | Watches them come ashore and follow where they are sent | |
 | The dwarves on screen (built) | **Their place at the top, their list, and several in the hand** (`foundations/interface.md`, I14). Who needs you first, then who you keep in view, then the count of all; a list that finds, groups and folds; alerts that count; messages that lead to their place. Made for a hold that grows | Clicks a dwarf's picture and is taken to her | |
-| I-2 | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
+| I-2 (built, and played) | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
 | E-1 | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
 | P3 (built) | **Orders.** Mark ground to dig, trees to fell, blocks to build. Dwarves take the work themselves. Goods go to a store without being carried at first, as RimWorld's first version did; carrying follows in P5, since Bellwright's makers found that work done in the abstract "didn't feel inspiring" | Has a first room dug and roofed | 2 |
 | P4 | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown | Gets through a first season, or does not | 1 |
@@ -496,7 +496,7 @@ Pictures: `interesting-world/real/i1-*.jpg` (the bed and the Places list at 2,56
 - **A dwarf in the hand is marked by a brass square round it**, drawn over the land, not in it: it shows through a hill.
 - **The Places list is of the island under the view** and its find field has never been typed in by hand.
 - **Three keys are P2's and not rows**: G, E and the right click are read from the keyboard and the mouse inside `hold_frame`, so no button can show them. G is the letter the design gives Gather. They should become acts when P3 brings the orders bar.
-- **Lessons and the scale are kept in `build/interface.txt`**, beside the binary, until the game has settings (I-2).
+- **Lessons and the scale are kept in `build/interface.txt`**, beside the binary, until the game has settings (I-2). *I-2 gave it settings and kept the file.*
 - **At 200% on a screen 2,560 wide** the list narrows to 126 modules and the card's depth to about 24: usable, and tight.
 - **The step is 2,900 lines** in five files, more than any step before it. The play screen is 1,335 of them.
 
@@ -781,3 +781,195 @@ Frame times, our own work, each bench once on the finished build:
 - **No Stores list**: the top right shows the five kinds there are most of.
 - **Timber is one row at the top right but three kinds in the world** (tabu, shii, sawn), and a wall of timber is always sawn boards whatever tree it came from.
 - **Still unplayed by a hand.** Every case was played by script and every picture looked at.
+
+### I-2, as built: the front door and the world (2026-11-16)
+
+*This is the step as it was first built, before anyone had played it. It was then held out of `main`, played, and changed: "I-2, as played", after this section, says what the player now sees, and where the two differ that section is the one that holds. Its pictures are those of the step before it was played (`interesting-world/real/i2-*.jpg`).*
+
+**What can now happen that could not before:** the owner starts the game and stands at a front door over the last world's start island; presses Enter and is in play as soon as the land is made; or makes a world from a seed and watches its history run, its map appear and its islands arrive one by one; looks over the islands near its start, asks what any of them is, paints the world's fields over the sea; founds a hold on one or walks it; and leaves play for the world's map or the front door without leaving the game.
+
+Pictures, each 2,560 × 1,440: `interesting-world/real/i2-*.jpg`. `i2-beside-drawing.jpg` puts the built front door, formed and while forming, beside the design's drawing.
+
+**What the owner sees and does**
+
+- **`./build.sh run`** opens the front door: the game's name, a line saying what the world in hand is, and five choices, the first in focus in brass with its key. Behind them the start island's map moves slowly. The last world begins forming at once, and a panel at the lower right names each stage and how far it has come.
+- **Enter** on "Enter the last world" goes into play at the landing, as the game began before this step. Pressed before the land is made, it waits and says so: "two of its five islands near the start are made. You go in when they are". Escape takes the wish back.
+- **Up, Down and the pointer** move the focus. **Worlds** lists every world with a history kept on this machine and what was written down of it; a row opens that world's map. **Make a new world** takes a seed, typed or drawn with D; Enter makes it and goes to its map. **Settings** has the interface's size and the keys. **Quit** quits.
+- **The world's map.** The known world's sea and land, with each island near the start drawn once it is formed and ringed until then. A drag or the arrows pan, the wheel or = and - zoom about the pointer, Home goes back over the start. A click on an island takes it in the hand, lower left, in the card's shape: what it is, why it is so, then Land, Rock, Climate, Life and Places. The mainland can be clicked too. The lenses stand at the upper right; the pointer on the map says what the lens says there.
+- **Found a hold** (Enter) lands the party on the island in the hand, where the land's rule puts it. **Walk the world** (W) stands the player on it on foot, with no party. Both wait for the island and those within 64 km to be formed, and the card says what is still to come.
+- **Stop making it** (S) begins no more islands, and **Go on making it** takes it up again.
+- **In play, Escape's menu** has **Leave to the world** (W) and **Leave to the front door** (D).
+
+**What was built**
+
+- **The world in hand** (`making.odin`, `adr/0013`): one world at a time, ordered and made on a thread of its own in four stages (`STAGES`), each the procedure the command line runs. Forming threads are pools that can be waited for and stopped. The worlds on disk and what was written down of each.
+- **The way through** (`main.odin`): play is a procedure, `game`, entered and left more than once in a run; `main` goes straight in where an option names where to go and to the front door otherwise.
+- **The screens before play** (`door.odin`): the front door, Worlds, a new world, settings, and the panel of a world being made, each a procedure that lists parts (`adr/0010`). Their keys are rows of `BINDS` in two new views. What is kept between runs is still `build/interface.txt`: the interface's size, the lessons learned, the world last entered, the keys changed, and how long a world last took.
+- **The world's screen** (`chart.odin`): the map as pictures painted on a thread of their own and put on the GPU by the frame; the world's lenses as rows (`WORLD_LENSES`); the island's card; the doors.
+- **The interface's ground** (`ui.odin`, `ui.metal`): a picture of the world's map as a part, a ring, a choice, a dark that clears toward its right, and the game's name in a style of its own, with their figures in `LOOK`. `render.odin` gives a frame's beginning and end to a screen with no world.
+- **The map's colour at a point** is one procedure (`map_at`, `land_report.odin`) that `--map` and the island's picture both draw with.
+- **Without a window**: `--door[=screen]` draws any of these, `--when=` chooses how far the making has come, `--pick=`, `--lens=`, `--tab=`, `--focus=` and `--find=` set a state, and `--press=id,id` presses parts in turn, through play and out again (`AGENTS.md`). `src/door_test.odin` stands at the door, goes through every screen, and checks each at every scale.
+
+**Keys.** At the front door: Up and Down move the focus, Enter takes it, Escape goes back, D draws a seed, S stops the making or goes on. On the world's map: Enter founds a hold, W walks, Home the start, = and - zoom, the arrows pan, S as before, Escape puts the island down and then goes to the front door. In play's menu: W and D leave. Any row of `BINDS` can be given another key in settings.
+
+**How long a world takes, and how the screen stays alive.** Measured once, the machine at a load of 6 from other agents, with the front door drawn throughout (`--door --seed=3 --bench=25`, a seed never made before):
+
+| Stage | Seed 3, new | Others |
+|---|---|---|
+| The plates' history | 2.47 s | 2.6 s (seed 9), 2.8 s (seed 13); nothing where it is kept |
+| The region round the start | 0.27 s | 0.3 s; 0.01 s to read a kept world back and make its records |
+| The islands near the start | 1.08 s for three | 1.11 s for seed 7's five; 0.7 s for seed 13's |
+| The far islands | nine more within the 25 s | seed 7's other six within 8 s of starting |
+
+Seed 7, kept, can be entered 1.1 s after the front door is up, where the game before this step showed nothing for about 4 s. In those 25 s the door drew 2,993 frames: our own work 0.18 ms at the median, 0.73 ms at the 99th hundredth and 6.77 ms at worst, none over 12.5 ms; the interface's share of it 0.03, 0.08 and 2.35 ms. Five frames came more than 12.5 ms after the one before, the worst 16.7 ms, while the history's crew had every core: the frame's thread was kept off the processor, as in every bench at this load. The screen never waits for the making: it reads a few words each frame.
+
+**What was tried and dropped**
+
+- *The start island whole in a dark sea behind the door.* Handsome, and half the picture was empty. The view is nearer: the land fills the height and runs in under the words, as the drawing has it.
+- *The known world drawn as its samples are.* The history's 6 km cells showed as steps along every slope of the sea floor, and the shading of each 2 km sample as stripes. Its heights are smoothed first.
+- *An unformed island marked by a ring as large as its square.* At the door's scale it was a brass ring 800 pixels across.
+- *A lens that multiplied an island's own colours.* Dark grey islands on a pale sea. An island under a lens is its relief in grey, lit, times the lens's colour.
+- *The world being made shown beside every screen.* At 175% and over it lay on the Worlds, new world and settings panels. A screen's own panel has the room first.
+- *The picture taken when nothing was waiting to be painted.* The painter takes islands one at a time, so that held between any two. A picture waits for every formed island's picture.
+
+**Costs**
+
+- **Benches**, once each on the parent (`main` at ca77356, with P3) and on this step, as the owner asked on 2026-11-16; the machine at a load of 6.5 to 7.4 from other agents. Our work in ms as median / 99% / worst, and frames over 12.5 ms:
+
+| Bench | Parent | This step |
+|---|---|---|
+| Forest flank, first person | 1.93 / 5.74 / 7.34 (0) | 1.80 / 5.48 / 7.03 (0) |
+| Down through cloud, first person | 1.87 / 4.50 / 5.84 (0) | 1.83 / 5.43 / 7.17 (0) |
+| From above, cut following the ground | 2.29 / 6.07 / 6.89 (0) | 2.23 / 6.52 / 9.54 (0) |
+
+- **Pictures**: the known world's is 2,048 pixels square with its smaller copies, 21 MB on the GPU, painted in bands on six threads; an island's is 1,024 square, 5.3 MB, painted in about 0.4 s on one thread of low priority. Seed 7's eleven are 59 MB.
+- **The atlas**: the game's name takes 190 rows more at the standard scale (567 of 2,048) and the text 1,756 at 200%. With every glyph of that style it was 2,035, so the style is letters alone.
+- **Memory**: a world put down leaves its formed islands, about 40 MB each (below).
+- The step is 2,220 lines in three new files, 245 of test, and about 150 changed elsewhere.
+- `odin check src -vet-unused` passes; `./build.sh test` passes with `GOLDEN` unchanged and the dwarves' three logs alike; `--dwarves=900 --orders=build/hold_test_orders.txt` prints the parent's hash, `6066913dffdaa756`; the start island's map is the parent's byte for byte. The start island's land hashes to `GOLDEN`'s figure when the world is made from the front door, and seed 12's to one figure whether it is made alone or after seed 7 in the same run.
+
+**Weak points**
+
+- **Nobody has used it.** No window was opened. The keys, the pointer's clicks and drags, the wheel and the typing of a seed were run by the test and by `--press`, through the procedures the window's events go through; the arrows' pan on the map, read from the keyboard's state, has not been run at all.
+- **The look has not been judged**, and beside the drawing (`i2-beside-drawing.jpg`) it falls short in these ways: the game's name is three quarters the drawing's size; the island's picture is 1,024 pixels for ten kilometres and is drawn at more than twice that, so it is softer than the land deserves; the drawing has the island's named places marked and ours has none; the bay-head flats show as square notches in the north coast, which is the land's own fault seen larger; and the drawing's first choice names a hold and a year, where ours has a seed.
+- **A world put down stays in memory.** Opening five worlds in one run leaves five worlds' islands, half a gigabyte or more each when every island was formed.
+- **Stop is not at once.** An island in hand takes up to two seconds more, and a history under way up to three.
+- **The world's lenses of rain and warmth are bands by latitude**, since nothing else exists at that scale, and say little over 200 km.
+- **The setting's lens shows the history's 6 km cells** as steps where the shelf meets the back-arc: a kind cannot be smoothed.
+- **A lens's key is dropped** where the picture is small for the interface's size (175% and over on 1,440 pixels with a world being made). The pointer on the map still says the figure.
+- **The mainland is a pale shape and one card.** It is not formed (N1), so it cannot be entered or walked.
+- **The island's card says its rock only once it is formed**, and its Life in the game's own figures of kilometres.
+- **The worlds' notes are written when a world's records are made**, so a history kept before this step is listed with nothing else said of it until it is opened once.
+- **Leaving play lets go what was dug and built.** The menu says so. Keeping it is P6.
+- **A key changed to one another row has** is marked and not refused, and the row before it in `BINDS` is the one obeyed.
+- **The start that segfaulted more than 64 km from the start did not do so here**: `--above=-89786,60,-38808` and `--pos=-89786,300,-38808`, 98 km off on seed 7's island 10, both drew their pictures, and Walk the world on that island went in. Nothing was changed for it. If it is seen again, its options are wanted.
+
+**For the steps that follow**
+
+- **Expedition planning** (E-1) begins from an island in the hand on the world's map: `chart.pick`, with `forming_toward` already forming its neighbours first. Its site card is the island's card one scale down, and `isle_paint` is the island's picture.
+- **Read its history** has its place in the world's own panel, top left (`world_build`), and is not drawn.
+- **A kept hold** (P6) is a row of the front door's first choice and a mark on the world's map; `Kept_World.says` is where a world's holds and ruins would be listed.
+- **Another world's field** is a row of `WORLD_LENSES`.
+- **Another stage of making** (N1's continents) is a value of `Stage` and a row of `STAGES`; the panel, the door's note and the bench's line follow from the row.
+
+**Pictures**
+
+![The front door: the last world's start island behind the choices, the first in focus with its key](interesting-world/real/i2-door.jpg)
+
+![The front door while the last world is formed: four of its five islands near the start are made, and the start is ringed until it is](interesting-world/real/i2-door-forming.jpg)
+
+![Worlds: the worlds this machine has made, and what was written down of each](interesting-world/real/i2-worlds.jpg)
+
+![A new world: its seed typed](interesting-world/real/i2-new-seed.jpg)
+
+![A new world a second in: the plates' history half run, and nothing yet to draw](interesting-world/real/i2-new-plates.jpg)
+
+![Another new world about three seconds in: its map is drawn, two of four islands near the start are made, and the start's card says its land is being formed](interesting-world/real/i2-new-islands.jpg)
+
+![A new world that can be entered: each stage with how long it took, and the far islands still arriving](interesting-world/real/i2-new-ready.jpg)
+
+![The world's map with an island in the hand, and who reached it](interesting-world/real/i2-world-island.jpg)
+
+![The same with the lens of setting on: the forearc, the arc, the shelf and the back-arc](interesting-world/real/i2-world-lens.jpg)
+
+![Settings: the interface's size and the keys](interesting-world/real/i2-settings.jpg)
+
+![The design's drawing, the built front door, and the built front door while the world is formed](interesting-world/real/i2-beside-drawing.jpg)
+
+### I-2, as played: the front door and the world, put right (2026-11-16)
+
+I-2 was held out of `main` when the owner called the step merged before it terrible: nobody had played either. It was merged onto today's `main` (the play script, goods, and step 21's continents), read against what a player of Dwarf Fortress and RimWorld expects of these screens (`interesting-world/notes/colony-sim-reference.md`, section 12, from their code and data), and then played by script from the player's seat through every door, each picture looked at. This section says what the player now sees; where it differs from "I-2, as built" above, this holds. What each change was and why is in `foundations/interface.md`, section 15.
+
+The scripts and their 46 pictures are in `interesting-world/real/play/`: `i2-door.txt` (the front door, Worlds, settings, into the last world and out), `i2-world.txt` (the world's screen: islands, the card, the list, the mainland, a lens, both doors), `i2-new.txt` (a new world made and watched). Run one with `build/odincraft --door --play=file`.
+
+**What the owner sees and does**
+
+- **The front door stands over land from its first frame** (`i2-01`): the start island as the game last painted it, kept beside its world. The choices can be used at once; the first names where it leads, "Enter the last world: East Firths, seed 7", and pressed too soon it waits and says so (`i2-03`).
+- **Worlds** is a few words a world: its start, its islands, its mainland, when it was kept (`i2-07`). **A new world** lists the stages it will go through with how long each took here last time (`i2-51`).
+- **The world's screen opens framed on the islands there are**, each named, with the start in the hand (`i2-20`). At the right is the list of them: a picture, a name, its kind and how far, its land and its highest ground. The wheel zooms about the pointer, a drag moves the map, Home shows them all again.
+- **A click on an island, on its name or on its row takes it in the hand and goes to it** (`i2-24`): it fills the picture between the panels, and its named places are written on it.
+- **Its card is rows**, in six depths: Land, Water, Rock, Climate, Life, Places (`i2-25` to `i2-29`). The why of a row is said beside the pointer (`i2-30`) and under the row when it is clicked (`i2-31`). The depth that is open stays open from island to island.
+- **"Land the party here"** (Enter) lands the seven on the island in the hand, and **"Walk it"** (W) stands the player there with no party (`i2-38`, `i2-40`). Over them a line says what to look at twice. Escape's menu in play leads back to the world or the front door.
+- **The mainland** is the list's last row and a name on the map. It says how it stands: known and not formed, with why (`i2-34`: seed 7's is 317,108 km², too large yet); being formed, with how far (`i2-53`); or formed on 64 m cells, drawn with its ranges and rivers.
+- **Lenses** (L) open under the list (`i2-35`, `i2-36`).
+- **A new world** shows its islands by name as soon as its records are made, while the mainland's stage runs, and that stage can be left (`i2-53` to `i2-56`).
+
+**What was wrong, and what was done**
+
+| Fault | What was done |
+|---|---|
+| The world's screen was mostly empty sea, the islands a few pixels each | It opens framed on the islands; an island taken is gone to and fills the free picture; the islands are also a list with a picture and two figures a row |
+| Islands were named by their kind, and several shared a label | Each has a name of its own, made before it is formed from what the world knows of it; its kind is said second |
+| The card answered in paragraphs | Rows of a thing and a word or a figure in every depth; the why on asking. A test fails a row that is a sentence |
+| The front door was a blank field until its picture was painted | The start island's picture is kept and shown from the first frame |
+| "Found a hold" was offered with no expedition to plan | "Land the party here", which is what it does; its tip says what is not built |
+| The mainland exists as land on some seeds | It is a stage of the making and is said as it stands, in three states, with why |
+
+**Found by playing, not on the list**
+
+- A click on an island's **name** on the map did nothing; the name is what a hand goes to. It takes the island now.
+- The mainland taken in the hand left the map where it was, on an island 86 km away. It goes to a view of the islands and the coast.
+- A lens tinted an island gone to one flat colour, and nothing could be read of it. An island keeps its colours unless the lens has a figure of its own for it.
+- The mainland's reason for not being formed **printed garbage**: step 21 wrote it in memory let go each frame. Kept now, and said in a player's words.
+- Settings named two keys by their act's name ("Order", "More") and the speeds as two and four times, which they have not been since the orders were put right. A test now fails a key with no words.
+- "No of its five islands are made"; "one of its five islands are made".
+- The world being made was 760 pixels wide and lay over the islands' names; in its column its words lay on each other. It is the column's width and its rows break.
+- While one world was put down for another, the panel showed the old world's stages under the new one's name, and "Stopping".
+- Two names on the map lay on each other. A name gives way.
+- A tip stood over its row and hid the words above it.
+- A script's picture waited for ever at the front door after leaving the map with a lens on.
+- Birds that cannot live on an island were listed as a caution to a founder.
+- Leaving the map with a lens on painted the front door's sea by it.
+- At 200% with a lens on and a world being made the right column's panels lay on each other; they give way in an order, which the test holds at every size.
+
+**What was built**
+
+- **The merge** (`main.odin`, `making.odin`, `continents.odin`): the mainland as `Stage.Mainland`, its coarse stage counted and leavable, the list of regions made in one place (`regions_make`) and again by the frame's thread once the mainland is cut, its pieces formed through the pools (`adr/0013`).
+- **Names** (`names_make`, `making.odin`). **The world's screen** (`chart.odin`): the view that frames and goes (`chart_frame`, `chart_go`, `chart_move`), the list (`isles_build`), the card's rows (`card_write`, `Card_Row`), the mainland's picture in tiles from its coarse stage (`mass_paint`), names that give way (`map_name`). **The front door** (`door.odin`): the kept picture (`door_keep`, `door_kept`), Worlds and a new world as rows, the making panel's mainland stage.
+- **The play script before play** (`script.odin`, `door_run`): `--door --play=file`, with `type`, `snap`, `until ready`, `until made`, `until mainland`.
+
+**Costs and checks**
+
+- `odin check src -vet-unused` passes. `./build.sh test` passes: `GOLDEN` unchanged, the dwarves' three logs alike (hash `8c5e885fd39409b`). `--dwarves=900 --orders=build/hold_test_orders.txt` prints the parent's hash, `3496ed7decd3f5f3`, and the start island's `--map` is the parent's byte for byte.
+- **Benches**, one round, the machine at a load of 11 from other agents. Our work in ms as median / 99% / worst, and frames of it over 12.5 ms: forest flank 1.41 / 6.98 / 11.23 (0); down through cloud 2.00 / 5.35 / 8.14 (0); from above 2.35 / 6.70 / 8.67 (0).
+- **How long**: seed 7, kept, can be entered about 4 s after the front door is up (load 7 to 12). Seed 1, never made, 5.4 min, nearly all of it the mainland's coarse stage, which is 943 MB on disk and 2 s to read back after. Seed 4's mainland, 3,392 km², takes about 12 s by the panel's own estimate; the script leaves it.
+- **Pictures on the GPU**: an island's layer each as before, and up to sixteen more of the same size for the mainland's tiles, those that hold land.
+
+**Weak points**
+
+- **No hand has used it.** Script and pictures only. The arrows' pan on the map is read from the keyboard's state and was not played.
+- **A new world's screen is empty for the seconds its plates' history runs**: two panels on the sea's dark.
+- **On a machine's first run the front door has no picture**: nothing is kept yet.
+- **A first opening of a world with a mainland that can be formed waits minutes before it can be entered**, unless the stage is left. The screen can be used meanwhile.
+- **The mainland cannot be entered from the world's screen**, and its formed pieces are drawn no finer than its coarse stage.
+- **In the overview an island is still small**: the list and the journey to it carry the comparing and the reading. From far out (over 900 km across) the islands have no names on the map.
+- **The names lean on few causes**: of seed 7's eleven islands three are named for a bird.
+- **The landing on the card is the first row that holds on the shore**, as the hold chooses; whether a boat can come in at a cell of it is found only on landing.
+- **A world put down still leaves its formed islands in memory**, as before.
+- **Walking an island shows the play screen's Dwarves button**, with no dwarves.
+
+**For the steps that follow**
+
+- **Expedition planning** (E-1) begins where "Land the party here" stands: the island in the hand, its card's Land depth as the site card's first lines, the cautions' line as its warnings.
+- **A finder** (DF's site finder) belongs with E-1, once a world has more places than can be read one by one.
+- **A door onto the mainland** wants the choice of ground E-1 gives; `pieces_begin(at, reach)` already forms the land round a point.

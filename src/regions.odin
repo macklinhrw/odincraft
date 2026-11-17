@@ -84,7 +84,7 @@ island_at :: proc(x, z: f64) -> ^Formed {
 }
 
 // The islands' records in `formed`, before the landmass's pieces, whose squares overlap.
-islands_count :: #force_inline proc() -> int { return mainland_state.first if mainland_state.pass != nil else len(formed) }
+islands_count :: #force_inline proc() -> int { return min(len(archipelago), len(formed)) }
 
 // Bind the island under a point in the world; false at the open sea, where the binding is left.
 bind_at :: proc(x, z: f64) -> bool {

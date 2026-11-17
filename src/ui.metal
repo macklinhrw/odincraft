@@ -13,7 +13,7 @@ struct UiIn {
     float4 rect   [[attribute(0)]];   // x, y, width, height in pixels, from the picture's top left
     float4 uv     [[attribute(1)]];   // the atlas from its top left to its bottom right, in texels; or how many times the tile repeats
     float4 colour [[attribute(2)]];
-    float4 extra  [[attribute(3)]];   // x: 1 + the layer of a block's tile, or 0; y: the shape; z: pixels its edge fades over; w: where it begins to fade toward its right, 0 for never
+    float4 extra  [[attribute(3)]];   // x: 1 + the layer of a block's tile, or 0, or under 0 a picture of the world's map (-1 the known world, -2 - n island n, and a half more for it in grey); y: the shape; z: pixels its edge fades over; w: where it begins to fade toward its right, 0 for never
 };
 
 struct UiV {
@@ -40,10 +40,19 @@ vertex UiV vs_ui(UiIn q [[stage_in]], uint vid [[vertex_id]], constant UiU &u [[
 
 fragment float4 fs_ui(UiV in [[stage_in]],
                       texture2d<float> atlas [[texture(0)]], sampler smp [[sampler(0)]],
-                      texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]]) {
+                      texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]],
+                      texture2d<float> known [[texture(2)]], sampler known_smp [[sampler(2)]],
+                      texture2d_array<float> isles [[texture(3)]], sampler isle_smp [[sampler(3)]]) {
     float4 c = in.colour;
     int shape = int(in.extra.y + 0.5);
-    if (in.extra.x > 0.5) {
+    if (in.extra.x < -0.5) {
+        // A picture of the world's map, in the display's own colours; in grey, it takes the part's colour.
+        float v = -in.extra.x + 0.25;
+        int layer = int(floor(v));
+        float4 t = layer == 1 ? known.sample(known_smp, in.uv) : isles.sample(isle_smp, in.uv, uint(layer - 2));
+        if (fract(v) > 0.5) t.rgb = float3(saturate(0.5 + 0.9 * dot(t.rgb, float3(0.30, 0.59, 0.11))));   // its relief alone, light enough for the colour to read
+        c *= t;
+    } else if (in.extra.x > 0.5) {
         // A block's tile, lit as the noon sun lights it and encoded as the world's picture is (finish, shaders.metal).
         float3 t = blocks.sample(block_smp, in.uv, uint(in.extra.x - 0.5), level(0.0)).rgb * 2.0;
         t = saturate((t * (2.51 * t + 0.03)) / (t * (2.43 * t + 0.59) + 0.14));
@@ -57,6 +66,7 @@ fragment float4 fs_ui(UiV in [[stage_in]],
     if (shape == 1) c.a *= saturate(reach - length(p) + 0.5);
     if (shape == 2) c.a *= saturate((reach - abs(p.x) - abs(p.y)) * 0.7071 + 0.5);
     if (shape == 3) c.a *= saturate(min(reach - p.y, (p.y + reach - 2.0 * abs(p.x)) * 0.4472) + 0.5);   // its point up
+    if (shape == 4) c.a *= saturate(reach - length(p) + 0.5) * saturate(length(p) - reach * 0.72 + 0.5);   // a ring
     if (in.extra.z > 0.0) {   // a shadow: it fades toward every edge
         float2 e = min(in.local, 1.0 - in.local) * in.size / in.extra.z;
         c.a *= smoothstep(0.0, 1.0, saturate(e.x)) * smoothstep(0.0, 1.0, saturate(e.y));

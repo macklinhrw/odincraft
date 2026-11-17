@@ -182,6 +182,54 @@ field_paint :: proc(paint: ^Field_Info, v: f32, x, z: f64) -> (col: [3]f32) {
 	return
 }
 
+// The land's colour at a point of the island in hand as its map shows it, and its height there:
+// relief shaded from the north-west, the sea by its depth, the rivers and lakes, and the shore as
+// the ground has it. With a field, the land is painted by it; with `marks`, the animals' trails and
+// fords are drawn. --map and the world's screen (chart.odin) both draw the land with this.
+map_at :: proc(x, z: f64, paint: ^Field_Info, field: Field, marks: bool) -> (col: [3]f32, h: f32) {
+	h = land_at(land.z[0], land.n, x, z)
+	gx := land_at(land.z[0], land.n, x + 8, z) - land_at(land.z[0], land.n, x - 8, z)
+	gz := land_at(land.z[0], land.n, x, z + 8) - land_at(land.z[0], land.n, x, z - 8)
+	shade := clamp(0.75 + 0.9*(-gx - gz)/16, 0.25, 1.3)
+	if h <= 0 {
+		col = math.lerp([3]f32{0.35, 0.62, 0.80}, [3]f32{0.08, 0.22, 0.42}, clamp(-h/30, 0, 1))
+	} else {
+		if paint != nil {
+			p := point_at(x, z, 8) if field in GROUND_FIELDS else Point{x = x, z = z, cell = 8}
+			col = field_paint(paint, paint.at(&p), x, z)*shade
+		} else {
+			// Green at the sea, tan at 200 m, brown at 500 and pale only near 1,000, so that
+			// the height of a high island still reads.
+			t := math.sqrt(clamp(h/1000, 0, 1))
+			col = math.lerp(math.lerp([3]f32{0.42, 0.60, 0.30}, [3]f32{0.66, 0.58, 0.38}, clamp(t*2.2, 0, 1)), [3]f32{0.52, 0.42, 0.34}, clamp(t*3.3 - 1.45, 0, 1))
+			col = math.lerp(col, [3]f32{0.90, 0.89, 0.86}, clamp(t*4 - 3, 0, 1))*shade
+			// Rock shows where the ground is too steep to hold soil, as on the ground.
+			bed := rock(x, f64(h) - 0.5, z, 8)
+			bare := smoothstep(0.85, 1.15, land_at(land.slope, land.n, x, z)/SOIL_HOLDS)
+			col = math.lerp(col, map_colour(bed)*shade, 0.8*bare)
+			// A slide's debris is tinted ochre and its scar pale.
+			if s := land_at(land.slid, land.n, x, z); abs(s) > 0.5 do col = math.lerp(col, ([3]f32{0.80, 0.50, 0.20} if s > 0 else {0.90, 0.88, 0.84})*shade, f32(0.5))
+			// A reed marsh is tinted the colour of reeds.
+			if land.community[land_cell(x, z)] == u8(Community_Kind.Marsh) do col = math.lerp(col, [3]f32{0.70, 0.72, 0.40}*shade, f32(0.6))
+		}
+		if r, near := river_near(f32(x), f32(z)); near && r.d < max(r.half, 4) do col = {0.10, 0.30, 0.75}
+		else if near && r.d < r.bed do col = [3]f32{0.78, 0.76, 0.70}*shade   // the bed of stones round the water
+		if level, inside, _ := lake_near(x, z); inside && h < level do col = {0.10, 0.30, 0.75}
+		if marks && trail_near(x, z) < 4.5 do col = {0.65, 0.10, 0.05}
+		if k := trails.ford[land_cell(x, z)]; marks && k > 0 && math.hypot(x - region.features[k - 1].at.x, z - region.features[k - 1].at.y) < 14 do col = {1, 1, 1}
+	}
+	// The shore as the ground has it (waters_edge, gen.odin): sand, stones and the rock
+	// platform in their own colours where they stand over the sea, and the stacks.
+	if _, fan := fan_at(x, z); paint == nil && (land_at(land.surf, land.n, x, z) > 0.01 || fan > 0) {
+		p := point_at(x, z, 8)
+		if w := SURFACES[surface_row(&p)].host; p.h > 0 && len(w) > 0 && (w[0].field == .Beach || w[0].field == .Surf || w[0].field == .Fan) || p.steep == 3 {
+			_, m, _ := surface_at(x, z, 8)
+			col = map_colour(m)*shade
+		}
+	}
+	return
+}
+
 // A picture of the land from above, eight metres to the pixel: relief shaded from the
 // north-west, sea by depth, and the rivers. With an overlay, the land is painted by that
 // field instead.
@@ -202,47 +250,7 @@ land_map :: proc(path, overlay: string) {
 		for px in 0..<SIZE {
 			o := land_corner()
 			x, z := (f64(px) + 0.5)*land_side()/SIZE + o.x, (f64(py) + 0.5)*land_side()/SIZE + o.y
-			h := land_at(land.z[0], land.n, x, z)
-			gx := land_at(land.z[0], land.n, x + 8, z) - land_at(land.z[0], land.n, x - 8, z)
-			gz := land_at(land.z[0], land.n, x, z + 8) - land_at(land.z[0], land.n, x, z - 8)
-			shade := clamp(0.75 + 0.9*(-gx - gz)/16, 0.25, 1.3)
-			col: [3]f32
-			if h <= 0 {
-				col = math.lerp([3]f32{0.35, 0.62, 0.80}, [3]f32{0.08, 0.22, 0.42}, clamp(-h/30, 0, 1))
-			} else {
-				if paint != nil {
-					p := point_at(x, z, 8) if field in GROUND_FIELDS else Point{x = x, z = z, cell = 8}
-					col = field_paint(paint, paint.at(&p), x, z)*shade
-				} else {
-					// Green at the sea, tan at 200 m, brown at 500 and pale only near 1,000, so that
-					// the height of a high island still reads.
-					t := math.sqrt(clamp(h/1000, 0, 1))
-					col = math.lerp(math.lerp([3]f32{0.42, 0.60, 0.30}, [3]f32{0.66, 0.58, 0.38}, clamp(t*2.2, 0, 1)), [3]f32{0.52, 0.42, 0.34}, clamp(t*3.3 - 1.45, 0, 1))
-					col = math.lerp(col, [3]f32{0.90, 0.89, 0.86}, clamp(t*4 - 3, 0, 1))*shade
-					// Rock shows where the ground is too steep to hold soil, as on the ground.
-					bed := rock(x, f64(h) - 0.5, z, 8)
-					bare := smoothstep(0.85, 1.15, land_at(land.slope, land.n, x, z)/SOIL_HOLDS)
-					col = math.lerp(col, map_colour(bed)*shade, 0.8*bare)
-					// A slide's debris is tinted ochre and its scar pale.
-					if s := land_at(land.slid, land.n, x, z); abs(s) > 0.5 do col = math.lerp(col, ([3]f32{0.80, 0.50, 0.20} if s > 0 else {0.90, 0.88, 0.84})*shade, f32(0.5))
-					// A reed marsh is tinted the colour of reeds.
-					if land.community[land_cell(x, z)] == u8(Community_Kind.Marsh) do col = math.lerp(col, [3]f32{0.70, 0.72, 0.40}*shade, f32(0.6))
-				}
-				if r, near := river_near(f32(x), f32(z)); near && r.d < max(r.half, 4) do col = {0.10, 0.30, 0.75}
-				else if near && r.d < r.bed do col = [3]f32{0.78, 0.76, 0.70}*shade   // the bed of stones round the water
-				if level, inside, _ := lake_near(x, z); inside && h < level do col = {0.10, 0.30, 0.75}
-				if trail_near(x, z) < 4.5 do col = {0.65, 0.10, 0.05}
-				if k := trails.ford[land_cell(x, z)]; k > 0 && math.hypot(x - region.features[k - 1].at.x, z - region.features[k - 1].at.y) < 14 do col = {1, 1, 1}
-			}
-			// The shore as the ground has it (waters_edge, gen.odin): sand, stones and the rock
-			// platform in their own colours where they stand over the sea, and the stacks.
-			if _, fan := fan_at(x, z); paint == nil && (land_at(land.surf, land.n, x, z) > 0.01 || fan > 0) {
-				p := point_at(x, z, 8)
-				if w := SURFACES[surface_row(&p)].host; p.h > 0 && len(w) > 0 && (w[0].field == .Beach || w[0].field == .Surf || w[0].field == .Fan) || p.steep == 3 {
-					_, m, _ := surface_at(x, z, 8)
-					col = map_colour(m)*shade
-				}
-			}
+			col, _ := map_at(x, z, paint, field, true)
 			for k in 0..<3 do pixels[(py*SIZE + px)*4 + k] = u8(clamp(col[k], 0, 1)*255)
 		}
 	}

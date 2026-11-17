@@ -12,6 +12,11 @@ import sdl "vendor:sdl3"
 // The game: start-up, the frame loop and its input, and the bench report. Command-line options are
 // in options.odin; the offline tools they start live beside what they inspect.
 //
+// The way through. With no option that names where to go, `main` opens the front door (door.odin),
+// which makes the world while it is looked at (making.odin) and goes into play from there. With one,
+// it makes the world itself, as it always did, and goes straight into play. Play is `game`: it is
+// left by its menu for the world's screen or the front door, and may be entered again.
+//
 // The game begins in the view from above, whose own controls are in above.odin. Tab goes down to
 // first person at the place under the view's middle, and back up from where the player stands.
 // The interface is laid over both (play.odin): every event goes to it first, and the keys that do
@@ -22,6 +27,7 @@ import sdl "vendor:sdl3"
 //   P                pause the world              Y        why: take what is under the pointer, or
 //   [ ]              turn the clock back / forward         aimed at, in the hand, which says what it is
 //   \                save a screenshot            F1, F4   the lists of dwarves and of places
+//   in the menu: W leaves to the world's screen, D to the front door, Q quits
 //   Enter            go to what is in the hand, or follow a dwarf   K   keep the dwarf in the hand in view at the top
 //   G                send the dwarves to the block under the pointer, or aimed at (hold.odin)
 //   from above: right click sends them there too; a click on a dwarf takes it in the hand, a drag over several
@@ -84,6 +90,10 @@ main :: proc() {
 		return
 	}
 	quiet_init()
+	if door_first(&opt) {   // nothing names where to go: the front door, which makes the world while it is looked at (door.odin)
+		door_run(&opt, nil, nil, .Door)
+		return
+	}
 	seed = world_seed   // the islands are made from the world's seed
 	// A record is drawn first at the start's place, for the swell and any kind asked for, unsaid; the
 	// islands near it, the start among them, and the land they lie off are read from the world's
@@ -129,21 +139,15 @@ main :: proc() {
 		archipelago[opt.island].kind = kind
 	}
 	arrivals_make()
+	names_make()
+	if opt.origin == {} && opt.kind == "" do world_note()   // what is known of it, kept for the list of worlds (making.odin)
 	// The land larger than a region nearest the start (continents.odin): its coarse stage before the
 	// islands' records are made into regions, since its pieces are regions beside theirs. The tools that
 	// act on one island and exit leave it a record.
 	offline := opt.survey || opt.map_path != "" || opt.has_why || opt.archipelago != ""
 	mainland_make()
 	if mainland_state.formable && !offline && opt.continent do mainland_pass()
-	pieces := len(mainland_state.cut.size) if mainland_state.pass != nil else 0
-	formed = make([]Formed, len(archipelago) + pieces)
-	mainland_state.first = len(archipelago)
-	for &f, i in formed[:len(archipelago)] do f.island = archipelago[i]
-	for p in 0..<pieces {
-		o, s := piece_square(i32(p))
-		formed[len(archipelago) + p].island = {id = len(archipelago) + p, origin = o, size = s, kind = mainland_kind(), seed = mainland.seed, setting = .Continent}
-	}
-	arrivals_extend(pieces)
+	pieces := regions_make()
 	home = &formed[opt.island]
 	if opt.archipelago != "" {
 		archipelago_map(opt.archipelago)
@@ -158,7 +162,7 @@ main :: proc() {
 	slice.sort_by(others[:], proc(a, b: int) -> bool { return apart(a) < apart(b) })
 	soon := 0
 	for soon < len(others) && apart(others[soon]) <= opt.near*1000 do soon += 1
-	early := islands_form(others[:soon], max(os.get_processor_core_count() - 1, 1), .Normal, false)
+	forming_begin(others[:soon], max(os.get_processor_core_count() - 1, 1), .Normal, false)
 	gen_init(home)
 	bind(home)   // the frame thread reads the start island unless it binds another
 	hold_make(&hold, home, opt.orders, opt.party)   // the dwarves and their landing
@@ -190,7 +194,7 @@ main :: proc() {
 		hold_report(&hold)
 		return
 	}
-	islands_done(early, others[:soon])
+	forming_wait(others[:soon])
 	// The landmass's pieces within `near` km of the start, or of the site asked for, formed before
 	// entering, each after the pieces it waits on; the rest nearest first on a thread of low priority
 	// once play has begun.
@@ -213,18 +217,33 @@ main :: proc() {
 		if !opt.has_look do opt.yaw, opt.pitch, opt.has_look = 0, -20, true
 	}
 	if opt.above && opt.place == 0 do opt.pos.y += f64(height_in_world(opt.pos.x, opt.pos.z, 1))
-	// With no day named, the first fair day from the March equinox on: a person looking at the
-	// land sees it in sunlight, and pictures taken on different days of work can be compared.
+	sky_choose(&opt)
+	window, unseen := window_open(&opt)
+	g: Gpu
+	gpu_init(&g, window)
+	g.unseen = unseen
+	world_adopt(opt.island, opt.near)
+	leave := game(&opt, &g, window, unseen, others[soon:], around)
+	if leave != .Quit do door_run(&opt, &g, window, leave)   // out of play to the world's screen or the front door, with this world in hand
+}
+
+// With no day named, the first fair day from the March equinox on: a person looking at the
+// land sees it in sunlight, and pictures taken on different days of work can be compared.
+sky_choose :: proc(opt: ^Options) {
 	if !opt.has_day do for c, _ := weather_at(opt.day, opt.hour); c > FAIR && opt.day < 140; c, _ = weather_at(opt.day, opt.hour) do opt.day += 1
 	cover, base := weather_at(opt.day, opt.hour)
 	daylight: f32
 	for h := f32(0.025); h < 24; h += 0.05 do daylight += 0.05 if sun_dir(h, opt.day).y > 0 else 0
 	fmt.printfln("sky on day %.0f at %.1f h: the sun %.0f° high at noon, %.1f h of daylight; drawn cover %.2f, cloud base %.0f m%s",
 		opt.day, opt.hour, math.to_degrees(math.asin(sun_dir(12, opt.day).y)), daylight, cover, base, ", forced by --weather" if opt.weather.x >= 0 else "")
+}
+
+// The window, opened once for the whole run.
+window_open :: proc(opt: ^Options) -> (window: ^sdl.Window, unseen: bool) {
 	// A run that only takes a picture or measures opens no window and takes no focus: it draws
 	// unseen, at the size and pace it would have on a display.
 	if opt.play != "" do script_read(opt.play)
-	unseen := (opt.shot != "" || opt.bench > 0 || script.on) && !opt.show
+	unseen = (opt.shot != "" || opt.bench > 0 || script.on) && !opt.show
 	// A window is opened only for a person: one asked for by --show, or a run started from a terminal.
 	// A script or an agent that forgets --shot or --bench is told so, and nothing appears on the owner's screen.
 	if !unseen && !opt.show && !posix.isatty(posix.STDIN_FILENO) {
@@ -233,11 +252,19 @@ main :: proc() {
 	}
 	if unseen do sdl.SetHint(sdl.HINT_MAC_BACKGROUND_APP, "1")
 	if !sdl.Init({.VIDEO}) do fatal("SDL")
-	window := sdl.CreateWindow("OdinCraft", opt.width, opt.height, {.RESIZABLE, .HIGH_PIXEL_DENSITY} + ({.HIDDEN} if unseen else {}))
+	window = sdl.CreateWindow("OdinCraft", opt.width, opt.height, {.RESIZABLE, .HIGH_PIXEL_DENSITY} + ({.HIDDEN} if unseen else {}))
 	if window == nil do fatal("window")
-	g: Gpu
-	gpu_init(&g, window)
-	g.unseen = unseen
+	return
+}
+
+// Why play ended: the game is left for good, or for the world's screen or the front door (door.odin).
+Leave :: enum u8 { Quit, World, Door }
+leaving: Leave
+
+// Play, from entering the world in hand on its start island (`home`) until the player leaves it:
+// the frame loop and its input. `far` are the islands still to be formed beside it.
+game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []int, around: [2]f64) -> Leave {
+	leaving = .Quit
 	w := new(World)
 	world_init(w)
 	water_init(&w.water, g.dev)
@@ -258,9 +285,9 @@ main :: proc() {
 	if opt.has_over do a.at, a.yaw = {opt.over.x, 0, opt.over.y}, 0
 	if opt.has_turn do a.yaw = math.to_radians(opt.turn)
 	clock := Clock{speed = 2 if opt.pace == 6 else 1 if opt.pace == 3 else 0, paused = opt.pace == 0}
-	hold_enter(&p, &a, &opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
-	islands_form(others[soon:], 3, .Low, false)
-	if pieces > 0 do mainland_background(around)
+	hold_enter(&p, &a, opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
+	forming_begin(far, 3, .Low, false)
+	pieces_begin(around, BACKGROUND_REACH)   // the landmass's pieces within reach, nearest first, one at a time
 	hour := opt.hour
 	place := Mat.Stone
 	captured := false
@@ -276,7 +303,7 @@ main :: proc() {
 	idle_frames, title_from := 0, 0
 
 	running := true
-	play_begin(&opt, &a, &clock, w, &p, &afoot, &captured, &running, window, unseen)
+	play_begin(opt, &a, &clock, w, &p, &afoot, &captured, &running, window, unseen)
 	if opt.row > 0 && opt.row <= len(home.places) do place_take(home.places[opt.row - 1].c)
 	for running {
 		now := sdl.GetPerformanceCounter()
@@ -427,7 +454,7 @@ main :: proc() {
 			opt.after += seconds   // the wait counts from the dig
 			idle_frames = 0
 		}
-		if opt.shot != "" && seconds >= opt.after && (idle_frames > 3 || seconds > opt.after + 120 || opt.bench > 0) {
+		if opt.shot != "" && seconds >= opt.after && (idle_frames > 3 || seconds > opt.after + 120 || opt.bench > 0) && pressed_all(opt, play_act) {   // and every part --press names has been pressed
 			shot = opt.shot
 			running = false
 			if !afoot && opt.has_cursor {   // what the pointer is on, said as the picture is taken
@@ -459,7 +486,7 @@ main :: proc() {
 			_ = sdl.GetMouseState(&mx, &my)
 			at = {mx, my}*play.ratio
 		}
-		play_posed(&opt)
+		play_posed(opt)
 		if unseen && opt.tool != "" && !afoot {   // a tool in the hand, as --tool= asks, the cursor's box its mark
 			for row, t in TOOL_ROWS do if strings.equal_fold(row.name, opt.tool) do bar.tool = t
 			for c in DIG_CHOICES do if bar.tool == .Dig && strings.contains(opt.plan, PLANS[c.plan]) do bar.dig = c.plan
@@ -492,7 +519,7 @@ main :: proc() {
 		}
 		view.mark[0], view.mark[1], _, _ = mark_box(&a)
 		view.boxes = marks_view(&view, boxes, eye)   // what is marked for the dwarves, and what the box being dragged would mark
-		render(&g, w, view, shot)
+		render(g, w, view, shot)
 		append(&work, f32(f64(sdl.GetPerformanceCounter() - now)/frequency - g.waited))
 		append(&drawn, [4]int{g.quads_drawn, g.plants_drawn, g.boxes_drawn, g.water_drawn})
 
@@ -577,4 +604,6 @@ main :: proc() {
 	hold_leave()
 	play_keep()
 	world_destroy(w)
+	if leaving != .Quit do game_end(w, g)
+	return leaving
 }
