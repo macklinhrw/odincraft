@@ -8,6 +8,8 @@ It is a plan, not a decision. Section 8 holds what is the owner's. Pictures of f
 
 **The dwarves on screen are built** (`../plan.md`, section 10, "The dwarves on screen, as built"): their place at the top, their list, several in the hand, and the alerts that count them. Section 11 below says what building them changed. Pictures: `../interesting-world/real/crowd-*.jpg`.
 
+**Step I-2 is built** (`../plan.md`, section 10, "I-2, as built"): the front door, a new world with honest progress, the world's screen, and settings. Section 12 below says what building it changed. Pictures: `../interesting-world/real/i2-*.jpg`.
+
 Revised the same day after the owner's two criticisms of the first pass: a hold will grow past seven dwarves, and the first drawings were ugly and immature. The placement and the grammar stand. The look is redone (I10), and the design now grows with the hold (I14).
 
 The evidence is a survey of Dwarf Fortress's Steam interface, RimWorld's, and what the makers of Factorio, Victoria 3, Crusader Kings 3 and others have written about theirs, made by a research agent on 2026-11-16 that fetched each page. Its sources are listed at the end. Claude did not re-check its quotations. *(Memory)* marks what neither checked.
@@ -168,11 +170,11 @@ Lists, in the order they arrive:
 
 ## 5. Before play: the front door, the world, the expedition
 
-**The front door.** One screen, centred, over a slow view of the last world. Continue (the last hold), Worlds, New world, Settings, Quit. Nothing else.
+**The front door.** One screen, centred, over a slow view of the last world. Continue (the last hold), Worlds, New world, Settings, Quit. Nothing else. *Built; section 12. Until holds are kept (P6) the first choice is "Enter the last world".*
 
 ![The front door: five choices at the left, and a new world's progress named stage by stage](interface-front-door.jpg)
 
-**New world.** A name and a seed. Then honest progress: each stage named as it runs (the plates, the region, the islands near the start), with what is done and what is left, and a way to stop. The whole world is made within the owner's 10 minutes, and the screen says what is still being made behind the player.
+**New world.** A name and a seed (*built with a seed alone; section 12*). Then honest progress: each stage named as it runs (the plates, the region, the islands near the start), with what is done and what is left, and a way to stop. The whole world is made within the owner's 10 minutes, and the screen says what is still being made behind the player.
 
 **The world.** The known world's map, with the islands near the start. Its lenses are the world's fields. Three doors: **Found a hold** (expedition planning), **Walk the world** (first person, anywhere, as the game is today), and later **Read its history**. A world lists the holds and ruins made in it.
 
@@ -205,7 +207,7 @@ The interface steps sit in the play track (`plan.md`, section 5).
 |---|---|---|
 | **I-1. The interface's ground and the play screen's frame** (after P1; built) | Text, panels on the module grid, the pointer shared between the world and the panels, scale, `--shot` with the interface. The four regions. The clock and speeds. The hand, answering what any block, tree, stream or place is and why. Messages. The level control, lenses and the walk | Clicks a bed of rock in a cut hillside and reads why it is there; paints the rain over the island |
 | **After I-1. The dwarves on screen** (built) | Their pictures at the top: who needs you, who you keep in view, the count of all. The Dwarves list, which finds, groups and folds. Several in the hand as a group. Alerts that count. Messages that lead to their place. A dwarf's card finished: name, trade and age, what it is doing and what it waits for, and tabs for its trade and itself | Clicks a dwarf's picture and is taken to her |
-| **I-2. The front door and the world** | The front door, a new world with honest progress, the world's map, Walk the world, settings for text size and keys | Makes a world from the menu and walks it |
+| **I-2. The front door and the world** (built) | The front door, a new world with honest progress, the world's map, Walk the world, settings for text size and keys | Makes a world from the menu and walks it |
 | **E-1. Expedition planning** | Where, with the site card; who, with drawing again; set out | Chooses a hard site on purpose |
 | **With P3. Orders** | The orders bar, marking ground by dragging, the build choices, what an order waits for | Has a room dug |
 | **With P4. Needs and the year** | Needs on the card, alerts, the date | Is warned before a dwarf starves |
@@ -250,7 +252,7 @@ The four regions and the grammar stood. These are the places where the built scr
 - **The list narrows before it covers anything.** At 175% and 200% on a screen 2,560 wide, a list a third of the screen wide lay over the place's panel. It is now never wider than the room beside the hand and the place. The test that found this checks every scale.
 - **The top left names where the view is**: the named place under it, or which way it lies from the nearest ("North of East Top"), until a hold has a name. The date is the day of the season ("16th of spring"); there is no year yet.
 - **Clicking the date does nothing**: there is no chronicle to open. The messages are kept for it.
-- **Lessons can be read again in the menu** (I11), which also holds the interface's size until settings exist (I-2).
+- **Lessons can be read again in the menu** (I11), which also holds the interface's size until settings exist (I-2). *They exist; the menu keeps the size too, since it is where a player in play looks for it.*
 - **A message need not have a place.** The hold's log has none to give yet, so its lines are told and cannot be followed (I4). Anything told with a place leads there.
 - **A picture can leave the interface out** (`--plain`), since pictures of the land are how the natural world is judged, and can say what the screen says (`--say`), which I12 did not name.
 
@@ -276,6 +278,28 @@ The design stood: who needs you, then who you keep, then the count; a list that 
 - **A list stands where the alerts do**, so they are not drawn while one is open; the Dwarves list by need says the same. Sections 3 and 4 give both the top right.
 - **The alerts narrow to leave the dwarves their count**, down to a least width. On a screen 2,560 wide that is enough up to 150%. At 175% with an alert standing the top is the count alone, with no pictures; at 200% it has no room at all, and two alerts are deep enough to take the ground's panel's place until they clear, though its keys still work. At 175% and 200% with a list open the top has no room for the dwarves either. The lists' button and F1 lead to them at every size.
 - **E in first person takes the dwarf aimed at in the hand**, and where none is aimed at the block, as Y does. It is a row of `BINDS`. G and the right click are still P2's, for P3.
+
+## 12. What building I-2 changed
+
+Section 5 stood: a front door over the last world, a new world whose making is told stage by stage, a world's screen with the doors on it. These are the places where the built screens differ from it, or settle what it left open, and why.
+
+- **The first choice is "Enter the last world"**, and it goes straight into play. The drawing's "Continue at Stonewater" names a hold and a year; neither is kept yet (P6). The line under the game's name says what the world in hand is, in the land's words.
+- **The last world is formed as soon as the door is up**, with the panel of its making at the lower right, as the drawing has a new world's. So the fast way in is one key, and the wait the game used to make before it showed anything is spent at the door.
+- **Enter pressed too soon waits, and says so.** The choice's note counts the islands made and says the player goes in when they are; Escape takes the wish back.
+- **A new world goes to its own screen, not back to the door.** The drawing shows the making beside the front door. Built, the player who has just asked for a world wants to see it: the map is empty while the plates' history runs, then the known world is drawn, then each island arrives. The same panel says the stages on both screens.
+- **A new world has a seed and no name.** A name comes with what it would name, a kept world with holds in it (P6).
+- **The panel of a world being made says more than the drawing's**: under the stage that is running, what that stage makes, or which islands are in hand; beside one that is done, how long it took, or that it was kept from an earlier run. The drawing's "the far islands and the mainland" is "the far islands": the mainland is not made as you play, it is not made at all yet.
+- **Stop finishes what is in hand.** Forming has no place to stop inside an island, and the plates' history none inside its run. The button's words and the panel's say so, and the button turns to "Go on making it".
+- **The doors are on the island's card**, in the hand, since both act on the island chosen (I2). The drawing's world screen names three doors and no place for them. **Read its history** is the world's, and will stand in the world's own panel at the top left; nothing is drawn there now.
+- **A door waits for the island and its neighbours**, and the card says what is still to be formed. The design did not say when an island can be entered.
+- **The world's regions follow the play screen's** (I1): what is constant at the top left (the world, and how much the picture shows), what to know at the right (the lenses), the hand at the lower left, the ways elsewhere at the bottom right.
+- **The map is the known world as the plates left it**, with land that is known and not formed drawn pale, and each island drawn as its own map once it is formed and ringed until then. The design said only "the known world's map, with the islands near the start".
+- **The mainland can be clicked**, and its card says it is not formed and cannot be landed on.
+- **A lens of the world paints the sea, and tints an island whole** by its own figure where it has one. The pointer on the map says what the lens says there, which the design did not ask and a ramp of colours needs.
+- **Settings stand in the front door's place**, as Worlds and a new world do, under the game's name: nothing on the door moves. A key is changed by clicking its row and pressing the key. The keys that move the view and the walker are named there as not yet rows.
+- **The game's name is three quarters the drawing's size**, and set in letters alone: the atlas has no room for every glyph of a style that large at 200% (I9).
+- **Where the picture is small for the interface's size, the parts give way in an order**: the world's panel says less, then the making is told in brief, and a lens's key goes first of all. At the front door a screen's own panel has the room before the making's.
+- **Play's menu has the two ways out** the design did not draw: to the world, and to the front door.
 
 ## Sources
 

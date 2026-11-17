@@ -11,6 +11,11 @@ import sdl "vendor:sdl3"
 // The game: start-up, the frame loop and its input, and the bench report. Command-line options are
 // in options.odin; the offline tools they start live beside what they inspect.
 //
+// The way through. With no option that names where to go, `main` opens the front door (door.odin),
+// which makes the world while it is looked at (making.odin) and goes into play from there. With one,
+// it makes the world itself, as it always did, and goes straight into play. Play is `game`: it is
+// left by its menu for the world's screen or the front door, and may be entered again.
+//
 // The game begins in the view from above, whose own controls are in above.odin. Tab goes down to
 // first person at the place under the view's middle, and back up from where the player stands.
 // The interface is laid over both (play.odin): every event goes to it first, and the keys that do
@@ -21,6 +26,7 @@ import sdl "vendor:sdl3"
 //   P                pause the world              Y        why: take what is under the pointer, or
 //   [ ]              turn the clock back / forward         aimed at, in the hand, which says what it is
 //   \                save a screenshot            F1, F4   the lists of dwarves and of places
+//   in the menu: W leaves to the world's screen, D to the front door, Q quits
 //   Enter            go to what is in the hand, or follow a dwarf   K   keep the dwarf in the hand in view at the top
 //   G                send the dwarves to the block under the pointer, or aimed at (hold.odin)
 //   from above: right click sends them there too; a click on a dwarf takes it in the hand, a drag over several

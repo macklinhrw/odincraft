@@ -281,7 +281,7 @@ known_paint :: proc(lens: int) -> []u8 {
 				col = lens_paint(job.lens, WORLD_LENSES[job.lens].at(w.x, w.y))*(clamp(1 + slope/1500, 0.86, 1.1) if h > 0 else 1)   // the land's relief under the paint; the sea flat
 				if (h > 0) != (east > 0) || (h > 0) != (south > 0) do col *= 0.45   // the coast, so the land can be found under the paint
 			} else if h > 0 {
-				col = linalg.lerp(land_colour(h)*clamp(0.82 + slope/700, 0.45, 1.25), mix(L.unformed, L.unformed, 0), f32(0.42))   // pale: known, and not formed
+				col = linalg.lerp(land_colour(h)*clamp(0.82 + slope/700, 0.45, 1.25), [3]f32{f32(L.unformed.r), f32(L.unformed.g), f32(L.unformed.b)}/255, f32(0.42))   // pale: known, and not formed
 			} else {
 				col = mix(L.seas[0], L.seas[1], math.sqrt(clamp(-h/6000, 0, 1)))*clamp(1 + slope/2500, 0.88, 1.1)
 			}
@@ -458,8 +458,6 @@ card_write :: proc() {
 	} else if sync.atomic_load(&making.doing[c.pick]) != 0 {
 		fmt.sbprintf(&b, "Its land is being formed now. ")
 	} else {
-		before := 0
-		for &g, i in formed do if i != c.pick && !is_formed(&g) && islands_apart(i, c.pick) < islands_apart(c.pick, c.pick) + 1 do before += 1
 		fmt.sbprintf(&b, "Its land is not formed yet: it is made when its turn comes. ")
 	}
 	fmt.sbprintf(&b, "Its land was made %s ago. Over the last half million years its crust %s.", myr_words(is.age),

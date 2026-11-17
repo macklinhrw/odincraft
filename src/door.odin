@@ -348,7 +348,6 @@ settings_keep :: proc() {
 	m := &making
 	if !m.kept && m.took[.Plates] > 0 do d.took[.Plates], d.took[.Region] = m.took[.Plates], m.took[.Region]
 	if m.took[.Near] > 0 do d.took[.Near] = m.took[.Near]
-	play.unseen = false
 	play_keep()
 }
 
@@ -734,6 +733,7 @@ worlds_build :: proc(x, y: f32) {
 	u.clip = {}
 	d.over = max(cy + d.scroll - top - box.h, 0)
 	d.scroll = clamp(d.scroll, 0, d.over)
+	if d.over > 0 do part(.Thumb, {box.x + box.w - px(1.5), box.y + box.h*d.scroll/(d.over + box.h), px(1.5), box.h*box.h/(d.over + box.h)}, id = "worlds.thumb")
 	door_button({cx, foot + px(3), button_wide("Back", door_key(.Door_Back)), px(L.button)}, "Back", .Door_Back, 0, "worlds.back")
 }
 

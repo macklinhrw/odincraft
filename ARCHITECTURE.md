@@ -4,9 +4,9 @@ This is a map for someone opening the code for the first time. The design reason
 
 ## Shape of the program
 
-`src/` is a single Odin package (about 19,000 lines including the shaders). The one executable does two jobs:
+`src/` is a single Odin package (about 25,000 lines including the shaders). The one executable does two jobs:
 
-1. **The game.** It reads the known world from the plate history, forms the islands near the start, opens a window in the view from above, streams chunks around what the camera looks at and simulates water near it.
+1. **The game.** It opens a window at the front door and makes the world while it is looked at: it reads the known world from the plate history and forms the islands near the start on threads of their own. Play is entered from there, in the view from above: it streams chunks around what the camera looks at and simulates water near it. An option that names where to go skips the door and makes the world before the window opens, as the game always did.
 2. **Offline tools behind flags.** These print or draw what the generator made, then exit: `--map`, `--archipelago`, `--known`, `--why`, `--survey`, `--plates`, `--plates-why`, and `--dwarves`, which runs the dwarves' world with no window and prints what happened. They share every line of the generator with the game, which is the point. A picture or an explanation of the land is always the land the game would show.
 
 Everything random is keyed from one seed through `hash`/`hash01` (`gen.odin`). There is no global RNG state, so any value can be recomputed anywhere, on any thread, in any order.
@@ -16,6 +16,7 @@ Everything random is keyed from one seed through `hash`/`hash01` (`gen.odin`). T
 | Area | Files | What it owns |
 |---|---|---|
 | Entry | `main.odin`, `options.odin` | Start-up order, the frame loop, input, `--bench` report; command-line parsing |
+| Before play | `door.odin`, `chart.odin`, `making.odin` | The front door, the list of worlds, a new world and settings, and the way through from them into play and back; the world's screen: the known world's map as pictures painted on a thread of their own, the world's lenses as rows (`WORLD_LENSES`), an island's card and the doors into play; the world in hand, made in stages (`STAGES`) off the frame's thread, the forming threads' pools, and the worlds kept on disk ([ADR 0012](docs/adr/0012-one-world-in-hand-made-off-the-frames-thread.md)) |
 | Play | `above.odin`, `clock.odin` | The view from above: the camera over a point of the ground, the cut's level, picking a block or a box of blocks through the cut, why at the pointer, down to first person and back ([ADR 0007](docs/adr/0007-the-view-from-above-cuts-the-world-at-a-level.md)); the one clock everything that moves reads, with pause and speeds ([ADR 0008](docs/adr/0008-one-clock-for-everything-that-moves.md)) |
 <<<<<<< HEAD
 | The interface | `ui.odin`, `ui.metal`, `type.odin`, `play.odin`, `hand.odin`, `bar.odin` | A screen as a list of parts, drawn over the finished picture, with one table for its look (`LOOK`) and the atlas of text made for each scale ([ADR 0010](docs/adr/0010-a-screen-is-a-list-of-parts-drawn-over-the-picture.md)); the TrueType reader and glyph drawer; the play screen's regions, the acts and the keys that do them (`BINDS`), the pointer shared with the world, messages (`tell`), alerts (`alert_raise`), lenses and lessons; what a click picks up and what its card says ([`foundations/interface.md`](docs/foundations/interface.md)) |
@@ -71,6 +72,8 @@ flowchart LR
 
 ### Start-up (`main`)
 
+With no option that names where to go, `main` hands over to `door_run` at once: the window opens, `world_open` orders the last world, and steps 2 and 3 below run on the making's thread while the front door is drawn (`making.odin`). Play begins from there by `door_play`, which makes the hold and calls `game`, the frame loop below. With such an option, `main` runs the steps itself in this order, then `game`; when the player leaves play for the world's screen or the front door, it goes on into `door_run` with the world it made.
+
 1. Parse options. `--plates` branches off here, because it needs no island.
 2. Draw a record at the start's place, for the swell and any `--kind`. Read the known world (`known_make`: from `build/worlds/`, or by running the plate history and its regional history, about 2.5 to 3 s, on a seed's first run), make the archipelago records from it, the start island's among them (`archipelago_make`; `--plates-why` and `--known` answer here and exit), and decide which animals reached each island (`arrivals_make`).
 3. Form the islands within `--near` km (default 64) on all cores but one, in the background. At the same time, form the start island on the main thread (`gen_init`).
@@ -96,6 +99,7 @@ Every event goes to the interface first (`play_event`): a key that is one of its
 - **One clock** ([ADR 0008](docs/adr/0008-one-clock-for-everything-that-moves.md)). Water, animals, clouds and the wind in the plants read one count of the world's seconds, which pauses and runs at 1, 2 or 4 times; the camera does not.
 - **The dwarves' world in ticks, beside the frame** ([ADR 0009](docs/adr/0009-the-dwarves-world-runs-in-ticks-beside-the-frame.md)). One thread owns one record and advances it a tenth of a second at a time from the seed and a list of orders, so the same orders give the same log with a window or without, paused or hurried. It reads the ground from the generator into its own floors, never from what the frame has streamed. A way is found over rooms of joined floors first, which says whether one exists, and then over the floors of those rooms. Nothing in it counts on seven dwarves.
 - **A screen is a list of parts** ([ADR 0010](docs/adr/0010-a-screen-is-a-list-of-parts-drawn-over-the-picture.md)). The interface is the game's own code: each frame the play screen lists rectangles that say what they are, what they say and what a click does, and one file draws them, finds the one under the pointer, and can say the screen in words for a test. Text is drawn from an atlas made at the exact pixel size of the scale in use.
+- **One world in hand, made off the frame's thread** ([ADR 0012](docs/adr/0012-one-world-in-hand-made-off-the-frames-thread.md)). The screens before play order a world and go on drawing; each frame they read how far each stage has come. Every stage is the procedure the command line runs, so the land is the same either way. Another world ordered stops the forming threads, puts the old world down and makes the new; a world put down leaves its formed islands in memory.
 - **Rules as data.** Soil, cover, communities, plants, creatures and places are ordered rows. Each row's *host* is a product of windows on named fields (`FIELDS` in `fields.odin`). `--overlay` paints any field, and `--why` prints which row won at a point and why.
 
 ## Where to start reading
@@ -106,10 +110,11 @@ Every event goes to the interface first (`play_event`): a key that is one of its
 4. [`regions.odin`](src/regions.odin) and ADR 0005, before touching anything that runs on more than one thread.
 5. [`hold.odin`](src/hold.odin), the top comment and `hold_tick`, and ADR 0009: how the dwarves' world runs. Then [`paths.odin`](src/paths.odin), the top comment and `walk_way`.
 6. [`play.odin`](src/play.odin), the top comment, `BINDS` and `play_frame`, and ADR 0010: how a screen is made and what the pointer and the keys do. Then `LOOK` in [`ui.odin`](src/ui.odin).
+7. [`making.odin`](src/making.odin), the top comment and `world_open`, and ADR 0012: how a world is made while a screen is drawn. Then `door_run` in [`door.odin`](src/door.odin) and `game` in [`main.odin`](src/main.odin): the way through.
 
 ## Tooling
 
 - `./build.sh [run …]`: one `odin build` with `-o:speed -vet-unused`.
 - `odin check src -vet-unused`: the typecheck CI runs first.
-- `./build.sh test`: the determinism test (`src/forming_test.odin`). It forms the start island and island 1, the second on a worker thread and again on the test thread, and checks both against a golden hash. It then runs the dwarves' world twice on the start island, once beside a thread that reads it as the frame does, and checks that the two logs are the same (`src/hold_test.odin`). Last it makes the play screen with no window and asks what it says (`src/play_test.odin`). Beyond that, changes to forming are checked by comparing `--map` output byte for byte and by `--bench` frame times, as the commit messages record.
+- `./build.sh test`: the determinism test (`src/forming_test.odin`). It forms the start island and island 1, the second on a worker thread and again on the test thread, and checks both against a golden hash. It then runs the dwarves' world twice on the start island, once beside a thread that reads it as the frame does, and checks that the two logs are the same (`src/hold_test.odin`). It then makes the play screen with no window and asks what it says (`src/play_test.odin`), and last the screens before play: the front door, its other screens and the world's map (`src/door_test.odin`). Beyond that, changes to forming are checked by comparing `--map` output byte for byte and by `--bench` frame times, as the commit messages record.
 - `tools/blocks.py` (Pillow) rebuilds the texture atlases. `tools/plates_compare.py` (pygplates, plate-model-manager, numpy, netCDF4, Pillow, matplotlib) fetches the EarthByte reference data and compares it with `--plates` output.
