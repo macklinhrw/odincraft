@@ -139,6 +139,7 @@ main :: proc() {
 		archipelago[opt.island].kind = kind
 	}
 	arrivals_make()
+	names_make()
 	if opt.origin == {} && opt.kind == "" do world_note()   // what is known of it, kept for the list of worlds (making.odin)
 	// The land larger than a region nearest the start (continents.odin): its coarse stage before the
 	// islands' records are made into regions, since its pieces are regions beside theirs. The tools that

@@ -61,6 +61,7 @@ Making :: struct {
 	massed:    bool,             // the mainland's stage has been gone through, whatever it came to
 	continent: bool,             // the mainland is formed as land where it can be (--continent=0 leaves it a record)
 	swap:      bool,             // the making's thread asks the frame's to make the list of regions again with the mainland's pieces (regions_make)
+	waiting:   bool,             // a world is ordered and the one before it is still being put down: the stages are not yet its own
 	began:     time.Time,        // when the stage running began
 	took:      [Stage]f64,       // seconds each stage took in this run; 0 for one not run
 	near, far: []int,            // the islands that must be formed before the world is entered, the start first; and the rest, nearest first
@@ -287,6 +288,11 @@ world_open :: proc(seed: u32, near_km: f64, continent: bool) {
 	o := new(Order)
 	o^ = {seed, near_km, m.job, true, m.order}
 	if seed == m.seed && m.stopped && !m.fresh do o.fresh = false   // the same world, stopped with its records made: go on with it
+	if o.fresh {   // the world asked for is the one spoken of from now on, though nothing of it is known yet
+		m.seed = seed
+		sync.atomic_store(&m.massed, false)
+		sync.atomic_store(&m.waiting, true)
+	}
 	m.job = thread.create_and_start_with_poly_data(o, proc(o: ^Order) {
 		m := &making
 		defer free(o)
@@ -310,6 +316,7 @@ world_open :: proc(seed: u32, near_km: f64, continent: bool) {
 			m.seed, m.near_km, m.took, m.kept, m.stopped, m.fresh = o.seed, o.near_km, {}, false, false, true
 			sync.atomic_store(cast(^u8)&m.stage, u8(Stage.Plates))
 			m.began = time.now()
+			sync.atomic_store(&m.waiting, false)   // from here the stages told are this world's
 			world_records(o.seed)
 			m.kept = known.took == 0
 			m.took[.Plates], m.took[.Region] = known.took - known.regional_took, known.regional_took
@@ -412,6 +419,7 @@ world_records :: proc(s: u32) {
 	known_make()
 	archipelago_make(false)
 	arrivals_make()
+	names_make()
 	mainland_make()   // its record, and whether it can be formed; its coarse stage is a stage of its own
 	regions_make()
 }
@@ -502,35 +510,21 @@ worlds_kept :: proc(allocator := context.temp_allocator) -> []Kept_World {
 // list of worlds can say it without making the world again: a sentence a line.
 world_note :: proc() {
 	b := strings.builder_make(context.temp_allocator)
-	fmt.sbprintln(&b, world_says())
-	fmt.sbprintln(&b, start_says())
+	is := archipelago[0]
+	ashore := f64(1e12)
+	for c in continent.coast do ashore = min(ashore, math.hypot(c.x - world_frame.origin.x, c.y - world_frame.origin.y))
+	fmt.sbprintfln(&b, "Start: %s, %s at %.0f° N", isle_name(0), kind_said(is.kind).one, world_frame.latitude)
+	fmt.sbprintfln(&b, "Islands: %s near the start", number_words(len(archipelago)))
+	if ashore < 1.5e6 do fmt.sbprintfln(&b, "Mainland: %.0f km off", ashore/1000)
+	else do fmt.sbprintln(&b, "Mainland: none in the known world")
 	_ = os.make_directory(worlds_dir())
 	_ = os.write_entire_file(world_note_path(world_seed), b.buf[:])
-}
-
-// The islands near the start in a sentence: how many, and of what kinds.
-world_says :: proc() -> string {
-	by_kind: [len(KINDS)]int
-	for is in archipelago do by_kind[is.kind] += 1
-	b := strings.builder_make(context.temp_allocator)
-	kinds := 0
-	for n in by_kind do kinds += int(n > 0)
-	said := 0
-	for n, k in by_kind do if n > 0 {
-		fmt.sbprintf(&b, "%s%s %s", "" if said == 0 else " and " if said == kinds - 1 else ", ", number_words(n), kind_said(k).many if n > 1 else kind_said(k).one[strings.index(kind_said(k).one, " ") + 1:])
-		said += 1
-	}
-	ashore := f64(1e12)
-	o := world_frame.origin
-	for c in continent.coast do ashore = min(ashore, math.hypot(c.x - o.x, c.y - o.y))
-	land := fmt.tprintf("off a mainland whose coast lies %.0f km away", ashore/1000) if ashore < 1.5e6 else "with no mainland in the known world"
-	return fmt.tprintf("%s island%s near the start, %s: %s.", capital(number_words(len(archipelago))), "" if len(archipelago) == 1 else "s", land, strings.to_string(b))
 }
 
 // Where the party lands, in a sentence.
 start_says :: proc() -> string {
 	is := archipelago[0]
-	return fmt.tprintf("The start is %s, %.0f km across, on the %s at %.0f° N.", kind_said(is.kind).one, is.size/1000, SETTINGS[is.setting], world_frame.latitude)
+	return fmt.tprintf("The start is %s, %s %.0f km across, on the %s at %.0f° N.", isle_name(0), kind_said(is.kind).one, is.size/1000, SETTINGS[is.setting], world_frame.latitude)
 }
 
 // What each kind of island is, in words for a person: one of them, several, the word under it on
@@ -550,6 +544,97 @@ kind_said :: proc(k: int) -> Kind_Said {
 	for row in KINDS_SAID do if row.name == KINDS[k].name do return row
 	n := KINDS[k].name
 	return {n, n, n, n, ""}
+}
+
+// ---- names ------------------------------------------------------------------------------------
+
+// An island's name, by the rule the places on an island are named by (places.odin): a word drawn
+// from a cause, then a word of its own kind, each drawn by the island's own key, and no word used by
+// two islands near one start. The causes are what the world knows of an island before it is formed,
+// so it has its name on the map from the first: an animal that reached it, where it lies among the
+// others and toward the wind, its size among them, the age of its land, and the colour of the rock
+// its kind is built of.
+ISLE_WORDS := [?]struct { kind: string, words: []string }{
+	{"ridge", {"Ridge", "Back", "Rigg", "Spine"}}, {"inlets", {"Sounds", "Havens", "Firths", "Arms"}}, {"cone", {"Cone", "Pike", "Mount"}},
+	{"crater", {"Cauldron", "Ring", "Bowl"}}, {"domes", {"Domes", "Knolls", "Humps"}}, {"worn", {"Downs", "Wolds", "Hills"}},
+	{"raised", {"Steps", "Benches", "Terraces", "Shelves"}}, {"reef", {"Reef", "Cay", "Key"}},
+}
+isle_names: [dynamic]string   // by island, made once with a world's records and read only after
+
+names_make :: proc() {
+	for n in isle_names do delete(n)
+	clear(&isle_names)
+	n := len(archipelago)
+	if n == 0 do return
+	middle: [2]f64
+	sizes, ages := make([]f64, n, context.temp_allocator), make([]f32, n, context.temp_allocator)
+	for is, i in archipelago {
+		middle += [2]f64{f64(is.origin.x), f64(is.origin.y)}/f64(n)
+		sizes[i], ages[i] = is.size, is.age
+	}
+	slice.sort(sizes)
+	slice.sort(ages)
+	Word :: struct { w: string, weight: f32 }
+	for is, i in archipelago {
+		words := make([dynamic]Word, context.temp_allocator)
+		for row, d in DISPERSAL do if a := arrivals[i][d]; a.reached {   // an animal names an island the more, the fewer islands it reached
+			with := 0
+			for _, j in archipelago do with += int(arrivals[j][d].reached)
+			if row.way == .Drifted do continue   // a fish in its streams names no island: a sailor names what is seen from the sea
+			name, _, last := strings.partition(row.name, " ")
+			append(&words, Word{capital(last if last != "" else name), 3 if with*3 <= n else 0.4})
+		}
+		off := [2]f64{f64(is.origin.x), f64(is.origin.y)} - middle
+		if far := math.hypot(off.x, off.y); far <= 12_000 do append(&words, Word{"Middle", 2})
+		else {
+			bearing := math.mod(math.to_degrees(math.atan2(off.x, -off.y)) + 360, 360)
+			quarters := [4]string{"North", "East", "South", "West"}
+			append(&words, Word{quarters[int(bearing + 45)/90%4], 1})
+			toward := abs(math.mod(bearing - world_frame.wind + 540, 360) - 180)   // degrees between where it lies and where the wind comes from
+			if toward < 40 do append(&words, Word{"Weather", 1})
+			if toward > 140 do append(&words, Word{"Lee", 1})
+		}
+		if n >= 3 {
+			if is.size > 1.3*sizes[n/2] do append(&words, Word{"Great", 2})
+			if is.size < 0.75*sizes[n/2] do append(&words, Word{"Little", 1.5})
+			if is.age == ages[0] && is.age < 1 do append(&words, Word{"New", 2})
+			if is.age == ages[n - 1] && ages[n - 1] > 1.5*ages[n/2] do append(&words, Word{"Old", 1.5})
+		}
+		switch KINDS[is.kind].name {
+		case "domes": append(&words, Word{"Pale", 1.5})
+		case "reef":  append(&words, Word{"White", 1.5})
+		case "cone", "crater": append(&words, Word{"Black", 1})
+		}
+		own := []string{"Isle"}
+		for row in ISLE_WORDS do if row.kind == KINDS[is.kind].name do own = row.words
+		// Drop the words an island before it has taken, unless none is left, then draw one by its weight.
+		total: f32
+		for &w in words {
+			for name in isle_names do if strings.has_prefix(name, fmt.tprintf("%s ", w.w)) do w.weight = -w.weight
+			total += max(w.weight, 0)
+		}
+		if total == 0 do for &w in words do w.weight, total = abs(w.weight), total + abs(w.weight)
+		key := hash(i32(is.origin.x), i32(is.origin.y), world_seed + 4711)
+		u, word := f32(key >> 8)/16777216*total, ""
+		for w in words do if w.weight > 0 && word == "" {
+			if u < w.weight do word = w.w
+			u -= w.weight
+		}
+		name := ""
+		for k in 0..<len(own) {
+			name = fmt.tprintf("%s %s", word, own[(int(key%7) + k)%len(own)]) if word != "" else own[(int(key%7) + k)%len(own)]
+			taken := false
+			for other in isle_names do taken ||= other == name
+			if !taken do break
+		}
+		append(&isle_names, strings.clone(name))
+	}
+}
+
+// An island's name, or its kind's where no name has been made (a world a test put together).
+isle_name :: proc(i: int) -> string {
+	if i >= 0 && i < len(isle_names) do return isle_names[i]
+	return capital(kind_said(archipelago[i].kind).short) if i >= 0 && i < len(archipelago) else ""
 }
 
 // A world made by start-up itself (main.odin) is the world in hand from here on, with the island

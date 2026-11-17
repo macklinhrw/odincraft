@@ -758,7 +758,7 @@ mainland_make :: proc() {
 	ms.pass_seconds = cells*159*171e-9
 	bytes := (side/64)*(side/64)*63
 	ms.formable = ms.pass_seconds <= PASS_SECONDS && bytes <= PASS_BYTES
-	if !ms.formable do ms.why = fmt.tprintf("its coarse stage, the whole of its %.0f km² through the 64 m phases on a lattice %.0f km across, would take about %.0f min on one thread and %.1f GB, more than the %.0f min and %.1f GB allowed before it runs in parallel",
+	if !ms.formable do ms.why = fmt.aprintf("its coarse stage, the whole of its %.0f km² through the 64 m phases on a lattice %.0f km across, would take about %.0f min on one thread and %.1f GB, more than the %.0f min and %.1f GB allowed before it runs in parallel",
 		mainland.area, side/1000, ms.pass_seconds/60, bytes/1e9, f64(PASS_SECONDS)/60, PASS_BYTES/1e9)
 	fmt.printfln("the land larger than a region nearest the start: %.0f km² of land in the known world, its coast %.0f km off, the history's ground up to %.0f m; %s",
 		mainland.area, by - KNOWN_STEP/2, top, "formed as land: its coarse stage before entering, its pieces within reach of the start before entering and the rest in the background" if ms.formable else fmt.tprintf("not formed: %s", ms.why))

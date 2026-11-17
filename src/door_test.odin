@@ -1,5 +1,6 @@
 package main
 
+import "core:fmt"
 import "core:strings"
 import "core:sync"
 import "core:testing"
@@ -37,6 +38,21 @@ click :: proc(id: string, words := "") -> bool {
 		return true
 	}
 	return false
+}
+
+// Frames until the map has come to where it is going.
+@(private="file")
+settle :: proc() {
+	for _ in 0..<200 do if chart.going do frame()
+}
+
+// What the card's row of a thing says, and its why.
+@(private="file")
+row_says :: proc(thing: string) -> (says, why: string) {
+	for it, i in screen.items do if it.id == "isle.thing" && it.text == thing {
+		for o in screen.items[i + 1:] do if o.id == "isle.says" do return o.text, screen.items[i - 1].tip if screen.items[i - 1].id == "isle.row" else ""
+	}
+	return
 }
 
 @(private="file")
@@ -77,7 +93,16 @@ the_front_door_and_the_world :: proc(t: ^testing.T) {
 	door = {rebind = -1, opt = &opt, unseen = true, running = true, ratio = 1}
 	play = {lens = -1, lens_shown = -1, open = {0}}
 	chart_forget()
+	names_make()
 	world_adopt(0, 64)   // the world the forming test made is the world in hand
+
+	// Every island has a name of its own, of two words, and no two share one.
+	for is, i in archipelago {
+		testing.expectf(t, strings.count(isle_name(i), " ") == 1, "island %d is named %q, not by a cause and its kind", is.id, isle_name(i))
+		for _, j in archipelago[:i] do testing.expectf(t, isle_name(i) != isle_name(j), "islands %d and %d are both named %s", j, i, isle_name(i))
+	}
+	// Every key that is a row has words for what it does, so Settings names none by its act's name.
+	for b in BINDS do testing.expectf(t, key_says(b) != fmt.tprint(b.act), "the key %s has no words for what it does", b.name)
 	screen_go(.Door)
 	frame()
 
@@ -156,24 +181,52 @@ the_front_door_and_the_world :: proc(t: ^testing.T) {
 	laid_out(t, "Settings")
 	key(.ESCAPE)
 
-	// The world's screen: the world, its islands, and the start in the hand in the card's shape.
+	// The world's screen opens framed on the islands there are to choose from, each named on the map
+	// and a row of the list, with the start in the hand in the card's shape.
 	screen_go(.Chart)
 	frame()
 	testing.expect_value(t, says("world.title"), "The world of seed 7")
 	testing.expect(t, strings.contains(says("world.says"), "islands near the start"), "the world's screen does not say what is known of the world")
 	testing.expect_value(t, count("chart.name"), len(archipelago))
-	testing.expect(t, chart.pick == 0 && says("isle.title") == capital(kind_said(archipelago[0].kind).one), "the start is not in the hand when the world's screen opens")
-	testing.expect(t, strings.contains(says("isle.sub"), "the start"), "the card does not say the island is the start")
+	for is in archipelago {
+		at := chart_to({f64(is.origin.x), f64(is.origin.y)})
+		testing.expectf(t, inside(chart.free, at), "island %d lies outside the part of the picture no panel stands on when the world's screen opens", is.id)
+	}
+	testing.expect_value(t, count("isles.row") + count("isles.mainland"), len(archipelago) + 1)
+	testing.expect(t, says("isles.name") == isle_name(0) && strings.contains(says("isles.land"), "km²"), "the list's first row is not the start, with its land")
+	testing.expect(t, chart.pick == 0 && says("isle.title") == isle_name(0), "the start is not in the hand when the world's screen opens")
+	testing.expect(t, strings.contains(says("isle.sub"), "the start") && strings.contains(says("isle.sub"), kind_said(archipelago[0].kind).one[2:]), "the card does not say the island's kind, and that it is the start")
 	hand := screen_says(&screen, .Hand)
-	testing.expect(t, strings.contains(hand, "* Land") && strings.contains(hand, "Rock") && strings.contains(hand, "Climate") && strings.contains(hand, "Life") && strings.contains(hand, "Places"), "the island's card has not its depths")
-	testing.expect(t, strings.contains(says("isle.says"), "km² of land"), "a formed island does not say its land")
+	for d in ISLE_DEPTHS do testing.expectf(t, strings.contains(hand, d), "the island's card has not its depth %s", d)
+	// The card is rows: a thing, and a word or a figure. No row is a sentence; the why is asked for.
+	for d in Isle_Depth {
+		click("isle.tab", ISLE_DEPTHS[d])
+		testing.expectf(t, count("isle.thing") >= 3 || d == .Places, "the card's depth %s has not its rows", ISLE_DEPTHS[d])
+		for it in screen.items do if it.id == "isle.says" || it.id == "isle.thing" {
+			testing.expectf(t, len(it.text) <= 44 && !strings.contains(it.text, ". "), "the card's depth %s answers in a sentence: %q", ISLE_DEPTHS[d], it.text)
+		}
+	}
+	click("isle.tab", "Land")
+	land, _ := row_says("Land")
+	testing.expect(t, strings.contains(land, "km²"), "a formed island does not say its land")
+	landing, why := row_says("Landing")
+	testing.expect(t, landing != "" && strings.contains(why, "boat"), "the card does not say what landing the island offers, and why")
+	testing.expect_value(t, count("isle.why"), 0)
+	click("isle.thing", "Landing")   // a click on the row's words says its why under it, and again takes it back
+	testing.expect(t, chart.row >= 0 && strings.contains(says("isle.why"), "boat"), "a row chosen does not say its why")
+	click("isle.thing", "Landing")
+	testing.expect_value(t, count("isle.why"), 0)
 	click("isle.tab", "Life")
-	testing.expect(t, strings.contains(says("isle.says"), "sika deer"), "the card does not say who reached the island")
+	deer, swims := row_says("Sika deer")
+	testing.expect(t, deer == "not here" && strings.contains(swims, "swims"), "the card does not say who reached the island, and why not")
 	click("isle.tab", "Rock")
-	testing.expect(t, strings.contains(says("isle.says"), home.region.story.name), "the card does not say the island's rock")
+	rock, _ := row_says("Its rock tells of")
+	testing.expect_value(t, rock, home.region.story.name)
+	click("isle.tab", "Land")
 
 	// The doors: not while the islands near it are unformed, and the card says why; then by key.
 	testing.expect(t, screen_find(&screen, "isle.found").key == "Enter" && screen_find(&screen, "isle.walk").key == "W", "the doors have not their keys on them")
+	testing.expect_value(t, says("isle.found"), "Land the party here")
 	testing.expect(t, strings.contains(says("isle.waits"), "still to be formed"), "the card does not say why play cannot begin yet")
 	key(.RETURN)
 	testing.expect(t, door.wish == .None, "Found a hold was taken before the island could be entered")
@@ -197,22 +250,48 @@ the_front_door_and_the_world :: proc(t: ^testing.T) {
 		door_event(&down)
 	}
 	frame()
-	testing.expect(t, chart.pick == 1 && says("isle.title") == capital(kind_said(archipelago[1].kind).one), "a click on an island did not take it in the hand")
+	testing.expect(t, chart.pick == 1 && says("isle.title") == isle_name(1), "a click on an island did not take it in the hand")
 	testing.expect(t, strings.contains(says("isle.sub"), "of the start"), "the card does not say where the island lies")
+	// The view goes to it: it fills the free part of the picture, large enough that its places are named on it.
+	settle()
+	side := f32(f64(chart.wide)/chart.span*archipelago[1].size)
+	there = chart_to({f64(archipelago[1].origin.x), f64(archipelago[1].origin.y)})
+	testing.expect(t, side > 0.5*chart.free.h && inside(chart.free, there), "an island taken in the hand was not gone to")
+	testing.expect_value(t, count("chart.place"), len(formed[1].places))
 
-	// A lens of the world's fields, with the key to it; and the pointer on the map says what it says there.
+	// A row of the list takes its island in the hand and the view to it; the mainland's says how it stands, and why.
+	click("isles.name", isle_name(0))
+	settle()
+	testing.expect(t, chart.pick == 0 && says("isle.title") == isle_name(0), "a row of the list did not take its island in the hand")
+	click("isles.name", "The mainland")
+	settle()
+	stands, cause := row_says("As land")
+	testing.expect(t, chart.pick == MAINLAND && stands == "known, not formed" && strings.contains(cause, "not formed as land"), "the mainland's card does not say how it stands, and why")
+	testing.expect_value(t, count("isle.found"), 0)
+	click("isles.name", isle_name(1))
+	settle()
+	there = chart_to({f64(archipelago[1].origin.x), f64(archipelago[1].origin.y)})
+
+	// The lenses open from their button: a lens of the world's fields, with the key to it; and the pointer on the map says what it says there.
+	testing.expect_value(t, count("lens.row"), 0)
+	key(.L)
+	testing.expect_value(t, count("lens.row"), len(WORLD_LENSES))
 	click("lens.row", "Setting")
 	testing.expect(t, sync.atomic_load(&chart.lens) == 0 && count("lens.kind") == len(Setting), "the lens did not come on with its key")
 	testing.expect_value(t, chart_tip(there), SETTINGS[archipelago[1].setting])
 	click("lens.row", "Setting")
 	testing.expect_value(t, chart.lens, -1)
+	key(.L)
+	testing.expect_value(t, count("lens.row"), 0)
 
-	// The wheel and the keys zoom; Home goes back over the start.
+	// The wheel and the keys zoom; Home shows all the islands again, and leaves the hand as it is.
 	span := chart.span
 	key(.EQUALS)
 	testing.expect(t, chart.span < span, "= did not bring the map nearer")
 	key(.HOME)
-	testing.expect(t, chart.pick == 0 && chart.at == world_frame.origin, "Home did not put the map over the start")
+	settle()
+	testing.expect(t, chart.pick == 1 && chart.span > 10*archipelago[1].size, "Home did not show all the islands")
+	for is in archipelago do testing.expectf(t, inside(chart.free, chart_to({f64(is.origin.x), f64(is.origin.y)})), "island %d is out of view after Home", is.id)
 
 	// It holds at every scale, with an island in the hand, a lens on and the world being made.
 	for module in 3..=8 {

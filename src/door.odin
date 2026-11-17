@@ -54,7 +54,7 @@ Door :: struct {
 	isle:     int,             // on this island
 	rebind:   int,             // the row of BINDS that takes the next key pressed, or -1
 	took:     [Stage]f64,      // how long each stage of making a world last took on this machine, kept between runs
-	now, rest: f64,            // real seconds here, and those the pointer has rested
+	now, rest, dt: f64,        // real seconds here, those the pointer has rested, and this frame's
 	pointer:  [2]f32,
 	ratio:    f32,             // pixels of the picture to a point of the window
 	pressing: bool,            // the left button went down on a part
@@ -64,6 +64,8 @@ Door :: struct {
 	on_map, dragged: bool,     // it went down on the map, and has moved far enough to be a drag
 	posed:    bool,            // the options' state was set, once
 	said:     bool,            // the picture's state was not reached, and that was said
+	kept_size: f64,            // metres across the start island's square in the picture kept from the last run; 0 with none
+	kept_pixels: []u8,         // that picture, held until this run's has taken its place
 }
 door := Door{rebind = -1}
 
@@ -77,7 +79,7 @@ door_first :: proc(opt: ^Options) -> bool {
 	if opt.has_door do return true
 	straight := opt.has_over || opt.has_pos || opt.has_look || opt.fly || opt.first || opt.place != 0 || opt.bench > 0 || opt.shot != "" || opt.enter ||
 		opt.island != 0 || opt.kind != "" || opt.origin != {} || opt.map_path != "" || opt.archipelago != "" || opt.known != "" || opt.has_why || opt.survey ||
-		opt.has_plates_why || opt.dwarves > 0 || opt.orders != "" || opt.has_select || opt.has_cursor
+		opt.has_plates_why || opt.dwarves > 0 || opt.orders != "" || opt.has_select || opt.has_cursor || opt.play != ""
 	return !straight
 }
 
@@ -98,6 +100,7 @@ door_run :: proc(opt: ^Options, g_in: ^Gpu, window_in: ^sdl.Window, to: Leave) {
 	d.g, d.window, d.unseen = g, window, g.unseen
 	settings_read()
 	if !sync.atomic_load(&making.records) && !sync.atomic_load(&making.working) {   // no world in hand: the one asked for, or the last entered
+		door_kept(g, world_seed if opt.has_seed || d.unseen || d.last == 0 else d.last)
 		world_open(world_seed if opt.has_seed || d.unseen || d.last == 0 else d.last, opt.near, opt.continent)
 	}
 	if sync.atomic_load(&making.records) && chart.painter == nil do chart_painter_begin()   // a world start-up made itself has no pictures yet
@@ -109,6 +112,8 @@ door_run :: proc(opt: ^Options, g_in: ^Gpu, window_in: ^sdl.Window, to: Leave) {
 	case "world":    screen_go(.Chart)
 	}
 
+	if script.on && script.at == 0 && len(script.steps) > 0 && script.steps[0].kind == .Loaded do script.at = 1   // a script begun here waits for no world: the first frame is its to look at
+	script_step, script_waited := -1, 0.0
 	frequency := f64(sdl.GetPerformanceFrequency())
 	last := sdl.GetPerformanceCounter()
 	began := time.now()
@@ -127,10 +132,23 @@ door_run :: proc(opt: ^Options, g_in: ^Gpu, window_in: ^sdl.Window, to: Leave) {
 		sdl.GetWindowSize(window, &points.x, &points.y)
 		d.ratio = f32(pw)/f32(max(points.x, 1))
 		making_sync()   // the list of regions, made again with the mainland's pieces where the making asks
-		e: sdl.Event
-		for sdl.PollEvent(&e) do door_event(&e)
+		// The hand's events, and with a script playing the script's (script.odin): both go through door_event.
+		events := make([dynamic]sdl.Event, context.temp_allocator)
+		polled: sdl.Event
+		for sdl.PollEvent(&polled) do append(&events, polled)
+		script_shot := ""
+		say_now, under_now := false, false
+		if script.on {
+			ended: bool
+			script_shot, say_now, under_now, ended = script_frame(&events, nil, nil, nil, !chart.going && (chart_painted() || !sync.atomic_load(&making.records)) || seconds > script_waited + 20, seconds, d.ratio)
+			if script.at != script_step do script_step, script_waited = script.at, seconds   // a picture waits twenty seconds at the most for the world's pictures
+			if ended do d.running = false
+			g.hurry = false
+		}
+		for &e in events do door_event(&e)
 		at := [2]f32{-1, -1}
 		if d.unseen && opt.has_cursor do at = {f32(opt.cursor[0]), f32(opt.cursor[1])}
+		if script.on do at = script.pointer
 		if !d.unseen {
 			mx, my: f32
 			_ = sdl.GetMouseState(&mx, &my)
@@ -138,13 +156,17 @@ door_run :: proc(opt: ^Options, g_in: ^Gpu, window_in: ^sdl.Window, to: Leave) {
 			if d.screen == .Chart && d.rebind < 0 {   // the arrows move the map, as they move the view over the land
 				keys := sdl.GetKeyboardState(nil)
 				pan := [2]f64{f64(int(keys[int(sdl.Scancode.RIGHT)]) - int(keys[int(sdl.Scancode.LEFT)])), f64(int(keys[int(sdl.Scancode.DOWN)]) - int(keys[int(sdl.Scancode.UP)]))}
+				if pan != {} do chart.going = false
 				chart.at += pan*chart.span*0.6*dt
 			}
 		}
 		listed := sdl.GetPerformanceCounter()
 		door_frame(f32(pw), f32(ph), at, 0 if d.unseen && opt.shot != "" else dt)
 		append(&listing, f32(f64(sdl.GetPerformanceCounter() - listed)/frequency))
-		shot := ""
+		script_parts()
+		if say_now do play_say()
+		if under_now do fmt.printfln("script: the pointer is on %s", chart_tip(at) if d.screen == .Chart && chart_tip(at) != "" else "nothing the map names")
+		shot := script_shot
 		posed := (opt.shot != "" || len(opt.press) > 0) && seconds >= opt.after && door_posed(opt) && pressed_all(opt, door_act)   // the state the options ask for, and their parts pressed
 		if opt.shot != "" && posed {
 			shot = opt.shot
@@ -183,13 +205,20 @@ door_run :: proc(opt: ^Options, g_in: ^Gpu, window_in: ^sdl.Window, to: Leave) {
 	}
 }
 
+// So many seconds in words: seconds under two minutes, then minutes.
+span_words :: proc(seconds: f64) -> string {
+	if seconds < 120 do return fmt.tprintf("%.0f s", max(seconds, 1))
+	return fmt.tprintf("%.0f min", math.round(seconds/60))
+}
+
 // How long each stage of making the world in hand took, as a bench says it.
 making_say :: proc(ran: f64) {
 	m := &making
 	near_done, near_all, _ := making_progress(.Near)
 	far_done, far_all, _ := making_progress(.Far)
-	fmt.printfln("the world of seed %d in %.1f s: the plates' history %s; the region round the start %.2f s; the islands near the start %d of %d in %.2f s%s; the far islands %d of %d",
-		m.seed, ran, "kept from an earlier run" if m.kept else fmt.tprintf("%.2f s", m.took[.Plates]), m.took[.Region], near_done, near_all, m.took[.Near],
+	fmt.printfln("the world of seed %d in %.1f s: the plates' history %s; the region round the start %.2f s; the mainland %s; the islands near the start %d of %d in %.2f s%s; the far islands %d of %d",
+		m.seed, ran, "kept from an earlier run" if m.kept else fmt.tprintf("%.2f s", m.took[.Plates]), m.took[.Region],
+		fmt.tprintf("formed on 64 m cells in %.1f s", m.took[.Mainland]) if sync.atomic_load_explicit(&mainland_state.ready, .Acquire) else "left as the history has it", near_done, near_all, m.took[.Near],
 		", and it could be entered" if world_enterable(0) else "", far_done, far_all)
 	if sync.atomic_load(&m.records) && is_formed(&formed[0]) {   // the start island's land, as the forming test hashes it: the same seed gives the same figure however the world was come to
 		f := &formed[0]
@@ -253,10 +282,11 @@ screen_go :: proc(to: Before) {
 		for w, i in d.worlds do if w.seed == making.seed do d.focus = i
 	}
 	if to == .Door do d.focus = 0
-	if to == .Chart && was != .Chart && chart.pick == -1 && sync.atomic_load(&making.records) {
-		chart_go(-1)
-		chart_take(0)
+	if to != .Chart {   // the map's lens and its view's journey are the world's screen's own
+		sync.atomic_store(&chart.lens, -1)
+		chart.lenses, chart.going = false, false
 	}
+	if to == .Chart && was != .Chart && chart.pick == -1 do chart.homed = false   // the islands there are to choose from, and the start in the hand
 	if d.window != nil && !d.unseen {
 		if to == .New do _ = sdl.StartTextInput(d.window)
 		else do _ = sdl.StopTextInput(d.window)
@@ -295,6 +325,38 @@ world_gpu_drop :: proc() {
 		if f.lifted != nil do sdl.ReleaseGPUTexture(g.dev, f.lifted)
 		f.ribbon, f.falls, f.lifted = nil, nil, nil
 	}
+}
+
+// ---- the picture kept for the front door ------------------------------------------------------
+
+// The start island's picture is kept beside its world when it is painted, so that the front door of
+// the next run stands over land from its first frame, and not over an empty sea until the island is
+// formed and painted again. It is the island as this game last made it: the run's own picture takes
+// its place as soon as it is painted.
+door_path :: proc(s: u32) -> string { return fmt.tprintf("%s/door-%d.bin", worlds_dir(), s) }
+
+door_keep :: proc(pixels: []u8) {
+	if len(archipelago) == 0 do return
+	head := [2]f64{archipelago[0].size, f64(PICTURE_ISLE)}
+	out := make([dynamic]u8, context.temp_allocator)
+	append(&out, ..slice.to_bytes(head[:]))
+	append(&out, ..pixels)
+	_ = os.make_directory(worlds_dir())
+	_ = os.write_entire_file(door_path(world_seed), out[:])
+}
+
+// Put the kept picture of a world's start island on the GPU, where there is one. The frame's thread,
+// before the first frame.
+door_kept :: proc(g: ^Gpu, s: u32) {
+	d, c := &door, &chart
+	data, err := os.read_entire_file(door_path(s), context.temp_allocator)
+	if err != nil || len(data) != 16 + PICTURE_ISLE*PICTURE_ISLE*4 do return
+	head := (^[2]f64)(raw_data(data))^
+	if head[1] != PICTURE_ISLE || head[0] <= 0 do return
+	picture_put(g, 0, 2, data[16:])
+	d.kept_size, d.kept_pixels = head[0], slice.clone(data[16:])
+	sync.guard(&c.mutex)
+	c.door = true
 }
 
 // ---- what is kept between runs ----------------------------------------------------------------
@@ -384,7 +446,7 @@ key_set :: proc(row: int, key: sdl.Scancode) {
 Key_Said :: struct { act: Act, arg: int, says: string }
 KEYS_SAID := [?]Key_Said{
 	{.Escape, 0, "Close the topmost thing, then open the menu"}, {.Pause, 0, "Stop the world, or let it go on"},
-	{.Speed, 0, "The world at its own pace"}, {.Speed, 1, "Twice as fast"}, {.Speed, 2, "Four times as fast"},
+	{.Speed, 0, "The world at its own pace"}, {.Speed, 1, "Three times as fast"}, {.Speed, 2, "Six times as fast"},
 	{.Cut_Move, 1, "Raise the cut (with Shift, by eight)"}, {.Cut_Move, -1, "Lower the cut (with Shift, by eight)"},
 	{.Cut, 0, "Cut the world open, or show it whole"}, {.Follow, 0, "Hold the cut over the ground"},
 	{.Bare, 0, "Leaves off, or on"}, {.Lenses, 0, "The lenses"}, {.Walk, 0, "Walk here, or back up to the view from above"},
@@ -392,12 +454,13 @@ KEYS_SAID := [?]Key_Said{
 	{.Keep, -1, "Keep the dwarf in the hand in view"},
 	{.List, int(List.Dwarves), "The list of dwarves"}, {.List, int(List.Places), "The list of places"},
 	{.Order, int(Tool.Dig), "The tool to dig"}, {.Order, int(Tool.Fell), "The tool to fell"}, {.Order, int(Tool.Build), "The tool to build"},
-	{.Order, int(Tool.Send), "Send the party"}, {.Order, int(Tool.Remove), "Take an order back"},
-	{.Back, 0, "Back to the game"}, {.Leave, int(Leave.World), "Leave to the world"}, {.Leave, int(Leave.Door), "Leave to the front door"}, {.Quit, 0, "Quit"},
+	{.Order, int(Tool.Send), "Send the party"}, {.Order, int(Tool.Remove), "Take marks back, built blocks down, or a stockpile away"},
+	{.Order, int(Tool.Store), "The tool to mark a stockpile"}, {.More, 0, "The card of what is in the hand, or shut it"},
+	{.Back, 0, "Back to the game"}, {.Leave, int(Leave.World), "Leave to the world"}, {.Leave, int(Leave.Door), "Leave to the front door"}, {.Quit, 0, "Quit the game"},
 	{.Door_Move, -1, "The choice above"}, {.Door_Move, 1, "The choice below"}, {.Door_Go, 0, "Take the choice in focus"},
 	{.Door_Back, 0, "Back: put down, then to the front door"}, {.Draw, 0, "Draw a seed"}, {.Stop, 0, "Stop making the world, or go on"},
-	{.Found, 0, "Found a hold on the island in the hand"}, {.Roam, 0, "Walk the island in the hand"},
-	{.Chart_Home, 0, "The map over the start"}, {.Chart_Zoom, 1, "The map nearer"}, {.Chart_Zoom, -1, "The map further"},
+	{.Found, 0, "Land the party on the island in the hand"}, {.Roam, 0, "Walk the island in the hand"},
+	{.Chart_Home, 0, "The map over all the islands"}, {.Chart_Zoom, 1, "The map nearer"}, {.Chart_Zoom, -1, "The map further"}, {.Chart_Lenses, 0, "The map's lenses"},
 }
 VIEWS_SAID := [Views]string{.Above = "From above", .Afoot = "On foot", .Either = "From above and on foot", .Menu = "In the menu", .Door = "At the front door", .Chart = "On the world's map"}
 
@@ -442,7 +505,10 @@ door_act :: proc(act: Act, arg: int) {
 		switch {
 		case d.rebind >= 0: d.rebind = -1
 		case d.wish != .None: d.wish = .None
-		case d.screen == .Chart && c.pick != -1: chart_take(-1)
+		case d.screen == .Chart && c.lenses && c.lens < 0: c.lenses = false
+		case d.screen == .Chart && c.pick != -1:   // the island is put down, and the view goes back to all of them
+			chart_take(-1)
+			chart_go(-1)
 		case d.screen != .Door: screen_go(.Door)
 		}
 	case .Draw:
@@ -461,11 +527,15 @@ door_act :: proc(act: Act, arg: int) {
 		settings_keep()
 	case .Quit: d.running = false
 	case .Chart_Lens: sync.atomic_store(&c.lens, -1 if c.lens == arg else arg)
-	case .Isle_Depth: c.depth, c.scroll = Isle_Depth(arg), 0
-	case .Chart_Zoom: chart_zoom(math.pow(0.9, f64(arg)), {c.wide/2, c.high/2})
-	case .Chart_Home:
-		chart_go(-1)
-		chart_take(0)
+	case .Chart_Lenses:
+		c.lenses = !(c.lenses || c.lens >= 0)
+		if !c.lenses do sync.atomic_store(&c.lens, -1)
+	case .Isle_Depth: c.depth, c.scroll, c.row = Isle_Depth(arg), 0, -1
+	case .Isle_Row: c.row = -1 if c.row == arg else arg
+	case .Isle_Take: chart_take(arg, true)
+	case .Chart_Zoom: chart_zoom(math.pow(0.9, f64(arg)), {c.free.x + c.free.w/2, c.free.y + c.free.h/2})
+	case .Chart_Home: chart_go(-1)
+	case .Mass_Leave: sync.atomic_store(&mainland_state.leave, true)
 	case .Found, .Roam:
 		if d.screen == .Chart && c.pick >= 0 && world_enterable(c.pick) do d.wish, d.isle = .Hold if act == .Found else .Walk, c.pick
 	}
@@ -500,7 +570,10 @@ door_event :: proc(e: ^sdl.Event) {
 		at := [2]f32{e.motion.x, e.motion.y}*d.ratio
 		if d.on_map && e.motion.state & sdl.BUTTON_LMASK != {} {   // the map is dragged under the pointer
 			if abs(at.x - d.press.x) + abs(at.y - d.press.y) > 6*d.ratio do d.dragged = true
-			if d.dragged do c.at -= [2]f64{f64(e.motion.xrel), f64(e.motion.yrel)}*f64(d.ratio)*c.span/f64(max(c.wide, 1))
+			if d.dragged {
+				c.going = false
+				c.at -= [2]f64{f64(e.motion.xrel), f64(e.motion.yrel)}*f64(d.ratio)*c.span/f64(max(c.wide, 1))
+			}
 			return
 		}
 		if hot, _, _ := screen_over(&screen, at); hot >= 0 && screen.items[hot].act == .Door_Pick do d.focus = screen.items[hot].arg   // the pointer moves the focus as the arrows do
@@ -518,13 +591,14 @@ door_event :: proc(e: ^sdl.Event) {
 		if d.pressing {
 			if hot, _, _ := screen_over(&screen, at); hot >= 0 && screen.items[hot].act == d.pressed && screen.items[hot].arg == d.pressed_arg do door_act(d.pressed, d.pressed_arg)
 		} else if d.on_map && !d.dragged && sync.atomic_load(&making.records) {   // a click on the map takes what is under it in the hand
-			chart_take(chart_under(chart_from(at)))
+			chart_take(chart_under(chart_from(at)), true)
 		}
 		d.pressing, d.on_map, d.dragged = false, false, false
 	case .MOUSE_WHEEL:
 		_, solid, on := screen_over(&screen, d.pointer)
 		if d.screen == .Chart && !solid do chart_zoom(math.pow(0.88, f64(e.wheel.y)), d.pointer)
 		else if d.screen == .Chart && on >= 0 && screen.items[on].area == .Hand do c.scroll -= e.wheel.y*px(8)
+		else if d.screen == .Chart && on >= 0 && screen.items[on].area == .List do c.list_scroll -= e.wheel.y*px(13)
 		else if d.screen == .Settings || d.screen == .Worlds do d.scroll -= e.wheel.y*px(14)
 	}
 }
@@ -538,6 +612,7 @@ door_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64) {
 	clear(&ui.quads)
 	s.w, s.h, s.hot = wide, high, -1
 	d.now += dt
+	d.dt = dt
 	d.rest = d.rest + dt if pointer == d.pointer else 0
 	d.pointer = pointer
 	ui_bake(play.scale if play.scale != 0 else scale_for(high))
@@ -559,9 +634,9 @@ door_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64) {
 		x, y := pointer.x + px(4), pointer.y + px(5)
 		if s.hot >= 0 {
 			r := s.items[s.hot].rect
-			if r.x + r.w/2 > 0.6*s.w do x, y = r.x - px(2) - w, r.y
-			else if r.y > s.h/2 do x, y = r.x, r.y - px(2) - h
-			else do x, y = r.x + r.w + px(2), r.y
+			if r.y > 0.85*s.h do x, y = r.x, r.y - px(2) - h   // a part at the picture's foot: over it, clear of those beside it
+			else if r.x + r.w/2 > 0.5*s.w do x, y = r.x - px(2) - w, r.y
+			else do x, y = r.x + r.w + px(2), r.y   // beside it, toward the picture's middle, so that nothing of its own panel is covered
 		}
 		if x + w > s.w - px(1) do x = s.w - px(1) - w
 		if y + h > s.h - px(1) do y = s.h - px(1) - h
@@ -598,12 +673,20 @@ front_build :: proc() {
 	d, c, u, L := &door, &chart, &play, &LOOK
 	// The view: the start island a little right of the middle, the sea round it, drifting.
 	was_at, was_span := c.at, c.span
-	if sync.atomic_load(&making.records) {
-		is := archipelago[0]
-		c.span = 1.2*is.size   // its land fills the picture's height and runs in under the words
-		reach := 0.05*is.size
+	records := sync.atomic_load(&making.records)
+	if size := archipelago[0].size if records else d.kept_size; size > 0 {
+		origin := [2]f64{f64(archipelago[0].origin.x), f64(archipelago[0].origin.y)} if records else [2]f64{}
+		c.span = 1.2*size   // its land fills the picture's height and runs in under the words
+		reach := 0.05*size
 		pace := f64(px(L.drift))*c.span/f64(max(screen.w, 1))/reach   // so that the picture moves so many pixels a second at its fastest
-		c.at = {f64(is.origin.x) - 0.13*c.span + reach*math.sin(d.now*pace), f64(is.origin.y) + 0.02*c.span + 0.6*reach*math.sin(0.7*d.now*pace + 1)}
+		c.at = origin + {-0.13*c.span + reach*math.sin(d.now*pace), 0.02*c.span + 0.6*reach*math.sin(0.7*d.now*pace + 1)}
+		if !records && c.door {   // the world's records are not made yet: the start island as the last run painted it, where it will stand
+			c.wide, c.high = screen.w, screen.h
+			u.area = .Chart
+			at, side := chart_to(origin), f32(f64(c.wide)/c.span*size)
+			it := part(.Picture, {at.x - side/2, at.y - side/2, side, side}, id = "chart.isle")
+			it.uv, it.arg = {0, 0, 1, 1}, 1
+		}
 	}
 	chart_map(true)
 	c.at, c.span = was_at, was_span
@@ -644,10 +727,11 @@ choices_build :: proc(x, y: f32, made: Rect) {
 	d, L := &door, &LOOK
 	y := y
 	Row :: struct { name, note, id, tip: string }
-	entering := fmt.tprintf("seed %d", making.seed)
+	entering := fmt.tprintf("%s, seed %d", isle_name(0), making.seed) if sync.atomic_load(&making.records) else fmt.tprintf("seed %d", making.seed)
 	if !world_enterable(0) {
 		done, all, _ := making_progress(.Near)
-		entering = fmt.tprintf("seed %d: %s of its %s islands near the start are made", making.seed, number_words(done), number_words(all)) if all > 0 else fmt.tprintf("seed %d: its history is being read", making.seed)
+		entering = fmt.tprintf("seed %d: %s of its %s islands near the start %s made", making.seed, number_words(done) if done > 0 else "none", number_words(all), "is" if done == 1 else "are") if all > 0 else fmt.tprintf("seed %d: its history is being read", making.seed)
+		if all > 0 && !sync.atomic_load(&making.massed) do entering = fmt.tprintf("seed %d: its mainland is being formed, and its islands after", making.seed)
 		if d.wish != .None do entering = fmt.tprintf("%s. You go in when they are", entering)
 	}
 	worlds := worlds_count()
@@ -699,10 +783,8 @@ worlds_build :: proc(x, y: f32) {
 	if len(d.worlds) == 0 do cy += words(cx, cy, "No world is kept on this machine yet. Make a new one, and it is kept here.", .Body, L.ash, "worlds.none", inner)
 	row_of :: proc(w: Kept_World, inner: f32) -> (high: f32, kept: string) {
 		days := int(time.duration_hours(time.since(w.kept))/24)
-		kept = fmt.tprintf("Its history was kept %s.", "within the last day" if days < 1 else "a day ago" if days == 1 else fmt.tprintf("%d days ago", days)) if w.fresh else "An earlier build of the game made its history; this one runs it again when the world is opened."
-		high = px(LOOK.row_pad.y)*2 + line_of(.Name) + text_high(.Body, kept, inner)
-		for s in w.says do high += text_high(.Body, s, inner)
-		if len(w.says) == 0 do high += text_high(.Body, "Nothing else was written down of it: it was made before the game kept notes.", inner)
+		kept = ("within the last day" if days < 1 else "a day ago" if days == 1 else fmt.tprintf("%d days ago", days)) if w.fresh else "by an earlier build: it is run again when opened"
+		high = px(LOOK.row_pad.y)*2 + line_of(.Name) + px(1) + f32(max(len(w.says), 1) + 1)*line_of(.Small)
 		return
 	}
 	all := f32(0)
@@ -726,10 +808,18 @@ worlds_build :: proc(x, y: f32) {
 		words(cx, ry, name, .Name, id = "worlds.name")
 		if d.focus == i do key_part(door_key(.Door_Go), cx + text_wide(.Name, name) + px(L.key_gap), ry, line_of(.Name))
 		if note != "" do part(.Text, {cx, ry, inner, line_of(.Name)}, note, .Body, L.brass, {.Right}, id = "worlds.note")
-		ry += line_of(.Name)
-		for s in w.says do ry += words(cx, ry, s, .Body, {}, "worlds.says", inner)
-		if len(w.says) == 0 do ry += words(cx, ry, "Nothing else was written down of it: it was made before the game kept notes.", .Body, L.ash, "worlds.says", inner)
-		words(cx, ry, when_, .Body, L.ash, "worlds.when", inner)
+		ry += line_of(.Name) + px(1)
+		fact :: proc(cx, ry, inner: f32, thing, says: string) -> f32 {   // a thing and what is so of it, on one line
+			words(cx, ry, thing, .Small, LOOK.ash, "worlds.thing")
+			words(cx + px(26), ry, fit(.Small, says, inner - px(26)), .Small, {}, "worlds.says")
+			return line_of(.Small)
+		}
+		for s in w.says {
+			thing, _, says := strings.partition(s, ": ")
+			ry += fact(cx, ry, inner, thing, says) if says != "" else words(cx, ry, fit(.Small, s, inner), .Small, {}, "worlds.says")
+		}
+		if len(w.says) == 0 do ry += words(cx, ry, "Nothing was written down of it yet.", .Small, L.ash, "worlds.says")
+		fact(cx, ry, inner, "Kept", when_)
 		cy += high
 	}
 	u.clip = {}
@@ -770,13 +860,31 @@ new_build :: proc(x, y: f32) {
 		kept := false
 		for w in d.worlds do if w.seed == u32(s) && w.fresh do kept = true
 		if u32(s) == making.seed do says = "This is the world in hand. Its map is opened."
-		else if kept do says = "A world of this seed is kept on this machine: its history is read back, and its islands are formed again."
-		else {
-			says = "Its plates' history is run first, then the islands near its start are formed. The rest is made as you look or play."
-			if d.took[.Plates] > 0 do says = fmt.tprintf("%s On this machine the last history took %.0f s, and the islands near a start %.0f s.", says, math.ceil(d.took[.Plates] + d.took[.Region]), math.ceil(d.took[.Near]))
-		}
+		else if kept do says = "A world of this seed is kept on this machine. Its history is read back."
+		else do says = "It is made in these stages, and can be looked at from the second on."
 	}
-	cy += words(cx, cy, says, .Body, {}, "new.will", inner) + px(6)
+	cy += words(cx, cy, says, .Body, {}, "new.will", inner) + px(2)
+	if ok && u32(s) != making.seed {   // what making it will take: a stage a row, with how long it took on this machine where that is known
+		kept := false
+		for w in d.worlds do if w.seed == u32(s) && w.fresh do kept = true
+		for stage in Stage {
+			took := ""
+			switch stage {
+			case .Plates:   took = "read back" if kept else fmt.tprintf("about %.0f s", math.ceil(d.took[.Plates])) if d.took[.Plates] > 0 else "a few seconds"
+			case .Region:   took = "read back" if kept else fmt.tprintf("about %.0f s", math.ceil(d.took[.Region])) if d.took[.Region] > 0 else "under a second"
+			case .Mainland: took = "minutes, once, where it is small enough"
+			case .Near:     took = fmt.tprintf("about %.0f s", math.ceil(d.took[.Near])) if d.took[.Near] > 0 else "a few seconds"
+			case .Far:      took = "as you look or play"
+			}
+			part(.Rule, {cx, cy, inner, 1})
+			cy += px(1)
+			words(cx, cy, STAGES[stage].name, .Body, L.ash, "new.stage")
+			part(.Text, {cx, cy, inner, line_of(.Body)}, took, .Body, {}, {.Right}, id = "new.took")
+			cy += line_of(.Body) + px(1)
+		}
+		part(.Rule, {cx, cy, inner, 1})
+	}
+	cy += px(5)
 	make_wide := button_wide("Make it", door_key(.Door_Go), .Bold)
 	door_button({cx, cy, make_wide, px(L.button)}, "Make it" if !(ok && u32(s) == making.seed) else "Open it", .Door_Go, 0, "new.make", main = ok, faint = !ok)
 	door_button({cx + make_wide + px(L.gap), cy, button_wide("Back", door_key(.Door_Back)), px(L.button)}, "Back", .Door_Back, 0, "new.back")
@@ -854,10 +962,18 @@ making_build :: proc(right, foot, wide: f32, brief: bool) -> (at: Rect) {
 	cx, y := x + px(L.pad.x), px(L.pad.y)
 	stage := making_stage()
 	can := world_enterable(0)
+	if sync.atomic_load(&m.waiting) {   // ordered, and the world before it not yet put down: nothing of its stages is this world's
+		y += words(cx, y, fmt.tprintf("Making the world of seed %d", m.seed), .Title, id = "making.title")
+		y += words(cx, y, "The world before it is put down first: the island in hand there is finished.", .Body, L.ash, "making.state", inner) + px(L.pad.y)
+		screen.items[first].rect.h = y
+		for &it in screen.items[first:] do it.rect.y += foot - y
+		return screen.items[first].rect
+	}
 	y += words(cx, y, fmt.tprintf("%s the world of seed %d", "Forming" if m.kept else "Making", m.seed), .Title, id = "making.title")
 	state := "You can enter when the islands near the start are made."
+	if records && !sync.atomic_load(&m.massed) do state = "The islands are made once the mainland is. You can look at the world meanwhile."
 	switch {
-	case m.stopped && working: state = "Stopping. The plates' history runs to its end first." if !records else "Stopping. The island in hand is finished first."
+	case m.stopped && working: state = "Stopping. The plates' history runs to its end first." if !records else "Stopping once the mainland's stage is done. Leave it as known to stop now." if !sync.atomic_load(&m.massed) else "Stopping. The island in hand is finished first."
 	case m.stopped: state = "Stopped. Nothing more is made until you say."
 	case can: state = "It can be entered. The far islands are made as you look or play."
 	}
@@ -869,37 +985,60 @@ making_build :: proc(right, foot, wide: f32, brief: bool) -> (at: Rect) {
 	for s in Stage {
 		done, all, now := making_progress(s)
 		near_done, near_all, _ := making_progress(.Near)
-		made := s <= .Region && (stage > s || records) || s >= .Near && records && done >= all
-		running := !made && !m.stopped && (s <= .Region && working && stage == s || s == .Near && records || s == .Far && records && near_done >= near_all)
+		ms := &mainland_state
+		massed := sync.atomic_load(&m.massed)
+		landed := sync.atomic_load_explicit(&ms.ready, .Acquire)   // the mainland's coarse stage stands
+		made := s <= .Region && (stage > s || records) || s == .Mainland && records && massed || s >= .Near && records && massed && done >= all
+		running := !made && !m.stopped && (s <= .Region && working && stage == s || s == .Mainland && records && stage == .Mainland || s == .Near && records && massed || s == .Far && records && massed && near_done >= near_all)
 		if brief && !running do continue   // in brief: the stage running alone
 		row := STAGES[s]
 		said := ""
 		switch {
 		case made && s <= .Region: said = "kept from an earlier run" if m.kept else fmt.tprintf("made in %.1f s", m.took[s])
+		case made && s == .Mainland: said = ("kept from an earlier run" if ms.kept else fmt.tprintf("made in %s", span_words(m.took[s]))) if landed else "left as the history has it"
 		case made && s == .Near:   said = fmt.tprintf("made in %.1f s", m.took[s]) if m.took[s] > 0 else "made"
 		case made:                 said = "made" if all > 0 else "none"
+		case running && s == .Mainland: said = fmt.tprintf("%d of %d steps", done, all) if all > 0 else ""
 		case running:              said = fmt.tprintf("%d of %d%s", done, all, " million years" if s <= .Region else "")
 		case s == .Far:            said = "made as you look or play"
 		case all > 0 && done > 0:  said = fmt.tprintf("%d of %d", done, all)
 		}
 		part(.Rule, {cx, y, inner, 1})
 		y += px(1.5)
-		if made do part(.Sign, {cx, y + math.round((line_of(.Body) - px(L.sign))/2), px(L.sign), px(L.sign)}).sign = .Well
+		if made && !(s == .Mainland && !landed) do part(.Sign, {cx, y + math.round((line_of(.Body) - px(L.sign))/2), px(L.sign), px(L.sign)}).sign = .Well
+		if made && s == .Mainland && !landed {   // why it was left, beside the pointer
+			part(.Fill, {cx, y, inner, line_of(.Body)}, colour = {}, state = {.Solid}, id = "making.why", tip = fmt.tprintf("The mainland is not formed as land: %s.", mainland_why()))
+		}
 		if running do part(.Sign, {cx, y + math.round((line_of(.Body) - px(L.sign))/2), px(L.sign), px(L.sign)}).sign = .Caution
 		words(cx + px(L.sign) + px(2), y, row.name, .Body, L.brass if running else L.chalk if made else L.ash, "making.stage")
-		part(.Text, {cx, y, inner, line_of(.Body)}, said, .Body, L.brass if running else L.ash, {.Right}, id = "making.said")
-		y += line_of(.Body) + px(1.5)
+		if px(L.sign) + px(2) + text_wide(.Body, row.name) + px(3) + text_wide(.Body, said) > inner {   // no room beside its name: under it
+			y += line_of(.Body)
+			words(cx + px(L.sign) + px(2), y - px(1), said, .Small, L.brass if running else L.ash, "making.said")
+			y += line_of(.Small) + px(0.5)
+		} else {
+			part(.Text, {cx, y, inner, line_of(.Body)}, said, .Body, L.brass if running else L.ash, {.Right}, id = "making.said")
+			y += line_of(.Body) + px(1.5)
+		}
 		if !running do continue
 		part(.Fill, {cx, y, inner, px(L.meter)}, colour = L.pit, id = "making.track")
 		if all > 0 do part(.Fill, {cx, y, math.round(inner*f32(done)/f32(all)), px(L.meter)}, colour = L.brass, id = "making.meter")
 		y += px(L.meter) + px(2)
 		what := row.makes
+		if s == .Mainland {   // long the first time: how long, and the way to leave it
+			left := ms.pass_seconds*f64(all - done)/f64(max(all, 1))
+			what = fmt.tprintf("%s About %s more on this machine.", what, span_words(left))
+		}
 		if len(now) > 0 {
 			b := strings.builder_make(context.temp_allocator)
-			for i, k in now do fmt.sbprintf(&b, "%s%s", "" if k == 0 else ", ", "the start" if i == 0 else kind_said(archipelago[i].kind).one)
+			for i, k in now do fmt.sbprintf(&b, "%s%s", "" if k == 0 else ", ", isle_name(i))
 			what = fmt.tprintf("In hand: %s.", strings.to_string(b))
 		}
 		if !brief do y += words(cx, y, what, .Small, L.ash, "making.makes", inner) + px(2)
+		if s == .Mainland && !brief {
+			leave := "Leave it as known"
+			door_button({cx, y, button_wide(leave, ""), px(L.button)}, leave, .Mass_Leave, 0, "making.leave", "Stop forming the mainland: it stays as the plates' history has it for now, and the islands are made. It is formed the next time this world is opened.", faint = sync.atomic_load(&ms.leave))
+			y += px(L.button) + px(3)
+		}
 	}
 	part(.Rule, {cx, y, inner, 1})
 	y += px(3)
@@ -926,11 +1065,12 @@ door_posed :: proc(opt: ^Options) -> bool {
 		if opt.focus > 0 do d.focus = opt.focus - 1
 	}
 	if records && opt.has_door && (opt.has_pick || opt.lens != "" || opt.tab != "" || opt.has_over) && c.wide > 0 {   // set once the records are there to set it on
-		if opt.has_pick do chart_take(opt.pick if opt.pick < len(archipelago) else -1)
+		if opt.has_pick do chart_take(opt.pick if opt.pick < len(archipelago) else -1, true)
 		for l, i in WORLD_LENSES do if strings.equal_fold(l.name, opt.lens) || FIELDS[l.field].name == opt.lens do sync.atomic_store(&c.lens, i)
 		for name, t in ISLE_DEPTHS do if strings.equal_fold(name, opt.tab) do c.depth = t
 		if opt.has_over do c.at = opt.over
 		if opt.span != 160 do c.span = clamp(opt.span, SPAN_WORLD[0], SPAN_WORLD[1])
+		if opt.has_over || opt.span != 160 do c.going = false
 	}
 	name, _, count := strings.partition(opt.at_when, ":")
 	n := 2
@@ -953,6 +1093,10 @@ door_posed :: proc(opt: ^Options) -> bool {
 		done, _, _ := making_progress(.Near)
 		if stage == .Near && done >= n && c.known do return true
 		return late("the islands near the start") if stage > .Near && painted else false
+	case "mainland":   // while its coarse stage runs, a few steps in
+		done, _, _ := making_progress(.Mainland)
+		if stage == .Mainland && done >= 2 && c.known do return true
+		return late("the mainland") if stage > .Mainland && painted else false
 	case "all": return world_whole() && painted
 	}
 	return world_enterable(0) && painted

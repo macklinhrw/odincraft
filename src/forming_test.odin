@@ -33,6 +33,7 @@ world_make :: proc() {
 	known_make()   // the plates' history, which places the islands near the start
 	archipelago_make(false)
 	arrivals_make()
+	names_make()
 	formed = make([]Formed, len(archipelago))
 	for &f, i in formed do f.island = archipelago[i]
 	home = &formed[0]

@@ -90,7 +90,9 @@ Look :: struct {
 	seas:               [2]Colour, // the world's map: the sea where it is shallow and where it is deepest
 	unformed:           Colour,   // and what its land that is known and not yet formed is mixed toward
 	isle:               f32,      // the least an island's mark is across on the map
-	chart_wide:         f32,      // the lenses of the world's map
+	isles_wide:         f32,      // the islands' list, and the lenses under it
+	isle_row:           f32,      // a row of it
+	thumb:              f32,      // an island's picture in its row
 	drift:              f32,      // modules a second the front door's picture of the world moves
 }
 
@@ -130,7 +132,7 @@ LOOK := Look {
 	menu_wide = 150,
 	shade = {0x10, 0x15, 0x1a, 236}, shade_from = 0.22,
 	door_left = 40, door_top = 62, door_wide = 190, choice = 16, choice_pad = 6,
-	making_wide = 190, meter = 1, isle = 5, chart_wide = 78, drift = 1.5,
+	making_wide = 190, meter = 1, isle = 5, isles_wide = 112, isle_row = 16, thumb = 12, drift = 1.5,
 	seas = {{0x3d, 0x74, 0x9e, 255}, {0x10, 0x25, 0x4c, 255}}, unformed = {0x7b, 0x86, 0x8c, 255},
 }
 

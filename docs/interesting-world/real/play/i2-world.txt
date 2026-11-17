@@ -1,0 +1,104 @@
+# The world's screen, played from the player's seat (step I-2; open-decisions.md, 2026-11-16): the
+# islands there are to choose from, one gone to and read, two compared, the mainland, a lens, and the
+# two doors into play.
+#   build/odincraft --door --play=docs/interesting-world/real/play/i2-world.txt
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+until ready 120
+print 1. Worlds, and the world in hand opened: it opens framed on its islands, the start in the hand
+part Worlds
+key Enter
+shot out/play/i2-20-world.png
+say
+
+print 2. the pointer rests on an island: its name and its kind
+move 1462 618
+wait 0.8
+snap out/play/i2-21-world-hover.png
+under
+
+print 3. the wheel brings the map nearer about the pointer, and a drag moves it
+wheel 4
+wait 0.4
+shot out/play/i2-22-world-wheel.png
+drag 1500 700 1200 600
+shot out/play/i2-23-world-drag.png
+key Home
+wait 0.6
+
+print 4. a click on an island takes it in the hand and goes to it: its land can be read, and its places are named
+click 1462 618
+wait 0.6
+shot out/play/i2-24-island.png
+say
+
+print 5. each depth of its card: rows, a thing and a word or a figure
+part Water
+shot out/play/i2-25-island-water.png
+part Rock
+shot out/play/i2-26-island-rock.png
+part Climate
+shot out/play/i2-27-island-climate.png
+part Life
+shot out/play/i2-28-island-life.png
+say
+part Places
+shot out/play/i2-29-island-places.png
+
+print 6. the why: beside the pointer on a row, and under the row once it is clicked
+part Land
+move 240 1205
+wait 0.8
+snap out/play/i2-30-row-tip.png
+part Landing
+shot out/play/i2-31-row-why.png
+part Landing
+
+print 7. two islands compared down the list's columns, and another taken by its row
+part White Cay
+wait 0.6
+shot out/play/i2-32-list-row.png
+say
+
+print 8. the mainland: how it stands, and why
+part isles.mainland
+wait 0.6
+shot out/play/i2-33-mainland.png
+say
+part As land
+shot out/play/i2-34-mainland-why.png
+
+print 9. the lenses, behind their button: one on, and what the pointer says under it
+key L
+shot out/play/i2-35-lenses.png
+part Depth of the sea
+move 900 500
+wait 0.8
+shot out/play/i2-36-lens.png
+under
+key L
+
+print 10. Escape puts the island down and shows all of them again
+key Esc
+wait 0.6
+shot out/play/i2-37-put-down.png
+
+print 11. the first door: the party landed on an island that is not the start
+part North Back
+wait 0.6
+part Land the party here
+wait 3
+shot out/play/i2-38-landed.png
+say
+key Esc
+part Leave to the world
+wait 0.5
+shot out/play/i2-39-back-to-world.png
+
+print 12. the second door: the same island walked, with no party
+part Walk it
+wait 2
+shot out/play/i2-40-walked.png
+key Esc
+part Leave to the front door
+shot out/play/i2-41-door.png

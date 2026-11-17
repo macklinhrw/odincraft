@@ -45,7 +45,8 @@ Act :: enum u8 {
 	Said, Wrong,                                         // a message or an alert, which leads to its place
 	Leave,                                               // out of play, to the world's screen or the front door (door.odin)
 	Door_Move, Door_Pick, Door_Go, Door_Back, Draw, Stop, Rebind, Keys_Back,   // before play: the front door and its screens (door.odin)
-	Chart_Lens, Chart_Zoom, Chart_Home, Isle_Depth, Found, Roam,               // the world's screen (chart.odin)
+	Chart_Lens, Chart_Lenses, Chart_Zoom, Chart_Home, Isle_Depth, Isle_Row, Isle_Take, Found, Roam,   // the world's screen (chart.odin)
+	Mass_Leave,                                                                // a world being made: the mainland's long stage left (door.odin)
 }
 
 // A key: which act it does and with what, in which view, and whether holding it goes on doing it.
@@ -88,7 +89,7 @@ BINDS := [?]Bind{
 	{.RETURN, "Enter", .Found, 0, 0, .Chart, false}, {.W, "W", .Roam, 0, 0, .Chart, false},
 	{.ESCAPE, "Esc", .Door_Back, 0, 0, .Chart, false}, {.HOME, "Home", .Chart_Home, 0, 0, .Chart, false},
 	{.EQUALS, "=", .Chart_Zoom, 1, 1, .Chart, true}, {.MINUS, "-", .Chart_Zoom, -1, -1, .Chart, true},
-	{.S, "S", .Stop, 0, 0, .Chart, false},
+	{.S, "S", .Stop, 0, 0, .Chart, false}, {.L, "L", .Chart_Lenses, 0, 0, .Chart, false},
 }
 
 // The key written on the button of an act.
@@ -488,7 +489,7 @@ play_act :: proc(act: Act, arg: int) {
 	case .Leave:   // out of play: the frame loop ends, and the way through goes on from there (main.odin)
 		leaving = Leave(arg)
 		u.running^ = false
-	case .Door_Move, .Door_Pick, .Door_Go, .Door_Back, .Draw, .Stop, .Rebind, .Keys_Back, .Chart_Lens, .Chart_Zoom, .Chart_Home, .Isle_Depth, .Found, .Roam:   // before play (door_act)
+	case .Door_Move, .Door_Pick, .Door_Go, .Door_Back, .Draw, .Stop, .Rebind, .Keys_Back, .Chart_Lens, .Chart_Lenses, .Chart_Zoom, .Chart_Home, .Isle_Depth, .Isle_Row, .Isle_Take, .Found, .Roam, .Mass_Leave:   // before play (door_act)
 	case .Scale:
 		u.scale = arg
 		play_keep()
@@ -789,6 +790,10 @@ place_build :: proc() {
 	u.area = .Place
 	title := place_title(u.p.pos if u.afoot^ else u.a.at)
 	date := date_words(u.day)
+	at := u.p.pos if u.afoot^ else u.a.at
+	if f := island_near(at.x, at.z); f != nil && off_island(f, at.x, at.z) <= 1500 {   // the island it is on, by its name (making.odin), before the day
+		if name := isle_name(f.island.id) if f.island.id < len(archipelago) else "The mainland"; name != "" do date = fmt.tprintf("%s, %s", name, date)
+	}
 	hour := fmt.tprintf("%02d:%02d", int(u.hour), int(u.hour*60)%60)
 	first := button_wide("Running at 00:00", key_for(.Pause))
 	names := [3]string{"Slow", "Fast", "Fastest"}

@@ -5,6 +5,7 @@ import "core:math"
 import "core:os"
 import "core:strconv"
 import "core:strings"
+import "core:sync"
 import sdl "vendor:sdl3"
 
 // The play script (--play=file): the game played with no window by a file of what a player's hand
@@ -19,7 +20,9 @@ import sdl "vendor:sdl3"
 //   press [right|middle]    a button goes down where the pointer is; release lets it go
 //   click x y [right]       move, press, release
 //   drag x y x y [right]    press at the first, move to the second over a quarter of a second, release
-//   key NAME [shift]        a key goes down: a letter, a digit, Space, Tab, Esc, Enter, F1 to F12, Up, Down, Left, Right, PageUp, PageDown
+//   key NAME [shift]        a key goes down: a letter, a digit, Space, Tab, Esc, Enter, F1 to F12, Up, Down, Left, Right, PageUp, PageDown,
+//                           Home, Backspace, = and -
+//   type words              the keyboard types them, as into a field
 //   wheel n                 the wheel turns n notches
 //   part words              click the middle of the part of the screen that says those words, or has that name (--say prints
 //                           both); words ending in * are the beginning of what it says
@@ -33,12 +36,21 @@ import sdl "vendor:sdl3"
 //   until done [seconds]    wait until nothing is marked and no dwarf has work in hand or carries anything, or so many seconds of
 //                           the dwarves' time; say how long it took since the timer, in their time and the player's
 //   shot file.png           wait for the world to be drawn whole, and save the picture
+//   snap file.png           save the picture as it stands this frame, waiting for nothing
+// Before play (door.odin), where a run begun with --door starts, the same lines go through the event
+// the front door and the world's screen read; `wait` is then real seconds, since a world is made in
+// real time, and besides:
+//   until ready [seconds]   wait until the world in hand can be entered and its pictures are painted, and say how long it took
+//   until made [seconds]    wait until every island of it is formed
+//   until mainland          wait until the mainland's long stage is running, a few steps in
+//   view over=x,z span=m    put the world's map somewhere
+//   under                   print what the pointer is on, on the map
 //   say                     print what the screen says, area by area
 //   under                   print the block under the pointer
 //   print words             print a line
 // A line beginning with # is a note.
 
-Step_Kind :: enum u8 { Frames, Loaded, Part, Move, Press, Release, Key, Wheel, View, Foot, Wait, Run, Timer, Until, Shot, Say, Under, Print }
+Step_Kind :: enum u8 { Frames, Loaded, Part, Move, Press, Release, Key, Wheel, View, Foot, Wait, Run, Timer, Until, Shot, Say, Under, Print, Type }
 Step :: struct {
 	kind:   Step_Kind,
 	v:      [5]f64,
@@ -71,7 +83,7 @@ shift_held :: proc() -> bool { return script.shift if script.on else sdl.GetModS
 script_key :: proc(name: string) -> (code: sdl.Scancode, ok: bool) {
 	NAMED := [?]struct { name: string, code: sdl.Scancode }{
 		{"space", .SPACE}, {"tab", .TAB}, {"esc", .ESCAPE}, {"enter", .RETURN}, {"up", .UP}, {"down", .DOWN}, {"left", .LEFT}, {"right", .RIGHT},
-		{"pageup", .PAGEUP}, {"pagedown", .PAGEDOWN}, {"backspace", .BACKSPACE}, {"0", ._0},
+		{"pageup", .PAGEUP}, {"pagedown", .PAGEDOWN}, {"backspace", .BACKSPACE}, {"0", ._0}, {"home", .HOME}, {"=", .EQUALS}, {"-", .MINUS},
 	}
 	n := strings.to_lower(name, context.temp_allocator)
 	for k in NAMED do if k.name == n do return k.code, true
@@ -166,13 +178,19 @@ script_read :: proc(path: string) {
 			append(&s.steps, Step{kind = .Wait if words[0] == "wait" else .Run, v = v})
 		case "timer": append(&s.steps, Step{kind = .Timer})
 		case "until":
-			ok = len(rest) >= 1 && rest[0] == "done"
+			ok = len(rest) >= 1 && (rest[0] == "done" || rest[0] == "ready" || rest[0] == "made" || rest[0] == "mainland")
 			v[0] = 3600
 			if len(rest) > 1 do ok &&= figures(rest[1:], v[:1])
-			append(&s.steps, Step{kind = .Until, v = v})
+			if ok do append(&s.steps, Step{kind = .Until, v = v, text = strings.clone(rest[0])})
 		case "shot":
 			ok = len(rest) == 1
 			if ok do append(&s.steps, Step{kind = .Frames, n = 3}, Step{kind = .Loaded}, Step{kind = .Shot, text = strings.clone(rest[0])})
+		case "snap":
+			ok = len(rest) == 1
+			if ok do append(&s.steps, Step{kind = .Shot, text = strings.clone(rest[0])})
+		case "type":
+			ok = len(rest) > 0
+			append(&s.steps, Step{kind = .Type, text = strings.clone(strings.join(rest, " ", context.temp_allocator))}, Step{kind = .Frames, n = 2})
 		case "say":   append(&s.steps, Step{kind = .Say})
 		case "under": append(&s.steps, Step{kind = .Under})
 		case "print": append(&s.steps, Step{kind = .Print, text = strings.clone(strings.join(rest, " ", context.temp_allocator))})
@@ -241,7 +259,18 @@ script_frame :: proc(events: ^[dynamic]sdl.Event, a: ^Above, p: ^Player, afoot: 
 			append(events, e)
 			s.at += 1
 			return
+		case .Type:
+			e.type = .TEXT_INPUT
+			e.text.text = strings.clone_to_cstring(step.text, context.temp_allocator)
+			append(events, e)
+			s.at += 1
+			return
 		case .View:
+			if a == nil {   // before play: the world's map
+				if 0 in step.set do chart.at, chart.going = {step.v[0], step.v[1]}, false
+				if 1 in step.set do chart.span, chart.going = clamp(step.v[2], SPAN_WORLD[0], SPAN_WORLD[1]), false
+				break
+			}
 			afoot^ = false
 			if 0 in step.set do a.at, a.settled = {step.v[0], 0, step.v[1]}, false
 			if 1 in step.set do a.span = clamp(step.v[2], SPAN_MIN, SPAN_MAX)
@@ -257,6 +286,10 @@ script_frame :: proc(events: ^[dynamic]sdl.Event, a: ^Above, p: ^Player, afoot: 
 			if 5 in step.set do a.bare = true
 			if 6 in step.set do a.bare = false
 		case .Foot:
+			if a == nil {
+				fmt.println("script: there is nowhere to stand before play")
+				break
+			}
 			afoot^ = true
 			p.pos = {step.v[0], f64(height_in_world(step.v[0], step.v[2], 1)) + step.v[1], step.v[2]}
 			p.yaw, p.pitch, p.fly, p.vel = f32(math.to_radians(step.v[3])), f32(math.to_radians(step.v[4])), true, 0
@@ -265,6 +298,10 @@ script_frame :: proc(events: ^[dynamic]sdl.Event, a: ^Above, p: ^Player, afoot: 
 			if seconds - s.began < step.v[0] do return
 			s.began = -1
 		case .Run:
+			if a == nil {
+				fmt.println("script: the dwarves' time does not run before play")
+				break
+			}
 			s.hurry = true
 			if s.began < 0 do s.began = watch.clock
 			if watch.clock - s.began < step.v[0] do return
@@ -272,6 +309,26 @@ script_frame :: proc(events: ^[dynamic]sdl.Event, a: ^Above, p: ^Player, afoot: 
 		case .Timer:
 			s.timer = watch.clock
 		case .Until:
+			if step.text != "done" {   // the world in hand, as it is made in real time (making.odin)
+				if s.began < 0 do s.began = seconds
+				there := false
+				switch step.text {
+				case "ready": there = world_enterable(0) && chart_painted()
+				case "made":  there = world_whole() && chart_painted()
+				case "mainland":
+					done, _, _ := making_progress(.Mainland)
+					there = making_stage() == .Mainland && done >= 2 || sync.atomic_load(&making.massed)
+				}
+				if !there && seconds - s.began < step.v[0] do return
+				if there do fmt.printfln("script: the world of seed %d %s %.1f s after the script asked", making.seed, "can be entered" if step.text == "ready" else "is whole" if step.text == "made" else "has come to its mainland", seconds - s.began)
+				else do fmt.printfln("script: the world of seed %d had not come to \"%s\" after %.0f s", making.seed, step.text, seconds - s.began)
+				s.began = -1
+				break
+			}
+			if a == nil {
+				fmt.println("script: no dwarves are at work before play")
+				break
+			}
 			s.hurry = true
 			if s.began < 0 do s.began = watch.clock
 			busy := watch.seen.marks > 0
@@ -314,7 +371,9 @@ script_parts :: proc() {
 	s := &script
 	if !s.on || s.at >= len(s.steps) || s.steps[s.at].kind != .Part do return
 	want := s.steps[s.at].text
-	for it in screen.items do if (it.id == want || it.text == want || strings.has_suffix(want, "*") && strings.has_prefix(it.text, want[:len(want) - 1])) && it.act != .None {
+	// A part that does something first; then any that says the words, since a hand clicks on words and
+	// the click lands on whatever lies under them (a row of a list, a row of a card).
+	for pass in 0..<2 do for it in screen.items do if (it.id == want || it.text == want || strings.has_suffix(want, "*") && strings.has_prefix(it.text, want[:len(want) - 1])) && (it.act != .None || pass == 1) {
 		c := [2]f64{f64(it.rect.x + it.rect.w/2), f64(it.rect.y + it.rect.h/2)}
 		s.steps[s.at] = Step{kind = .Move, v = {c.x, c.y, 0, 0, 0}}
 		inject_at(&s.steps, s.at + 1, Step{kind = .Frames, n = 2}, Step{kind = .Press, button = sdl.BUTTON_LEFT}, Step{kind = .Frames, n = 2}, Step{kind = .Release, button = sdl.BUTTON_LEFT}, Step{kind = .Frames, n = 2})
