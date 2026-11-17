@@ -413,6 +413,10 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Seed 1's coast is judged against a real low drowned coast before the history is changed**: the three coasts measured (Bōsō, Kii, Muroto) rise fast on a forearc and are the wrong kind to hold an old low margin to. The second part measures a ria coast on an old margin first.
 - *Asked of the owner:* **look at the continent** (`interesting-world/real/continent-seed1-map.jpg`, `-from-summit.jpg`, `-coast.jpg`; in the game, `--seed=1 --site=x,z`). Formed land ends in a straight grey side where the next piece is not formed; the far rings drawn from the coarse stage are to take that away.
 
+**2026-11-16, Claude's call** (a message that fades)
+
+- **A message's shadow fades with its words.** The shadow under words over the world was drawn at full strength whatever the words' own, so a line in its last two seconds, and the older lines at their 72%, turned black: the "older lines hard to read" noted on merging the goods. Seen in E-1's played pictures; checked in a picture of a line half faded.
+
 **2026-11-16, Claude's call** (merging E-1, expedition planning, `t3/expedition-planning-screen`)
 
 - **Merged**, after Claude played its two scripts on the merged tree (`e1-plan.txt`, `e1-danger.txt`: 25 pictures) and looked at planning as it opens, a bad shore chosen with its cautions over Set out, the party and one dwarf drawn again, and the drawn party come ashore at the chosen place. `GOLDEN` unchanged; the dwarves' log 698fc3b965110ddf three ways with nothing planned. No benches run again.
