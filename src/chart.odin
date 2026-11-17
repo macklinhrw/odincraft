@@ -74,6 +74,7 @@ Isle_Card :: struct {
 	of:     int,    // the island it is of, a large land's pick (MAINLAND and below), or -1 for none
 	formed: bool,   // as it was when the card was written: an island says more once formed
 	pieces: int,    // the large land's pieces formed when it was written
+	stands: int,    // and how the large land stood (land_stands)
 	title, sub: string,
 	rows:   [Isle_Depth][dynamic]Card_Row,
 }
@@ -129,7 +130,7 @@ chart_painter_begin :: proc() {
 	sync.lock(&c.mutex)
 	// The large lands' tiles that hold land, where a coarse stage stands: each a layer after the islands'.
 	clear(&c.tiles)
-	if sync.atomic_load_explicit(&lands_state.regions, .Acquire) do for &m, i in lands do if m.ready {
+	for &m, i in lands do if mass_listed(&m) {
 		st, tiled := &m.store, land_tiled(&m)
 		land := make([]bool, tiled*tiled, context.temp_allocator)
 		for slot, sq in st.slot do if slot >= 0 {   // a square the coarse stage kept: land, or sea beside it
@@ -373,7 +374,7 @@ mass_paint :: proc(tile: [3]int) -> []u8 {
 	st := &m.store
 	pixels := make([]u8, N*N*4)
 	per := f64(st.n)/f64(land_tiled(m))/N   // cells of the lattice to a pixel
-	at :: proc(st: ^Store, x, y: f64) -> f32 { return store_z(st, clamp(int(x), 0, st.n - 1), clamp(int(y), 0, st.n - 1)) - st.rise }
+	at :: proc(st: ^Store, x, y: f64) -> f32 { return store_now(st, clamp(int(x), 0, st.n - 1), clamp(int(y), 0, st.n - 1)) }
 	for py in 0..<N do for px in 0..<N {
 		x, y := (f64(tile.x*N + px) + 0.5)*per, (f64(tile.y*N + py) + 0.5)*per
 		h := at(st, x, y)
@@ -537,16 +538,54 @@ land_why :: proc(i: int) -> string {
 	case making.continent == 0: return "it was asked to be left as the plates' history has it (--continent=0)"
 	case !sync.atomic_load(&making.massed): return "its stage has not been come to"
 	}
-	return fmt.tprintf("its nearest shore lies %.0f km from the start, and a world's large lands are formed when it is made only within %d km of the start. It is formed when a view or a site comes within %d km of it: the whole of it on cells 64 m across, about %s here, once, and kept",
-		m.near/1000, COARSE_REACH/1000, COARSE_REACH/1000, span_words(mass_seconds(m)))
+	return fmt.tprintf("its nearest shore lies %.0f km from the start, and a world's large lands are formed when it is made only within %d km of the start. It is formed from this card, or in play when the view nears it: the whole of it on cells 64 m across, once, and kept",
+		m.near/1000, COARSE_REACH/1000)
+}
+
+// Seconds a land mass's coarse stage takes to form on this kind of machine, about: half a minute for
+// 45,000 km² and six minutes for 317,000 km² under some load (continents-forming.md). For the screen
+// that says what forming one would cost.
+mass_seconds :: proc(m: ^Landmass) -> f64 { return 5 + 0.001*f64(m.area) }
+
+// GB a land mass's coarse stage holds at the most while it is formed, about: 13.5 for 317,000 km²
+// (continents-forming.md). For the screen that says what forming one costs.
+mass_memory :: proc(m: ^Landmass) -> f64 { return 1.5 + 0.038*f64(m.area)/1000 }
+
+// How a large land stands: known and not formed, asked for and waiting its turn, being formed, or formed.
+Land_Stands :: enum { Known, Asked, Forming, Formed }
+land_stands :: proc(i: int) -> Land_Stands {
+	if i < 0 || i >= len(lands) do return .Known
+	m := &lands[i]
+	if mass_listed(m) do return .Formed
+	if sync.atomic_load(&lands_state.forming) == m.mass do return .Forming
+	return .Asked if sync.atomic_load(&m.asked) else .Known
+}
+
+// What forming a large land takes here, in a few words: how long, and the memory it holds meanwhile.
+land_costs :: proc(i: int) -> string {
+	m := &lands[i]
+	return fmt.tprintf("about %s, %.0f GB", span_words(mass_seconds(m)), mass_memory(m))
+}
+
+// How far the forming of the land being formed has come, and about how long is left, in words.
+land_progress :: proc() -> string {
+	done, all, _ := making_progress(.Mainland)
+	if all == 0 do return "begun"
+	left := lands_state.expect*f64(all - done)/f64(max(all, 1))   // by what such land takes here, until it has run long enough to say by its own pace
+	if done >= 8 do left = time.duration_seconds(time.since(lands_state.began))*f64(all - done)/f64(done)
+	return fmt.tprintf("%d of %d steps, about %s more", done, all, span_words(left))
 }
 
 // How a large land stands, in a few words.
 land_says :: proc(i: int) -> string {
 	if i < 0 || i >= len(lands) do return "none in the known world"
 	m := &lands[i]
-	if sync.atomic_load_explicit(&lands_state.regions, .Acquire) && sync.atomic_load(&m.ready) do return "formed on 64 m cells" if len(m.cut.size) > 0 else "under the sea"
-	if sync.atomic_load(&lands_state.forming) == m.mass do return "being formed"
+	switch land_stands(i) {
+	case .Formed:  return "formed on 64 m cells" if len(m.cut.size) > 0 else "under the sea"
+	case .Forming: return "being formed"
+	case .Asked:   return "waiting to be formed"
+	case .Known:
+	}
 	return "known, not formed"
 }
 
@@ -568,7 +607,7 @@ chart_map :: proc(plain: bool) {
 	}
 	lensed := c.lens >= 0 && c.lens_on == c.lens
 	isles := len(archipelago)
-	if sync.atomic_load_explicit(&lands_state.regions, .Acquire) do for tile, t in c.tiles do if isles + t < len(c.shown) && c.shown[isles + t] && !lensed {
+	for tile, t in c.tiles do if isles + t < len(c.shown) && c.shown[isles + t] && !lensed && mass_listed(&lands[tile.z]) {
 		m := &lands[tile.z]
 		side := m.side/f64(land_tiled(m))
 		corner := [2]f64{f64(m.origin.x), f64(m.origin.y)} - m.side/2 + {f64(tile.x), f64(tile.y)}*side
@@ -682,15 +721,16 @@ card_write :: proc() {
 	now := c.pick >= 0 && is_formed(&formed[c.pick])
 	pieces := 0
 	li := land_of(c.pick)
-	landed := li >= 0 && sync.atomic_load_explicit(&lands_state.regions, .Acquire) && sync.atomic_load(&lands[li].ready)
+	landed := li >= 0 && mass_listed(&lands[li])
 	if landed do for &f in formed[lands[li].first:][:len(lands[li].cut.size)] do pieces += int(is_formed(&f))
-	if c.pick == k.of && now == k.formed && pieces == k.pieces && !(c.pick <= MAINLAND && making_stage() == .Mainland) do return
+	stands := int(land_stands(li))
+	if c.pick == k.of && now == k.formed && pieces == k.pieces && stands == k.stands && !(c.pick <= MAINLAND && (making_stage() == .Mainland || stands == int(Land_Stands.Forming))) do return
 	delete(k.title); delete(k.sub)
 	for &rows in k.rows {
 		for r in rows { delete(r.thing); delete(r.says); delete(r.why) }
 		delete(rows)
 	}
-	k^ = {of = c.pick, formed = now, pieces = pieces}
+	k^ = {of = c.pick, formed = now, pieces = pieces, stands = stands}
 	if c.pick == -1 do return
 	byte :: proc(v: [3]f32) -> Colour { return {u8(clamp(v.r, 0, 1)*255), u8(clamp(v.g, 0, 1)*255), u8(clamp(v.b, 0, 1)*255), 255} }
 	o_start := world_frame.origin
@@ -707,12 +747,19 @@ card_write :: proc() {
 		case landed:
 			m := &lands[li]
 			card_row(k, .Land, "As land", "formed on 64 m cells", fmt.tprintf("Its coarse stage is run: the whole of it through the history's 64 m steps, %s. That gives its ranges, its valleys and where its rivers run, which is what the map draws.", "read back from where an earlier run kept it" if m.kept else fmt.tprintf("formed in this run in %s and kept", span_words(m.took))), .Well)
-			card_row(k, .Land, "Ground to walk on", fmt.tprintf("%d of %s pieces", pieces, thousands(len(m.cut.size))), fmt.tprintf("It is cut along its drainage into pieces of about %d km². A piece is formed down to the ground you walk on when the start lies within %d km of it, and within %.0f km of the view while you look or play; one left far behind is let go and read back on return. Beyond the pieces formed its land is drawn from the 64 m cells. No door leads to it yet.", PIECE_KM2, NEAR_REACH/1000, mass_reach/1000), .Caution if pieces == 0 else .None)
-		case li >= 0 && sync.atomic_load(&lands_state.forming) == lands[li].mass:
+			card_row(k, .Land, "Ground to walk on", fmt.tprintf("%d of %s pieces", pieces, thousands(len(m.cut.size))), fmt.tprintf("It is cut along its drainage into pieces of about %d km². A piece is formed down to the ground you walk on when the start lies within %d km of it, round where you come ashore to walk it, and within %.0f km of the view while you play; one left far behind is let go and read back on return. Beyond the pieces formed its land is drawn from the 64 m cells.", PIECE_KM2, NEAR_REACH/1000, mass_reach/1000), .Caution if pieces == 0 else .None)
+			if m.landing_piece >= 0 {
+				o := m.landing - o_start
+				card_row(k, .Land, "Come ashore", fmt.tprintf("%.0f km %s of the start", math.hypot(o.x, o.y)/1000, compass(o.x, o.y)), fmt.tprintf("Walking it begins on its land nearest the start, once the pieces within %d km of there are formed. No boat lands a party on it yet.", WALK_REACH/1000))
+			}
+		case stands == int(Land_Stands.Forming):
 			done, all, _ := making_progress(.Mainland)
 			card_row(k, .Land, "As land", "being formed", fmt.tprintf("Its coarse stage is running: the whole of it through the history's 64 m steps, %d of %d so far. It is made once for a world and kept.", done, all), .Caution)
+		case stands == int(Land_Stands.Asked):
+			card_row(k, .Land, "As land", "waiting to be formed", "It is formed once the land in hand is: one large land is formed at a time, since each takes most of the machine.", .Caution)
 		case:
 			card_row(k, .Land, "As land", "known, not formed", fmt.tprintf("The plates' history made it, and the world knows its coast and its heights. It is not formed as land: %s.", land_why(li)), .Caution)
+			if li >= 0 do card_row(k, .Land, "Forming it takes", land_costs(li), "The whole of it through the history's 64 m steps, on every core while you look and on a few while you play. The memory is held only while it forms. It is made once for this world and kept on disk.")
 			card_row(k, .Land, "Can be landed on", "no", "Nothing is formed there to stand on.", faint = true)
 		}
 		if li >= 0 {
@@ -869,6 +916,41 @@ enter_waits :: proc(island: int) -> string {
 	return fmt.tprintf("%s of the islands within %.0f km of it %s still to be formed.", capital(number_words(n)), making.near_km, "is" if n == 1 else "are")
 }
 
+// In play: say when a large land begins to be formed and when it stands, once each (lands_near,
+// continents.odin, asks for one as the view nears it).
+lands_tell :: proc() {
+	ls := &lands_state
+	now := sync.atomic_load(&ls.forming) if sync.atomic_load(&ls.asking) else 0
+	if now == ls.told do return
+	for &m, i in lands {
+		if m.mass == ls.told && mass_listed(&m) do tell(fmt.tprintf("%s is formed: its land is drawn from here on, and its ground is made as you come near.", land_name(i)) if len(m.cut.size) > 0 else fmt.tprintf("%s is formed, and nothing of it stands over the sea.", land_name(i)))
+		if m.mass == now do tell(fmt.tprintf("%s lies %.0f km off and is being formed as land, about %s.", land_name(i), mass_from(&m, mass_focus)/1000, span_words(ls.expect)))
+	}
+	ls.told = now
+}
+
+// What stands between a large land and its doors, in a line; "" where nothing does.
+land_waits :: proc(li: int) -> string {
+	m := &lands[li]
+	switch land_stands(li) {
+	case .Known:
+		if !lands_can(li) do return "It can be formed once the world's own making has gone through its large lands, and while the making is not stopped."
+	case .Asked: return "It is formed once the land in hand is."
+	case .Forming: return fmt.tprintf("Being formed: %s.", land_progress())
+	case .Formed:
+		if m.landing_piece < 0 || world_enterable(MAINLAND - li) do return ""
+		left := masses_near(m.landing, WALK_REACH)
+		going := " You go in when it is." if door.wish == .Walk && door.isle == MAINLAND - li else ""
+		return fmt.tprintf("Its ground where you come ashore is formed when you walk it: %s piece%s to form.%s", number_words(left), "" if left == 1 else "s", going)
+	}
+	return ""
+}
+
+// Whether a large land's coarse stage can be asked for now.
+lands_can :: proc(li: int) -> bool {
+	return li >= 0 && li < len(lands) && sync.atomic_load(&making.massed) && !sync.atomic_load(&forming.stop) && !making.stopped
+}
+
 // How high a row of the card stands: a line, two where its words do not fit beside its thing, and its why under it once chosen.
 row_high :: proc(r: Card_Row, inner: f32, chosen: bool) -> (high: f32, two: bool) {
 	L := &LOOK
@@ -944,7 +1026,9 @@ isle_build :: proc() {
 	}
 	if !tabs[c.depth] do c.depth, c.row = .Land, -1
 	isle := k.of >= 0
-	waits := enter_waits(k.of)
+	li := land_of(k.of)
+	stands := land_stands(li)
+	waits := enter_waits(k.of) if isle else land_waits(li) if li >= 0 else ""
 	if isle && waits == "" {   // what a founder should look at twice before the door is taken, in a line: each is a row of the card, with its why
 		b := strings.builder_make(context.temp_allocator)
 		for rows in k.rows do for row in rows do if row.sign == .Caution {
@@ -957,8 +1041,9 @@ isle_build :: proc() {
 	beside := inner - head - px(4)
 	head = max(head, line_of(.Title) + text_high(.Body, k.sub, beside))
 	tabs_high := line_of(.Body) + px(1.5) + px(2.5) if count > 1 else 0
-	doors := (text_high(.Small, waits, inner) + px(2) if waits != "" else 0) + px(L.button) if isle else 0
-	fixed := 2*px(L.pad.y) + head + px(L.space) + tabs_high + (px(4) + doors if isle else 0)
+	doored := isle || li >= 0 && !(stands == .Formed && lands[li].landing_piece < 0)   // a land under the sea has no door
+	doors := (text_high(.Small, waits, inner) + px(2) if waits != "" else 0) + px(L.button) if doored else 0
+	fixed := 2*px(L.pad.y) + head + px(L.space) + tabs_high + (px(4) + doors if doored else 0)
 	// As deep as its longest depth with no row chosen, so that it stands as tall whichever is shown; a why opened scrolls it.
 	longest := f32(0)
 	for d in Isle_Depth {
@@ -1001,10 +1086,21 @@ isle_build :: proc() {
 	}
 	rows_put(k.rows[c.depth][:], cx, y, inner, depth, &c.scroll, &c.over, c.row, .Isle_Row, "isle")
 	y += depth
-	if !isle do return
-	// The doors: an expedition is planned on an island once its land is formed (plan.odin); walking it waits for its neighbours.
+	if !doored do return
 	y += px(4)
 	if waits != "" do y += words(cx, y, waits, .Small, L.ash, "isle.waits", inner) + px(2)
+	if !isle {   // a large land's doors: formed from its card, left while it forms, and walked once it stands
+		switch stands {
+		case .Known:
+			door_button({cx, y, inner, px(L.button)}, "Form it", .Found, 0, "land.form", "Form the whole of this land on cells 64 m across: its ranges, its valleys and where its rivers run. You can go on looking, or play, while it is made.", main = lands_can(li), faint = !lands_can(li))
+		case .Asked, .Forming:
+			door_button({cx, y, inner, px(L.button)}, "Leave it as known", .Mass_Leave, li, "land.leave", "Stop forming it: nothing of it is kept, and it stays as the plates' history has it until it is asked for again.", faint = stands == .Forming && sync.atomic_load(&lands_state.leave))
+		case .Formed:
+			door_button({cx, y, inner, px(L.button)}, "Walk it", .Roam, 0, "land.walk", "Stand on this land on foot, with no party: on its ground nearest the start, where it is come ashore.", main = world_enterable(k.of), held = door.wish == .Walk && door.isle == k.of)
+		}
+		return
+	}
+	// The doors: an expedition is planned on an island once its land is formed (plan.odin); walking it waits for its neighbours.
 	walk := button_wide("Walk it", door_key(.Roam))
 	unformed := !is_formed(&formed[k.of])
 	door_button({cx, y, inner - walk - px(L.gap), px(L.button)}, "Plan an expedition", .Found, 0, "isle.found", "Choose where on this island the boat lands and who comes, and set out.", main = !unformed, faint = unformed)

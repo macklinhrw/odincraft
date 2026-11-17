@@ -769,7 +769,7 @@ Steps 17 to 20 started together; step 21 followed the seam test's failure, and s
 **The order of work from here is `plan.md`** (the owner's direction of 2026-11-16: a world that makes stories, after Dwarf Fortress first and RimWorld second). Steps 21, 25 and 27 carry on as its N1 to N3; steps 26, 29 and 30 are replaced by its N5, P9 and P7.
 
 - **Done:** steps 17, 18, 19, 20, 22, 23, 24, 25, 28, 31, 32, 33, 34 and 35; outside the table, the reef kind and Yakushima measured for the granite massif (`interesting-world/notes/real-islands.md`). Step 17's stand-in is replaced by step 22's history and step 32's regional history.
-- **Built, both parts:** step 21 (the plan's N1). Every land mass of the known world larger than a region is formed whole through its 64 m phases, in parallel and to the bit as the serial forming makes it, inside the ten minutes (seed 7's world in 3.7 to 6.4 min, seed 1's in 2.6, seed 3's in 4.9); pieces take up the finer phases round the start, a site or the player, are kept on disk and let go behind; land not yet formed is drawn from the coarse stage ("Step 21, as built" and "Step 21, second part, as built"). Left: the continent's coast judged against a real ria coast on an old margin; the 64 m stage made to wear a capped ridge as the finer cells do; memory while forming (9.6 to 11.8 GB); the last of the flood still on one thread.
+- **Built, three parts:** step 21 (the plan's N1). Every land mass of the known world larger than a region is formed whole through its 64 m phases, in parallel and to the bit as the serial forming makes it, inside the ten minutes (seed 7's world in 5.7 min, seed 1's in 4.3, seed 3's in 5.5); pieces take up the finer phases round the start, a site or the player, are kept on disk and let go behind; land not yet formed is drawn from the coarse stage run on to today; a land beyond reach of the start is formed from its card on the world's map or as play nears it, and walked; the mainland's coast is judged against five real drowned coasts, and stands within 12 km of where the history puts it ("Step 21, as built", "second part" and "third part"). Left: formed land standing a median 8 to 14 m over the land drawn from afar; the rebound's width; memory while forming (10 to 14 GB); a party landing on a large land.
 - **Built since:** step 25, climate per island ("Step 25, as built"), with its narrowing of the stream beds by rain held back for the owner to judge; step 27's first part, river mouths, bay-head flats and reed marsh ("Step 27, part one, as built"), its caves left for a step of their own. Step 21's second part is built within the owner's goal of 10 minutes for the whole world's generation.
 - **Not started, and now ordered by `plan.md`:** floras (its N5), peoples and history (P9), the fantastic (P7).
 - **Left open in step 32:** one sea for the world, which read into each phase put 33.1% of figures far, so the islands keep their kinds' seas; and the planet's boundaries, which stay two to three times the real length, since the regional history runs the planet's plates and did not shorten them.
@@ -1084,6 +1084,52 @@ Built 2026-11-16 and 17 by Claude: the rest of the plan's N1 that could be built
 ![Seed 1 made: the mainland drawn from its 64 m cells, its card saying how it stands](interesting-world/real/play/n1-04-mainland.jpg)
 
 ![Seed 7, where no large land lies within reach: the mainland known, not formed, with why and what forming it would take](interesting-world/real/play/n1-11-far-mainland.jpg)
+
+### Step 21, third part, as built
+
+Built 2026-11-17 by Claude: the rest of the world reached from inside the game, far land that is the land it becomes, and the continents' coasts judged against real drowned coasts. The owner has not yet looked at it. Every number, what was measured to find each cause and what was tried and dropped are in `interesting-world/notes/continents-forming.md`, its first section; the real coasts are in `interesting-world/notes/real-islands.md`, "Drowned coasts on old ground"; the choices are Claude's call of 2026-11-17 in `open-decisions.md`.
+
+![Seed 7's mainland being formed from its card: its steps counted in the panel that tells a world being made, with the way to leave it](interesting-world/real/play/n1-22-forming.jpg)
+
+![Formed: drawn from its 64 m cells as they stand today, with its rivers; its card says where it is come ashore and how much of its ground is formed](interesting-world/real/play/n1-24-formed.jpg)
+
+![12 km of seed 1's nearest land mass, where a ridge of strong rock over weak stands on a cut, as it is drawn from afar](interesting-world/real/continent-seed1-ridge-afar-3.jpg)
+
+![The same 12 km formed. The second part's pictures of this ground, above, were a maze of ridges in the sea against a wooded upland](interesting-world/real/continent-seed1-ridge-formed-3.jpg)
+
+![12 km of seed 7's mainland's coast, drawn from afar (left) and formed (right)](interesting-world/real/continent-seed7-coast-afar-formed-3.jpg)
+
+![Seed 7's known world as its coarse stages hold it today, 1,020 km across: its continent's coast now stands near where the plates' history puts it](interesting-world/real/continent-seed7-map-3.jpg)
+
+**What the owner can see and do.** On any seed, a large land that the world's map says is known and not formed has a card with what forming it takes (for seed 7's mainland, about 5 min and 14 GB while it runs) and a button, Form it. While it forms the map goes on being drawn, the card and the panel that tells a world being made count its steps, and Leave it as known stops it with nothing kept. Formed, it is drawn from its 64 m cells with its rivers, and its card has Walk it: its ground is formed where it comes nearest the start, and play begins there on foot. In play, a land the view comes within 80 km of is formed beside play, a line says so, and its ground is formed as the view comes down to it. A world in which this has happened is put down for another and taken up again as it was left. Played by script on seed 7: `interesting-world/real/play/n1-form.txt` (the mainland, 317,000 km², formed from its card in 4.4 min and walked) and `n1-journey.txt` (the west land, formed beside play in 9 s as the view neared it).
+
+**What is built.**
+
+- **The list of regions grows in place** (`regions.odin`, ADR 0005): room for a million records is set aside for a world and only what is used takes memory, so no record ever moves; a land's pieces are written whole beyond the list's end and then the list's length is stored. The frame's thread and the forming threads read it without waiting. The swap by which the frame's thread made the list again (ADR 0013) is gone.
+- **A land asked for after the world is made** (`lands_ask`, `lands_watch`, `continents.odin`): one thread forms the lands asked for by the procedure the making's stage runs; in play it also watches how fast the view travels and asks for a land that far ahead, and the coarse stage then leaves play its cores.
+- **A face holds what its beds hold** (`face_holds`, `erosion.odin`), at every cell size of a land mass: the run to the cell below is spent bed by bed. A 64 m cell that read only the rock at its top held a strong cap's slope over a face of weak rock, 110 m a cell, which 16 m cells wore back.
+- **A piece's crust rises by the coarse stage's own rule** (`piece_rebound`): 0.82 of what the land round a place wore, over the 12 km a piece knows, where the second part let it go on rising at the coarse stage's last rate whatever the piece wore.
+- **The coarse stage is run on to today** (`coarse_today`, `coarse.odin`) on its own cells, through the years of the finer phases and the sea's last rise, and that ground is what is drawn from afar and on the map; the second part drew the ground as the pieces take it up, less a guess.
+- **A land mass's ground starts at the history's height over the sea as it stood low, and its sea floor rises with the crust** (`mass_ground`, `bank` in the mainland's shape). The first two parts started it at the history's height over the low sea and then raised the sea 120 m over it.
+- **Islets join the piece of the shore they lie off**, and **the flood through hollows has a third size of block**.
+
+**Far land against the land it becomes**, the formed land's mean over each 64 m cell less the land drawn there from afar (`--seam`): on seed 1's capped ridge a tenth of the cells stood 151 m under and a tenth 30 m over, with a hundredth 290 m under; now a tenth 0.2 m over and a tenth 33 m over, the median 14 m over. On seed 7's coast, a tenth 81 m under and a tenth 50 m over; now 11 m under and 37 m over, the median 8 m over. What is left is that the formed land stands a little higher: the far-drawn inlets reach a few hundred metres farther inland at their heads than the formed ones.
+
+**No seam, and one world whatever the order.** Seed 7's coast, 25.2 km of cut: none of 1,654 steps across it larger than the largest elsewhere at its slope; a closed hollow of two cells, 4.2 m, by a cut. Seed 1's ridge, 22.0 km: no closed hollow by a cut; 2 of 1,483 steps larger than the largest elsewhere at their slope, 37.3 m at most, on the ridge's crest. A third square on seed 1: none of 1,003. Seed 1's 9 pieces formed in two orders are the same byte for byte. The parallel coarse stage is the serial forming's on seed 1's nearest land mass, 0 of 10,719,089 land cells differing, and on seed 7's smallest in `./build.sh test`.
+
+**Against real land.** Five real drowned coasts on old ground (Tsushima's Asō Bay, Ago Bay, Kujūkushima, and two inlets of Chesapeake Bay) have 64 to 100% of their land under 50 m, where the three forearc coasts the mainland was first judged against have 14 to 24%. Seed 1's coast is within the five on eight figures of ten; seed 7's, where its mainland comes nearest the start, is hillier than they are (36% under 50 m). The mainland is now judged against the five.
+
+**Where the coasts stand.** Seed 7's continent's land comes within 187 km of the start, where the history has it at 175 and the second part formed it at 230; 70% of its land before the last rise stays over it, where under half did. Its land mass 2, which formed as nothing, has 680 km² of land.
+
+**Times and memory.** The whole known world's coarse stages: seed 7's in 5.7 min, seed 1's in 4.3, seed 3's in 5.5, at loads of 5 to 16 from other work (the second part: 3.7 to 6.4, 2.6 and 4.9); 10.2 to 13.9 GB at the peak (9.6 to 11.8).
+
+**The islands are unchanged**: all 83 islands of seeds 1 to 10 give maps the same byte for byte as `main`'s, before and after `main` was merged in (00cf62a); `GOLDEN` is as it was and the dwarves' log is `main`'s, 137792e92a2f583d three ways. `p3-play.txt` and `p4-shelter-play.txt` played again: every order done, nobody shut in, seven of seven alive.
+
+**Benches**, one round, this build beside `main`'s built the same way, at a load of 5 to 6 from other work. No frame of our work over 12.5 ms on either. Our work, median and worst: the forest flank 1.76 and 8.4 ms (`main` 1.81 and 8.6); down through cloud 1.94 and 7.6 ms (1.88 and 9.4); from above 2.48 and 9.9 ms (2.31 and 11.4). And a journey: flying west at 250 m/s toward seed 7's west land while its coarse stage is formed beside play (12.3 s): 0.87 and 6.9 ms, none over 12.5 ms. Frame intervals over 12.5 ms, which are the display's: 39, 27 and 36 against `main`'s 45, 15 and 28, and 3 on the journey.
+
+**Found by playing it and put right**: walking seed 7's mainland first set the player down in the sea (its piece nearest the start is an islet with no ground the start's rule takes), then inside a tree's crown on that islet; a land is now come ashore on a shore with land round it, on open ground. A low flight over land not yet formed, and the journey, ended the game three times, each a fault of the second part met now that pieces form as the view travels (`continents-forming.md`). The place's line named a land by its nearest formed piece, which over two lands' pieces could be the other's.
+
+**What is not done.** The width over which the crust rebounds is not measured: a coast's shape does not hold it. Formed land still stands a median 8 to 14 m over far-drawn land. A view from above that jumps arrives before a land can be formed. No party lands on a large land: it is walked.
 
 ### Step 31, as built
 

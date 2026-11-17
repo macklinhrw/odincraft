@@ -704,11 +704,15 @@ button :: proc(r: Rect, text: string, act: Act, arg := 0, held := false, id := "
 // The place under the view: the named place it is at, or which way it lies from the nearest.
 place_title :: proc(at: [3]f64) -> string {
 	f := island_near(at.x, at.z)
+	if own := island_at(at.x, at.z); own != nil && own.mass != nil {   // over a large land: its own piece, or none where that is not formed yet
+		if !is_formed(own) do return "Land not yet formed underfoot"
+		f = own
+	}
 	if f == nil || off_island(f, at.x, at.z) > 1500 do return "The open sea"
 	bound(f)
 	x, z := at.x - f64(region.origin.x), at.z - f64(region.origin.y)
 	i, d := place_near(x, z)
-	if i < 0 do return "An island with no name yet"
+	if i < 0 do return "Ground with no name yet" if f.mass != nil else "An island with no name yet"
 	name := places[i].name
 	if d < GATHER do return sentence(name)[:len(name)]
 	c := candidates[places[i].c]
@@ -832,7 +836,9 @@ place_build :: proc() {
 	title := place_title(u.p.pos if u.afoot^ else u.a.at)
 	date := date_words(u.date)
 	at := u.p.pos if u.afoot^ else u.a.at
-	if f := island_near(at.x, at.z); f != nil && off_island(f, at.x, at.z) <= 1500 {   // the island it is on, by its name (making.odin), before the day
+	if m, _ := mass_piece(at.x, at.z); m != nil {   // the large land it is over, formed underfoot or not: its pieces' squares lie over each other, so the nearest formed need not be its own
+		date = fmt.tprintf("%s, %s", land_name(land_index(m)), date)
+	} else if f := island_near(at.x, at.z); f != nil && off_island(f, at.x, at.z) <= 1500 {   // the island it is on, by its name (making.odin), before the day
 		if name := isle_name(f.island.id) if f.island.id < len(archipelago) else land_name(land_index(f.mass)); name != "" do date = fmt.tprintf("%s, %s", name, date)
 	}
 	hour := fmt.tprintf("%02d:%02d", int(u.date.hour), int(u.date.hour*60)%60)   // the hour the dwarves live by, whatever the sun was turned to

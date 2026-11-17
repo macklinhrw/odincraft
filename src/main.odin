@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:slice"
+import "core:sync"
 import "core:strings"
 import "core:sys/posix"
 import "core:time"
@@ -215,16 +216,16 @@ main :: proc() {
 		fmt.printfln("land larger than a region: %d pieces within %.0f km of %s formed before entering, in %.1f s", before, min(opt.near, NEAR_REACH/1000), "the site" if opt.has_site else "the start", time.duration_seconds(time.since(started)))
 	}
 	if opt.seam > 0 {
-		mass_seam(around, opt.seam*1000)
+		mass_seam(around, opt.seam*1000, opt.window)
 		if opt.landmap == "" do return
 	}
 	if opt.landmap != "" {
 		if len(lands) == 0 || !lands[0].ready do fmt.eprintln("no land larger than a region is at hand to map")
-		else if opt.has_site do mass_map(opt.landmap, around, (opt.mapspan if opt.mapspan > 0 else 64)*1000, opt.cuts)
+		else if opt.has_site do mass_map(opt.landmap, around, (opt.mapspan if opt.mapspan > 0 else 64)*1000, opt.cuts, opt.afar)
 		else {
 			m := &lands[0]
 			for &l in lands do if l.ready && l.area > m.area do m = &l
-			mass_map(opt.landmap, {f64(m.origin.x), f64(m.origin.y)}, opt.mapspan*1000 if opt.mapspan > 0 else m.side, opt.cuts)
+			mass_map(opt.landmap, {f64(m.origin.x), f64(m.origin.y)}, opt.mapspan*1000 if opt.mapspan > 0 else m.side, opt.cuts, opt.afar)
 		}
 		return
 	}
@@ -238,7 +239,7 @@ main :: proc() {
 	g: Gpu
 	gpu_init(&g, window)
 	g.unseen = unseen
-	world_adopt(opt.island, opt.near)
+	world_adopt(opt.island, opt.near, opt.continent)
 	leave := game(&opt, &g, window, unseen, others[soon:])
 	if leave != .Quit do door_run(&opt, &g, window, leave)   // out of play to the world's screen or the front door, with this world in hand
 }
@@ -304,6 +305,8 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 	hold_enter(&p, &a, opt)   // the dwarves' world begins; the player and the view are put where the landing can be watched
 	forming_begin(far, 3, .Low, false)
 	mass_focus = (p.pos if afoot else a.at).xz
+	sync.atomic_store(&lands_state.gently, true)   // a large land formed from here on leaves play its cores, and one the view nears is asked for
+	defer sync.atomic_store(&lands_state.gently, false)
 	masses_keep()   // the land masses' pieces within reach of the view, nearest first, and those left far behind let go
 	turned := f32(0)   // hours the sun was turned by hand
 	place := Mat.Stone
@@ -422,6 +425,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 		}
 		passed := clock_step(&clock, 0 if play.menu else dt)   // the world's time this frame: none while the menu is open
 		mass_focus = centre.xz
+		lands_tell()   // a large land begun or formed since the last frame is said
 		// The day and the hour (clock.odin): the dwarves' own where a hold runs, since the screen says the
 		// day they live by, and else the clock's. --hour and --day hold the sun where they say, for a
 		// picture of the land; the date said is the true one all the same.

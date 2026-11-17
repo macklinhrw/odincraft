@@ -1,0 +1,50 @@
+# A journey in play toward a land that is not formed (step N1, third part; open-decisions.md,
+# 2026-11-17): seed 7, from the start island west to the west land, 365 km off, which the world's
+# making leaves as the plates' history has it. As the view comes within reach of it its coarse stage
+# is formed beside play and the screen says so; its land is then drawn from the 64 m cells, and its
+# ground is formed where the view comes down to it. To play it from a land not formed:
+#   find build/worlds -name 'landmass-7-4-*' -delete
+#   build/odincraft --seed=7 --play=docs/interesting-world/real/play/n1-journey.txt
+# The pictures go to out/play/. A view put somewhere is a jump: on foot or flying the land is asked
+# for as far ahead as the view travels while it forms (lands_ahead, continents.odin).
+
+print 1. the start island, and the way west: 300 km of open sea
+view over=-24950,-20838 span=2000
+wait 1
+view over=-200000,20000 span=24000
+wait 2
+shot out/play/n1-40-open-sea.png
+
+print 2. 80 km off the west land: it is asked for, and the screen says so
+view over=-290000,50000 span=24000
+wait 2
+snap out/play/n1-41-asked.png
+say
+until land 600
+wait 3
+snap out/play/n1-42-formed.png
+say
+
+print 3. on to its coast: its land drawn from the 64 m cells, no piece of it formed yet
+view over=-362000,55776 span=24000 tilt=55
+wait 3
+shot out/play/n1-43-coast-afar.png
+
+print 4. down to where it is come ashore: its ground is formed under the view
+view over=-369824,55776 span=6000 tilt=55
+until ground 1200
+wait 2
+shot out/play/n1-44-coast-formed.png
+view over=-369824,55776 span=600 tilt=50
+wait 2
+shot out/play/n1-45-ground.png
+say
+print on foot there
+foot -369824,3,55776 270,-5
+wait 3
+shot out/play/n1-46-afoot.png
+
+print 5. back up, and the pieces round it formed since
+view over=-372000,55776 span=24000 tilt=60
+wait 30
+shot out/play/n1-47-around.png

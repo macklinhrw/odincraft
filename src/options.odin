@@ -68,8 +68,11 @@ import "core:strings"
 //                   and say the first stage where a cell differs; coarse=plain forms it the serial way
 //   reach=km        how near the player a landmass's pieces are kept formed beside play (40); 0 for none
 //   landmap=file    write a map of the land larger than a region as the game has it and exit: mapspan=km
-//                   across round --site, or the largest land mass whole; cuts draws the lines between pieces
-//   seam=km         measure the seam in a square that wide round --site (continents.odin, mass_seam), and exit
+//                   across round --site, or the largest land mass whole; cuts draws the lines between pieces,
+//                   and afar draws every piece as it is drawn before it is formed, from the coarse stage
+//   seam=km         measure the seam in a square that wide round --site (continents.odin, mass_seam), and exit;
+//                   window=file writes that square's heights on the 16 m grid as the real coasts are kept
+//                   (real-islands.md), to be measured as they are
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground; with over, the view from above
 //                   panned toward its picture's top at `speed` m/s
@@ -160,7 +163,9 @@ Options :: struct {
 	landmap:       string,   // write a map of the land larger than a region and exit: round --site, or the nearest landmass whole
 	mapspan:       f64,      // km across
 	cuts:          bool,     // with the cuts between pieces drawn
+	afar:          bool,     // with every piece drawn from the coarse stage, formed or not
 	seam:          f64,      // measure the seam in a square this many km across round --site, and exit
+	window:        string,   // with seam: write the square's heights on the 16 m grid to this file
 	over:          [2]f64,
 	has_over:      bool,
 	span, tilt:    f64,
@@ -271,6 +276,8 @@ options :: proc() -> Options {
 		case "landmap":   o.landmap = value
 		case "mapspan":   ok = numbers(value, ",", v[:1]); o.mapspan = f64(v.x)
 		case "cuts":      o.cuts = true
+		case "afar":      o.afar = true
+		case "window":    o.window = value
 		case "seam":      ok = numbers(value, ",", v[:1]); o.seam = f64(v.x)
 		case "dwarves": ok = numbers(value, ",", v[:1]); o.dwarves = v.x
 		case "orders": o.orders = value

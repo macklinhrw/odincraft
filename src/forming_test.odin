@@ -34,9 +34,7 @@ world_make :: proc() {
 	archipelago_make(false)
 	arrivals_make()
 	names_make()
-	formed = make([]Formed, len(archipelago))
-	for &f, i in formed do f.island = archipelago[i]
-	home = &formed[0]
+	regions_make()   // the list of regions, as a world's records make it: the islands', with room after them (regions.odin)
 }
 
 @(test)

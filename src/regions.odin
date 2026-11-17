@@ -4,6 +4,7 @@ import "base:runtime"
 import "core:fmt"
 import "core:io"
 import "core:math"
+import "core:mem/virtual"
 import "core:os"
 import "core:sync"
 import "core:thread"
@@ -40,8 +41,39 @@ Formed :: struct {
 	ribbon_count, falls_count: u32,
 	lifted:                    ^sdl.GPUTexture,  // the field `lifted`, for the cloud cap
 }
-formed: []Formed   // one for each island, in the archipelago's order
+formed: []Formed   // one for each island, in the archipelago's order, then one for each piece of each large land listed (regions_add)
 home:   ^Formed    // the start island, which the frame thread reads unless it binds another
+
+// The list of regions grows in place. A world's list is laid in room set aside for REGIONS_MOST
+// records, of which only those in use are ever touched and so take memory: no record moves once it
+// is made, so a pointer into the list stands for as long as its world is in hand, whatever is added
+// after it. A large land's pieces are added while islands are formed and read and frames are drawn
+// (regions_add): the new records are made whole first, beyond the list's end where nobody reads, and
+// then the list's length is stored, one word. A reader that took the list before sees the shorter
+// list, and one that takes it after sees records already whole; none waits. Only one thread adds at a
+// time (`regions_mutex`). A world put down leaves its list where it lies (making.odin).
+REGIONS_MOST :: 1 << 20   // a known world of a million km² cut into pieces of 300 km² is some thousands of them
+regions_mutex: sync.Mutex
+
+// A new world's list: `count` records, the islands', with room after them for the large lands' pieces.
+regions_begin :: proc(count: int) {
+	sync.guard(&regions_mutex)
+	room, err := virtual.reserve_and_commit(uint(REGIONS_MOST*size_of(Formed)))
+	if err != nil do panic("no room for the world's regions")
+	formed = ([^]Formed)(raw_data(room))[:count]
+}
+
+// Records beyond the list's end, `count` of them, for the caller to make whole before regions_show
+// adds them. The caller holds `regions_mutex`.
+regions_room :: proc(count: int) -> []Formed {
+	if len(formed) + count > REGIONS_MOST do panic("more regions than a world's list has room for")
+	return ([^]Formed)(raw_data(formed))[len(formed):][:count]
+}
+
+// The records made in regions_room are the list's from here on.
+regions_show :: proc(count: int) {
+	sync.atomic_store_explicit(&(^runtime.Raw_Slice)(&formed).len, len(formed) + count, .Release)
+}
 world_seed := u32(7)   // the world's seed (--seed=), from which the archipelago is made; the weather reads it
 
 @(thread_local) here:       ^Formed
@@ -85,14 +117,16 @@ island_at :: proc(x, z: f64) -> ^Formed {
 	return nil
 }
 
-// The islands' records in `formed`, before the landmass's pieces, whose squares overlap.
+// The islands' records in `formed`, before the large lands' pieces, whose squares overlap.
 islands_count :: #force_inline proc() -> int { return min(len(archipelago), len(formed)) }
 
-// Bind the island under a point in the world; false at the open sea, where the binding is left.
+// Bind the island under a point in the world; false at the open sea, and over land not yet formed,
+// which has nothing to read (a large land's piece seen from far off, afar.odin): the binding is left.
 bind_at :: proc(x, z: f64) -> bool {
 	f := island_at(x, z)
-	if f != nil && f != here do bind(f)
-	return f != nil
+	if f == nil || !is_formed(f) do return false
+	if f != here do bind(f)
+	return true
 }
 
 // Metres from a point in the world to an island's region, 0 inside it.
@@ -177,9 +211,11 @@ Share :: struct {
 	n, part:    int,
 	next, done: int,   // parts taken and parts finished
 	users:      int,   // helpers holding it
+	most:       int,   // helpers that may hold it at once; 0 for any number
 }
 helping: struct { mutex: sync.Mutex, wake: sync.Cond, shares: [dynamic]^Share, helpers: int }
 @(thread_local) alone: bool
+@(thread_local) sharing: int   // helpers that may take up this thread's work at once; 0 for any number (lands_share, continents.odin)
 
 // Run `work` over 0..<n in parts of `part`, on this thread and any helper free.
 shared :: proc(n, part: int, data: ^$T, work: proc(data: ^T, lo, hi: int)) {
@@ -187,7 +223,7 @@ shared :: proc(n, part: int, data: ^$T, work: proc(data: ^T, lo, hi: int)) {
 		work(data, 0, n)
 		return
 	}
-	s := Share{work = transmute(proc(rawptr, int, int))work, data = data, island = here, n = n, part = part}
+	s := Share{work = transmute(proc(rawptr, int, int))work, data = data, island = here, n = n, part = part, most = sharing}
 	sync.lock(&helping.mutex)
 	if helping.helpers == 0 {
 		helping.helpers = max(os.get_processor_core_count() - 1, 1)
@@ -223,8 +259,12 @@ unshare :: proc(s: ^Share) {
 helper :: proc() {
 	for {
 		sync.lock(&helping.mutex)
-		for len(helping.shares) == 0 do sync.cond_wait(&helping.wake, &helping.mutex)
-		s := helping.shares[0]
+		s: ^Share
+		for {   // the first with room for one more
+			for t in helping.shares do if s == nil && (t.most == 0 || sync.atomic_load(&t.users) < t.most) do s = t
+			if s != nil do break
+			sync.cond_wait(&helping.wake, &helping.mutex)
+		}
 		sync.atomic_add(&s.users, 1)
 		sync.unlock(&helping.mutex)
 		bind(s.island)

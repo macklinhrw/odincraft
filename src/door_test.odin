@@ -1,10 +1,14 @@
 package main
 
 import "core:fmt"
+import "core:hash"
 import "core:os"
+import "core:slice"
 import "core:strings"
 import "core:sync"
 import "core:testing"
+import "core:thread"
+import "core:time"
 import sdl "vendor:sdl3"
 
 // The screens before play are data, as the play screen is (docs/adr/0010): each a list of parts made
@@ -528,6 +532,8 @@ the_front_door_and_the_world :: proc(t: ^testing.T) {
 	door.screen = .Chart
 	frame()
 
+	a_far_land_is_formed_from_its_card(t)
+
 	// Escape puts the island down, then goes to the front door.
 	key(.ESCAPE)
 	testing.expect(t, chart.pick == -1 && door.screen == .Chart, "Escape did not put the island down first")
@@ -541,4 +547,102 @@ the_front_door_and_the_world :: proc(t: ^testing.T) {
 	play_act(.Leave, int(Leave.World))
 	testing.expect(t, !running && leaving == .World, "Leave to the world did not end the game for the world's screen")
 	play.menu, leaving = false, .Quit
+}
+
+// A large land that is known and not formed is formed from its card, and the list of regions grows in
+// place while it is read and an island is formed beside it (regions.odin, ADR 0005): no record moves,
+// a reader never sees a record that is not whole, and the island comes out bit for bit as it did alone.
+// Then one being formed is left as known.
+@(private="file")
+a_far_land_is_formed_from_its_card :: proc(t: ^testing.T) {
+	// The large land on the smallest lattice that stands over the sea once formed (the forming test's).
+	small, next := -1, -1
+	for &m, i in lands do if m.mass != 2 && (small < 0 || m.side < lands[small].side) do small = i
+	for &m, i in lands do if i != small && m.mass != 2 && (next < 0 || m.side < lands[next].side) do next = i
+	if !testing.expect(t, small >= 0 && next >= 0, "the default world has two large lands to form") do return
+	for li in ([2]int{small, next}) do _ = os.remove(pass_path(&lands[li]))   // as a world that has never formed them
+	first, count_was, one := raw_data(formed), len(formed), &formed[1]
+	// A thread that reads the list as the frame's and the forming threads do, all the while.
+	Reader :: struct { stop: bool, reads, torn: int, at: [2]f64 }
+	@(static) reader: Reader
+	reader = {at = lands[small].shore}
+	reading := thread.create_and_start(proc() {
+		r := &reader
+		for !sync.atomic_load(&r.stop) {
+			for &f in formed do if f.island.size <= 0 || f.island.seed == 0 do r.torn += 1
+			if f := island_at(r.at.x, r.at.y); f != nil && (f.mass == nil || f.island.size <= 0) do r.torn += 1
+			r.reads += 1
+		}
+	})
+	// Island 1 formed again beside it, on a thread of its own.
+	@(static) again: Formed
+	again = {}
+	again.island = formed[1].island
+	forming_again := thread.create_and_start(proc() {
+		quiet = true
+		gen_init(&again)
+		quiet = false
+	})
+	chart_take(MAINLAND - small, true)
+	settle()
+	frame()
+	stands, _ := row_says("As land")
+	costs, _ := row_says("Forming it takes")
+	testing.expect(t, stands == "known, not formed" && strings.contains(costs, "GB") && says("land.form") == "Form it", "a land known and not formed does not say what forming it takes, with the way to form it")
+	testing.expect(t, click("land.form"), "Form it cannot be pressed")
+	began := time.now()
+	seen_forming := false
+	for !mass_listed(&lands[small]) && time.duration_seconds(time.since(began)) < 300 {
+		frame()
+		if s, _ := row_says("As land"); s == "being formed" && sync.atomic_load(&lands_state.steps) > 0 {
+			seen_forming = true
+			testing.expect(t, says("land.leave") == "Leave it as known" && strings.contains(says("isle.waits"), "steps"), "a land being formed does not say how far it has come, with the way to leave it")
+			stage := screen_find(&screen, "making.stage")
+			testing.expect(t, stage != nil && stage.text == land_name(small) && count("making.meter") + count("making.track") > 0, "the world being made does not show the land being formed as its stage")
+		}
+		time.sleep(20*time.Millisecond)
+	}
+	thread.join(forming_again)
+	thread.destroy(forming_again)
+	sync.atomic_store(&reader.stop, true)
+	thread.join(reading)
+	thread.destroy(reading)
+	frame()
+	m := &lands[small]
+	stands, _ = row_says("As land")
+	fmt.printfln("a far land formed from its card: %s, %.0f km², in %.1f s, %d pieces added to %d regions in place while they were read %d times and island 1 was formed again", land_name(small), m.area, time.duration_seconds(time.since(began)), len(m.cut.size), count_was, reader.reads)
+	testing.expect(t, mass_listed(m) && seen_forming && stands == "formed on 64 m cells", "the land asked for from its card was not formed")
+	testing.expect(t, raw_data(formed) == first && one == &formed[1] && len(formed) == count_was + len(m.cut.size) && m.first == count_was, "the list of regions did not grow in place")
+	testing.expect_value(t, reader.torn, 0)
+	testing.expect(t, reader.reads > 100, "the list was not read while it grew")
+	for &f in formed[m.first:] do testing.expect(t, f.mass == m && f.island.size > 0, "a piece's record is not whole")
+	if m.landing_piece >= 0 {
+		testing.expect(t, island_at(m.landing.x, m.landing.y) == &formed[m.first + int(m.landing_piece)], "where the land is come ashore is not its piece's")
+		testing.expect(t, says("land.walk") == "Walk it", "a land formed has no way to walk it")
+	}
+	was := bind(&again)
+	h := hash.fnv64a(slice.to_bytes(land.z[0])) ~ hash.fnv64a(slice.to_bytes(land.wet)) ~ hash.fnv64a(slice.to_bytes(land.age)) ~ hash.fnv64a(land.community)
+	bind(was)
+	testing.expect_value(t, h, GOLDEN[1])   // the island formed beside the growing list is the island formed alone
+	// A second land, asked for and left as known before it has run: it stays a record, and can be asked for again.
+	chart_take(MAINLAND - next, true)
+	settle()
+	frame()
+	testing.expect(t, click("land.form"), "Form it cannot be pressed on a second land")
+	began = time.now()
+	for !(land_stands(next) == .Forming && sync.atomic_load(&lands_state.step) >= 4) && !mass_listed(&lands[next]) && time.duration_seconds(time.since(began)) < 120 {
+		frame()
+		time.sleep(20*time.Millisecond)
+	}
+	testing.expect(t, click("land.leave"), "Leave it as known cannot be pressed")
+	for land_stands(next) != .Known && time.duration_seconds(time.since(began)) < 120 {
+		frame()
+		time.sleep(20*time.Millisecond)
+	}
+	frame()
+	stands, _ = row_says("As land")
+	testing.expectf(t, !mass_listed(&lands[next]) && lands[next].left && stands == "known, not formed" && says("land.form") == "Form it" && len(formed) == count_was + len(m.cut.size), "a land left as known did not stay a record: listed %v, left %v, it stands %q, its door says %q, %d regions", mass_listed(&lands[next]), lands[next].left, stands, says("land.form"), len(formed))
+	forming_stop()   // the thread that forms the lands asked for ends before the test does
+	chart_take(1, true)
+	settle()
 }

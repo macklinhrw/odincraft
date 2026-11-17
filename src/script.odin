@@ -179,7 +179,7 @@ script_read :: proc(path: string) {
 			append(&s.steps, Step{kind = .Wait if words[0] == "wait" else .Run, v = v})
 		case "timer": append(&s.steps, Step{kind = .Timer})
 		case "until":
-			ok = len(rest) >= 1 && (rest[0] == "done" || rest[0] == "ready" || rest[0] == "made" || rest[0] == "mainland" || rest[0] == "hour" && len(rest) == 2)
+			ok = len(rest) >= 1 && (rest[0] == "done" || rest[0] == "ready" || rest[0] == "made" || rest[0] == "mainland" || rest[0] == "land" || rest[0] == "play" || rest[0] == "ground" || rest[0] == "hour" && len(rest) == 2)
 			v[0] = 3600
 			if len(rest) > 1 do ok &&= figures(rest[1:], v[:1])
 			if ok do append(&s.steps, Step{kind = .Until, v = v, text = strings.clone(rest[0])})
@@ -323,9 +323,19 @@ script_frame :: proc(events: ^[dynamic]sdl.Event, a: ^Above, p: ^Player, afoot: 
 				break
 			}
 			if step.text != "done" {   // the world in hand, as it is made in real time (making.odin)
-				if s.began < 0 do s.began = seconds
+				if s.began < 0 || seconds < s.began do s.began = seconds   // play's seconds begin again when it is entered
 				there := false
 				switch step.text {
+				case "ground":   // the ground under the view's middle is formed: a large land's piece there is, or it is an island's or the sea
+					if a != nil {
+						at := p.pos.xz if afoot^ else a.at.xz
+						f := island_at(at.x, at.y)
+						there = f == nil || is_formed(f)
+					}
+				case "play": there = a != nil   // play has been entered, which a door wished for is once its ground is formed
+				case "land":   // no large land is asked for and not yet formed (lands_ask), and at the map its picture is painted
+					there = sync.atomic_load(&lands_state.forming) == 0 && (a != nil || chart_painted())
+					for &m in lands do if sync.atomic_load(&m.asked) do there = false
 				case "ready": there = world_enterable(0) && chart_painted()
 				case "made":  there = world_whole() && chart_painted()
 				case "mainland":
@@ -333,7 +343,7 @@ script_frame :: proc(events: ^[dynamic]sdl.Event, a: ^Above, p: ^Player, afoot: 
 					there = making_stage() == .Mainland && done >= 2 || sync.atomic_load(&making.massed)
 				}
 				if !there && seconds - s.began < step.v[0] do return
-				if there do fmt.printfln("script: the world of seed %d %s %.1f s after the script asked", making.seed, "can be entered" if step.text == "ready" else "is whole" if step.text == "made" else "has come to its mainland", seconds - s.began)
+				if there do fmt.printfln("script: the world of seed %d %s %.1f s after the script asked", making.seed, "can be entered" if step.text == "ready" else "is whole" if step.text == "made" else "has the large lands asked for formed" if step.text == "land" else "is being played" if step.text == "play" else "has the ground under the view formed" if step.text == "ground" else "has come to its mainland", seconds - s.began)
 				else do fmt.printfln("script: the world of seed %d had not come to \"%s\" after %.0f s", making.seed, step.text, seconds - s.began)
 				s.began = -1
 				break

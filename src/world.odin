@@ -250,6 +250,23 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		}
 	}
 	w.islands = islands
+	// A large land whose coarse stage has come to hand since (lands_ask, continents.odin): what was drawn
+	// where it lies was drawn as open sea. From far off it is built again, from the coarse stage; near
+	// the ground it is let go, and built when the piece under it is formed (waits).
+	for &m in lands do if !m.seen && mass_listed(&m) {
+		m.seen = true
+		moved = true
+		gone := make([dynamic]Key, context.temp_allocator)
+		for key, c in w.chunks do if chunk_over(&m, key) {
+			if key.level < FAR_LEVEL {
+				append(&gone, key)
+			} else if !c.dirty {
+				c.dirty = true
+				append(&w.dirty, key)
+			}
+		}
+		for key in gone do chunk_drop(w, dev, key)
+	}
 
 	if moved {
 		w.started = true
@@ -257,18 +274,7 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 		// across a boundary costs nothing.
 		gone := make([dynamic]Key, context.temp_allocator)
 		for key in w.chunks do if !in_ring(w, key, RADIUS + 1) || key.level < w.finest do append(&gone, key)
-		for key in gone {
-			c := w.chunks[key]
-			if c.buffer != nil do sdl.ReleaseGPUBuffer(dev, c.buffer)
-			if key.level == 0 do water_unload(&w.water, dev, c)
-			if c.plant_buf != nil do sdl.ReleaseGPUBuffer(dev, c.plant_buf)
-			delete(c.plants)
-			delete(c.blocks)
-			delete(c.under)
-			if key.level == 0 do w.volume += 1
-			free(c)
-			delete_key(&w.chunks, key)
-		}
+		for key in gone do chunk_drop(w, dev, key)
 
 		// The queue: what has left the rings leaves it, and what has come into them joins it.
 		if w.behind = !sync.try_lock(&w.mutex); !w.behind {
@@ -390,6 +396,32 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 	sdl.EndGPUCopyPass(pass)
 	_ = sdl.SubmitGPUCommandBuffer(cmd)
 	if staging != nil do sdl.ReleaseGPUTransferBuffer(dev, staging)
+}
+
+// Let a chunk go: what it holds on the GPU and in memory.
+chunk_drop :: proc(w: ^World, dev: ^sdl.GPUDevice, key: Key) {
+	c := w.chunks[key]
+	if c.buffer != nil do sdl.ReleaseGPUBuffer(dev, c.buffer)
+	if key.level == 0 do water_unload(&w.water, dev, c)
+	if c.plant_buf != nil do sdl.ReleaseGPUBuffer(dev, c.plant_buf)
+	delete(c.plants)
+	delete(c.blocks)
+	delete(c.under)
+	if key.level == 0 do w.volume += 1
+	free(c)
+	delete_key(&w.chunks, key)
+}
+
+// Whether a chunk lies over any piece of a large land, read at most every 64 m.
+chunk_over :: proc(m: ^Landmass, key: Key) -> bool {
+	s := f64(i32(CHUNK) << u32(key.level))
+	lo, hi := [2]f64{f64(key.x), f64(key.z)}*s - s/CHUNK - TREE_REACH, [2]f64{f64(key.x + 1), f64(key.z + 1)}*s + s/CHUNK + TREE_REACH
+	n := f64(m.store.n)
+	step := max(s/CHUNK, 64)
+	for z := lo.y; z <= hi.y; z += step do for x := lo.x; x <= hi.x; x += step {
+		if store_owner(&m.store, int(math.floor((x - f64(m.origin.x))/64 + n/2)), int(math.floor((z - f64(m.origin.y))/64 + n/2))) >= 0 do return true
+	}
+	return false
 }
 
 // Whether a chunk, with its border and the trees reaching into it, lies over an island not yet

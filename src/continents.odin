@@ -21,7 +21,10 @@ import "core:slice"
 // leaves beside the pieces after it is kept for them (`Band`), and with it what it made of their
 // ground in its margin, which their own cells near the cut lean toward (`held_lean`). The pieces
 // round the player are kept formed and those far behind let go (`masses_keep`); land not yet formed
-// is drawn from the coarse stage (afar.odin).
+// is drawn from the coarse stage run on to today (coarse_today, afar.odin). A land whose coarse stage
+// is not at hand is formed when it is asked for, from its card on the world's map or because play
+// came near it (lands_ask, lands_watch), and its pieces are then added to the world's regions where
+// the list stands (regions_add, making.odin).
 
 // A land mass of the known world larger than a region can hold. What the world knows of it before it
 // is formed: its ground at the start of the forming, its uplift and its sea are read from the plates'
@@ -48,46 +51,69 @@ Landmass :: struct {
 	mutex:  sync.Mutex,   // pieces are formed one at a time, each after those it waits on
 	seconds: f64,      // spent forming its pieces
 	ready:  bool,      // its coarse stage is at hand
+	listed: bool,      // its pieces are regions in `formed` (regions_add): until then no point is any piece's
+	asked:  bool,      // its coarse stage is to be formed beside whatever else is done (lands_ask), by the player's hand or because the view came near
+	seen:   bool,      // the frame has seen it listed, and built again what was drawn where it lies (world.odin)
+	landing: [2]f64,   // where it is come ashore on foot: its land nearest the start, in the world, metres (mass_landing),
+	landing_piece: i32,   // the piece that is, or -1: nothing of it stands over the sea
 	kept:   bool,      // it was read back from where an earlier run kept it,
 	took:   f64,       // or formed in this many seconds
-	left:   bool,      // its coarse stage was stopped before it had run (lands_state.leave): it stays a record until the world is opened again
+	left:   bool,      // its coarse stage was stopped before it had run (lands_state.leave): it stays a record until it is asked for by hand or the world is opened again
 }
 
 MASS_ROUGH :: 80     // metres the starting ground wanders over a few km, so the coast does not follow the history's 2 km samples
 MASS_SHELF :: -600   // the deepest the sea floor inside the lattice starts at
 
 // A cell of a landmass's grid as the forming starts: the history's ground there, lowered by the
-// uplift still to come, and roughened. Where the known world's ground is another land mass's, it is
-// sea floor here: each mass is formed on its own lattice.
+// uplift still to come, and roughened. Where the known world's ground is another land mass's, or an
+// island's region, it is sea floor here: each is formed on its own lattice.
 mass_cell :: proc(g: ^Grid, c: int, x, z: f64) {
-	h: f32
-	h, g.uplift[c] = mass_ground(x, z)
-	if l, i, j := g.at, c%g.n + g.at.x, c/g.n + g.at.z; i == 0 || j == 0 || i == l.n - 1 || j == l.n - 1 do h = min(h, MASS_SHELF)   // the lattice's rim is sea, as a region's is
+	h, lift: f32
+	h, g.uplift[c], lift = mass_ground(x, z)
+	if l, i, j := g.at, c%g.n + g.at.x, c/g.n + g.at.z; i == 0 || j == 0 || i == l.n - 1 || j == l.n - 1 {   // the lattice's rim is sea, as a region's is, and stays so
+		h, g.uplift[c], lift = min(h, MASS_SHELF), 0, 0
+	}
 	g.sea[c] = h <= 0
-	g.z[c] = max(h, MASS_SHELF) if g.sea[c] else 0.5 + max(h, 0) + 12*(1 + fbm(x, z, 900, 1, 3, seed + 9))
+	g.z[c] = max(h, MASS_SHELF - lift) if g.sea[c] else 0.5 + max(h, 0) + 12*(1 + fbm(x, z, 900, 1, 3, seed + 9))   // the sea floor no deeper, once it has risen, than the shelf
 	u_ := rock_base(x, z, LAND_CELL)
 	g.base[c] = u_.base
 	if g.bodies != nil do g.bodies[c] = {u_.cover, u_.roof, u_.body}
 }
 
-// The history's ground at a point of a landmass as the forming starts, lowered by the uplift still to
-// come and roughened, and how fast it rises there, m/yr at the shape's rate of 1.
-mass_ground :: proc(x, z: f64) -> (h, uplift: f32) {
+// The history's ground at a point of a landmass as the forming starts, and how fast it rises there,
+// m/yr at the shape's rate of 1; with them, how far the sea floor there rises over the whole forming.
+//
+// The history's ground is today's, over today's sea. The forming runs with the sea as it stood
+// through the ice ages, lower by the last rise still to come (the kind's history), so the ground
+// starts that much higher over it: land the history has at 50 m stood 170 m over the low sea, was cut
+// into valleys down to it, and has the sea in those valleys today. (The first two parts started it at
+// the history's height over the low sea, and the last rise then drowned every part of a continent
+// under 120 m: more than half of seed 7's.) It is lowered by the uplift still to come, and roughened.
+// The crust rises under the sea as under the land (the shape's `bank`), so ground the history is
+// still raising out of the sea comes up through it in its time.
+mass_ground :: proc(x, z: f64) -> (h, uplift, lift: f32) {
 	m := region.mass
-	at := known_point(f64(region.origin.x) + x, f64(region.origin.y) + z)
+	wx, wz := f64(region.origin.x) + x, f64(region.origin.y) + z
+	at := known_point(wx, wz)
 	k, _ := known_at(at)
 	h = k.h
 	u, v := clamp(int((at.x + WINDOW/2)/KNOWN_STEP), 0, KNOWN_N - 1), clamp(int((at.y + WINDOW/2)/KNOWN_STEP), 0, KNOWN_N - 1)
-	if known.mass[v*KNOWN_N + u] != m.mass && h > 0 do h = -50
+	other := known.mass[v*KNOWN_N + u] != m.mass && h > 0
+	for is in archipelago do other ||= abs(wx - f64(is.origin.x)) < is.size/2 + MASS_APART && abs(wz - f64(is.origin.y)) < is.size/2 + MASS_APART
 	rates := past_at(at)
 	mean: f32
 	for r in rates do mean += r/PAST
 	uplift = max(mean, 0)/1000
-	left: f32
-	for p in region.history do left += p.steps*p.years*p.uplift
-	h += MASS_ROUGH*fbm(x, z, 5000, 1, 4, seed + 9) - uplift*left
-	return
+	left, rise: f32
+	for p in region.history {
+		left += p.steps*p.years*p.uplift
+		rise += p.sea
+	}
+	h += MASS_ROUGH*fbm(x, z, 5000, 1, 4, seed + 9) + rise - uplift*left
+	if other do return min(h, -50 - rise), 0, 0   // sea floor here, which does not rise: it is another's land
+	return h, uplift, f32(region.shape.bank)*uplift*left
 }
+MASS_APART :: 2048   // metres of sea a land mass's lattice keeps round an island's region
 
 ONWARD :: -3   // in `next`: the water leaves the piece of a landmass in hand into another, which carries it on
 
@@ -134,7 +160,9 @@ Holding :: struct {
 	leans:  []Lean,     // own cells that lean toward what an earlier neighbour made of them, a cell's entries together
 	out:    ^Band,      // what is kept of them
 	step:   int,        // steps taken at this cell size
-	rose:   []f32,      // each cell: m/yr the ground goes on rising as the rebound left the coarse stage rising (coarse.odin)
+	was:    []f32,      // each cell: the ground at the step's start, for the rebound
+	land:   []f32,      // each cell: the share of the rebound's square round it that is land in the coarse stage
+	sums:   []f64,      // the rebound's sums of rock worn and of land, over the cells above and to the left of each corner
 }
 
 // The held cells as they stand at a stage of this step: 0 at its start, 2 after creep, 3 after the coast.
@@ -165,6 +193,59 @@ held_lean :: proc(g: ^Grid) {
 		g.z[c] = math.lerp(g.z[c], sum/weight, most)
 		g.sea[c] = g.z[c] <= 0
 	}
+}
+
+// The crust goes on rising under a piece as rock is worn off it, by the coarse stage's own rule
+// (rebound, coarse.odin): ISOSTASY of the rock worn off the land this step, as its mean over a square
+// round each cell, the sea in it counting for nothing worn. A piece knows the land MARGIN past its cut
+// and no farther, so its square is twice that across, half the coarse stage's. What the land of the
+// square wore, the piece takes from the land it knows there: its own cells, its margin, and the cells
+// it holds of the pieces before it, as they wore in those pieces' forming. How much of the square is
+// land it takes from the coarse stage (`land`), which every piece reads alike: two pieces that know
+// different parts of one square must not take its sea differently, or the ground between them tilts
+// (tried: closed hollows 17 m deep along the cuts). The second part let a
+// piece go on rising at the rate the coarse stage's last steps left, whatever the piece itself wore:
+// finer cells wear a low land less than the coarse cells did, and it rose out of the sea.
+piece_rebound :: proc(g: ^Grid, dt: f32) #no_bounds_check {
+	h := g.holding
+	n := g.n
+	w := n + 1
+	if len(h.sums) != 2*w*w {
+		delete(h.sums)
+		h.sums = make([]f64, 2*w*w)
+	}
+	worn, count := h.sums[:w*w], h.sums[w*w:]
+	for y in 0..<n {
+		row_worn, row_count: f64
+		for x in 0..<n {
+			c := y*n + x
+			if !g.sea[c] {
+				if i := h.index[c]; i < 0 {
+					row_worn += f64(h.was[c] + g.uplift[c]*g.lift*dt - g.z[c])
+					row_count += 1
+				} else if h.band[i] != nil {   // held of a piece before it: as it wore there
+					row_worn += f64(h.vals[i].z0 - h.vals[i].z2)
+					row_count += 1
+				}
+			}
+			worn[(y + 1)*w + x + 1] = worn[y*w + x + 1] + row_worn
+			count[(y + 1)*w + x + 1] = count[y*w + x + 1] + row_count
+		}
+	}
+	Rise :: struct { g: ^Grid, r: int }
+	rise := Rise{g, int(MARGIN/g.d)}
+	shared(n, rows(n), &rise, proc(rise: ^Rise, lo, hi: int) {
+		g, h, n, r := rise.g, rise.g.holding, rise.g.n, rise.r
+		w := n + 1
+		worn, count := h.sums[:w*w], h.sums[w*w:]
+		#no_bounds_check for y in lo..<hi do for x in 0..<n {
+			c := y*n + x
+			if g.sea[c] || h.held[c] do continue
+			x0, y0, x1, y1 := max(x - r, 0), max(y - r, 0), min(x + r + 1, n), min(y + r + 1, n)
+			k := count[y1*w + x1] - count[y0*w + x1] - count[y1*w + x0] + count[y0*w + x0]
+			if k > 0 do g.z[c] += ISOSTASY*h.land[c]*f32((worn[y1*w + x1] - worn[y0*w + x1] - worn[y1*w + x0] + worn[y0*w + x0])/k)
+		}
+	})
 }
 
 // Fill this step's values of the held cells.
@@ -276,6 +357,7 @@ form_phases :: proc(g: ^Grid, from, upto: int, level: Leveller = nil, data: rawp
 				held_values(g)
 				held_stage(g, 0)
 				held_keep(g, 0)
+				copy(g.holding.was, g.z)
 			}
 			route(g)
 			if g.holding != nil do held_keep(g, 1)
@@ -288,7 +370,7 @@ form_phases :: proc(g: ^Grid, from, upto: int, level: Leveller = nil, data: rawp
 			}
 			coast(g, p.years)
 			if g.holding != nil {
-				for c in 0..<g.n*g.n do if !g.sea[c] do g.z[c] += g.holding.rose[c]*p.years   // the crust goes on rising as rock is worn off it (coarse.odin)
+				piece_rebound(g, p.years)
 				held_lean(g)
 				held_stage(g, 3)
 				held_keep(g, 4)
@@ -411,6 +493,37 @@ cut_make :: proc(g: ^Grid, most: int, margin: f32) -> (cut: Cut, own: []i32) {
 		bx^ = {min(bx.x, x), min(bx.y, y), max(bx.z, x), max(bx.w, y)}
 		for k in ([2]int{c + 1, c + n}) do if q := own[k] - 1; q >= 0 && q != a { beside[a][q] = true; beside[q][a] = true }
 	}
+	// The sea within SEA_REACH goes with the nearest land, nearest first, the land in the flood's order.
+	// Pieces whose seas meet lie beside each other too: an islet a few kilometres off a shore joins the
+	// piece of that shore, where it would else be a piece of its own, formed on a window of its own (a
+	// land mass whose sea floor rises has hundreds: seed 1's nearest was cut into 1,018 pieces).
+	reach := make([]u8, n*n)
+	defer delete(reach)
+	clear(&keys)
+	for b in batches do for ci in b.buf[b.lo:b.hi] {
+		c := int(ci)
+		if g.sea[c + 1] || g.sea[c - 1] || g.sea[c + n] || g.sea[c - n] do append(&keys, ckey(g, c))
+	}
+	slice.sort(keys[:])
+	queue := make([dynamic]i32)
+	defer delete(queue)
+	for k in keys do append(&queue, i32(u32(k)))
+	shore := len(queue)
+	for head := 0; head < len(queue); head += 1 {
+		c := int(queue[head])
+		if reach[c] >= SEA_REACH do continue
+		for o in FOUR {
+			x, y := c%n + o.x, c/n + o.y
+			if x < 0 || y < 0 || x >= n || y >= n do continue
+			k := y*n + x
+			if own[k] == 0 {
+				own[k], reach[k] = own[c], reach[c] + 1
+				append(&queue, i32(k))
+			} else if a, q := own[c] - 1, own[k] - 1; a != q {
+				beside[a][q], beside[q][a] = true, true
+			}
+		}
+	}
 	into := make([]i32, pieces)
 	defer delete(into)
 	for &v, i in into do v = i32(i)
@@ -469,31 +582,12 @@ cut_make :: proc(g: ^Grid, most: int, margin: f32) -> (cut: Cut, own: []i32) {
 		bx^ = {min(bx.x, b.x), min(bx.y, b.y), max(bx.z, b.z), max(bx.w, b.w)}
 		if r := g.next[roots[p]]; r >= 0 && own[r] - 1 != a do cut.down[a] = own[r] - 1
 	}
-	// The sea within SEA_REACH goes with the nearest land, nearest first, the land in the flood's order.
-	reach := make([]u8, n*n)
-	defer delete(reach)
-	clear(&keys)
-	for b in batches do for ci in b.buf[b.lo:b.hi] {
-		c := int(ci)
-		if g.sea[c + 1] || g.sea[c - 1] || g.sea[c + n] || g.sea[c - n] do append(&keys, ckey(g, c))
-	}
-	slice.sort(keys[:])
-	queue := make([dynamic]i32)
-	defer delete(queue)
-	for k in keys do append(&queue, i32(u32(k)))
-	for head := 0; head < len(queue); head += 1 {
-		c := int(queue[head])
-		if reach[c] >= SEA_REACH do continue
-		for o in FOUR {
-			x, y := c%n + o.x, c/n + o.y
-			if x < 0 || y < 0 || x >= n || y >= n do continue
-			if k := y*n + x; own[k] == 0 {
-				own[k], reach[k] = own[c], reach[c] + 1
-				append(&queue, i32(k))
-				bx := &cut.box[own[c] - 1]
-				bx^ = {min(bx.x, i32(x)), min(bx.y, i32(y)), max(bx.z, i32(x)), max(bx.w, i32(y))}
-			}
-		}
+	// The sea that went with each piece is the joined piece's, and its box takes it in.
+	for ki in queue[shore:] {
+		k := int(ki)
+		own[k] = number[own[k] - 1] + 1
+		bx := &cut.box[own[k] - 1]
+		bx^ = {min(bx.x, i32(k%n)), min(bx.y, i32(k/n)), max(bx.z, i32(k%n)), max(bx.w, i32(k/n))}
 	}
 	// Neighbours are pieces whose cells come within two of each other's, 128 m at 64 m, the BAND a
 	// piece holds of a neighbour at the finest cells.
@@ -662,7 +756,7 @@ piece_level :: proc(g: ^Grid, data: rawptr) {
 	pass, cut := f.pass, &all.m.cut
 	if g.holding != nil {   // the coarser grid's hold, gone with it
 		h := g.holding
-		delete(h.held); delete(h.index); delete(h.cells); delete(h.band); delete(h.at); delete(h.coarse); delete(h.vals); delete(h.into); delete(h.keep); delete(h.rose); delete(h.toward); delete(h.leans)
+		delete(h.held); delete(h.index); delete(h.cells); delete(h.band); delete(h.at); delete(h.coarse); delete(h.vals); delete(h.into); delete(h.keep); delete(h.was); delete(h.land); delete(h.sums); delete(h.toward); delete(h.leans)
 		free(h)
 		g.holding = nil
 	}
@@ -689,8 +783,26 @@ piece_level :: proc(g: ^Grid, data: rawptr) {
 	}
 	sweep(far, n, g.d)
 	h := new(Holding)
-	h.held, h.index, h.rose = make([]bool, n*n), make([]i32, n*n), make([]f32, n*n)
-	for c in 0..<n*n do h.rose[c] = store_rose(&all.m.store, (f32(c%n + g.at.x) + 0.5)*g.d/64, (f32(c/n + g.at.z) + 0.5)*g.d/64)
+	h.held, h.index, h.was, h.land = make([]bool, n*n), make([]i32, n*n), make([]f32, n*n), make([]f32, n*n)
+	{   // the share of land in the rebound's square round each coarse cell of the window, as the coarse stage has it, then each cell's
+		st := &all.m.store
+		m, r := pass.n, int(MARGIN/pass.d)
+		wide := m + 2*r   // the window and the square's reach round it
+		sums := make([]i32, (wide + 1)*(wide + 1), context.temp_allocator)
+		for y in 0..<wide {
+			row: i32
+			for x in 0..<wide {
+				slot, k := store_at(st, pass.at.x + x - r, pass.at.z + y - r)
+				row += i32(slot >= 0 && st.next[slot][k] != NEXT_SEA)
+				sums[(y + 1)*(wide + 1) + x + 1] = sums[y*(wide + 1) + x + 1] + row
+			}
+		}
+		for c in 0..<n*n {
+			x, z := clamp((c%n + g.at.x)/scale - pass.at.x, 0, m - 1), clamp((c/n + g.at.z)/scale - pass.at.z, 0, m - 1)
+			x1, y1 := x + 2*r + 1, z + 2*r + 1   // in the wider window the cell stands r in, so its square runs from its own place to 2r past
+			h.land[c] = f32(sums[y1*(wide + 1) + x1] - sums[z*(wide + 1) + x1] - sums[y1*(wide + 1) + x] + sums[z*(wide + 1) + x])/f32((2*r + 1)*(2*r + 1))
+		}
+	}
 	slice.fill(h.index, -1)
 	cells, bands, at, coarse := make([dynamic]i32), make([dynamic]^Band), make([dynamic]i32), make([dynamic]Held)
 	// The coarse pass at a point, metres from the lattice's corner: its height by the four cells round it.
@@ -836,19 +948,31 @@ lands: []Landmass   // every land mass of the known world larger than a region, 
 // How the land larger than a region stands as a whole, for the thread that makes a world and the
 // screens that watch it (making.odin, chart.odin): each a word, stored whole.
 Lands_State :: struct {
-	regions: bool,      // the pieces of the land masses at hand are regions in `formed` (regions_make): until then no point is anybody's piece
 	step, steps: i32,   // how far the coarse stages being formed have come, of how many steps of their histories: for the eye
 	forming: i32,       // the land mass whose coarse stage is being formed, or 0
 	leave:   bool,      // the coarse stage being formed is to be left where it stands, and those after it: they stay records
 	expect:  f64,       // seconds the coarse stages to be formed are expected to take in all (mass_seconds)
 	began:   time.Time, // when the first of them was begun
+	asking:  bool,      // the one being formed was asked for after the world was made (lands_ask), not by its making
+	gently:  bool,      // play is going on: a coarse stage formed now leaves play its cores (lands_share)
+	told:    i32,       // the land mass play last said was being formed, or 0 (lands_tell)
 }
 lands_state: Lands_State
 
-// Seconds a land mass's coarse stage takes to form on this kind of machine, about: 25 s for 45,000 km²
-// and 200 to 360 s for 317,000 km², by the load (continents-forming.md). For the screen that says
-// what forming one would cost.
-mass_seconds :: proc(m: ^Landmass) -> f64 { return 5 + 0.0008*f64(m.area) }
+// Whether a land mass's pieces are regions: what says a point of the world is one of its pieces'.
+mass_listed :: #force_inline proc(m: ^Landmass) -> bool { return sync.atomic_load_explicit(&m.listed, .Acquire) }
+
+// Whether any large land's pieces are regions.
+lands_listed :: proc() -> bool {
+	for &m in lands do if mass_listed(&m) do return true
+	return false
+}
+
+// The steps the coarse stage of the land mass bound takes: its 64 m phases, and its run on to today.
+mass_steps :: proc() -> (steps: int) {
+	for p in region.history do steps += int(p.steps) if p.cell >= 64 else today_steps(p)
+	return
+}
 
 // The coarse stages of the world's land masses (mass_pass), as start-up and the making of a world
 // both ask for them: one that is kept is read back; one that is not is formed if `all` is asked for
@@ -867,7 +991,7 @@ lands_pass :: proc(views: [][2]f64, all, none: bool) -> (pieces: int) {
 		form[i] = all || near <= COARSE_REACH
 		if form[i] && !os.exists(pass_path(&m)) {
 			mass_bind(&m, &m.frame, -1, m.origin, m.side)
-			for p in region.history do if p.cell >= 64 do steps += int(p.steps)
+			steps += mass_steps()
 			expect += mass_seconds(&m)
 		}
 	}
@@ -878,6 +1002,7 @@ lands_pass :: proc(views: [][2]f64, all, none: bool) -> (pieces: int) {
 	for &m, i in lands {
 		if mass_pass(&m, form[i] && !sync.atomic_load(&ls.leave)) do pieces += len(m.cut.size)
 		else do left, left_area = left + 1, left_area + m.area
+		sync.atomic_store(&ls.forming, 0)
 	}
 	if left > 0 do fmt.printfln("land larger than a region: %d land masses, %.0f km², lie beyond what is drawn from here and their coarse stage is not kept, or were left: they stay records until a view comes within %.0f km of them or --continent=1 forms the whole world's", left, left_area, f64(COARSE_REACH)/1000)
 	if pieces > 0 do fmt.printfln("land larger than a region: the coarse stages at hand in %.1f s, %d pieces in all", time.duration_seconds(time.since(began)), pieces)
@@ -888,8 +1013,8 @@ lands_pass :: proc(views: [][2]f64, all, none: bool) -> (pieces: int) {
 // mapped) and its cut freed. The pieces formed stay where they lie, as formed islands do, and so do
 // the records themselves, which those pieces still point at (making.odin). No thread is forming.
 lands_drop :: proc() {
-	sync.atomic_store_explicit(&lands_state.regions, false, .Release)
 	for &m in lands {
+		sync.atomic_store_explicit(&m.listed, false, .Release)
 		if !m.ready do continue
 		m.ready = false
 		store_close(&m.store)
@@ -907,16 +1032,14 @@ lands_drop :: proc() {
 
 // How many pieces of the land masses at hand lie within `reach` metres of a point and are not formed.
 masses_near :: proc(at: [2]f64, reach: f64) -> (count: int) {
-	if !sync.atomic_load_explicit(&lands_state.regions, .Acquire) do return
-	for &m in lands do if m.ready do for p in mass_order(&m, at, reach) do count += int(!is_formed(&formed[m.first + int(p)]))
+	for &m in lands do if mass_listed(&m) do for p in mass_order(&m, at, reach) do count += int(!is_formed(&formed[m.first + int(p)]))
 	return
 }
 
 // Form the pieces within `reach` metres of a point, each after those it waits on, side by side: what
 // must stand before a world is entered there. Returns how many were asked for.
 masses_form :: proc(at: [2]f64, reach: f64) -> (count: int) {
-	if !sync.atomic_load_explicit(&lands_state.regions, .Acquire) do return
-	for &m in lands do if m.ready {
+	for &m in lands do if mass_listed(&m) {
 		near := mass_order(&m, at, reach, context.allocator)   // its own memory: forming frees the temporary as it goes
 		was := quiet
 		quiet = true
@@ -958,6 +1081,7 @@ lands_make :: proc() {
 	for m in lands do all += m.area
 	fmt.printfln("land larger than a region in the known world: %d land masses, %.0f km² in all; the nearest the start %.0f km² of land, its coast %.0f km off at %.0f, %.0f, the history's ground up to %.0f m; the largest %.0f km²",
 		len(lands), all, lands[0].area, lands[0].near/1000, lands[0].shore.x, lands[0].shore.y, lands[0].top, slice.max(slice.mapper(lands, proc(m: Landmass) -> f32 { return m.area }, context.temp_allocator)))
+	for m in lands[1:] do fmt.printfln("  land mass %d: %.0f km² of land, its coast %.0f km off at %.0f, %.0f", m.mass, m.area, m.near/1000, m.shore.x, m.shore.y)
 }
 
 // Bind a landmass's own region, or a piece's, its record drawn from the landmass's seed as an island's is.
@@ -998,25 +1122,36 @@ mass_pass :: proc(m: ^Landmass, form: bool) -> bool {
 	if !kept {
 		if !form do return false
 		fmt.printfln("land mass %d: %.0f km² of land in the known world, on a lattice %.0f km across, its middle at %d, %d: its coarse stage, the whole of it through the 64 m phases", m.mass, m.area, m.side/1000, m.origin.x, m.origin.y)
-		sync.atomic_store(&lands_state.forming, m.mass)
+		sync.atomic_store(&lands_state.forming, m.mass)   // until its pieces are cut and kept: the caller says when it is in hand no longer
 		g := coarse_form(n, m.from)
-		sync.atomic_store(&lands_state.forming, 0)
-		if sync.atomic_load(&lands_state.leave) {   // left where it stood: nothing of it is kept, and it stays a record
+		if sync.atomic_load(&lands_state.leave) || sync.atomic_load(&forming.stop) {   // left where it stood: nothing of it is kept, and it stays a record
 			coarse_free(g)
 			grid_free(g)
-			m.left = true
+			m.left = sync.atomic_load(&lands_state.leave)   // by the player's word; stopped with its world, it is asked for again when the world goes on
 			fmt.printfln("land mass %d: its coarse stage was left before it had run; it stays a record", m.mass)
 			return false
 		}
+		// It is cut and kept as the pieces take it up, then run on to today for what is drawn of it from
+		// afar (coarse_today), which is kept with it.
 		cutting := time.now()
 		cut, own := cut_make(g, PIECE_KM2*1e6/4096, MARGIN)
 		cut_time := time.duration_seconds(time.since(cutting))
 		_ = os.make_directory(os.dir(path))
-		if !store_write(path, g, &cut, own) do fmt.eprintln("could not keep the coarse stage in", path)
-		fmt.printfln("land mass %d: cut along its drainage into %d pieces in %.1f s, and kept in %.1f s", m.mass, len(cut.size), cut_time, time.duration_seconds(time.since(cutting)) - cut_time)
+		temp := store_write(path, g, &cut, own)
+		kept_time := time.duration_seconds(time.since(cutting)) - cut_time
 		delete(own)
+		today := time.now()
+		whole := temp != "" && coarse_today(g, m.from)
+		if temp == "" do fmt.eprintln("could not keep the coarse stage in", path)
+		else if !store_today(temp, path, g if whole else nil) && whole do fmt.eprintln("could not keep the coarse stage in", path)
+		fmt.printfln("land mass %d: cut along its drainage into %d pieces in %.1f s, kept in %.1f s, and run on to today in %.1f s", m.mass, len(cut.size), cut_time, kept_time, time.duration_seconds(time.since(today)))
 		coarse_free(g)
 		grid_free(g)
+		if temp != "" && !whole {   // left on the way to today: nothing of it is kept
+			m.left = sync.atomic_load(&lands_state.leave)
+			fmt.printfln("land mass %d: its coarse stage was left before it had run; it stays a record", m.mass)
+			return false
+		}
 		if !store_open(&m.store, path, n) do return false
 	}
 	// The cut, as it is kept.
@@ -1034,6 +1169,7 @@ mass_pass :: proc(m: ^Landmass, form: bool) -> bool {
 	for &l in c.near do slice.sort(l[:])
 	m.all = Pieces{m = m, from = m.from, margin = MARGIN, formed = make([]bool, count)}
 	m.took = time.duration_seconds(time.since(started))
+	m.landing, m.landing_piece = mass_landing(m)
 	sync.atomic_store(&m.ready, true)
 	// How many pieces each waits on: the cost of forming one alone, anywhere.
 	waits := make([]int, count, context.temp_allocator)
@@ -1061,14 +1197,57 @@ mass_pass :: proc(m: ^Landmass, form: bool) -> bool {
 // The landmass whose lattice holds a point in the world and the piece the point lies in, or nil: off
 // every lattice, or out on the open sea.
 mass_piece :: proc(x, z: f64) -> (^Landmass, int) {
-	if !sync.atomic_load_explicit(&lands_state.regions, .Acquire) do return nil, -1
-	for &m in lands do if m.ready {
+	for &m in lands do if mass_listed(&m) {
 		n := m.store.n
 		u, v := int(math.floor((x - f64(m.origin.x))/64 + f64(n)/2)), int(math.floor((z - f64(m.origin.y))/64 + f64(n)/2))
 		if p := store_owner(&m.store, u, v); p >= 0 do return &m, p
 	}
 	return nil, -1
 }
+
+// Where a large land is come ashore on foot: the cell of its coarse stage nearest the start whose
+// ground stands a few metres over the sea as it is today with land round it (half the square 2 km
+// across: a shore of the land itself, not an islet off it), and the piece that cell is of. The
+// squares are read nearest the start first, so only those near its near shore are read. Where no
+// shore has land round it, the nearest ground of any kind.
+mass_landing :: proc(m: ^Landmass) -> (at: [2]f64, piece: i32) {
+	st := &m.store
+	piece = -1
+	start := world_frame.origin
+	Square :: struct { far: f64, sq: i32 }
+	squares := make([dynamic]Square, context.temp_allocator)
+	corner := [2]f64{f64(m.origin.x), f64(m.origin.y)} - f64(st.n)*32
+	for slot, sq in st.slot do if slot >= 0 {
+		lo := corner + [2]f64{f64(sq%st.m), f64(sq/st.m)}*SQUARE*64
+		append(&squares, Square{math.hypot(max(lo.x - start.x, start.x - lo.x - SQUARE*64, 0), max(lo.y - start.y, start.y - lo.y - SQUARE*64, 0)), i32(sq)})
+	}
+	slice.sort_by(squares[:], proc(a, b: Square) -> bool { return a.far < b.far || a.far == b.far && a.sq < b.sq })
+	ROUND :: 16   // cells either side: 2 km across
+	for wide in ([2]bool{true, false}) {
+		best := f64(1e18)
+		for s in squares {
+			if s.far >= best do break
+			slot := st.slot[s.sq]
+			for k in 0..<KEPT_CELLS do if st.owner[slot][k] >= 0 && st.now[slot][k] >= 3 {
+				i, j := int(s.sq)%st.m*SQUARE + k%SQUARE, int(s.sq)/st.m*SQUARE + k/SQUARE
+				p := corner + [2]f64{f64(i) + 0.5, f64(j) + 0.5}*64
+				far := math.hypot(p.x - start.x, p.y - start.y)
+				if far >= best do continue
+				if wide {
+					land := 0
+					for y in j - ROUND..=j + ROUND do for x in i - ROUND..=i + ROUND do land += int(store_now(st, x, y) > 0)
+					if 2*land < (2*ROUND + 1)*(2*ROUND + 1) do continue
+				}
+				best, at, piece = far, p, i32(st.owner[slot][k])
+			}
+		}
+		if piece >= 0 do return
+	}
+	return
+}
+
+// Metres round where a large land is come ashore within which its pieces are formed before it is walked.
+WALK_REACH :: 8_000
 
 // The world square a piece forms on: its middle and side.
 piece_square :: proc(m: ^Landmass, p: i32) -> (origin: [2]i32, size: f64) {
@@ -1187,7 +1366,7 @@ mass_order :: proc(m: ^Landmass, at: [2]f64, reach: f64, allocator := context.te
 	return order
 }
 
-PASS_VERSION :: 6   // raised whenever what this file or coarse.odin does to form or keep the coarse stage changes
+PASS_VERSION :: 8   // raised whenever what this file or coarse.odin does to form or keep the coarse stage changes
 
 // Where the coarse stage of a landmass is kept: beside the known world, named by the seed and by what
 // forms it, so a change to the forming forms it again.
@@ -1434,7 +1613,7 @@ piece_crop :: proc(g: ^Grid, m: ^Landmass, p: i32) -> ^Grid {
 	for x in 0..<side do for y in ([2]int{0, side - 1}) do c.sea[y*side + x], c.sea[x*side + y] = true, true   // the rim, as an island's, so what reads a neighbour stays on the grid
 	h := g.holding
 	if h != nil {
-		delete(h.held); delete(h.index); delete(h.cells); delete(h.band); delete(h.at); delete(h.coarse); delete(h.vals); delete(h.into); delete(h.keep); delete(h.rose)
+		delete(h.held); delete(h.index); delete(h.cells); delete(h.band); delete(h.at); delete(h.coarse); delete(h.vals); delete(h.into); delete(h.keep); delete(h.was); delete(h.land); delete(h.sums); delete(h.toward); delete(h.leans)
 		free(h)
 		g.holding = nil
 	}
@@ -1497,7 +1676,7 @@ coarse_form :: proc(n, upto: int) -> ^Grid {
 	} else do mass_phases(g, upto)
 	co := g.coarse
 	fmt.printfln("the coarse stage in parallel: %d steps in %.1f s: routing %.1f (of it the flood through hollows %.1f in blocks, %.1f in wide blocks, %.1f over the whole lattice), cutting %.1f, creep %.1f, the coast %.1f, the rebound %.1f, starting cells %.1f; %d steps routed plainly because a cell did not check",
-		co.steps, time.duration_seconds(time.since(started)), co.took[0], co.flood[0], co.flood[1], co.flood[2], co.took[1], co.took[2], co.took[3], co.took[4], co.took[5], co.failed)
+		co.steps, time.duration_seconds(time.since(started)), co.took[0], co.flood[0], co.flood[1] + co.flood[2], co.flood[3], co.took[1], co.took[2], co.took[3], co.took[4], co.took[5], co.failed)
 	return g
 }
 
@@ -1517,15 +1696,19 @@ mass_focus: [2]f64
 KEEP_THREADS :: 3   // threads that form pieces beside play
 LET_GO   :: 1.5   // a piece this many times the reach from the player is let go,
 GRACE    :: 8     // and its land's memory freed this many seconds later, when nothing that was reading it still is
+SIGHT    :: 65_000   // metres the view reaches from the ground: land nearer than this can be seen
+AHEAD    :: 250      // m/s: the fastest the view is taken to travel when a land is formed ahead of it; faster, it has jumped, and no forming can go before it
 
-// Keep the landmasses' pieces within reach of the view (`mass_focus`, `mass_reach`) formed, nearest
+// Keep the large lands' pieces within reach of the view (`mass_focus`, `mass_reach`) formed, nearest
 // first, on one thread of low priority beside play or the screens before it; and let go those left
 // far behind, which are read back from where they were kept when the view comes near again, so that
 // what is held does not grow with how far the player has been. Asked for more than once, it is begun
-// once; it ends when forming is told to stop.
+// once; it ends when forming is told to stop. With it the thread that forms the coarse stages asked
+// for is begun (lands_watch), which in play asks for a land as the view nears it.
 masses_keep :: proc() {
+	lands_watch()
 	sync.guard(&forming.mutex)
-	if keeper != nil || mass_reach <= 0 || !sync.atomic_load_explicit(&lands_state.regions, .Acquire) do return
+	if keeper != nil || mass_reach <= 0 || len(lands) == 0 do return
 	keeper = thread.create_and_start(proc() {
 		alone, quiet = true, true
 		Gone :: struct { f: ^Formed, at: time.Time }
@@ -1534,7 +1717,7 @@ masses_keep :: proc() {
 		for !sync.atomic_load(&forming.stop) {
 			at := mass_focus
 			formed_one := false
-			for &m in lands do if m.ready && !formed_one {
+			for &m in lands do if mass_listed(&m) && !formed_one {
 				for p in mass_order(&m, at, mass_reach, context.allocator) do if f := &formed[m.first + int(p)]; !is_formed(f) {   // its own memory: forming frees the temporary as it goes
 					waiting := false
 					for g in gone do waiting ||= g.f == f   // let go a moment ago, and not yet freed
@@ -1544,8 +1727,8 @@ masses_keep :: proc() {
 					break
 				}
 			}
-			for &m in lands do if m.ready do for p in 0..<i32(len(m.cut.size)) {
-				if f := &formed[m.first + int(p)]; is_formed(f) && mass_off(&m, p, at) > LET_GO*mass_reach {
+			for &m in lands do if mass_listed(&m) do for p in 0..<i32(len(m.cut.size)) {
+				if f := &formed[m.first + int(p)]; f != home && is_formed(f) && mass_off(&m, p, at) > LET_GO*mass_reach {   // never the ground play stands on
 					sync.atomic_store_explicit(&f.ready, false, .Release)
 					append(&gone, Gone{f, time.now()})
 				}
@@ -1560,17 +1743,116 @@ masses_keep :: proc() {
 	}, priority = .Low)
 }
 keeper: ^thread.Thread   // the thread that keeps pieces formed; made and ended under forming.mutex
+lander: ^thread.Thread   // the thread that forms the coarse stages asked for; made and ended under forming.mutex
 mass_reach: f64          // metres round the view within which pieces are kept formed (--reach); none are kept at 0
 
-// Wait for the keeper, which forming.stop has told to end (forming_stop, making.odin).
+// How near the view a land's coarse stage is begun in play: within what is drawn, and farther by how
+// far the view travels while it forms, twice over, so that it stands before its coast comes in sight.
+lands_ahead :: proc(m: ^Landmass, speed: f64) -> f64 {
+	return max(COARSE_REACH, SIGHT + 2*speed*BESIDE_PLAY*mass_seconds(m))
+}
+
+// Ask for every large land the view has come near whose coarse stage is not at hand. One the player
+// left as known is not asked for again but by hand, nor any where the world's large lands were asked
+// to be left records (--continent=0).
+lands_near :: proc(at: [2]f64, speed: f64) {
+	if making.continent == 0 do return
+	for &m in lands do if !sync.atomic_load(&m.ready) && !sync.atomic_load(&m.asked) && !m.left {
+		if mass_from(&m, at) <= lands_ahead(&m, speed) do sync.atomic_store(&m.asked, true)
+	}
+}
+
+// Ask for a large land's coarse stage to be formed beside whatever else is done: from its card on the
+// world's map, or because play came near it. A thread of its own forms those asked for, one after
+// another, and adds each one's pieces to the world's regions (regions_add), after which the pieces
+// near the view are formed as any are (masses_keep). It ends at the word forming ends at, and is
+// waited for with the rest (masses_end). False where it cannot be asked for now.
+lands_ask :: proc(i: int) -> bool {
+	if i < 0 || i >= len(lands) || sync.atomic_load(&forming.stop) || !sync.atomic_load(&making.massed) do return false
+	m := &lands[i]
+	if sync.atomic_load(&m.ready) do return false
+	m.left = false
+	sync.atomic_store(&m.asked, true)
+	lands_watch()
+	return true
+}
+
+// Begin the thread that forms the coarse stages asked for, one after another, if it is not begun and
+// the world has a large land not yet at hand. While play goes on it watches how fast the view travels
+// and asks for each land the view nears (lands_near).
+lands_watch :: proc() {
+	all := true
+	for &l in lands do all &&= sync.atomic_load(&l.ready)
+	sync.guard(&forming.mutex)
+	if lander != nil || all || sync.atomic_load(&forming.stop) do return
+	lander = thread.create_and_start(proc() {
+		ls := &lands_state
+		was, at_time, speed := mass_focus, time.now(), f64(0)
+		for !sync.atomic_load(&forming.stop) {
+			// How fast the view travels, eased over a few seconds, and by that how far ahead a land is asked for.
+			if dt := time.duration_seconds(time.since(at_time)); dt > 0.2 {
+				at := mass_focus
+				speed += (min(math.hypot(at.x - was.x, at.y - was.y)/dt, AHEAD) - speed)*min(dt/3, 1)
+				was, at_time = at, time.now()
+				if sync.atomic_load(&ls.gently) do lands_near(at, speed)
+			}
+			m: ^Landmass
+			for &l in lands do if sync.atomic_load(&l.asked) && !l.ready && m == nil do m = &l
+			if m == nil {
+				time.sleep(100*time.Millisecond)
+				continue
+			}
+			// It is in hand from here: the word to leave it is its own, and one that was asked for no longer
+			// in the moment before is let be (the card's Leave it as known, door.odin).
+			sync.atomic_store(&ls.leave, false)
+			sync.atomic_store(&ls.step, 0)
+			sync.atomic_store(&ls.steps, 0)
+			sync.atomic_store(&ls.asking, true)
+			sync.atomic_store(&ls.forming, m.mass)
+			if !sync.atomic_load(&m.asked) {
+				sync.atomic_store(&ls.forming, 0)
+				sync.atomic_store(&ls.asking, false)
+				continue
+			}
+			mass_bind(m, &m.frame, -1, m.origin, m.side)
+			steps := mass_steps()
+			ls.expect, ls.began = mass_seconds(m)*(BESIDE_PLAY if sync.atomic_load(&ls.gently) else 1), time.now()
+			sync.atomic_store(&ls.steps, i32(steps) if !os.exists(pass_path(m)) else 0)
+			sharing = lands_share()
+			if mass_pass(m, true) {
+				// Its pieces are regions from here on. The map's painter is begun again, for its picture.
+				painting := chart.painter != nil
+				if painting do chart_painter_end()
+				regions_add(m)
+				if painting do chart_painter_begin()
+			}
+			sync.atomic_store(&m.asked, false)
+			sync.atomic_store(&ls.forming, 0)
+			sync.atomic_store(&ls.asking, false)
+			sync.atomic_store(&ls.steps, 0)
+			sync.atomic_store(&ls.step, 0)
+			free_all(context.temp_allocator)
+			was, at_time = mass_focus, time.now()   // the view's speed is taken up again from here
+		}
+	})
+}
+
+// How many helper threads a coarse stage may share its work among: all of them, or, while play goes
+// on, few enough that play keeps its cores.
+lands_share :: proc() -> int {
+	return max(os.get_processor_core_count()/2 - 3, 1) if sync.atomic_load(&lands_state.gently) else 0
+}
+BESIDE_PLAY :: 1.5   // a coarse stage formed beside play takes about this many times as long (seed 7's west land: 12 s where it is 8 s before play)
+
+// Wait for the keeper and the lander, which forming.stop has told to end (forming_stop, making.odin).
 masses_end :: proc() {
 	sync.lock(&forming.mutex)
-	k := keeper
-	keeper = nil
+	k, l := keeper, lander
+	keeper, lander = nil, nil
 	sync.unlock(&forming.mutex)
-	if k != nil {
-		thread.join(k)
-		thread.destroy(k)
+	for t in ([2]^thread.Thread{k, l}) do if t != nil {
+		thread.join(t)
+		thread.destroy(t)
 	}
 }
 
