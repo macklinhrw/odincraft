@@ -131,6 +131,7 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
   - The cut takes off the dwarves' heads and bodies, and their feet sink into the floor.
   - The menus are badly designed. Dig offers "a room", which has nothing to do with rooms and only digs two blocks high, and "a stair down", which only digs a block. Fell has the same fault.
   - **There is no place for what is gathered.** "Unlike in dwarf fortress or rimworld i dont define a region where materials i gathered, it goes who knows where and i cant see it."
+  - The card at the lower left opens on every click: "i might want to see it sometimes but everytime i click anything it shows."
   - "Where did all the research time go to? Did you learn nothing? I'm massively dissapointed."
 - **What follows, at the owner's word:** goods are things that lie in the world and are carried to a place the player marks for them, now and not in P5. Orders are named for what the player gets and work as a player of those two games expects. No play step is merged again until it has been played through by script, from the player's seat, and its pictures judged against those expectations.
 
