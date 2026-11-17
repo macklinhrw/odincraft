@@ -41,7 +41,7 @@ TOOL_ROWS := [Tool]Tool_Row{
 	.Gather = {"Gather", "Mark plants and trees that bear food to be gathered.", "orders.gather"},
 	.Fish   = {"Fish", "Mark fresh water to be fished.", "orders.fish"},
 	.Send   = {"Send", "Send the party to stand somewhere.", "orders.send"},
-	.Remove = {"Remove", "Take marks back; or take built blocks down; or put a fire out; or take ground out of a stockpile or a sleeping place.", "orders.remove"},
+	.Remove = {"Remove", "Take marks back; or take built blocks down; or put a fire out; or take a rack down; or take ground out of a stockpile or a sleeping place.", "orders.remove"},
 }
 Choice :: struct { plan: Plan, name, says: string, line: bool }   // line: it is dragged as a line, not a rectangle
 DIG_CHOICES := [?]Choice{
@@ -55,6 +55,7 @@ BUILD_CHOICES := [?]Choice{
 	{.Roof, "Roof", "One layer over this level: begun on the top of a wall, it lies on the walls and roofs what they stand round.", false},
 	{.Stair, "Stair up", "Steps built up from this level, a block up for each block along the drag.", true},
 	{.Fire, "Fire", "A fire, laid of a log and lit where you click. It warms those by it and dries them, lights the night, and is fed from the timber the hold has.", false},
+	{.Rack, "Rack", "Drying racks, each of a log, one on every place dragged over. Fresh fish and shoots are brought to them and dried, and what is dried does not spoil. Beside a fire they dry twice as fast, and in the rain.", false},
 }
 DEEPEST :: 4   // blocks deep a dig, or high a wall, may be set
 
@@ -69,6 +70,7 @@ Bar :: struct {
 	job:      int,          // the order whose card is in the hand, or -1
 	zone:     int,          // the stockpile or the sleeping place in the hand, or -1
 	fire:     int,          // the fire in the hand, among those the hold last showed, or -1
+	bench:    int,          // and the rack in the hand, or -1 (bench_view.odin)
 	roofed:   int,          // with Sleep: how many of the places it would mark are under a roof
 	lens_boxes: [dynamic]Map_Box,   // the shelter lens: the ground under a roof round the view's middle (shelter_scan)
 	lens_key: u64,          // what they were read for
@@ -98,11 +100,11 @@ Bar :: struct {
 	picked_v: int,
 	way:      int,          // with Remove: how many marks, built blocks or places it would take
 	built:    map[[3]i32]Plan,   // the blocks the dwarves laid that stand, and what each was laid as: told by the hold as they are laid and dug
-	undo:     enum u8 { Marks, Built, Fire, Zone },   // what Remove would take away here
+	undo:     enum u8 { Marks, Built, Fire, Rack, Zone },   // what Remove would take away here
 	said:     [4]string,    // the alerts as last raised
 }
 Preview_Key :: struct { tool: Tool, dig, build: Plan, stuff: Stuff, takes: Takes, deep, high: i32, a, b: [3]i32, press: [3]i32, dragged, pressed: bool, volume: int, marks: int, day, taken: int }
-bar := Bar{dig = .Out, build = .Wall, deep = 2, high = 2, job = -1, fire = -1}
+bar := Bar{dig = .Out, build = .Wall, deep = 2, high = 2, job = -1, fire = -1, bench = -1}
 
 // Take a tool in the hand, or put it down; the same tool again puts it down. In first person Send
 // sends the party to the block aimed at.
@@ -191,6 +193,7 @@ tool_order :: proc(a: ^Above, m0, m1: [3]i32, press: Pick, dragged: bool) -> (o:
 			if far == m0 do far = m0 + ahead(a)*2
 			return {kind = .Build, shape = .Stair, stuff = bar.stuff, at = m0, to = far}, true
 		case .Fire:  return {kind = .Build, shape = .Fire, stuff = .Timber, at = m0, to = m0}, true   // one fire, where the press fell
+		case .Rack:  return {kind = .Build, shape = .Rack, stuff = .Timber, at = m0, to = m1}, true   // a rack on every place dragged over
 		}
 	case .Store:  return {kind = .Store, at = m0, to = m1, takes = bar.takes}, true
 	case .Sleep:  return {kind = .Sleep, at = m0, to = m1}, true
@@ -262,7 +265,7 @@ bar_frame :: proc() {
 		bar.job = job_of(u.hand)
 	}
 	if _, ok := site_seen(bar.job); !ok do bar.job = -1
-	bar.zone, bar.fire = -1, -1
+	bar.zone, bar.fire, bar.bench = -1, -1, -1
 	if u.hand.kind == .Zone {   // the stockpile in the hand, while the ground it was taken by is still its ground
 		if z, on := zone_under(u.hand.block + {0, 1, 0}); on do bar.zone = z.id
 		else do hand_drop()
@@ -270,6 +273,10 @@ bar_frame :: proc() {
 	if u.hand.kind == .Fire {   // the fire in the hand, while it stands
 		for f, k in watch.seen.fires do if f.at == u.hand.block do bar.fire = k
 		if bar.fire < 0 do hand_drop()
+	}
+	if u.hand.kind == .Rack {   // the rack in the hand, while it stands
+		for b, k in watch.seen.benches do if b.at == u.hand.block do bar.bench = k
+		if bar.bench < 0 do hand_drop()
 	}
 	shelter_scan()
 	preview()
@@ -362,6 +369,10 @@ preview :: proc() {
 		if bar.way == 0 {
 			bar.undo = .Fire
 			for f in watch.seen.fires do bar.way += int(f.at.x >= lo.x && f.at.x <= hi.x && f.at.z >= lo.z && f.at.z <= hi.z)
+		}
+		if bar.way == 0 {
+			bar.undo = .Rack
+			for b in watch.seen.benches do bar.way += int(b.at.x >= lo.x && b.at.x <= hi.x && b.at.z >= lo.z && b.at.z <= hi.z)
 		}
 		if bar.way == 0 {
 			bar.undo = .Zone
@@ -495,7 +506,7 @@ marks_bind :: proc(g: ^Gpu, eye, focus: [3]f64) -> (texture: ^sdl.GPUTexture, at
 // each tree to fell and a small block for each block to lay.
 marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 	s, a := &watch.seen, play.a
-	boxes := fires_view(piles_view(boxes, eye, a.at if !play.afoot^ else eye), eye)
+	boxes := benches_view(fires_view(piles_view(boxes, eye, a.at if !play.afoot^ else eye), eye), eye, a.at if !play.afoot^ else eye)
 	// The blocks themselves go to the map the terrain reads (marks_bind): the stockpiles' ground,
 	// then what is marked to be dug, the order in the hand, and what the tool would mark, each over
 	// the one before. Only the ground over a mark is still a box of the frame's own.
@@ -648,6 +659,15 @@ tool_says :: proc() -> string {
 			reach := FIRE_REACH
 			where_ := fmt.tprintf("Indoors: it warms %d steps round it", reach[1]) if indoors(s) else fmt.tprintf("%s: it warms %d steps round it", "Under a roof with no walls" if s.roof else "In the open", reach[0])
 			return fmt.tprintf("A fire, of a log. %s%s.%s", where_, "" if s.roof else ", and burns three times as fast in rain", " No timber lies anywhere: it waits." if stuff_lying(.Timber) == 0 else "")
+		case .Rack:   // how many, what they hold, and whether a fire burns by them (bench_pace)
+			row := BENCHES[.Rack]
+			by_fire := false
+			reach := FIRE_REACH
+			for c in bar.cells do for f in watch.seen.fires do by_fire ||= f.lit && abs(f.at.x - c.x) <= reach[0] && abs(f.at.z - c.z) <= reach[0] && abs(f.at.y - c.y) <= 2
+			timber := stuff_lying(.Timber)
+			wants := fmt.tprintf(" %d timber to be had: the rest waits.", timber) if timber < n else ""
+			return fmt.tprintf("%s, of %s: %d things dry at a time. %s.%s", "A rack" if n == 1 else fmt.tprintf("%d racks", n), "a log" if n == 1 else fmt.tprintf("%d logs", n), n*int(row.holds),
+				"By a fire: twice as fast, rain or none" if by_fire else "In sun and wind; not in rain, unless a fire burns by them", wants)
 		}
 	case .Sleep:
 		if !pressed do if z, on := zone_under(bar.aim.block + {0, 1, 0}); on && z.sleep do return fmt.tprintf("A sleeping place: %d places, %d under a roof. Drag beside it to make it larger.", z.cells, z.roofed)
@@ -673,6 +693,7 @@ tool_says :: proc() -> string {
 		case .Marks: return fmt.tprintf("%d %s taken back.", bar.way, "mark" if bar.way == 1 else "marks")
 		case .Built: return fmt.tprintf("%d built %s taken down; what they are of lies there.", bar.way, "block" if bar.way == 1 else "blocks")
 		case .Fire:  return "The fire is put out and taken up; what timber is left lies there."
+		case .Rack:  return fmt.tprintf("%s taken down; what is on %s, and the timber, lie there.", "The rack is" if bar.way == 1 else fmt.tprintf("%d racks are", bar.way), "it" if bar.way == 1 else "them")
 		case .Zone:  return fmt.tprintf("%d %s taken out of what is marked here.", bar.way, "place" if bar.way == 1 else "places")
 		}
 	}
@@ -729,6 +750,10 @@ bar_hand :: proc() -> bool {
 	}
 	if bar.fire >= 0 {
 		fire_card()
+		return true
+	}
+	if bar.bench >= 0 {
+		bench_card()
 		return true
 	}
 	if bar.zone >= 0 && !u.card_open {
@@ -963,6 +988,14 @@ shaded :: proc(m: Mat, by: f32) -> u32 {
 	return u32(clamp(math.pow(c.r, 1/2.2), 0, 1)*255) << 16 | u32(clamp(math.pow(c.g, 1/2.2), 0, 1)*255) << 8 | u32(clamp(math.pow(c.b, 1/2.2), 0, 1)*255)
 }
 
+// A material's colour gone halfway to grey, as food about to spoil lies.
+greyed :: proc(m: Mat, by: f32) -> u32 {
+	c := MATERIALS[m].colour
+	grey := (c.r + c.g + c.b)/3
+	c = ((c + {grey, grey, grey})/2)*by*0.8
+	return u32(clamp(math.pow(c.r, 1/2.2), 0, 1)*255) << 16 | u32(clamp(math.pow(c.g, 1/2.2), 0, 1)*255) << 8 | u32(clamp(math.pow(c.b, 1/2.2), 0, 1)*255)
+}
+
 // A material's colour as the boxes take it.
 mat_rgb :: proc(m: Mat) -> u32 {
 	c := MATERIALS[m].colour
@@ -984,13 +1017,14 @@ piles_view :: proc(boxes: []Box, eye, middle: [3]f64) -> []Box {
 		base := [3]f32{f32(f64(p.at.x) + 0.5 - eye.x), f32(f64(p.at.y) - eye.y), f32(f64(p.at.z) + 0.5 - eye.z)}
 		feet := base.y - 1e-3
 		n := int(min(p.n, HEAP))
-		if is(p.kind, FOOD) {   // what is eaten: a low heap of small things in its own colour, wider as there is more of it
+		if is(p.kind, FOOD) {   // what is eaten: a low heap of small things in its own colour, wider as there is more of it; what is about to spoil has gone grey
 			heaps := clamp(int(p.n + 5)/6, 1, 4)
+			turned := p.left >= 0 && p.left < SOON
 			for k in 0..<heaps {
 				jog := f32((p.at.x*5 + p.at.z*11 + i32(k)*3)%%5 - 2)*0.02
 				size := [3]f32{0.17, 0.07, 0.17} if p.kind != .Ayu else {0.22, 0.045, 0.09}
 				at := base + {(f32(k%2) - 0.5)*0.42 + jog, size.y, (f32(k/2) - 0.5)*0.42 - jog}
-				append(&out, Box{at, f32(shaded(p.kind, 1.5)), {size.x, 0, 0}, f32(shaded(p.kind, 1.0)), {0, size.y, 0}, 0, {0, 0, size.z}, feet})
+				append(&out, Box{at, f32(greyed(p.kind, 1.5) if turned else shaded(p.kind, 1.5)), {size.x, 0, 0}, f32(greyed(p.kind, 1.0) if turned else shaded(p.kind, 1.0)), {0, size.y, 0}, 0, {0, 0, size.z}, feet})
 			}
 			continue
 		}

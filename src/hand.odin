@@ -13,7 +13,7 @@ import "core:strings"
 // what `--why` says of its ground is a tab away, in its own words, and under a block of ground
 // stands the column of rock it lies in.
 
-Thing_Kind :: enum u8 { None, Ground, Tree, Stream, Lake, Sea, Place, Animal, Box, Dwarf, Dwarves, Pile, Zone, Fire }   // Dwarves: several of them, as a group (Play.several); Pile: things lying in a cell; Zone: a stockpile's ground (goods.odin)
+Thing_Kind :: enum u8 { None, Ground, Tree, Stream, Lake, Sea, Place, Animal, Box, Dwarf, Dwarves, Pile, Zone, Fire, Rack }   // Dwarves: several of them, as a group (Play.several); Pile: things lying in a cell; Zone: a stockpile's ground (goods.odin)
 Thing :: struct {
 	kind:     Thing_Kind,
 	island:   ^Formed,
@@ -32,7 +32,7 @@ Thing :: struct {
 // A dwarf's are its trade and what it knows of itself (dwarf_says, crowd.odin).
 Depth :: enum u8 { Own, Rock, Ground, Plants, Near, World, Self }
 DEPTHS := [Depth]string{.Own = "", .Rock = "Rock", .Ground = "Ground", .Plants = "Plants", .Near = "Near", .World = "World", .Self = "Self"}
-OWN := [Thing_Kind]string{.None = "", .Ground = "", .Tree = "Tree", .Stream = "Stream", .Lake = "Water", .Sea = "Sea", .Place = "Place", .Animal = "Animal", .Box = "Blocks", .Dwarf = "Trade", .Dwarves = "", .Pile = "", .Zone = "", .Fire = ""}
+OWN := [Thing_Kind]string{.None = "", .Ground = "", .Tree = "Tree", .Stream = "Stream", .Lake = "Water", .Sea = "Sea", .Place = "Place", .Animal = "Animal", .Box = "Blocks", .Dwarf = "Trade", .Dwarves = "", .Pile = "", .Zone = "", .Fire = "", .Rack = ""}
 
 Hand_Card :: struct {
 	title, sub, line: string,
@@ -320,6 +320,10 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 		c.title, c.sub, c.line = strings.clone("Fire"), strings.clone("laid of timber"), strings.clone("A fire warms those by it and dries them, and lights the night round it. It is fed from the timber the hold has.")
 		c.mat, c.tint = .Air, LOOK.ember
 		return
+	case .Rack:   // a drying rack: its own card says what is on it (bench_card, bench_view.odin)
+		c.title, c.sub, c.line = strings.clone("Drying rack"), strings.clone("built of timber"), strings.clone(BENCHES[.Rack].says)
+		c.mat, c.tint = .Timber, LOOK.slab
+		return
 	case .Pile:   // things lying in a cell: what, how many, and whether the hold counts them
 		title = store_words(t.mat)
 		in_store := false
@@ -328,8 +332,18 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 		what := "Timber, felled and lying where the tree stood" if is_stuff(t.mat, .Timber) else "Stone, lying where it was dug"
 		if is(t.mat, FOOD) {   // what is eaten says what it is, and that a hungry dwarf takes it wherever it lies (food.odin)
 			row := FOODS[food_of(t.mat)]
-			line = fmt.tprintf("Food: %s. One is %s of a day's eating. A hungry dwarf eats it where it lies%s", row.why, "a twentieth" if row.feeds <= 0.06 else "a tenth" if row.feeds <= 0.13 else "a fifth" if row.feeds <= 0.25 else "two fifths", "; in a stockpile it is counted at the top right" if in_store else ", and a dwarf with nothing more pressing carries it to a stockpile that takes food; Store (S) marks one")
+			line = fmt.tprintf("Food: %s. One is %s of a day's eating. A hungry dwarf eats it where it lies%s", row.why, "a twentieth" if row.feeds <= 0.06 else "a tenth" if row.feeds <= 0.13 else "a fifth" if row.feeds <= 0.25 else "half" if row.feeds >= 0.45 else "two fifths", "; in a stockpile it is counted at the top right" if in_store else ", and a dwarf with nothing more pressing carries it to a stockpile that takes food; Store (S) marks one")
+			// How long it keeps: the one thing a heap of food says that stone does not (goods_spoil, goods.odin).
+			left := f32(-1)
+			for p in watch.seen.piles do if p.at == t.block do left = p.left
+			keeps := "it does not spoil" if row.keeps <= 0 else fmt.tprintf("fresh for %s more as it lies", days_words(left)) if left >= SOON else "it spoils within the day"
+			sub = fmt.tprintf("%s; %s", sub, keeps)
+			if row.keeps > 0 {
+				dries := make_of(t.mat, .Rack) >= 0
+				line = fmt.tprintf("%s. It keeps %s in mild air, longer in the cold and less in the heat%s", line, days_words(row.keeps), "; dried on a rack it does not spoil (Build, then Rack)" if dries else "")
+			}
 			c.title, c.sub, c.line = strings.clone(sentence(title)[:len(sentence(title)) - 1]), strings.clone(sub), strings.clone(sentence(line))
+			if left >= 0 && left < SOON do c.tint = LOOK.brass
 			return
 		}
 		line = fmt.tprintf("%s. It is counted at the top right, and a wall or floor marked near it is built of it", what) if in_store else fmt.tprintf("%s. A dwarf with nothing more pressing carries it to a stockpile that takes it; Store (S) marks one", what)

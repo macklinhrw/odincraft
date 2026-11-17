@@ -201,7 +201,7 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 		zs := &watch.seen
 		append(&zs.zones, Zone_Seen{id = 3, takes = .All, cells = 4, full = 2})
 		append(&zs.zone_boxes, Tint{block, block + {1, 0, 1}, 3})
-		append(&zs.piles, Pile_Seen{block + {0, 1, 0}, .Basalt, 8, true}, Pile_Seen{block + {1, 1, 0}, .Basalt, 5, true}, Pile_Seen{block + {1, 1, 1}, .Wood, 3, true})
+		append(&zs.piles, Pile_Seen{block + {0, 1, 0}, .Basalt, 8, true, -1}, Pile_Seen{block + {1, 1, 0}, .Basalt, 5, true, -1}, Pile_Seen{block + {1, 1, 1}, .Wood, 3, true, -1})
 		play.card_open = false
 		hand_take({kind = .Zone, block = block, lo = block, hi = block})
 		frame(s)

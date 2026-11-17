@@ -246,7 +246,7 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 		for w in Want do testing.expectf(t, d.want[w] >= 0 && d.want[w] <= 1, "%s's %s is a share of the whole: %.2f", played.party[i].given, WANTS[w].name, d.want[w])
 	}
 	{
-		days, loose := food_days(played)
+		days, _, loose := food_days(played)
 		fmt.printfln("needs: on the %s the seven are alive; food for %.1f days lies in the stockpile and %d things loose; %d columns gathered or fished; %d places to drink known", date_words(date_tick(played.tick)), days, loose, len(played.picked), len(played.wells))
 	}
 	SECONDS := now + 60

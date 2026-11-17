@@ -21,11 +21,15 @@ import "core:strings"
 // What grows here and is not eaten has no row: the tabu's fruit is the birds', manryō's berries are
 // not food, and the camellia's seed gives oil, which is P5's.
 //
+// Food spoils (plan.md, "Winter's food"): each kind lies good for its row's days in mild air, longer
+// in the cold and less in the heat (spoil_rate), and then is gone. What is to be eaten in a lean
+// season is dried on a rack (MAKES, bench.odin), or is a nut, which keeps as it is.
+//
 // A thing gathered or caught is a thing lying in a cell (goods.odin): its kind is a material that is
 // no block's (.Food), so it is carried, stored and counted as stone and timber are.
 
-Food_Kind :: enum u8 { Bracken, Itadori, Bamboo, Wild_Rice, Shii_Nuts, Ayu, Goby, Provisions }
-Source :: enum u8 { Plant, Tree, Fish, Brought }   // Brought: what the party came with (PROVISIONS), which no land bears
+Food_Kind :: enum u8 { Bracken, Itadori, Bamboo, Wild_Rice, Shii_Nuts, Ayu, Goby, Provisions, Dried_Bracken, Dried_Itadori, Dried_Bamboo, Dried_Wild_Rice, Dried_Ayu, Dried_Goby }
+Source :: enum u8 { Plant, Tree, Fish, Brought, Made }   // Brought: what the party came with (PROVISIONS), which no land bears; Made: what the hold makes of another food, by a row of MAKES (bench.odin)
 Food :: struct {
 	name:   string,       // as the stores say it
 	one:    string,       // what one taking is: "a bracken's shoots"
@@ -39,6 +43,7 @@ Food :: struct {
 	feeds:  f32,          // the share of a day's hunger one thing stills (WANTS)
 	work:   f32,          // seconds a common hand takes over one plant, one tree or one catch
 	again:  int,          // days before the same plant, tree or water gives again
+	keeps:  f32,          // days it lies before it spoils, in mild air (MILD); none for what does not spoil
 	comes:  string,       // its season in words
 	why:    string,
 }
@@ -49,23 +54,43 @@ Food :: struct {
 // one column in three, so a drag of ten by ten feeds a dwarf two or three days. A shii of 16 m drops
 // eight handfuls, a day and a third. Shoots and nuts come once a year: a plant taken bears next year.
 // A catch takes twenty seconds; fished water holds fish again in four days, as others move in.
+//
+// How long each keeps (colony-sim-reference.md, section 16). RimWorld's raw meat and fish rot in 2
+// days of its 60 in a year, its berries in 14, its potatoes in 30, rice in 40 and corn in 60, a
+// cooked meal in 4, and pemmican in 70 (CompProperties_Rottable.daysToRotStart in each ThingDef).
+// Here, of a year of 48 days: a fish caught is good for two days, shoots and stems for five, and
+// nuts, which keep in their shells, for thirty; what was dried, and what the party brought dried and
+// salted, does not spoil. So a spring's shoots are not eaten in winter unless they were dried.
 FOODS := [Food_Kind]Food{
-	.Bracken   = {"bracken shoots", "a bracken's shoots", .Bracken_Shoots, .Plant, .Bracken, .Tabu, "", {75, 140}, {1, 1}, 0.1, 4, YEAR_DAYS, "spring",
+	.Bracken   = {"bracken shoots", "a bracken's shoots", .Bracken_Shoots, .Plant, .Bracken, .Tabu, "", {75, 140}, {1, 1}, 0.1, 4, YEAR_DAYS, 5, "spring",
 		"the young shoots of bracken, picked before they open and eaten when the bitterness is soaked out of them"},
-	.Itadori   = {"itadori shoots", "an itadori's shoots", .Itadori_Shoots, .Plant, .Knotweed, .Tabu, "", {70, 125}, {1, 1}, 0.1, 4, YEAR_DAYS, "spring",
+	.Itadori   = {"itadori shoots", "an itadori's shoots", .Itadori_Shoots, .Plant, .Knotweed, .Tabu, "", {70, 125}, {1, 1}, 0.1, 4, YEAR_DAYS, 5, "spring",
 		"the thick young shoots of itadori, sour and full of water, snapped off as they come up on raw ground"},
-	.Bamboo    = {"bamboo shoots", "a bamboo's shoots", .Bamboo_Shoots, .Plant, .Bamboo, .Tabu, "", {115, 175}, {1, 1}, 0.15, 5, YEAR_DAYS, "late spring",
+	.Bamboo    = {"bamboo shoots", "a bamboo's shoots", .Bamboo_Shoots, .Plant, .Bamboo, .Tabu, "", {115, 175}, {1, 1}, 0.15, 5, YEAR_DAYS, 5, "late spring",
 		"the shoots of dwarf bamboo, dug where they break the ground at the edge of its patches"},
-	.Wild_Rice = {"wild rice stems", "a wild rice's stems", .Wild_Rice, .Plant, .Sedge, .Tabu, "", {245, 310}, {1, 1}, 0.12, 5, YEAR_DAYS, "autumn",
+	.Wild_Rice = {"wild rice stems", "a wild rice's stems", .Wild_Rice, .Plant, .Sedge, .Tabu, "", {245, 310}, {1, 1}, 0.12, 5, YEAR_DAYS, 5, "autumn",
 		"the swollen stems of wild rice, cut in the wet ground above the reeds"},
-	.Shii_Nuts = {"shii nuts", "a shii's nuts", .Shii_Nuts, .Tree, .Reed, .Shii, "", {275, 345}, {3, 9}, 0.2, 30, YEAR_DAYS, "autumn",
-		"the small sweet nuts the shii drops, gathered from under it and eaten as they are"},
-	.Ayu       = {"ayu", "an ayu", .Ayu, .Fish, .Reed, .Tabu, "ayu", {}, {1, 1}, 0.4, 20, 4, "spring to autumn",
+	.Shii_Nuts = {"shii nuts", "a shii's nuts", .Shii_Nuts, .Tree, .Reed, .Shii, "", {275, 345}, {3, 9}, 0.2, 30, YEAR_DAYS, 30, "autumn",
+		"the small sweet nuts the shii drops, gathered from under it and eaten as they are; in their shells they keep through a winter"},
+	.Ayu       = {"ayu", "an ayu", .Ayu, .Fish, .Reed, .Tabu, "ayu", {}, {1, 1}, 0.4, 20, 4, 2, "spring to autumn",
 		"a fish as long as a hand, taken with a net where it holds over the stones"},
-	.Goby      = {"gobies", "a handful of gobies", .Goby, .Fish, .Reed, .Tabu, "yoshinobori", {}, {2, 2}, 0.05, 20, 4, "all year",
+	.Goby      = {"gobies", "a handful of gobies", .Goby, .Fish, .Reed, .Tabu, "yoshinobori", {}, {2, 2}, 0.05, 20, 4, 2, "all year",
 		"small gobies picked off the bed: poor eating, and there when nothing else is"},
-	.Provisions = {"provisions", "a sack of provisions", .Provisions, .Brought, .Reed, .Tabu, "", {-1, -1}, {1, 1}, 0.5, 0, 0, "",
+	.Provisions = {"provisions", "a sack of provisions", .Provisions, .Brought, .Reed, .Tabu, "", {-1, -1}, {1, 1}, 0.5, 0, 0, 0, "",
 		"dried and salted food the party brought in the boat: a sack is half a day's eating for one"},
+	// What is made of them to keep (MAKES, bench.odin): each feeds as what it was made of.
+	.Dried_Bracken   = {"dried bracken", "", .Dried_Bracken, .Made, .Reed, .Tabu, "", {-1, -1}, {1, 1}, 0.1, 0, 0, 0, "",
+		"bracken shoots dried on a rack until they are dark and hard, to be soaked again and eaten in a lean season"},
+	.Dried_Itadori   = {"dried itadori", "", .Dried_Itadori, .Made, .Reed, .Tabu, "", {-1, -1}, {1, 1}, 0.1, 0, 0, 0, "",
+		"itadori shoots split and dried on a rack"},
+	.Dried_Bamboo    = {"dried bamboo shoots", "", .Dried_Bamboo, .Made, .Reed, .Tabu, "", {-1, -1}, {1, 1}, 0.15, 0, 0, 0, "",
+		"bamboo shoots sliced and dried on a rack"},
+	.Dried_Wild_Rice = {"dried wild rice stems", "", .Dried_Wild_Rice, .Made, .Reed, .Tabu, "", {-1, -1}, {1, 1}, 0.12, 0, 0, 0, "",
+		"the stems of wild rice sliced and dried on a rack"},
+	.Dried_Ayu       = {"dried ayu", "", .Dried_Ayu, .Made, .Reed, .Tabu, "", {-1, -1}, {1, 1}, 0.4, 0, 0, 0, "",
+		"ayu opened and dried hard on a rack, over the smoke of a fire where one burns by it"},
+	.Dried_Goby      = {"dried gobies", "", .Dried_Goby, .Made, .Reed, .Tabu, "", {-1, -1}, {1, 1}, 0.05, 0, 0, 0, "",
+		"small gobies dried whole on a rack"},
 }
 FOOD :: bit_set[Trait]{.Food}
 
@@ -279,7 +304,7 @@ cell_bears :: proc(k: int) -> (things: [Food_Kind]f32) {
 		if !grows do continue
 		squares := f32(LAND_CELL*LAND_CELL)/36
 		things[food] = squares*COMMUNITIES[com].density*COMMUNITIES[com].trees[row.tree]*0.5*f32(row.gives[0] + row.gives[1])/2   // half of them grown enough to bear
-	case .Brought:   // no land bears it
+	case .Brought, .Made:   // no land bears it
 	case .Fish:
 		f := food_fish(&row)
 		if f < 0 || bits >> uint(f) & 1 == 0 do continue
