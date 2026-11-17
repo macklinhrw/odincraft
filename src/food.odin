@@ -24,8 +24,8 @@ import "core:strings"
 // A thing gathered or caught is a thing lying in a cell (goods.odin): its kind is a material that is
 // no block's (.Food), so it is carried, stored and counted as stone and timber are.
 
-Food_Kind :: enum u8 { Bracken, Itadori, Bamboo, Wild_Rice, Shii_Nuts, Ayu, Goby }
-Source :: enum u8 { Plant, Tree, Fish }
+Food_Kind :: enum u8 { Bracken, Itadori, Bamboo, Wild_Rice, Shii_Nuts, Ayu, Goby, Provisions }
+Source :: enum u8 { Plant, Tree, Fish, Brought }   // Brought: what the party came with (PROVISIONS), which no land bears
 Food :: struct {
 	name:   string,       // as the stores say it
 	one:    string,       // what one taking is: "a bracken's shoots"
@@ -64,6 +64,8 @@ FOODS := [Food_Kind]Food{
 		"a fish as long as a hand, taken with a net where it holds over the stones"},
 	.Goby      = {"gobies", "a handful of gobies", .Goby, .Fish, .Reed, .Tabu, "yoshinobori", {}, {2, 2}, 0.05, 20, 4, "all year",
 		"small gobies picked off the bed: poor eating, and there when nothing else is"},
+	.Provisions = {"provisions", "a sack of provisions", .Provisions, .Brought, .Reed, .Tabu, "", {-1, -1}, {1, 1}, 0.5, 0, 0, "",
+		"dried and salted food the party brought in the boat: a sack is half a day's eating for one"},
 }
 FOOD :: bit_set[Trait]{.Food}
 
@@ -277,6 +279,7 @@ cell_bears :: proc(k: int) -> (things: [Food_Kind]f32) {
 		if !grows do continue
 		squares := f32(LAND_CELL*LAND_CELL)/36
 		things[food] = squares*COMMUNITIES[com].density*COMMUNITIES[com].trees[row.tree]*0.5*f32(row.gives[0] + row.gives[1])/2   // half of them grown enough to bear
+	case .Brought:   // no land bears it
 	case .Fish:
 		f := food_fish(&row)
 		if f < 0 || bits >> uint(f) & 1 == 0 do continue

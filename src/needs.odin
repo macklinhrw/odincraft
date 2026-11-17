@@ -51,6 +51,7 @@ WANTS := [Want]Want_Row{
 SLEEP_MENDS :: 2.1    // of the whole, in a day asleep: eight hours make good sixteen awake
 SLEEPS_AT   :: 0.75   // at night a dwarf lies down under this (RimWorld's DefaultFallAsleepMaxLevel)
 FULL        :: 0.9    // a dwarf eating stops over this
+PROVISIONS  :: 4      // days of food the party brings in the boat, for each of them. RimWorld's three colonists land with 30 survival meals, five days; a Dwarf Fortress embark's default stores last the seven a season. Four days is the time to find where food grows and set a stockpile, and no more; what a party chooses to bring is expedition planning's, with P5
 RETRY       :: 300    // ticks before a dwarf looks again for what it found no way to
 FORAGES     :: 12     // things, at most, a hungry dwarf marks to gather for itself at a time
 FORAGE_CELLS :: 24    // cells of the land, the nearest that bear something first, that it looks over for them; five times as many where those were all taken already
@@ -623,11 +624,15 @@ larder_tell :: proc(h: ^Hold) {
 	l := larder_round(c)
 	good := food_seasons(c)
 	h.at = feet_on(h.landed.camp)
+	// What it brought is carried up from the boat and lies where it gathers: sacks of provisions, PROVISIONS days of them for each.
+	sacks := i32(math.ceil(f32(living(h))*PROVISIONS/FOODS[.Provisions].feeds))
+	if sacks > 0 do good_drop(h, h.landed.camp + {0, 1, 0}, .Provisions, sacks)
+	brought := fmt.tprintf("The party brought provisions for %s, %d sacks, which lie where it gathered", days_words(PROVISIONS), sacks)
 	if good == 0 {
-		h.short = "No food a party could live on lies within a walk of here."
-		say(h, "The party brought no stores, and no food a party could live on lies within a walk of the landing. %s What it eats it must go far for.", larder_words(l))
+		h.short = fmt.tprintf("Provisions for %s. No food a party could live on lies within a walk of here.", days_words(PROVISIONS))
+		say(h, "%s, and no food a party could live on lies within a walk of the landing. %s When the sacks are empty, what it eats it must go far for.", brought, larder_words(l))
 		return
 	}
-	h.short = fmt.tprintf("Food within a walk: %s.", larder_says(l))
-	say(h, "The party brought no stores: what it eats it must gather or catch. Within a walk of the landing the land and its water bear food %s. %s", larder_says(l), larder_words(l))
+	h.short = fmt.tprintf("Provisions for %s. Food within a walk: %s.", days_words(PROVISIONS), larder_says(l))
+	say(h, "%s: after them, what it eats it must gather or catch. Within a walk of the landing the land and its water bear food %s. %s", brought, larder_says(l), larder_words(l))
 }

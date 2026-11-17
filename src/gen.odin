@@ -37,7 +37,7 @@ Mat :: enum u16 {
 	Mudstone_Gravel, Siltstone_Gravel, Sandstone_Gravel, Grit_Gravel, Limestone_Gravel, Basalt_Gravel, Scoria_Gravel, Rhyolite_Gravel, Tuff_Gravel, Reef_Gravel,
 	Red_Sandstone_Gravel, Chalk_Gravel, Coal_Gravel, Breccia_Gravel, Dolerite_Gravel, Granite_Gravel, Slate_Gravel, Schist_Gravel, Gneiss_Gravel, Quartzite_Gravel, Hornfels_Gravel, Marble_Gravel,
 	Timber,   // sawn timber laid as a block by the dwarves (orders.odin): never a tree's, so nothing fells it, grows on it or hangs leaves from it. What the hold makes comes last, so the land's own figures stand
-	Bracken_Shoots, Itadori_Shoots, Bamboo_Shoots, Wild_Rice, Shii_Nuts, Ayu, Goby,   // what is gathered and caught to eat (FOODS, food.odin): things that lie in a cell, never blocks, with no tile in the atlas
+	Bracken_Shoots, Itadori_Shoots, Bamboo_Shoots, Wild_Rice, Shii_Nuts, Ayu, Goby, Provisions,   // what is gathered and caught to eat (FOODS, food.odin): things that lie in a cell, never blocks, with no tile in the atlas
 }
 BLOCK_MATS :: int(Mat.Timber) + 1   // the materials a block can be, which the atlas has tiles for
 
@@ -65,6 +65,7 @@ MATERIALS := [Mat]Material{
 	.Shii_Nuts      = {{0.160, 0.085, 0.035}, 0, 0, .Air},
 	.Ayu            = {{0.420, 0.450, 0.400}, 0, 0, .Air},
 	.Goby           = {{0.230, 0.190, 0.130}, 0, 0, .Air},
+	.Provisions     = {{0.480, 0.370, 0.210}, 0, 0, .Air},   // sacks of what the party brought
 	.Gravel    = {{0.105, 0.097, 0.085}, 0, 0, .Air},
 	.Shii_Bark       = {{0.087, 0.070, 0.055}, 0, 0, .Air},   // dark grey-brown, furrowed
 	.Shii_Leaves     = {{0.074, 0.139, 0.021}, 0, 0, .Air},  // olive with a yellow cast
@@ -231,7 +232,7 @@ Trait :: enum u8 {
 	.Coal_Broken = {.Rubble}, .Breccia_Broken = {.Rubble}, .Dolerite_Broken = {.Rubble}, .Granite_Broken = {.Rubble}, .Slate_Broken = {.Rubble}, .Schist_Broken = {.Rubble},
 	.Gneiss_Broken = {.Rubble}, .Quartzite_Broken = {.Rubble}, .Hornfels_Broken = {.Rubble}, .Marble_Broken = {.Rubble},
 	.Gravel = {.Pebbles},
-	.Bracken_Shoots = {.Food}, .Itadori_Shoots = {.Food}, .Bamboo_Shoots = {.Food}, .Wild_Rice = {.Food}, .Shii_Nuts = {.Food}, .Ayu = {.Food}, .Goby = {.Food},
+	.Bracken_Shoots = {.Food}, .Itadori_Shoots = {.Food}, .Bamboo_Shoots = {.Food}, .Wild_Rice = {.Food}, .Shii_Nuts = {.Food}, .Ayu = {.Food}, .Goby = {.Food}, .Provisions = {.Food},
 	.Mudstone_Gravel = {.Pebbles}, .Siltstone_Gravel = {.Pebbles}, .Sandstone_Gravel = {.Pebbles}, .Grit_Gravel = {.Pebbles}, .Limestone_Gravel = {.Pebbles}, .Basalt_Gravel = {.Pebbles},
 	.Scoria_Gravel = {.Pebbles}, .Rhyolite_Gravel = {.Pebbles}, .Tuff_Gravel = {.Pebbles}, .Reef_Gravel = {.Pebbles}, .Red_Sandstone_Gravel = {.Pebbles}, .Chalk_Gravel = {.Pebbles},
 	.Coal_Gravel = {.Pebbles}, .Breccia_Gravel = {.Pebbles}, .Dolerite_Gravel = {.Pebbles}, .Granite_Gravel = {.Pebbles}, .Slate_Gravel = {.Pebbles}, .Schist_Gravel = {.Pebbles},
