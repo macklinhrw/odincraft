@@ -499,6 +499,11 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - *Asked:* **should a fire in the open warm at all?** RimWorld's does not; here it warms two steps round it and is what saves a party with no roof. *Recommendation: keep it*: a first night by a fire is the genre's oldest picture.
 - *Asked:* **the food of winter.** A hold that plays shelter well still loses dwarves to hunger where it stored nothing: with the room and no orders for food all seven starve in summer on `main` as here. Food that keeps and a season's store are the first half's open matter. *Recommendation: take it up before P5's materials*, since nothing else kills a careful player.
 
+**2026-11-17, Claude's call** (what comes after winter's food)
+
+- **P5 is held until what exists has been played together.** Since the owner last played, expedition planning, both halves of P4 and winter's food have been merged, each played by its own script and none by a hand. Starting materials and making on top of them would be the fault of 2026-11-16 again: steps stacked that nobody has played as a game. The next play work is a first year played through from the front door with everything the game has, its faults listed and the worst put right, and no new feature.
+- **The owner is asked to play it** (`./build.sh run`) before P5 begins; what they find goes before anything else.
+
 **2026-11-17, Claude's call** (merging winter's food, `t3/winter-food-preservation` at d93e2ef)
 
 - **Merged**, after one clash with the continents' code was settled (two records named `Lean`: the lean season's is `Lean_Season`) and Claude played `wf-play.txt` on the merged tree (19 pictures, nobody shut in or dead; the alert of the lean season from the first morning, a rack's card with fish on it, the dried food stored and "All of it keeps" looked at) and `p3-play.txt` again (12 works done, nobody shut in or dead). `GOLDEN` unchanged; the coarse stage's test passes beside it; the dwarves' log changes on purpose to faabb81e6dcd6b38, the same three ways. No benches run again; the step's one round had one frame of 14.2 ms from above, not chased.
