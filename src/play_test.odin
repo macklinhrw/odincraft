@@ -195,6 +195,26 @@ the_play_screen_says_what_is_so :: proc(t: ^testing.T) {
 	play.scale = 0
 	key(s, .ESCAPE)
 	testing.expect(t, bar.tool == .None && !play.menu, "Escape did not put the tool down")
+	// A stockpile is taken whole by a click on its ground: its card says how large it is and what lies
+	// in it by kind, and gives its three buttons; it is put down when its ground is no stockpile's.
+	{
+		zs := &watch.seen
+		append(&zs.zones, Zone_Seen{id = 3, takes = .All, cells = 4, full = 2})
+		append(&zs.zone_boxes, Tint{block, block + {1, 0, 1}, 3})
+		append(&zs.piles, Pile_Seen{block + {0, 1, 0}, .Basalt, 8, true}, Pile_Seen{block + {1, 1, 0}, .Basalt, 5, true}, Pile_Seen{block + {1, 1, 1}, .Wood, 3, true})
+		play.card_open = false
+		hand_take({kind = .Zone, block = block, lo = block, hi = block})
+		frame(s)
+		testing.expect(t, bar.zone == 3 && says("zone.title") == "Stockpile" && says("zone.size") == "4 places, 2 in use", says("zone.size"))
+		hand := screen_says(&screen, .Hand)
+		testing.expect(t, strings.contains(hand, "Basalt") && strings.contains(hand, "13") && strings.contains(hand, "Timber") && strings.contains(hand, "Make larger") && strings.contains(hand, "Remove"), hand)
+		testing.expect(t, click(s, "zone.grow") && bar.tool == .Store && bar.takes == .All, "Make larger did not take up Store")
+		key(s, .ESCAPE)
+		hand_take({kind = .Zone, block = block, lo = block, hi = block})
+		clear(&zs.zones); clear(&zs.zone_boxes); clear(&zs.piles)
+		frame(s)
+		testing.expect(t, play.hand.kind == .None && bar.zone == -1, "a stockpile that is gone stayed in the hand")
+	}
 	hand_pick({block = block, ok = true, exact = true}, {0.5, 0.5})
 	frame(s)
 

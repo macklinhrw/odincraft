@@ -20,6 +20,8 @@ import "core:fmt"
 //
 // An orders file gives a stockpile as a line (hold.odin has the rest):
 //   store all|stone|timber x y z x y z   the ground of the box's columns, at the level of its first block
+//   unstore x y z x y z                  the whole stockpile whose ground the first block is, is removed
+//   takes all|stone|timber x y z x y z   and from now it takes this
 // and `unmark` over a stockpile with no mark and no built block in its columns takes that ground out of it.
 
 HEAP :: 8   // things of one kind that lie in one cell: RimWorld stacks 75 of a resource and one chunk of stone, Ingnomia ten stones; eight are a heap a dwarf's cell holds and the eye counts
@@ -187,6 +189,40 @@ zone_obey :: proc(h: ^Hold, o: Order) {
 	for &d in h.dwarves do if !d.job && !d.haul.on do d.rest = min(d.rest, 2)
 	h.short = fmt.tprintf("Stockpile for %s: %d places%s.", TAKES_SAYS[o.takes], h.zones[id].cells, fmt.tprintf(", %d of them new", added) if joined else "")
 	say(h, `The hold says "%s": %d places are marked to store %s, %s.`, words, added, TAKES_SAYS[o.takes], "joined to the stockpile beside them" if joined else "a new stockpile")
+}
+
+// A stockpile taken in the hand and changed as a whole, as RimWorld's zone is deleted or its filter
+// set from the zone selected, and Dwarf Fortress's stockpile from its own panel: removed, with what
+// lay in it left lying loose; or told to take something else, after which what it no longer takes is
+// loose and is carried to a place that does.
+zone_change :: proc(h: ^Hold, o: Order) {
+	words := order_words(o)
+	cell, ok := h.zoned[o.at + {0, 1, 0}]
+	h.at = feet_on(o.at + {0, 1, 0})
+	if !ok {
+		h.short = "No stockpile there."
+		say(h, `The hold says "%s": no stockpile's ground is there.`, words)
+		return
+	}
+	id := cell.zone
+	if o.kind == .Takes {
+		h.zones[id].takes = o.takes
+		h.short = fmt.tprintf("The stockpile takes %s from now.", TAKES_SAYS[o.takes])
+		say(h, `The hold says "%s": the stockpile of %d places takes %s from now.`, words, h.zones[id].cells, TAKES_SAYS[o.takes])
+	} else {
+		cells := make([dynamic][3]i32, context.temp_allocator)
+		lying := 0
+		for c, z in h.zoned do if z.zone == id {
+			append(&cells, c)
+			for g in h.goods do if g.at == c do lying += int(g.n)
+		}
+		for c in cells do delete_key(&h.zoned, c)
+		h.zones[id].cells = 0
+		h.short = fmt.tprintf("Stockpile removed: %d places%s.", len(cells), fmt.tprintf("; %d things lie loose", lying) if lying > 0 else "")
+		say(h, `The hold says "%s": the stockpile for %s is removed, %d places of it; %d things that lay in it lie loose.`, words, TAKES_SAYS[h.zones[id].takes], len(cells), lying)
+	}
+	h.goods_v += 1
+	for &d in h.dwarves do if !d.job && !d.haul.on do d.rest = min(d.rest, 2)
 }
 
 // Take the ground of a box's columns out of every stockpile: how many places went. What lies there stays, loose.

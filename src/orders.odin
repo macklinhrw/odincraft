@@ -316,6 +316,8 @@ order_words :: proc(o: Order) -> string {
 	case .Build:  return fmt.tprintf("build %s %s %s", PLANS[o.shape], STUFFS[o.stuff], box)
 	case .Unmark: return fmt.tprintf("unmark %s", box)
 	case .Store:  return fmt.tprintf("store %s %s", TAKES[o.takes], box)
+	case .Unstore: return fmt.tprintf("unstore %s", box)
+	case .Takes:  return fmt.tprintf("takes %s %s", TAKES[o.takes], box)
 	}
 	return ""
 }

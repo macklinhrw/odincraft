@@ -39,6 +39,7 @@ Act :: enum u8 {
 	Cut, Cut_Move, Cut_Drag, Follow, Bare, Lenses, Lens, Walk,   // the ground here
 	Why, Go, Drop, Depth,                                // the hand
 	Order, Plan, Stuff, Takes, Deep, High, Take_Back, More,     // the orders bar, a tool's choices and numbers, an order's card (bar.odin), and the card asked for or shut
+	Zone_Takes, Zone_Grow, Zone_Remove,                  // a stockpile in the hand: what it takes, the Store tool taken up to make it larger, and the whole of it removed (bar.odin)
 	List, Sort, Fold, Row, Find, Thumb,                  // the lists
 	Who, Lead, Keep, Only, Whole, Crowd,                 // the dwarves: a picture, a row, kept in view, the list's kept alone, a group whole, the list opened on some (crowd.odin)
 	Menu, Back, Quit, Scale, Escape,
@@ -374,7 +375,10 @@ hand_pick :: proc(pick: Pick, pointer: [2]f32) {
 		if k := pile_aimed(u.eye, ray, pick); k >= 0 {
 			p := watch.seen.piles[k]
 			t = {kind = .Pile, island = t.island, block = p.at, lo = p.at, hi = p.at, mat = p.kind, feature = int(p.n)}
-		} else if _, on := zone_under(t.block + {0, 1, 0}); on && t.kind == .Ground do t.kind = .Zone
+		} else if _, on := zone_under(t.block + {0, 1, 0}); on && t.kind == .Ground {   // a click on a stockpile's ground takes the whole stockpile, and its own card (zone_card, bar.odin)
+			t.kind = .Zone
+			if !held_now(t) do u.card_open = false
+		}
 	}
 	if held_now(t) do u.card_open = !u.card_open
 	else if t.kind == .Ground && job_of(t) < 0 do u.card_open = false
@@ -460,6 +464,16 @@ play_act :: proc(act: Act, arg: int) {
 	case .Take_Back:
 		if site, ok := site_seen(bar.job); ok do hold_order({kind = .Unmark, at = site.lo, to = site.hi})
 		hand_drop()
+	case .Zone_Takes:
+		if u.hand.kind == .Zone do hold_order({kind = .Takes, at = u.hand.block, to = u.hand.block, takes = Takes(arg)})
+	case .Zone_Remove:
+		if u.hand.kind == .Zone do hold_order({kind = .Unstore, at = u.hand.block, to = u.hand.block})
+		hand_drop()
+	case .Zone_Grow:
+		if z, ok := zone_seen(bar.zone); ok {
+			bar.takes = z.takes
+			if bar.tool != .Store do tool_take(.Store)
+		}
 	case .List:
 		u.list = .None if u.list == List(arg) else List(arg)
 		u.list_scroll, u.typing = 0, false

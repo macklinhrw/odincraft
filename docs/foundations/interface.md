@@ -426,3 +426,12 @@ From the survey; the numbers are its own.
 - [Against the Storm's interface update](https://eremitegames.com/interface-update/) and [its hotfix](https://eremitegames.com/interface-hotfix-we-hear-you/); [a preview of Prison Architect](https://www.pcgamer.com/prison-architect-preview-2); [a preview of Timberborn](https://gameblur.net/previews/game-previews/timberborn-pc-early-access-preview/); Songs of Syx's Steam post "What the survey told me".
 - [Game accessibility guidelines, basic](https://gameaccessibilityguidelines.com/basic/); [Xbox accessibility guideline 101](https://learn.microsoft.com/en-us/gaming/accessibility/xbox-accessibility-guidelines/101).
 - Text in a small engine: [libGDX on distance-field fonts](https://libgdx.com/wiki/graphics/2d/fonts/distance-field-fonts); [Dear ImGui on fonts](https://github.com/ocornut/imgui/blob/master/docs/FONTS.md); [microui](https://github.com/rxi/microui); [Odin's vendor folder](https://github.com/odin-lang/Odin/tree/master/vendor).
+
+## 17. A stockpile in the hand
+
+The owner asked (2026-11-16) to select a stockpile, remove it, and see what lies in it, as Dwarf Fortress does.
+
+- **A click on a stockpile's ground takes the whole stockpile**, not the block. Its ground is lit brighter than the other stockpiles', with one outline.
+- **Its card stands where an order's card does**, in the hand at the lower left, and is read afresh each frame: the title; how many places and how many in use; what lies in it, a row a kind as the stores have them, the most first; what lies there that it does not take, in brass, since that is on its way out; what it takes, as three chips; and three buttons.
+- **The buttons are what is done to a stockpile and nothing else**: Go there, Make larger (Store taken up with what it takes), Remove (the whole of it). Remove says in its tip that what lies there stays, loose.
+- **It is put down** by Escape, by a click elsewhere, or when the ground it was taken by is no longer a stockpile's.

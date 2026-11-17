@@ -92,7 +92,7 @@ Dwarf :: struct {
 	shut:        bool,                // it stands in a pit with no way out
 	checked:     int,                 // the ground's changes when it last looked to itself
 }
-Order_Kind :: enum u8 { Go, Block, Dig, Fell, Build, Unmark, Store }
+Order_Kind :: enum u8 { Go, Block, Dig, Fell, Build, Unmark, Store, Unstore, Takes }   // Unstore: the whole stockpile at a block is removed; Takes: it takes something else from now (goods.odin)
 Order :: struct {
 	tick:   int,
 	kind:   Order_Kind,
@@ -347,13 +347,13 @@ order_read :: proc(h: ^Hold, line: string) -> bool {
 		}
 		v: [3]i32
 		ok := seconds >= 0 && len(words) >= 4
-		marking := len(words) > 1 && (words[1] == "dig" || words[1] == "fell" || words[1] == "build" || words[1] == "unmark" || words[1] == "store")
+		marking := len(words) > 1 && (words[1] == "dig" || words[1] == "fell" || words[1] == "build" || words[1] == "unmark" || words[1] == "store" || words[1] == "unstore" || words[1] == "takes")
 		if ok && marking {   // a mark: its kind, what it is to be, and the six figures of its box
-			o.kind = .Dig if words[1] == "dig" else .Fell if words[1] == "fell" else .Build if words[1] == "build" else .Store if words[1] == "store" else .Unmark
+			o.kind = .Dig if words[1] == "dig" else .Fell if words[1] == "fell" else .Build if words[1] == "build" else .Store if words[1] == "store" else .Unstore if words[1] == "unstore" else .Takes if words[1] == "takes" else .Unmark
 			rest = words[2:]
-			named := 1 if o.kind == .Dig || o.kind == .Store else 2 if o.kind == .Build else 0
+			named := 1 if o.kind == .Dig || o.kind == .Store || o.kind == .Takes else 2 if o.kind == .Build else 0
 			ok = len(rest) == named + 6
-			if ok && o.kind == .Store {
+			if ok && (o.kind == .Store || o.kind == .Takes) {
 				ok = false
 				for name, takes in TAKES do if name == rest[0] do o.takes, ok = takes, true
 			} else if ok && named > 0 {
@@ -867,6 +867,8 @@ obey :: proc(h: ^Hold, o: Order) {
 		mark_obey(h, o)
 	case .Store:
 		zone_obey(h, o)
+	case .Unstore, .Takes:
+		zone_change(h, o)
 	case .Go:
 		at := o.at
 		if o.column do at.y = i32(math.round(ground(f64(at.x - region.origin.x) + 0.5, f64(at.z - region.origin.y) + 0.5, 1).h)) - 1
