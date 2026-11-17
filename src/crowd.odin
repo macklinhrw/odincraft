@@ -31,9 +31,9 @@ Need :: struct {
 }
 NEEDS := [?]Need{
 	// Needs (needs.odin): a dwarf with nothing left to drink or to eat is dying, and one that has looked for water or food and found none soon will be.
-	{"parched", "dying of thirst", "dying of thirst: it has nothing to drink, and no way to fresh water", "dying of thirst: they have nothing to drink, and no way to fresh water",
+	{"parched", "parched", "parched: it has had nothing to drink, and dies of thirst unless it does", "parched: they have had nothing to drink, and die of thirst unless they do",
 		"Send the party to a stream, a lake or a pond, or make a way to one", .Trouble, proc(d: ^Seen) -> bool { return d.doing != .Dead && d.doing != .Aboard && d.want[.Drink] <= 0 }},
-	{"starving", "starving", "starving: it has nothing to eat", "starving: they have nothing to eat",
+	{"starving", "starving", "starving: it has had nothing to eat, and dies of hunger unless it does", "starving: they have had nothing to eat, and die of hunger unless they do",
 		"Mark plants to gather or water to fish, or send the party where food grows", .Trouble, proc(d: ^Seen) -> bool { return d.doing != .Dead && d.doing != .Aboard && d.want[.Food] <= 0 }},
 	{"no-water", "no water", "thirsty: it finds no way to fresh water", "thirsty: they find no way to fresh water",
 		"Send the party to a stream, a lake or a pond, or make a way to one", .Caution, proc(d: ^Seen) -> bool { return d.doing != .Dead && .Drink in d.lacks }},

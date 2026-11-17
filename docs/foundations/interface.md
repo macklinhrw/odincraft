@@ -218,7 +218,7 @@ The interface steps sit in the play track (`plan.md`, section 5).
 | **I-2. The front door and the world** (built) | The front door, a new world with honest progress, the world's map, Walk the world, settings for text size and keys | Makes a world from the menu and walks it |
 | **E-1. Expedition planning** (built) | Where, with the site card; who, with drawing again; set out | Chooses a hard site on purpose |
 | **With P3. Orders** | The orders bar, marking ground by dragging, the build choices, what an order waits for | Has a room dug |
-| **With P4. Needs and the year** | Needs on the card, alerts, the date | Is warned before a dwarf starves |
+| **With P4. Needs and the year** (first half built: section 17) | Needs on the card, alerts, the date | Is warned before a dwarf starves |
 | **With P5. Materials** | Stores, what a build needs and has, a workshop's card, what the expedition brings | Builds from the island's stone |
 | **With P6. The kept world** | Continue, the list of worlds with their holds and ruins, the chronicle | Opens the last game's world |
 | **Later** | The map in a corner, the world's history and journal, trade, fighting, mind control | |
@@ -414,6 +414,27 @@ Step E-1 (`../plan.md`). Written before the screen was drawn, from what a player
 - *The why of a danger ended "Here: dam below 97.3 m."* A danger says its figure in its own words, and the field's name is left out.
 
 **Not built, and no place left for it**: what the party brings (P5), the home hold it leaves (P9, P10), a finder of sites, the season it lands in.
+
+## 17. What building needs and the year settled
+
+Step P4's first half (`plan.md`, "P4, first half, as built"; `adr/0014`), built 2026-11-16 and played by `interesting-world/real/play/p4-play.txt`. Nothing new was given a region: every part landed in a place this design already had, which is what the regions are for.
+
+- **The date is the clock's, top left, where it was.** "East Firths, 3rd of spring", and the hour on the pause button: both now move. The hour said is the one the dwarves live by, whatever the sun was turned to for a picture. From the second year the date says which year.
+- **Night is lit.** A hold is kept through the night, so the land at night is lit as by a full moon, about a third of the day's light, cold in colour. A true night was tried first: black, and for eight of every twenty-four hours nothing could be seen or ordered.
+- **What a dwarf feels is three meters on its card**, under what it is doing: Drink, Food and Sleep, each a name, a word and a bar that empties (I3, I9: never a colour alone). The word is the row's own (`WANTS`): not thirsty, thirsty, very thirsty, parched, dying of thirst. Chalk and verdigris while it is met, brass while it wants, cinnabar when nothing is left. They stand on the short card and the open one alike, since they are the first thing a click on a dwarf is for. A tip on each says how a dwarf sees to it. A dead dwarf has none: its card says what it died of and when.
+- **Who needs you first gains four causes** (`NEEDS`), ahead of the three it had: dying of thirst and starving (trouble), and thirsty or hungry with no way to water or no food in reach (caution). A dwarf that is only thirsty and walking to the stream needs nobody and is not among them.
+- **The Dwarves list groups by what they are at**: need you; seeing to themselves; at work; walking; idle; coming ashore; dead. "Seeing to themselves" is where the answer to "why is nobody digging" stands at night. The word at a row's right is now how the dwarf is, worst first: parched, starving, thirsty, hungry, tired, asleep, well, dead.
+- **The count at the top is of the living.** The dead keep a row in the list, under their own group, and are not kept in view.
+- **A death is an alert that stands until it is looked at**, with the trouble sign: "Yrsa Coalsleeve has died of thirst." A click goes to the body and takes it in the hand, and the alert is gone. The stages before it are messages and the dwarf's place among those who need you.
+- **A hold living from hand to mouth is one alert that says what to do**: "No food in store: the dwarves forage as they hunger. Gather (G) or fish (N), and store it." It stands while a hungry dwarf has marked food for itself within a day and nothing is stored.
+- **The stores say how long the food lasts**, under the stone and timber: "Food for two days", then each food with a swatch of its own colour and its count. Brass under a day and a half, cinnabar at none. It is the figure a player of either game looks at each morning. A thing that is no block has no tile, so its swatch is a plain square.
+- **Gather and Fish are two tools on the orders bar**, after Store, with G and N. Each drags a rectangle of ground, whatever its height, as Fell does. What it would take stands up as pale pins while it is dragged and as pins with a verdigris head once marked; a tree wears the band and cap of one to be felled, in verdigris. A flat tile was tried first and was lost under the tint of the ground dragged over.
+- **The tool's one line says what the drag would bring, or why nothing**: "13 plants and trees: 13 bracken shoots."; "Nothing here bears food a dwarf eats."; "Nothing to gather here now: shii nuts come in autumn."; "No fresh water here to fish."; "This water was fished: it holds fish again in a few days."
+- **A stockpile takes Everything, Stone, Timber or Food.**
+- **The orders bar wraps to two rows where the text is set large.** Eight tools no longer fit beside the lists' buttons at 175%; the hand stands a row higher there.
+- **An order's card says when it waits on the dwarves' own needs**: "Waits while the dwarves see to themselves: seven asleep."
+- **The hand says what is food**: a plant's ground says the plant on it and when it is gathered, a shii tree says its nuts, a heap of food says how far one goes, and a stream still says which fish live in it and why not the others.
+- **The landing's card has a Food row** (section 16), read on the ground the party would gather on by the rule the hold's first word is read by: "through the year", "in spring and autumn", "none a party could live on", with the seasons one by one in its why.
 
 ## Sources
 

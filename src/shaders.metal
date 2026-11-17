@@ -88,8 +88,8 @@ static float3 sky_ambient(float3 N, float3 sun, float cover) {
     // At night the land is lit as by a full moon, far brighter than a true one against the day: a hold
     // is kept through the night, and the player must see it (plan.md, P4). RimWorld's night keeps about
     // a third of the day's light.
-    float3 sky = mix(float3(0.13, 0.17, 0.29), mix(float3(0.44, 0.55, 0.76), float3(0.62, 0.64, 0.68), cover), day);
-    float3 ground = mix(float3(0.048, 0.062, 0.10), float3(0.27, 0.25, 0.20), day);
+    float3 sky = mix(float3(0.18, 0.22, 0.32), mix(float3(0.44, 0.55, 0.76), float3(0.62, 0.64, 0.68), cover), day);
+    float3 ground = mix(float3(0.07, 0.085, 0.12), float3(0.27, 0.25, 0.20), day);
     return mix(ground, sky, N.y * 0.5 + 0.5);
 }
 

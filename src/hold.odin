@@ -490,6 +490,10 @@ hold_show :: proc(h: ^Hold) {
 			want = d.want, lacks = d.lacks, caring = d.caring, care = d.care, died = d.died, died_on = d.died_on}
 		for row, w in WANTS do if row.kills > 0 do h.showing[i].spent[w] = d.spent[w]/row.kills
 		if k, ok := h.marked[d.job_at]; ok && d.job do h.showing[i].site = h.marks[k].site
+		if d.doing == .Dead {   // nothing is wrong with where the dead lie that the player can mend
+			h.showing[i].shut = false
+			continue
+		}
 		h.showing[i].plight = plight_of(h, i)
 		if !d.job && !d.shut && (d.doing == .Waiting || d.doing == .Stopped) && len(h.marks) > 0 do h.showing[i].lack = d.lack
 	}
@@ -1078,9 +1082,10 @@ hold_report :: proc(h: ^Hold) {
 		date := date_tick(h.tick)
 		days, loose := food_days(h)
 		fmt.printfln("  it is the %s, %02d:%02d; %d of %d alive; food in the stockpiles for %.1f days, %d things of food loose; %d places to drink known", date_words(date), int(date.hour), int(date.hour*60)%%60, living(h), len(h.dwarves), days, loose, len(h.wells))
+		for well in h.wells do fmt.printfln("    a place to drink at %d, %d, %d: %s", well.x, well.y, well.z, place_say(h, well))
 		for d, i in h.dwarves {
 			if d.doing == .Dead do fmt.printfln("    %s: dead of %s since the %s", who(h, i), WANTS[d.died].of, date_words(date_tick(d.died_on)))
-			else do fmt.printfln("    %s: drink %.2f, food %.2f, sleep %.2f%s%s", who(h, i), d.want[.Drink], d.want[.Food], d.want[.Sleep], fmt.tprintf("; %v", d.doing) if d.doing >= .Drinking else "", fmt.tprintf("; finds no %v", d.lacks) if d.lacks != {} else "")
+			else do fmt.printfln("    %s, at %d, %d, %d: drink %.2f, food %.2f, sleep %.2f%s%s%s", who(h, i), d.cell.x, d.cell.y, d.cell.z, d.want[.Drink], d.want[.Food], d.want[.Sleep], fmt.tprintf("; %v", d.doing) if d.doing >= .Drinking else "", "; shut in" if d.shut else "", fmt.tprintf("; finds no %v", d.lacks) if d.lacks != {} else "")
 		}
 	}
 	if len(h.sites) > 0 {

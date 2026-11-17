@@ -480,3 +480,76 @@ the_dwarves_are_on_screen :: proc(t: ^testing.T) {
 	}
 	play.scale, play.list = 0, .None
 }
+
+// What each dwarf feels is on the screen (plan.md, P4; foundations/interface.md, section 17): its
+// three meters on its card, the word for how it is in the list, who is dying among those who need
+// the player, the dead counted out of the hold and told as an alert, and the two tools that feed it.
+the_dwarves_feel :: proc(t: ^testing.T) {
+	s := new(Stage)
+	stage_make(s)
+	hold_shown(s, 7)
+	seen := &watch.seen
+	// A thirsty dwarf walking to water needs nobody: its card says so, and its meter says thirsty.
+	seen.dwarves[0].want[.Drink], seen.dwarves[0].caring, seen.dwarves[0].care, seen.dwarves[0].doing = 0.3, true, .Drink, .Walking
+	frame(s)
+	testing.expect(t, screen_says(&screen, .Wrong) == "", "a thirsty dwarf on its way to water raised an alert")
+	dwarf_take(0)
+	frame(s)
+	testing.expect_value(t, count("hand.feel"), 3)
+	testing.expect_value(t, says("hand.feel"), "thirsty")
+	testing.expect_value(t, says("hand.line"), "Walking to fresh water, to drink.")
+	// One with nothing left to drink is first among those who need the player, with the trouble sign, and an alert says so.
+	seen.dwarves[1].want[.Drink] = 0
+	frame(s)
+	testing.expect(t, count("crowd.need") == 1 && strings.has_suffix(says("crowd.need"), "parched"), "a parched dwarf is not first at the top")
+	testing.expect(t, strings.contains(screen_says(&screen, .Wrong), "is parched"), "no alert says a dwarf is parched")
+	// One that looked for food and found none needs the player too, less gravely.
+	seen.dwarves[2].lacks = {.Food}
+	frame(s)
+	testing.expect_value(t, count("crowd.need"), 2)
+	// The list groups by what they are at, and says how each is.
+	seen.dwarves[3].doing, seen.dwarves[3].caring, seen.dwarves[3].care = .Sleeping, true, .Sleep
+	key(s, .F1)
+	frame(s)
+	groups := make([dynamic]string, context.temp_allocator)
+	hows := make([dynamic]string, context.temp_allocator)
+	for it in screen.items {
+		if it.id == "list.group.name" do append(&groups, it.text)
+		if it.id == "list.row.how" do append(&hows, it.text)
+	}
+	testing.expectf(t, len(groups) == 3 && groups[0] == "Need you" && groups[1] == "Seeing to themselves" && groups[2] == "Idle", "the list's groups are %v", groups)
+	testing.expectf(t, len(hows) == 7 && hows[0] == "parched" && hows[1] == "no food" && hows[2] == "thirsty" && hows[3] == "asleep" && hows[4] == "well", "the list says how each dwarf is: %v", hows)
+	key(s, .F1)
+	// A death: the hold is one fewer, the death stands as an alert until it is looked at, and the card says what it died of.
+	seen.dwarves[1].doing, seen.dwarves[1].died, seen.dwarves[1].died_on = .Dead, .Drink, 30000
+	frame(s)
+	testing.expect_value(t, says("crowd.count"), "6")
+	testing.expect(t, strings.contains(screen_says(&screen, .Wrong), fmt.tprintf("%s has died of thirst.", who_name(1))), "a death raised no alert")
+	testing.expect(t, !strings.contains(screen_says(&screen, .Wrong), "is parched"), "the dead still need the player")
+	dwarf_take(1)
+	frame(s)
+	testing.expect(t, strings.has_prefix(says("hand.line"), "Dead of thirst since the 3rd of spring"), "a dead dwarf's card does not say what it died of and when")
+	testing.expect_value(t, count("hand.feel"), 0)
+	hand_take({})
+	// The stores say how long the food lasts, and the orders bar has the two tools that bring it.
+	seen.tick, seen.food_days = 100, 2.2
+	seen.store[.Shii_Nuts] = 30
+	frame(s)
+	testing.expect_value(t, says("stores.food"), "Food for about two days")
+	testing.expect_value(t, says("stores.kind"), "Shii nuts")
+	testing.expect(t, screen_find(&screen, "orders.gather") != nil && screen_find(&screen, "orders.fish") != nil, "the orders bar has no Gather or no Fish")
+	key(s, .G)
+	frame(s)
+	testing.expect_value(t, says("tool.title"), "Gather")
+	key(s, .N)
+	frame(s)
+	testing.expect_value(t, says("tool.title"), "Fish")
+	key(s, .N)
+	seen.store, seen.food_days = {}, 0
+	// The date is the clock's: a day is DAY seconds, the year YEAR_DAYS days, and it begins at LANDS_AT on the 1st of spring.
+	testing.expect_value(t, date_words(date_at(0)), "1st of spring")
+	testing.expect_value(t, date_words(date_at(13*DAY)), "2nd of summer")
+	testing.expect_value(t, date_words(date_at((YEAR_DAYS + 47)*DAY)), "12th of winter, year 2")
+	testing.expect(t, abs(date_at(DAY/2).hour - (LANDS_AT + 12)) < 0.01 && night(23) && night(3) && !night(12), "the hour is not read from the seconds")
+}
+

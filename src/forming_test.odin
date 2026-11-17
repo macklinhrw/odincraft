@@ -68,6 +68,7 @@ forming_is_deterministic :: proc(t: ^testing.T) {
 	the_play_screen_says_what_is_so(t)
 	bind(home)
 	the_dwarves_are_on_screen(t)
+	the_dwarves_feel(t)
 	// And the screens before play (door_test.odin), over the same world.
 	bind(home)
 	the_front_door_and_the_world(t)

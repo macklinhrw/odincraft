@@ -78,7 +78,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 | I-2 (built, and played) | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
 | E-1 (built, and played) | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
 | P3 (built) | **Orders.** Mark ground to dig, trees to fell, blocks to build. Dwarves take the work themselves. Goods go to a store without being carried at first, as RimWorld's first version did; carrying follows in P5, since Bellwright's makers found that work done in the abstract "didn't feel inspiring" | Has a first room dug and roofed | 2 |
-| P4 | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown | Gets through a first season, or does not | 1 |
+| P4 (first half built, and played: thirst, hunger, sleep, the day and the year, death) | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown. Shelter, warmth and weather that acts are its second half | Gets through a first season, or does not | 1 |
 | P5 | **Materials and making.** What the rock and the woods give is what can be built and made: stone by its kind, timber, clay, a first metal. Goods are carried and stored. A workshop | Builds from the island's own stone | 2 |
 | P6 | **The world is kept.** A world is saved and reopened with what was dug and built. Leaving or losing a hold writes it into the world. A new party can land in the same world and walk into it | Finds the last game's hall | 3 |
 | P7 | **Trouble.** Dangerous animals, then a hostile band, then one great beast with a lair. Fighting and wounds. The pacing rule | Loses a dwarf to something with a name | 4 |
@@ -134,7 +134,7 @@ New:
 
 None blocks P1. Each has a recommendation and is asked when its step is reached.
 
-1. **How long a day and a year last in play** (P4). *Recommendation: a day of about 20 minutes at normal speed and a year of 48 days, with faster speeds.* It is a guess to be changed by playing.
+1. **How long a day and a year last in play** (P4). *Recommendation: a day of about 20 minutes at normal speed and a year of 48 days, with faster speeds.* It is a guess to be changed by playing. *Built so ("P4, first half, as built"): 20 minutes and 48 days, beside RimWorld's 16:40 and 60.*
 2. **How tall a dwarf is in metre blocks** (P2), which sets how high a tunnel must be. *Recommendation: under one and a half blocks, so a tunnel two blocks high is roomy and one block high is a crawl.*
 3. **Where the first hold stands** (P2). *Recommendation: the default island, until embark (P10) chooses.*
 4. **What the first great beast is** (P7). The owner called fantastic creatures very important, so its nature is the owner's.
@@ -1032,3 +1032,88 @@ The scripts and their 25 pictures are in `interesting-world/real/play/`: `e1-pla
 - **A finder** reads `SHORE`'s rows over every island's shore: the rows are data.
 - **A door onto the mainland** is this screen over a piece of it, once pieces have pictures.
 - **A danger of a new kind** is a field and a row of `SHORE` marked `may`.
+
+### P4, first half, as built: needs and the year (2026-11-16)
+
+**What can now happen that could not before:** a party lands in the morning with nothing to eat, drinks at the stream, strips the bracken and the gobies near the landing, sleeps on the ground, and is hungry by the second day unless the player has food gathered and stored; and a dwarf shut in a pit is warned of stage by stage and dies of thirst on the third day unless a stair is dug to it.
+
+The design is `adr/0014`; the real games' figures, with their files, are `interesting-world/notes/colony-sim-reference.md`, section 14; where everything stands on the screen is `foundations/interface.md`, section 17. Shelter, warmth and weather that acts are the second half and are not built.
+
+**What the owner sees.** The date and the hour move, top left: the boat stands off at 08:00 on the 1st of spring. The first word of the hold says what the land within a walk bears, season by season. By early afternoon dwarves walk down to the stream and stand in it to drink; toward evening the hungry look for food. With none stored they mark the nearest shoots and fish themselves, gather them and eat, and an alert says the hold lives from hand to mouth and what to do. Gather (G) and Fish (N) drag a rectangle; pins stand up where something would be taken, and the tool's line says what, or why nothing. Store has a fourth choice, Food. The stores say "Food for two days". At 22:00 the party lies down where it is; the land is lit as by a moon. At dawn one message says the day, what was eaten and how long the food will last. A click on a dwarf shows three meters, Drink, Food and Sleep. The Dwarves list groups by what they are at.
+
+**What was built**
+
+- **The calendar** (`clock.odin`): `date_at` reads the day, the hour, the season and the day of the sun's year from the seconds since the boat stood off. A day is 1,200 s, the year 48 days. The dwarves' world reads its own tick; the frame reads the same count, and gives the sun and the creatures that day of the sun's year.
+- **Needs** (`needs.odin`): three rows of `WANTS`; each dwarf's own pace; `care_look` before work, `care_calls` between two blocks, and the urgent need that takes a dwarf from its work; drinking, eating and sleeping as things a dwarf walks to and does; the stages of dying and death; the day's one line.
+- **Food** (`food.odin`): seven rows of `FOODS` on the plants, the tree and the fish the world has; `bearing_of`, the one rule of what a box bears, asked by the hold and by the frame; `larder_round`, what the land within a walk bears through the year, which the hold's first word and the landing's card are both read from.
+- **Gather and Fish** as rows of `WORKS` and marks like any (`orders.odin`); food as things that lie, in heaps of 24 (`goods.odin`); a stockpile that takes food.
+- **On the screen** (`crowd.odin`, `play.odin`, `bar.odin`, `hand.odin`): four more causes for needing the player, the list's groups, the meters, the stores' food, two tools, the alerts for a death and for foraging, and the Food row of a landing's card (`landing.odin`).
+- **Without a window**: an orders file takes `gather x y z x y z` and `fish x y z x y z`, and `store food ...`; the run's summary says the date, who is alive, how each dwarf's needs stand and where it is, and the places to drink the party found.
+
+**The figures, beside the real games'** (their files are in the reference note)
+
+| | RimWorld | Dwarf Fortress | Ingnomia | Here |
+|---|---|---|---|---|
+| A day at normal speed | 16:40 | 12 s | 12 min | 20 min (6:40 at 3 times, 3:20 at 6) |
+| A year | 60 days, 16.7 h | 336 days, 67 min | 48 days, 9.6 h | 48 days, 16 h (2.7 h at 6 times) |
+| Hunger: full to hungry | 11 h | 42 days | 1.9 days | 10 h; two meals a day of two or three things |
+| With nothing to eat, dead after | 2.2 days | when its fat is gone | 2.8 days | 3 days |
+| Thirst | none | twice as fast as hunger | as hunger | full to thirsty in 6.6 h, about three drinks a day; dead a day and a half after running dry |
+| Sleep | tired after 18 h; sleeps 22 to 6 by its timetable; 10.5 h mends it | about once a month | very sleepy after 1.7 days | tired after 16 h; lies down from 22:00 under three quarters rested; 8 h mend 16 |
+| One eating, one drink | 8 s | | | 10 s a thing, 6 s a drink |
+| A plant gathered | a bush: 10 berries, a third of a day, 4 s of work, again in 4 days | | | a plant's shoots: a tenth of a day, 4 s, again next year; a shii's nuts: up to nine fifths of a day, 30 s |
+| A catch | fish of 0.05 to 0.5 of a day | | | gobies, a tenth of a day, 20 s; fished water holds fish again in 4 days |
+
+Twenty minutes was chosen over RimWorld's 16:40 because a dwarf here walks to water and over pathless slopes to its work; 48 days because four seasons of twelve are short enough to see a year in an evening at the fastest speed and long enough that a season's food has to be stored. Death was made slower than RimWorld's because here the remedy may be a walk and an order away.
+
+**What the start island bears** (seed 7, as the hold says when the party stands ashore): bracken and bamboo shoots in spring, wild rice stems late in summer, shii nuts in autumn, gobies all year. No ayu: none reached the island, across 163 km of sea. Summer and winter are lean: gobies only, a twentieth of a day each.
+
+**Found by playing, and put right**
+
+- *Night was black.* For eight hours of every twenty-four nothing could be seen or ordered. The night is now lit as by a full moon (`sky_ambient`).
+- *A hungry dwarf looked 36 m round itself and gave up*, saying nothing bore food, with a wood of shoots a hundred metres off. It now looks over the land's cells within a short walk, the nearest that the rows say bear something first.
+- *A starving party starved beside the stream.* Run for a year with no orders, all seven died on the 6th of summer. Reproduced at that moment from the run's own summary: hunger that would not wait took each dwarf from its fishing every three seconds, so no catch was ever landed. The work that is the remedy is no longer left for the need.
+- *A dwarf shut in a pit had the land stripped for it.* It could reach no food, so it marked more, and the others gathered 221 things it never ate. A dwarf shut in, or with food lying where it has no way to, marks nothing and says it has no way to food.
+- *The dead still needed the player*: a dwarf dead in a pit stood among those who need you as "shut in". The dead need nothing.
+- *The party on a dry shore died with a stream 400 m off.* Six cells of one unreachable water used up every try. Waters are now tried, not cells, and a place to drink once found is known to all.
+- *The marks to gather could not be seen*: a tile on the ground was lost under the tint of the ground dragged over, and a pin a metre high stood inside grass taller than itself. A pin now stands two metres.
+- *"Starving" was said four times an hour* of a dwarf that ate a goby between. A stage is said again only after the need was met.
+- *The orders bar ran into the lists' buttons* at 175% with eight tools. It wraps.
+
+**Played** (`interesting-world/real/play/`; every picture looked at)
+
+- `p4-play.txt`: the first day from the landing to the next dawn, at the fastest speed: the first word; a card; Gather on bare shore and on the wood's edge; Fish on the sea and on the stream; a food stockpile; a day's felling left for a drink; evening; the night and a sleeper; an order that waits while they sleep; the morning's word (`p4-01` to `p4-17`).
+- `p4-pit-orders.txt` and `p4-pit-saved-orders.txt`, with no window: a dwarf shut in a pit, left (thirsty with no way at 13:00, parched at 16:30, dead on the 3rd of spring) and saved by a stair dug to it (`p4-20` to `p4-23`).
+- With no window and no orders: five days, four days on a shore 400 m from fresh water, and a whole year (`--dwarves=57600`, 5 s to run). Left wholly alone on the start island the seven live through the year, hungry and 45 times said to be starving or parched, doing nothing but feeding themselves: 25 to 100 gobies a day in summer and winter. It is a near thing: an earlier build of the same day, in which marks the hungry could not reach were tried for ever, lost four of the seven on the 8th and 9th of summer.
+- Pictures of a moment: the seventh day of summer, autumn and winter at noon (`p4-30` to `p4-32`), and the landing's card with its Food row (`p4-40`).
+
+**Costs.** A tick of seven costs 3 to 5 µs with their needs, against 0.3 before: most of it is the hungry looking for food and work. A year with no orders is 576,000 ticks, 560 lines of log and 7,400 ways looked for, and runs in 5 s. A hungry dwarf's look over the land is up to 120 cells of 256 columns, a few tens of milliseconds at worst, on the hold's thread, at most once in thirty seconds.
+
+Benches, one round, the machine at a load of 8 to 13 from other work, not run against the parent in the same minutes. Our work in ms, median / 99% / worst, and frames over 12.5 ms:
+
+| Bench | This step |
+|---|---|
+| Forest flank, first person | 2.11 / 9.77 / 33.16, 6 over |
+| Down through cloud, first person | 1.92 / 6.02 / 10.87, 0 over |
+| From above, the cut following the ground | 1.93 / 5.96 / 7.49, 0 over |
+| From above over the landing, the seven on screen, 40 s | 1.00 / 2.77 / 5.54, 0 over |
+
+The interface listed in 0.04 to 0.06 ms a frame. The six late frames of the forest flank were under the heavier load and were not chased, as agreed; that bench should be run once on a quiet machine. Nothing this step added runs on the frame's thread but the date and the meters.
+
+**Determinism.** `./build.sh test` plays gather, fish and a food stockpile into the second day, three ways, and the logs agree (`cc87256386a20280` at this step's first commit; it changes on purpose, since a hold that drinks, eats and sleeps does everything at other moments). `GOLDEN` is unchanged: forming was not touched.
+
+**Weak points**
+
+- **Nothing spoils.** Shoots gathered in spring are eaten in winter. Spoiling, drying and smoking belong with P5's making; until then a season's food is a matter of labour and stockpile room only.
+- **The party brings no stores.** By the first evening it is hungry. It was asked not to invent a food that is not the island's; provisions come with what an expedition brings (E-1 with P5).
+- **Left alone the party survives a year on the start island.** It forages well enough to live, badly, and does no other work. Whether neglect should kill sooner is the owner's (asked).
+- **The sea has no fish and the shore no shellfish**, since the world has no rows for them: the osprey "fishes the sea round it" and nothing swims there. That is the natural track's.
+- **Sleepers lie where they stood**, in a heap by the stockpile, and a sleeping body differs from a dead one only by its colour. Beds and a place to sleep come with shelter.
+- **Hunger and thirst cost nothing until they kill.** A starving dwarf works and walks as fast as a fed one.
+- **A plant gathered looks as it did**: only its mark goes. The tool then says "What was here has been taken".
+- **Fish are a draw on each square metre of water**, by the creature's own density, not the fish the eye sees swimming.
+- **The seasons of the plant foods are from memory** of Japanese gathering calendars, not from a source.
+- **The year shows on the land only by the sun**: the wood is evergreen, and no plant's look changes.
+- **No lens shows where food grows**: the field behind the landing's Food row costs a thousand reads a point. The Gather tool's pins under the pointer are the way to look.
+- **Not tried by hand**: no pointer has dragged Gather across a wood in a window.
+

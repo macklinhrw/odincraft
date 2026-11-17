@@ -1,0 +1,119 @@
+# P4's first half played from the player's seat (plan.md, "P4, first half, as built"): the first day
+# from the landing to the next dawn. What the land bears is said; a dwarf's card shows what it
+# feels; Gather and Fish are dragged where they find nothing and where they find something; a
+# stockpile takes the food; a day's work is ordered and left when thirst calls; the party sleeps;
+# and the morning says how the day went.
+#   build/odincraft --play=docs/interesting-world/real/play/p4-play.txt --dwarves=1
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+view over=2690,-1762 span=80 tilt=55 turn=0 cut=off
+key 3
+
+print 1. the party lands at 08:00 on the 1st of spring, and the hold says what the land round it bears
+run 45
+shot out/play/p4-01-ashore.png
+say
+print 2. a dwarf's card: what it is doing, and its thirst, hunger and sleep as three meters
+part Yrsa Coalsleeve, grower
+shot out/play/p4-02-card.png
+say
+key I
+shot out/play/p4-03-card-open.png
+key I
+key esc
+
+print 3. Gather dragged over the boulder shore, which bears nothing: the tool says so
+key G
+move 1750 600
+press
+move 2050 850
+shot out/play/p4-04-gather-nothing.png
+say
+release
+print 4. Gather dragged across the edge of the wood: what it would take is shown, and is marked
+move 300 500
+press
+move 1100 1250
+shot out/play/p4-05-gather-drag.png
+say
+release
+run 25
+shot out/play/p4-06-gathering.png
+say
+
+print 5. Fish dragged over the sea, which is no water to fish
+key N
+move 1900 180
+press
+move 2300 420
+shot out/play/p4-07-fish-sea.png
+say
+release
+print 6. Fish dragged along the stream: the places that hold fish
+move 1150 500
+press
+move 1600 1380
+shot out/play/p4-08-fish-drag.png
+say
+release
+run 30
+shot out/play/p4-09-fishing.png
+say
+
+print 7. a stockpile for food on the gravel: what was gathered and caught is carried to it, and the stores say how long it lasts
+key S
+part Food
+move 1900 850
+press
+move 2150 1000
+shot out/play/p4-10-store-drag.png
+say
+release
+run 100
+key esc
+shot out/play/p4-11-food-stored.png
+say
+
+print 8. a day's work: the wood marked to be felled. Early in the afternoon thirst calls dwarves from it
+key T
+drag 100 300 1000 1300
+key esc
+run 130
+key F1
+shot out/play/p4-12-afternoon-list.png
+say
+key F1
+
+print 9. evening: the hungry eat from the stockpile
+run 300
+shot out/play/p4-13-evening.png
+say
+
+print 10. night: the party lies down where it is. The list says who is asleep
+run 260
+key F1
+shot out/play/p4-14-night-list.png
+say
+print 11. a sleeper's card, and the sleepers from near by
+part Yrsa Coalsleeve
+shot out/play/p4-15-sleeper.png
+say
+key F1
+view span=24
+shot out/play/p4-15b-sleepers-near.png
+view over=2690,-1762 span=80
+key esc
+
+print 12. ground marked to be dug while they sleep: the order says why it waits
+key D
+drag 1900 1050 2100 1150
+key esc
+click 1915 1062
+shot out/play/p4-16-order-waits.png
+say
+key esc
+
+print 13. the next morning: the hold's word on the day that was
+run 216
+shot out/play/p4-17-morning.png
+say

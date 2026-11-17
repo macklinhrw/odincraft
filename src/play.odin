@@ -878,7 +878,7 @@ stores_build :: proc() -> (foot: f32) {
 	days := s.food_days
 	lasts := "No food stored" if days <= 0 else "Food for under a day" if days < 0.75 else fmt.tprintf("Food for %s", days_words(days))
 	fed := hold_living() > 0 && s.tick > 0
-	w := px(66)
+	w := px(78)
 	line := line_of(.Body)
 	high := 2*px(L.pad.y) + line_of(.Small) + px(1) + f32(max(len(rows) + len(food), 1))*line + (px(1.5) + line_of(.Small) + px(0.5) if fed else 0) + (px(1) + line_of(.Small) if note != "" else 0)
 	x, y := screen.w - px(L.margin) - w, px(L.margin)

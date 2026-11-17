@@ -521,7 +521,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 		view := View {
 			eye = eye, yaw = yaw, pitch = pitch, hour = hour, day = sun_day, weather_day = opt.day + f32(today.day), weather = opt.weather, seconds = f32(clock.seconds),
 			target = hit, has_target = aiming, crosshair = shot == "", boxes = boxes,
-			fov = fov, focus = eye if afoot else a.at, above = !afoot, level = NO_CUT if afoot else above_level(&a), bare = !afoot && a.bare, has_mark = !afoot && a.marked,
+			fov = fov, focus = eye if afoot else a.at, above = !afoot, level = NO_CUT if afoot else above_level(&a), bare = !afoot && (a.bare || bar.tool == .Gather),   // with Gather in the hand the woods are shown without their leaves: what it takes grows under them has_mark = !afoot && a.marked,
 		}
 		view.mark[0], view.mark[1], _, _ = mark_box(&a)
 		view.boxes = marks_view(&view, boxes, eye)   // what is marked for the dwarves, and what the box being dragged would mark

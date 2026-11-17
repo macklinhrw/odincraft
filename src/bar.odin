@@ -410,6 +410,11 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 		append(out, Box{at, f32(upper), {half.x, 0, 0}, f32(under), {0, half.y, 0}, 0, {0, 0, half.z}, at.y - half.y - 1e-3})   // drawn whole or not at all by the cut, as a dwarf is
 	}
 	rgb :: proc(c: Colour) -> u32 { return u32(c.r) << 16 | u32(c.g) << 8 | u32(c.b) }
+	// A pin standing on a point: a thin stem with a head on it, taller than the tallest grass (susuki and bracken stand 1.6 m), so it shows from above over grass, rock and water alike.
+	pin :: proc(out: ^[dynamic]Box, foot: [3]f32, head: f32, stem, top: u32) {
+		append(out, Box{foot + {0, 1.0, 0}, f32(stem), {0.05, 0, 0}, f32(stem), {0, 1.0, 0}, 0, {0, 0, 0.05}, foot.y - 1e-3})
+		append(out, Box{foot + {0, 2.0 + head, 0}, f32(top), {head, 0, 0}, f32(top), {0, head, 0}, 0, {0, 0, head}, foot.y - 1e-3})
+	}
 	stuff_colour :: proc(stuff: Stuff, store: ^[Mat]i32) -> u32 {
 		_, most := store_of(store, stuff)
 		if stuff == .Timber do most = .Timber
@@ -437,9 +442,9 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 			if g.tall > 0 {
 				cube(&out, at + {0, 0.6, 0}, {0.62, 0.14 if chosen else 0.09, 0.62}, rgb(LOOK.verdigris), rgb(LOOK.verdigris))
 				cube(&out, at + {0, f32(g.tall) + 0.1, 0}, {0.6, 0.14, 0.6} if chosen else {0.5, 0.1, 0.5}, rgb(LOOK.verdigris), rgb(LOOK.verdigris))
-			} else do cube(&out, at + {0, -0.44, 0}, {0.46, 0.05, 0.46} if chosen else {0.4, 0.04, 0.4}, rgb(LOOK.verdigris), rgb(LOOK.verdigris))   // a tile on the ground the plant stands on: flat things read from above
-		case .Fish:     // a tile on the water
-			cube(&out, at + {0, 0.5, 0}, {0.46, 0.04, 0.46} if chosen else {0.4, 0.03, 0.4}, rgb(LOOK.verdigris), rgb(LOOK.verdigris))
+			} else do pin(&out, at + {0, -0.5, 0}, 0.26 if chosen else 0.2, rgb(LOOK.chalk), rgb(LOOK.verdigris))   // a pin standing in the plant: a pale stem and a head in the colour of what is well
+		case .Fish:     // a float standing in the water
+			pin(&out, at + {0, 0.45, 0}, 0.26 if chosen else 0.2, rgb(LOOK.chalk), rgb(LOOK.verdigris))
 		case .Dig:
 		}
 	}
@@ -457,8 +462,8 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 		if f.tall > 0 {
 			cube(&out, at + {0, 0.6, 0}, {0.66, 0.16, 0.66}, brass, brass)
 			cube(&out, at + {0, f32(f.tall) + 0.1, 0}, {0.7, 0.16, 0.7}, brass, brass)
-		} else if FOODS[f.food].from == .Fish do cube(&out, at + {0, 0.5, 0}, {0.46, 0.04, 0.46}, rgb(LOOK.chalk), rgb(LOOK.verdigris))   // paler than the ground dragged over, which is brass
-		else do cube(&out, at + {0, -0.44, 0}, {0.46, 0.05, 0.46}, rgb(LOOK.chalk), rgb(LOOK.verdigris))
+		} else if FOODS[f.food].from == .Fish do pin(&out, at + {0, 0.45, 0}, 0.28, rgb(LOOK.chalk), rgb(LOOK.chalk))   // paler than the ground dragged over, which is brass
+		else do pin(&out, at + {0, -0.5, 0}, 0.28, rgb(LOOK.chalk), rgb(LOOK.chalk))
 	}
 	return out[:]
 }

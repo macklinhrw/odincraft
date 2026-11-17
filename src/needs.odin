@@ -44,7 +44,7 @@ Want_Row :: struct {
 // ten seconds each. It dies of thirst a day and a half after it ran dry and of hunger three days
 // after: longer than RimWorld's, since here the remedy may be a walk and an order away.
 WANTS := [Want]Want_Row{
-	.Drink = {"thirst", "thirst", 2.0, 0.5, 0.45, 0.2, 1.5, 6, {"has drunk", "thirsty", "very thirsty", "parched", "dying of thirst"}},
+	.Drink = {"thirst", "thirst", 2.0, 0.5, 0.45, 0.2, 1.5, 6, {"not thirsty", "thirsty", "very thirsty", "parched", "dying of thirst"}},
 	.Food  = {"hunger", "hunger", 1.2, 0.6, 0.5, 0.2, 3.0, 10, {"fed", "hungry", "very hungry", "starving", "dying of hunger"}},
 	.Sleep = {"tiredness", "", 1.05, 0, 0.3, 0.1, 0, 0, {"rested", "tired", "worn out", "asleep on its feet", ""}},
 }
@@ -54,7 +54,7 @@ FULL        :: 0.9    // a dwarf eating stops over this
 RETRY       :: 300    // ticks before a dwarf looks again for what it found no way to
 FORAGES     :: 12     // things, at most, a hungry dwarf marks to gather for itself at a time
 FORAGE_CELLS :: 24    // cells of the land, the nearest that bear something first, that it looks over for them; five times as many where those were all taken already
-WELLS       :: 6      // fresh cells of the land round a dwarf, the nearest first, that are tried for a place to drink
+WELLS       :: 6      // waters round a dwarf, the nearest first, that are tried for a place to drink it has a way to
 
 // What a hold keeps of the day in hand, for its word at the next dawn.
 Day_Tally :: struct { drank: int, ate: [Food_Kind]int }
@@ -130,7 +130,7 @@ needs_tick :: proc(h: ^Hold, i: int) {
 
 // A length of days in words, as a dwarf's end is told: "a day and a half", "about three days".
 days_words :: proc(days: f32) -> string {
-	return "a few hours" if days < 0.4 else "half a day" if days < 0.75 else "a day" if days < 1.25 else "a day and a half" if days < 1.75 else fmt.tprintf("about %s days", count_words(int(math.round(days))))
+	return "a few hours" if days < 0.3 else "half a day" if days < 0.6 else "under a day" if days < 0.9 else "a day" if days < 1.25 else "a day and a half" if days < 1.75 else fmt.tprintf("about %s days", count_words(int(math.round(days))))
 }
 
 // A dwarf dies of a need. Its body lies where it fell; what it had in hand is let go.
@@ -202,9 +202,9 @@ care_begin :: proc(h: ^Hold, i: int, w: Want) -> bool {
 		}
 		to = spot
 	case .Food:
-		pile, stand, ok := food_find(h, i)
+		pile, stand, lies, ok := food_find(h, i)
 		if !ok {
-			if forage(h, i) {
+			if !lies && !d.shut && forage(h, i) {   // food that lies where it has no way to, or a dwarf shut in, is not mended by marking more
 				d.forages += {.Food}
 				return false   // it takes the marks it made as any work, and eats when something lies
 			}
@@ -212,7 +212,8 @@ care_begin :: proc(h: ^Hold, i: int, w: Want) -> bool {
 				d.lacks += {.Food}
 				h.at = feet_of(h, i)
 				h.short = fmt.tprintf("%s finds nothing to eat.", who(h, i))
-				say(h, "%s is hungry, and finds nothing to eat: no food lies in the hold or about it, and nothing within reach of %s bears any now.", who(h, i), place_say(h, d.cell))
+				if lies || d.shut do say(h, "%s is hungry, and has no way to food from %s.", who(h, i), place_say(h, d.cell))
+				else do say(h, "%s is hungry, and finds nothing to eat: no food lies in the hold or about it, and nothing within reach of %s bears any now.", who(h, i), place_say(h, d.cell))
 			}
 			return false
 		}
@@ -407,7 +408,7 @@ drink_find :: proc(h: ^Hold, i: int) -> (spot: [3]i32, ok: bool) {
 	order := make([dynamic]int, context.temp_allocator)
 	for _, k in h.wells do append(&order, k)
 	for a in 1..<len(order) do for k := a; k > 0 && far(h.wells[order[k]], d.cell) < far(h.wells[order[k - 1]], d.cell); k -= 1 do order[k], order[k - 1] = order[k - 1], order[k]
-	for k in order[:min(len(order), 3)] do if far(h.wells[k], d.cell) < 400 {
+	for k in order[:min(len(order), 3)] do if far(h.wells[k], d.cell) < 2*640 {   // as far as fresh water is looked for at all (fresh_water, landing.odin)
 		if spot, ok = try(h, i, h.wells[k]); ok do return
 	}
 	// Fresh cells of the land round it, the nearest first: in each, the wet floor nearest the dwarf.
@@ -426,9 +427,11 @@ drink_find :: proc(h: ^Hold, i: int) -> (spot: [3]i32, ok: bool) {
 		}
 	}
 	tried := 0
-	for cell in cells {
+	no_way := make([dynamic][2]f64, context.temp_allocator)   // waters no way was found to: their other cells are not tried
+	next: for cell in cells {
 		if tried >= WELLS do break
 		m := middle_of(land.grid, cell.c)
+		for at in no_way do if abs(at.x - m.x) + abs(at.y - m.y) < 5*LAND_CELL do continue next
 		x0, z0 := i32(math.floor(m.x)) + region.origin.x - LAND_CELL/2 - 2, i32(math.floor(m.y)) + region.origin.y - LAND_CELL/2 - 2
 		best, least := [3]i32{}, max(i32)
 		w.budget = ASKING
@@ -449,6 +452,7 @@ drink_find :: proc(h: ^Hold, i: int) -> (spot: [3]i32, ok: bool) {
 			append(&h.wells, best)
 			return
 		}
+		append(&no_way, m)
 	}
 	return
 }
@@ -457,7 +461,7 @@ drink_find :: proc(h: ^Hold, i: int) -> (spot: [3]i32, ok: bool) {
 
 // Food for a dwarf to eat, with a way to it: the nearest heap of it that lies anywhere, stored or
 // loose, and the floor to eat it from.
-food_find :: proc(h: ^Hold, i: int) -> (pile, stand: [3]i32, ok: bool) {
+food_find :: proc(h: ^Hold, i: int) -> (pile, stand: [3]i32, lies, ok: bool) {
 	d, w := &h.dwarves[i], &h.walk
 	far :: proc(a, b: [3]i32) -> i32 { return abs(a.x - b.x) + abs(a.z - b.z) + 2*abs(a.y - b.y) }
 	Near :: struct { far: i32, k: int }
@@ -474,6 +478,7 @@ food_find :: proc(h: ^Hold, i: int) -> (pile, stand: [3]i32, ok: bool) {
 		tries[at] = {f, k}
 		count = min(count + 1, len(tries))
 	}
+	lies = count > 0   // food lies somewhere: whether it has a way to any is what is asked next
 	for t in tries[:count] {
 		g := h.goods[t.k]
 		w.budget = ASKING
@@ -487,7 +492,7 @@ food_find :: proc(h: ^Hold, i: int) -> (pile, stand: [3]i32, ok: bool) {
 			way := make([dynamic][3]i32, context.temp_allocator)
 			if _, why, _, _ := way_timed(h, d.cell, stand, &way); why != .Way do continue
 		}
-		return g.at, stand, true
+		return g.at, stand, true, true
 	}
 	return
 }
@@ -501,6 +506,8 @@ forage :: proc(h: ^Hold, i: int) -> bool {
 	for m in h.marks do if (m.work == .Gather || m.work == .Fish) && (m.taker < 0 || m.taker == i) && (m.wait == .None || m.by >= 0 && m.by != i) do return true
 	if h.tick < h.foraged do return false
 	h.foraged = h.tick + RETRY
+	// What the hungry marked before and no dwarf found a way to is taken back: it is their own mark, and nothing for the player to mend.
+	for k := len(h.marks) - 1; k >= 0; k -= 1 do if m := h.marks[k]; h.sites[m.site].thing == "foraging" && m.taker < 0 && m.wait != .None && (m.by < 0 || m.by == i) do mark_remove(h, k, false)
 	date := date_tick(h.tick)
 	found := make([dynamic]Bearing, context.temp_allocator)
 	// The cells of the land within a short walk that bear something in season, the nearest first; each is
