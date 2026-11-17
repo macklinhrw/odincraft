@@ -6,6 +6,10 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 
 ## Decided
 
+**2026-11-17, by the owner** (the play track moved onto its own branch)
+
+- **`main` holds the world's making and the view from above, and play is on the branch `play`.** The owner asked that all the interface and play work be put on a branch, and that `main` end at the view from above and the islands' improvements. `main` now ends at 4649d5b (P1, the view from above, with the cut, the cursor and the clock), after steps 25 and 27 and the interface's design notes. Everything merged after it is on `play`, at f6a7f5e: P2 to P4, I-1 and I-2, E-1, the goods, winter's food, a first year played through, and also step 21's three parts (land larger than a region formed as land, kept, drawn from afar and reached from inside the game), which were built on top of the play work and touch it. Nothing was lost: `play` holds every commit `main` had. Neither is pushed.
+
 **2026-11-10, by the owner**
 
 - **Fresh repository, ideas only.** Earlier projects' idea documents are in `reference/`. Earlier code may be read to learn what a feature did; implementations are designed fresh.
