@@ -357,7 +357,7 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 	if tool_marks() && bar.ready {
 		v.has_mark = bar.tool == .Send
 		for b in bar.boxes[:min(len(bar.boxes), TINTS/2)] do put(v, &n, b[0], b[1], 3 if bar.tool == .Remove else 2, eye)
-		if bar.tool == .Dig && len(bar.boxes) > 0 {   // and the ground over them, so a mark under a hillside shows where it lies
+		if bar.tool == .Dig && len(bar.boxes) > 0 && a.marked && (a.marking || bar.posed) {   // and, through a drag, its outline on the ground over it, so a box under a hillside shows where it lies; with nothing pressed only the blocks themselves are lit
 			lo, hi := bar.boxes[0][0], bar.boxes[0][1]
 			for b in bar.boxes do lo, hi = {min(lo.x, b[0].x), min(lo.y, b[0].y), min(lo.z, b[0].z)}, {max(hi.x, b[1].x), max(hi.y, b[1].y), max(hi.z, b[1].z)}
 			put(v, &n, {lo.x, hi.y + 1, lo.z}, {hi.x, 3000, hi.z}, 5, eye)
