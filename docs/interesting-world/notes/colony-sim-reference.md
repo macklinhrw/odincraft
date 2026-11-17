@@ -102,6 +102,12 @@ dwarfcorp: walk 0.75 × Dexterity 5 = 3.75 voxels/s, climb half. Voxel health di
 
 **For OdinCraft.** Dug blocks become goods on the floor. One stockpile tool, filter by kind, and a count of what is stored.
 
+### A stockpile selected
+
+- RimWorld: a click takes the zone under the pointer where no thing is to be taken (`RW/RimWorld/Selector.cs:351`, `ZoneAt(UI.MouseCell())`); a drag takes several. The zone selected gives gizmos: Hide, **Delete zone** (`Zone.Delete`, the whole zone at once), Shrink and **Expand** (the add tool taken up for this zone), and copy and paste of its settings (`RW/Verse/Zone.cs:250`, `RW/RimWorld/Zone_Stockpile.cs:70`). Its inspect line is "Size: N"; its Storage tab, 300 by 480, holds the priority and the filter (`RW/RimWorld/ITab_Storage.cs`). `Designator_ZoneDelete` takes cells out by a drag. What lies in a zone is not listed on it: each thing is clicked.
+- Dwarf Fortress: a stockpile is a building with settings, storage and links (`building_stockpilest`, `DF/df.building.xml:990`); a click on it opens its own panel, from which it is repainted, erased or removed (`stockpile_interfacest`: `repainting`, `erasing`, `cur_bld`; `stockpile_tools_interfacest` for its barrels, bins and wheelbarrows; `DF/df.d_interface.xml:479`, `:1030`).
+- For OdinCraft: a click on a stockpile's ground takes the whole of it; its card lists what lies in it and gives Remove (the whole), Make larger (Store taken up with what it takes) and what it takes.
+
 ## 7. Building
 
 RimWorld: a `Blueprint`; `WorkGiver_ConstructDeliverResourcesToBlueprints` hauls to it and it becomes a `Frame`; `WorkGiver_ConstructFinishFrames` works it. Walls drag as lines, floors as rectangles (draw styles `Default1D` and `Default2D`, `RD/DrawStyleCategoryDefs/`). Ingnomia: phases `PENDING`, `HAULING`, `READY`; one item a block (`StoneWall` 1 RawStone, `PlankFloor` 1 Plank, `Scaffold` 2 Plank), so a mined wall builds a wall. `BuildStairs` needs a floor here and nothing above. Dwarf Fortress: `construction_type` FORTIFICATION, WALL, FLOOR, STAIR_UP, STAIR_DOWN, STAIR_UPDOWN, RAMP, tracks; a `construction` record keeps the item and `original_tile` (`DF/df.event.xml:191`). dwarfcorp: one resource a voxel, lowest first.

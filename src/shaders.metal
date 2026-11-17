@@ -331,7 +331,7 @@ static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<fl
 
 // A block's texel of the map of marked blocks. Its low three bits say what it is marked as: 0 not,
 // 1 to be dug, 2 what the tool would mark, 3 what it would take back, 4 the order in the hand, 5 a
-// stockpile's ground. The five above them say which of the blocks beside it are open air: east,
+// stockpile's ground, 6 the stockpile in the hand. The five above them say which of the blocks beside it are open air: east,
 // west, south, north, and over it.
 static uint marked_as(texture3d<float> marks, float3 cell) {
     if (any(cell < 0.0) || cell.x >= 256.0 || cell.y >= 64.0 || cell.z >= 256.0) return 0u;
@@ -352,12 +352,12 @@ static float3 marked_face(float3 col, float3 rel, float3 N, float cell_size, con
     if (cell_size > 1.5) {                    // far ground stands on cells of two metres and more: the block under or over it may be the one marked
         kind = max(kind, max(marked_as(marks, cell - N) & 7u, marked_as(marks, cell + N) & 7u));
         if (kind == 0u) return col;
-        float3 far_line = kind == 5u ? float3(0.42, 1.25, 1.0) : kind == 3u ? f.wrong.rgb : f.live.rgb;
-        return mix(col, far_line, kind == 1u ? 0.14 : 0.24);
+        float3 far_line = kind >= 5u ? float3(0.42, 1.25, 1.0) : kind == 3u ? f.wrong.rgb : f.live.rgb;
+        return mix(col, far_line, kind == 1u ? 0.14 : kind == 6u ? 0.42 : 0.24);
     }
-    if (kind == 0u || (kind == 5u && N.y < 0.5)) return col;   // a stockpile is its floor: the faces that look up
-    float3 line = kind == 5u ? float3(0.42, 1.25, 1.0) : kind == 3u ? f.wrong.rgb : f.live.rgb;
-    float tint = kind == 1u ? 0.09 : kind == 5u ? 0.2 : 0.22;
+    if (kind == 0u || (kind >= 5u && N.y < 0.5)) return col;   // a stockpile is its floor: the faces that look up
+    float3 line = kind >= 5u ? float3(0.42, 1.25, 1.0) : kind == 3u ? f.wrong.rgb : f.live.rgb;
+    float tint = kind == 1u ? 0.09 : kind == 5u ? 0.2 : kind == 6u ? 0.42 : 0.22;
     float3 a = abs(N.x) > 0.5 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);   // the two ways along the face
     float3 b = abs(N.z) > 0.5 ? float3(0.0, 1.0, 0.0) : float3(0.0, 0.0, 1.0);
     float3 in_cell = p - cell;

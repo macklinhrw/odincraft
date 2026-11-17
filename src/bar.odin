@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:math"
 import "core:math/linalg"
 import "core:strings"
+import "core:slice"
+import "base:builtin"
 import "base:runtime"
 import sdl "vendor:sdl3"
 
@@ -60,6 +62,7 @@ Bar :: struct {
 	deep:     i32,          // blocks an order to dig out goes down
 	high:     i32,          // blocks a wall stands
 	job:      int,          // the order whose card is in the hand, or -1
+	zone:     int,          // the stockpile in the hand, or -1
 	for_hand: [3]i32,       // the block of the thing that was looked up
 	posed:    bool,         // a run with no window holds the mark's box as if the button were down
 	aim:      Pick,         // the block the tool would begin on: the ground under the pointer, through any tree over it
@@ -233,6 +236,11 @@ bar_frame :: proc() {
 		bar.job = job_of(u.hand)
 	}
 	if _, ok := site_seen(bar.job); !ok do bar.job = -1
+	bar.zone = -1
+	if u.hand.kind == .Zone {   // the stockpile in the hand, while the ground it was taken by is still its ground
+		if z, on := zone_under(u.hand.block + {0, 1, 0}); on do bar.zone = z.id
+		else do hand_drop()
+	}
 	preview()
 	alerts_keep()
 }
@@ -356,7 +364,7 @@ alerts_keep :: proc() {
 // where the view stands on it, has changed.
 MAP_WIDE :: 256
 MAP_HIGH :: 64
-Map_Box :: struct { lo, hi: [3]i32, kind: u8 }   // 1 to be dug, 2 what the tool would mark, 3 what it would take back, 4 the order in the hand, 5 a stockpile's ground
+Map_Box :: struct { lo, hi: [3]i32, kind: u8 }   // 1 to be dug, 2 what the tool would mark, 3 what it would take back, 4 the order in the hand, 5 a stockpile's ground, 6 the stockpile in the hand
 
 // The map for the frame's picture: its texture, and where the eye stands in it. Called by render.
 marks_bind :: proc(g: ^Gpu, eye, focus: [3]f64) -> (texture: ^sdl.GPUTexture, at: [4]f32) {
@@ -423,7 +431,7 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 	// then what is marked to be dug, the order in the hand, and what the tool would mark, each over
 	// the one before. Only the ground over a mark is still a box of the frame's own.
 	clear(&bar.map_boxes)
-	for t in s.zone_boxes do append(&bar.map_boxes, Map_Box{t.lo, t.hi, 5})
+	for t in s.zone_boxes do append(&bar.map_boxes, Map_Box{t.lo, t.hi, 6 if t.site == bar.zone else 5})
 	for t in s.tints do append(&bar.map_boxes, Map_Box{t.lo, t.hi, 4 if t.site == bar.job else 1})
 	if play.afoot^ && len(s.ghosts) == 0 do return boxes
 	n := 0
@@ -584,6 +592,10 @@ bar_hand :: proc() -> bool {
 		tool_card()
 		return true
 	}
+	if bar.zone >= 0 && !u.card_open {
+		zone_card()
+		return true
+	}
 	site, ok := site_seen(bar.job)
 	if !ok || u.card_open || u.hand.kind == .None do return false   // asked for more, the thing's own card
 	u.area = .Hand
@@ -612,6 +624,84 @@ bar_hand :: proc() -> bool {
 	button({cx + gw + px(L.gap), y, bw, px(L.button)}, "Take it back", .Take_Back, 0, false, "job.back", "Take this order back: nothing more of it is done.")
 	button({cx + gw + bw + 2*px(L.gap), y, button_wide("More", key_for(.More)), px(L.button)}, "More", .More, 0, false, "hand.more", "What the ground under the mark is, and why.")
 	return true
+}
+
+zone_seen :: proc(id: int) -> (z: Zone_Seen, ok: bool) {
+	for zone in watch.seen.zones do if zone.id == id do return zone, true
+	return
+}
+
+// The stockpile in the hand, as a whole: how large it is, what lies in it by kind, what it takes,
+// and the three things done to one: go to it, make it larger, remove it. RimWorld's zone is taken
+// by a click on its ground and gives Delete and Expand with its storage settings; Dwarf Fortress's
+// stockpile opens a panel of its own with repaint, erase and remove
+// (colony-sim-reference.md, section 6). What lies in it is read from the piles the hold shows, so
+// the card is as the stockpile stands this frame.
+zone_card :: proc() {
+	u, L := &play, &LOOK
+	z, _ := zone_seen(bar.zone)
+	u.area = .Hand
+	w := px(L.hand_wide)
+	inner := w - 2*px(L.pad.x)
+	x := px(L.margin)
+	// What lies in it: the stones by their rock and the timber together, the most first; and what lies there that it does not take.
+	Row :: struct { mat: Mat, name: string, n: int }
+	rows := make([dynamic]Row, context.temp_allocator)
+	timber, stray := 0, 0
+	for p in watch.seen.piles {
+		if in_zone, on := zone_under(p.at); !on || in_zone.id != z.id do continue
+		if !p.stored do stray += int(p.n)
+		else if is_stuff(p.kind, .Timber) do timber += int(p.n)
+		else {
+			found := false
+			for &r in rows do if r.mat == p.kind {
+				r.n += int(p.n)
+				found = true
+			}
+			if !found do append(&rows, Row{p.kind, sentence(mat_words(p.kind))[:len(mat_words(p.kind))], int(p.n)})
+		}
+	}
+	if timber > 0 do append(&rows, Row{.Timber, "Timber", timber})
+	slice.sort_by(rows[:], proc(a, b: Row) -> bool { return a.n > b.n })
+	more := 0
+	if len(rows) > 6 {
+		for r in rows[6:] do more += r.n
+		builtin.resize(&rows, 6)
+	}
+	line := line_of(.Body)
+	chip := line + 2*px(L.chip_pad.y)
+	size := fmt.tprintf("%d %s, %d in use", z.cells, "place" if z.cells == 1 else "places", z.full)
+	note := fmt.tprintf("%d more of other kinds", more) if more > 0 else ""
+	lost := fmt.tprintf("%d lie here that it does not take", stray) if stray > 0 else ""
+	high := 2*px(L.pad.y) + line_of(.Title) + line + px(2) + f32(max(len(rows), 1))*line + (line_of(.Small) if note != "" else 0) + (line_of(.Small) if lost != "" else 0) + px(3) + chip + px(3) + px(L.button)
+	r := Rect{x, screen.h - px(L.hand_foot) - high, w, high}
+	part(.Panel, r, id = "hand")
+	cx, y := x + px(L.pad.x), r.y + px(L.pad.y)
+	down := button_wide("Put down", key_for(.Escape), .Small, L.chip_pad.x)
+	part(.Chip, {cx + inner - down, y, down, line_of(.Small) + 2*px(L.chip_pad.y)}, "Put down", .Small, {}, {}, .Drop, 0, key_for(.Escape), "zone.drop", "Put the stockpile down.")
+	y += words(cx, y, "Stockpile", .Title, id = "zone.title")
+	y += words(cx, y, size, .Body, L.ash, "zone.size", inner) + px(2)
+	if len(rows) == 0 do y += words(cx, y, "Nothing in it yet", .Body, L.ash, "zone.none")
+	for row in rows {
+		part(.Block, {cx, y + math.round((line - px(L.block))/2), px(L.block), px(L.block)}, id = "zone.block").mat = row.mat
+		words(cx + px(L.block) + px(2.5), y, row.name, .Body, {}, "zone.kind")
+		count := fmt.tprint(row.n)
+		words(cx + inner - text_wide(.Figure, count), y, count, .Figure, {}, "zone.count")
+		y += line
+	}
+	if note != "" do y += words(cx, y, note, .Small, L.ash, "zone.more")
+	if lost != "" do y += words(cx, y, lost, .Small, L.brass, "zone.stray")
+	y += px(3)
+	names := [Takes]string{.All = "Everything", .Stone = "Stone", .Timber = "Timber"}
+	takes := [len(Takes)]int{int(Takes.All), int(Takes.Stone), int(Takes.Timber)}
+	tips := [len(Takes)]string{"It takes stone and timber.", "It takes stone alone: timber lying in it is carried to a place that takes it.", "It takes timber alone: stone lying in it is carried to a place that takes it."}
+	chips(cx, y, "Takes", ([]string{names[.All], names[.Stone], names[.Timber]}), int(z.takes), .Zone_Takes, takes[:], "zone.takes", tips[:])
+	y += chip + px(3)
+	gw := button_wide("Go there", key_for(.Go))
+	button({cx, y, gw, px(L.button)}, "Go there", .Go, 0, false, "zone.go", "Put the view over it.")
+	lw := button_wide("Make larger", "")
+	button({cx + gw + px(L.gap), y, lw, px(L.button)}, "Make larger", .Zone_Grow, 0, false, "zone.grow", "Take up Store with what this stockpile takes: drag beside it and the ground joins it.")
+	button({cx + gw + lw + 2*px(L.gap), y, button_wide("Remove", ""), px(L.button)}, "Remove", .Zone_Remove, 0, false, "zone.remove", "Remove this stockpile, all of it. What lies in it stays where it is, loose, and is no longer counted.")
 }
 
 // A row of the tool's card: a few choices, one of them chosen.
