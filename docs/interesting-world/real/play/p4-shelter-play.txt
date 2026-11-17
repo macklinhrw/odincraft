@@ -1,0 +1,168 @@
+# P4's second half played from the player's seat (plan.md, "P4, second half, as built"): the weather
+# under the date and why; a first night in the open and what it costs; timber; a fire marked, laid,
+# lit and looked at; a hut of walls with a roof over them; the shelter lens; a place to sleep marked
+# inside it, slept in, taken in the hand, made larger, trimmed and removed.
+#   build/odincraft --play=docs/interesting-world/real/play/p4-shelter-play.txt --dwarves=1
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440. Where a
+# thing is dragged the view looks straight down, 80 pixels to a block, so the figures can be read
+# off the blocks: a block's middle is at x = 1280 + 80 (its x - 2686), y = 720 + 80 (its z + 1750).
+
+view over=2690,-1755 span=70 tilt=55 turn=0 cut=off
+key 3
+
+print 1. the party lands at 08:00 on the 1st of spring: the weather stands under the date, and the pointer resting on it says why
+run 45
+move 300 128
+wait 1.5
+shot out/play/p4s-01-weather-why.png
+say
+
+print 2. timber: Fell dragged across the wood west of the camp, and over the tree that stands where the hut's door will be
+view over=2668,-1752 span=80 tilt=90 turn=0 cut=off
+key T
+drag 800 300 2170 1230
+key esc
+timer
+until done 420
+view over=2690,-1755 span=70 tilt=55 turn=0 cut=off
+shot out/play/p4s-02-felled.png
+
+print 3. the first night, with no fire and no roof: at 22:30 the seven lie where they are, on open ground
+until hour 22.6
+part Bramik Tuffelbow, weaver*
+view over=2690,-1750 span=40 tilt=55 turn=0 cut=off
+shot out/play/p4s-03-night-open.png
+say
+key esc
+
+print 4. dawn: one line says the day's weather, and that the seven slept in the open
+until hour 6.15
+shot out/play/p4s-04-dawn.png
+say
+
+print 5. Build, then Fire: the tool says what a fire there would warm; a click marks it; it is laid of a log and lit
+view over=2686.5,-1749.5 span=32 tilt=90 turn=0 cut=off
+key B
+part Fire
+move 1600 960
+wait 0.3
+under
+shot out/play/p4s-05-fire-tool.png
+say
+click 1600 960
+key esc
+run 40
+view over=2690,-1749 span=24 tilt=55 turn=0 cut=off
+shot out/play/p4s-06-fire-lit.png
+say
+
+print 6. a click on the fire: its card says how long its timber lasts, what it warms there, and who is by it
+view over=2686.5,-1749.5 span=32 tilt=90 turn=0 cut=off
+click 1600 950
+wait 0.3
+shot out/play/p4s-07-fire-card.png
+say
+key esc
+
+print 7. a hut: four walls of timber two high with a door on the east, then Roof dragged from one wall's top to the far one's
+key B
+part Wall
+part Timber*
+drag 1120 560 1440 560
+drag 1120 880 1440 880
+drag 1120 640 1120 800
+click 1440 640
+click 1440 800
+shot out/play/p4s-08-walls-marked.png
+say
+key esc
+timer
+until done 300
+key B
+part Roof
+move 1120 560
+press
+move 1440 880
+shot out/play/p4s-09-roof-drag.png
+say
+release
+key esc
+timer
+until done 400
+view over=2686,-1750 span=24 tilt=50 turn=300 cut=off
+shot out/play/p4s-10-hut.png
+
+print 8. is it a roof? The Shelter lens, with the view cut under the roof: the hut's floor is indoors, its doorway under a roof
+view over=2686.5,-1749.5 span=32 tilt=90 turn=0 cut=5
+key L
+part Shelter
+key L
+shot out/play/p4s-11-lens.png
+say
+
+print 9. Sleep dragged over the hut's floor: the tool says how many places, and how many of them have a roof
+key Z
+move 1200 640
+press
+move 1360 800
+shot out/play/p4s-12-sleep-drag.png
+say
+release
+key esc
+wait 0.3
+shot out/play/p4s-13-sleep-marked.png
+say
+
+print 10. the second night: at 22:30 the seven lie in the hut, and a sleeper's card says so
+until hour 22.6
+part Bramik Tuffelbow, weaver*
+shot out/play/p4s-14-night-indoors.png
+say
+key esc
+key L
+part Shelter
+key L
+
+print 11. dawn of the third day: the seven slept indoors
+until hour 6.15
+view over=2690,-1750 span=40 tilt=55 turn=0 cut=off
+shot out/play/p4s-15-dawn-indoors.png
+say
+
+print 12. the sleeping place taken in the hand by a click on its ground, once the sleepers have risen (a click on a sleeper takes the sleeper): how it is sheltered, who lies in it, and what is done to one
+until hour 9.5
+view over=2686.5,-1749.5 span=32 tilt=90 turn=0 cut=5
+click 1280 720
+wait 0.3
+shot out/play/p4s-16-sleep-card.png
+say
+print 13. Make larger takes up Sleep: a drag out through the door joins the doorway and the ground before it
+part Make larger
+drag 1440 720 1600 720
+key esc
+click 1280 720
+wait 0.3
+shot out/play/p4s-17-sleep-larger.png
+say
+print 14. Remove dragged over the ground before the door takes it out again; then the whole place is removed from its card
+key esc
+key X
+drag 1520 720 1600 720
+key esc
+click 1280 720
+wait 0.3
+shot out/play/p4s-18-sleep-trimmed.png
+say
+part Remove
+wait 0.3
+shot out/play/p4s-19-sleep-removed.png
+say
+
+print 15. the fire is let go out from its card
+view over=2686.5,-1749.5 span=32 tilt=90 turn=0 cut=off
+click 1600 950
+wait 0.3
+part Let it go out
+wait 0.3
+shot out/play/p4s-20-fire-left.png
+say

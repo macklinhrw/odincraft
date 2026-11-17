@@ -1,0 +1,13 @@
+# A winter in the open, and the party saved at its first warning (P4, second half). Left wholly
+# alone the seven live through spring, summer and autumn on what they forage, and winter kills
+# them: with no orders at all,
+#   build/odincraft --dwarves=57600
+# says who is numb with cold on the 1st of winter, dying on the 2nd and dead on the 5th and 6th.
+# Here the player answers the first warning, at noon on the 1st of winter (43,400 s): the party,
+# which is scattered a long walk off catching gobies, is sent back to where it camped; trees are
+# felled there, a fire is laid on the open ground, and the ground round it is marked to sleep on.
+#   build/odincraft --dwarves=57600 --orders=docs/interesting-world/real/play/p4-winter-saved-orders.txt
+43650 go 2690 -1747
+43650 fell 2660 3 -1765 2696 3 -1735
+43650 build fire timber 2690 2 -1747 2690 2 -1747
+43650 sleep 2688 2 -1749 2692 2 -1745

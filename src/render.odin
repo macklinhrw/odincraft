@@ -58,7 +58,7 @@ Gpu :: struct {
 	plant_sampler:  ^sdl.GPUSampler,
 	block_sampler:  ^sdl.GPUSampler,
 	linear:         ^sdl.GPUSampler,
-	terrain, leaf, shadow_pipe, sky, water, river, pool, present, plant, cloud_pipe, box: ^sdl.GPUGraphicsPipeline,
+	terrain, leaf, shadow_pipe, sky, water, river, pool, present, plant, cloud_pipe, box, rain: ^sdl.GPUGraphicsPipeline,
 	caps:           ^sdl.GPUBuffer,    // the faces the cut makes through solid blocks (caps_make)
 	cap_staging:    ^sdl.GPUTransferBuffer,
 	caps_room:      int,               // quads they have room for
@@ -88,7 +88,8 @@ View :: struct {
 	yaw, pitch: f32,
 	hour:       f32,    // time of day, 0..24, by the sun
 	day:        f32,    // of the year, 0 on 1 January
-	weather_day: f32,   // the day the weather is read on: a spell of cloud lasts as many of the game's days as it did of the sun's
+	sky:        Weather, // the weather over the view: its cover and cloud base, the rain and how wet the ground is (weather.odin)
+	dry:        bool,    // the eye is under a roof: no rain is drawn falling before it
 	weather:    [2]f32, // cover and cloud base forced by --weather, where they are 0 or more
 	seconds:    f32,
 	target:     [3]i32, // block being aimed at, or under the pointer
@@ -114,6 +115,9 @@ Frame :: struct {
 	cascade_r, sun, cam, target, cam_r, cam_u, cam_f, screen, cloud, weather, focus, cut, mark, mark_size, lens, marked: [4]f32,
 	tint, tint_size: [TINTS][4]f32,
 	live, wrong: [4]f32,   // the interface's brass and cinnabar (LOOK), which marked ground is tinted with
+	rain:  [4]f32,         // the rain over the view, how wet the ground is, how the wind leans the rain, and the seconds it falls by (weather.odin)
+	kinds: [4][4]f32,      // the colours of ground marked to sleep on, under a roof and indoors (LOOK)
+	fire:  [8][4]f32,      // the fires that burn, from the eye, and how far each one's light reaches (shelter_view.odin)
 	}
 
 	// Mirrors `ShadowU` in shaders.metal.
@@ -208,19 +212,7 @@ Sky :: struct {
 }
 SKY := Sky{cover = {0.66, 0.62, 0.62, 0.57, 0.62, 0.73, 0.48, 0.45, 0.54, 0.55, 0.59, 0.62}, spell = 2, deck = 300, base = {250, 1000}, wind = 8}
 
-// The cover (0 clear to 1 overcast) and cloud base at a time, the same for the same seed.
-FAIR :: 0.3   // cloud cover under which a day counts as fair
-weather_at :: proc(day, hour: f32) -> (cover, base: f32) {
-	t := (day + hour/24)/SKY.spell
-	k, w := i32(math.floor(t)), smoothstep(0, 1, t - math.floor(t))
-	for i in i32(0)..=1 {
-		mean := SKY.cover[int((f32(k + i) + 0.5)*SKY.spell/365*12) %% 12]
-		c := math.pow(hash01(k + i, 0, world_seed + 700), 1/mean - 1)   // a draw whose mean is `mean`
-		b := SKY.base[0] + (SKY.base[1] - SKY.base[0])*hash01(k + i, 1, world_seed + 700)*(1 - 0.5*c)   // lower under a heavier cover
-		cover, base = cover + c*(w if i == 1 else 1 - w), base + b*(w if i == 1 else 1 - w)
-	}
-	return
-}
+FAIR :: 0.3   // cloud cover under which a day counts as fair (weather.odin has the rule)
 
 Item :: struct {
 	chunk:  ^Chunk,
@@ -419,6 +411,7 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 		color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, blend = true,
 	})
 	g.present = make_pipeline(g, {vs = "vs_screen", fs = "fs_present", fs_uniforms = 1, fs_samplers = 1, color = g.format})
+	g.rain = make_pipeline(g, {vs = "vs_screen", fs = "fs_rain", fs_uniforms = 1, color = g.format, samples = ._4, depth = true, compare = .ALWAYS, blend = true})   // over the world, whatever stands in it
 	g.cloud_pipe = make_pipeline(g, {vs = "vs_screen", fs = "fs_clouds", fs_uniforms = 1, fs_samplers = 1, color = .R16G16B16A16_FLOAT})
 	// River water writes depth, so where two reaches meet the water is drawn once.
 	g.river = make_pipeline(g, {
@@ -621,7 +614,7 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	f.screen = {f32(sw), f32(sh), 1 if v.crosshair else 0, 0}
 	// The camera in the cloud field, which drifts downwind from the start island's swell, and on the
 	// land's grid of the island nearest, whose `lifted` alone raises a cap.
-	cover, base := weather_at(v.weather_day if v.weather_day != 0 else v.day, v.hour)   // a view that names no day of weather has its own day's
+	cover, base := v.sky.cover, v.sky.base
 	if v.weather.x >= 0 do cover, base = v.weather.x, v.weather.y
 	from := math.to_radians(home.region.shape.swell)
 	drift := f64(SKY.wind)*((f64(v.day)*24 + f64(v.hour))*3600 + f64(v.seconds))
@@ -635,6 +628,11 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	for i in 0..<min(v.tint_count, TINTS) do f.tint[i], f.tint_size[i] = v.tints[i], v.tint_sizes[i]
 	lit :: proc(c: Colour, by: f32) -> [4]f32 { return {math.pow(f32(c.r)/255, 2.2)*by, math.pow(f32(c.g)/255, 2.2)*by, math.pow(f32(c.b)/255, 2.2)*by, 1} }
 	f.live, f.wrong = lit(LOOK.brass, 2.6), lit(LOOK.cinnabar, 2.6)
+	f.kinds = {lit(LOOK.sleep, 2.4), lit(LOOK.roofed, 2.2), lit(LOOK.indoors, 2.4), {v.sky.rain, 0, 0, 0}}   // and, in the last, the rain that dims the sun
+	lean := math.to_radians(f32(home.region.shape.swell))   // the wind blows from there: the rain leans the way it blows, as far as that lies across the picture
+	across := -math.sin(lean)*math.cos(v.yaw) + math.cos(lean)*math.sin(v.yaw)
+	f.rain = {0 if v.dry else -v.sky.rain if v.sky.snow else v.sky.rain, v.sky.wet, -0.04*across*v.sky.wind, f32(math.mod(play.now, 1000))}
+	fires_light(v.eye, v.focus, &f.fire)
 	if v.has_mark {
 		f.mark = {f32(f64(v.mark[0].x) - v.eye.x), f32(f64(v.mark[0].y) - v.eye.y), f32(f64(v.mark[0].z) - v.eye.z), 1}
 		f.mark_size = {f32(v.mark[1].x - v.mark[0].x + 1), f32(v.mark[1].y - v.mark[0].y + 1), f32(v.mark[1].z - v.mark[0].z + 1), 0}
@@ -892,6 +890,10 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.BindGPUGraphicsPipeline(pass, g.water)
 	sdl.BindGPUFragmentSamplers(pass, 0, &water_mask[0], 3)
 	sdl.DrawGPUPrimitives(pass, 4, SEA_GRID*SEA_GRID, 0, 0)
+	if f.rain.x != 0 && !play.plain {   // the rain, or the snow, over all of it (fs_rain, shaders.metal)
+		sdl.BindGPUGraphicsPipeline(pass, g.rain)
+		sdl.DrawGPUPrimitives(pass, 3, 1, 0, 0)
+	}
 	sdl.EndGPURenderPass(pass)
 	g.quads_drawn -= shadow_quads
 	ui_render(g, cmd)   // the interface, over the finished picture of the world (ui.odin)

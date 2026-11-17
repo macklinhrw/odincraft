@@ -242,7 +242,7 @@ release
 key esc
 
 print 13. Dig: the pointer on one block of a pit's wall lights that block and no other (the owner's: one block under the pointer and two lit)
-key esc
+# (No Escape here: the tool was put down above, and a second Escape opens the menu, in which D leaves the game. Found on 2026-11-16: with it, cases 13 to 15 were played at the front door.)
 view over=2690,-1750 span=36 tilt=55 turn=0 cut=off
 key D
 part tool.deep

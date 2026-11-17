@@ -1,0 +1,42 @@
+# A winter got through with a room and a fire (P4, second half): on the first day a room is dug
+# into the rise behind the landing, roofed where it lies open and walled across its front but for
+# a door; its floor is marked to sleep on and a fire is laid in it. Through the year the player
+# does what a player does: has the land round the camp gathered and its water fished every fourth
+# day, with a stockpile for the food, and has timber felled again in summer and in autumn.
+#   build/odincraft --dwarves=57600 --orders=docs/interesting-world/real/play/p4-winter-room-orders.txt
+900 fell 2690 1 -1782 2699 1 -1774
+900 fell 2673 3 -1760 2689 3 -1744
+900 dig out 2692 1 -1780 2697 2 -1776
+900 store all 2701 0 -1775 2699 0 -1781
+1220 build floor timber 2692 3 -1780 2697 3 -1776
+1220 build wall stone 2697 0 -1776 2697 1 -1777
+1220 build wall stone 2697 0 -1779 2697 1 -1780
+1280 store food 2690 2 -1750 2696 2 -1744
+1500 sleep 2692 0 -1780 2696 0 -1776
+1500 build fire timber 2694 0 -1778 2694 0 -1778
+15000 fell 2640 3 -1775 2672 3 -1735
+30000 fell 2610 3 -1790 2640 3 -1730
+1260 gather 2650 3 -1790 2734 3 -1706
+1260 fish 2650 3 -1790 2734 3 -1706
+6060 gather 2650 3 -1790 2734 3 -1706
+6060 fish 2650 3 -1790 2734 3 -1706
+10860 gather 2650 3 -1790 2734 3 -1706
+10860 fish 2650 3 -1790 2734 3 -1706
+15660 gather 2650 3 -1790 2734 3 -1706
+15660 fish 2650 3 -1790 2734 3 -1706
+20460 gather 2650 3 -1790 2734 3 -1706
+20460 fish 2650 3 -1790 2734 3 -1706
+25260 gather 2650 3 -1790 2734 3 -1706
+25260 fish 2650 3 -1790 2734 3 -1706
+30060 gather 2650 3 -1790 2734 3 -1706
+30060 fish 2650 3 -1790 2734 3 -1706
+34860 gather 2650 3 -1790 2734 3 -1706
+34860 fish 2650 3 -1790 2734 3 -1706
+39660 gather 2650 3 -1790 2734 3 -1706
+39660 fish 2650 3 -1790 2734 3 -1706
+44460 gather 2650 3 -1790 2734 3 -1706
+44460 fish 2650 3 -1790 2734 3 -1706
+49260 gather 2650 3 -1790 2734 3 -1706
+49260 fish 2650 3 -1790 2734 3 -1706
+54060 gather 2650 3 -1790 2734 3 -1706
+54060 fish 2650 3 -1790 2734 3 -1706

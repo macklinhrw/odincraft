@@ -471,7 +471,7 @@ KEYS_SAID := [?]Key_Said{
 	{.List, int(List.Dwarves), "The list of dwarves"}, {.List, int(List.Places), "The list of places"},
 	{.Order, int(Tool.Dig), "The tool to dig"}, {.Order, int(Tool.Fell), "The tool to fell"}, {.Order, int(Tool.Build), "The tool to build"},
 	{.Order, int(Tool.Send), "Send the party"}, {.Order, int(Tool.Remove), "Take marks back, built blocks down, or a stockpile away"},
-	{.Order, int(Tool.Store), "The tool to mark a stockpile"}, {.Order, int(Tool.Gather), "The tool to gather food from plants and trees"}, {.Order, int(Tool.Fish), "The tool to fish"}, {.More, 0, "The card of what is in the hand, or shut it"},
+	{.Order, int(Tool.Store), "The tool to mark a stockpile"}, {.Order, int(Tool.Sleep), "The tool to mark a place to sleep"}, {.Order, int(Tool.Gather), "The tool to gather food from plants and trees"}, {.Order, int(Tool.Fish), "The tool to fish"}, {.More, 0, "The card of what is in the hand, or shut it"},
 	{.Back, 0, "Back to the game"}, {.Leave, int(Leave.World), "Leave to the world"}, {.Leave, int(Leave.Door), "Leave to the front door"}, {.Quit, 0, "Quit the game"},
 	{.Door_Move, -1, "The choice above"}, {.Door_Move, 1, "The choice below"}, {.Door_Go, 0, "Take the choice in focus"},
 	{.Door_Back, 0, "Back: put down, then to the front door"}, {.Draw, 0, "Draw a seed"}, {.Stop, 0, "Stop making the world, or go on"},

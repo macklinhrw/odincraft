@@ -1,0 +1,6 @@
+# A rainy evening at work (P4, second half). The first rain of the year falls on the 4th of spring
+# from 18:00 to 21:00 (start-up says when: "the first rains"). The party has a trench to dig beside
+# its camp that evening, and no roof: it works on in the rain and is wet through by dark.
+#   build/odincraft --dwarves=4400 --orders=docs/interesting-world/real/play/p4-rain-orders.txt
+# A picture of the moment: add --shot=out/v.png --over=2688,-1750 --span=40 at --dwarves=4200.
+3900 dig out 2680 2 -1756 2689 2 -1753

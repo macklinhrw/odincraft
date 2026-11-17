@@ -33,6 +33,7 @@ import sdl "vendor:sdl3"
 //   wait seconds            let that much of the player's time pass
 //   run seconds             let that much of the dwarves' time pass, at whatever speed the clock is running
 //   timer                   note the dwarves' time
+//   until hour h            let the dwarves' time pass until their day next comes to that hour: until hour 22.5
 //   until done [seconds]    wait until nothing is marked and no dwarf has work in hand or carries anything, or so many seconds of
 //                           the dwarves' time; say how long it took since the timer, in their time and the player's
 //   shot file.png           wait for the world to be drawn whole, and save the picture
@@ -178,7 +179,7 @@ script_read :: proc(path: string) {
 			append(&s.steps, Step{kind = .Wait if words[0] == "wait" else .Run, v = v})
 		case "timer": append(&s.steps, Step{kind = .Timer})
 		case "until":
-			ok = len(rest) >= 1 && (rest[0] == "done" || rest[0] == "ready" || rest[0] == "made" || rest[0] == "mainland")
+			ok = len(rest) >= 1 && (rest[0] == "done" || rest[0] == "ready" || rest[0] == "made" || rest[0] == "mainland" || rest[0] == "hour" && len(rest) == 2)
 			v[0] = 3600
 			if len(rest) > 1 do ok &&= figures(rest[1:], v[:1])
 			if ok do append(&s.steps, Step{kind = .Until, v = v, text = strings.clone(rest[0])})
@@ -309,6 +310,18 @@ script_frame :: proc(events: ^[dynamic]sdl.Event, a: ^Above, p: ^Player, afoot: 
 		case .Timer:
 			s.timer = watch.clock
 		case .Until:
+			if step.text == "hour" {   // the next time the dwarves' day comes to that hour
+				if a == nil {
+					fmt.println("script: the dwarves' time does not run before play")
+					break
+				}
+				s.hurry = true
+				if s.began < 0 do s.began = watch.clock
+				ahead := math.mod(f64(step.v[0]) - f64(date_at(s.began).hour) + 24, 24)
+				if (watch.clock - s.began)*24/DAY < ahead do return
+				s.began = -1
+				break
+			}
 			if step.text != "done" {   // the world in hand, as it is made in real time (making.odin)
 				if s.began < 0 do s.began = seconds
 				there := false

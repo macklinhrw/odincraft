@@ -252,3 +252,64 @@ RimWorld's pawns and Ingnomia's gnomes live by the hour: they work by day and sl
 - **Death takes a day and a half of thirst after running dry and three days of hunger**: longer than RimWorld's 2.2, because the remedy here may be a walk and an order away, and the first of it is said when the need reaches nothing.
 - **Gather and Fish are marks dragged like any order**, done once: a plant bears again next year, fished water holds fish again in four days. A hungry dwarf with no food lying anywhere marks the nearest for itself, as RimWorld's eats from a bush.
 - **A plant's shoots are a tenth of a day, a shii's nuts a day and a third, an ayu two fifths of a day**: one drag of ten by ten on a wood's floor feeds a dwarf two or three days, where RimWorld's bush is a third of one.
+
+## 15. Shelter and warmth: the weather, cold, roofs and rooms, where a pawn sleeps, fire
+
+Read on 2026-11-16 for step P4's second half, before it was built. Every figure has its file; "(from memory)" marks what is not in these folders.
+
+### The weather and the temperature
+
+- **RimWorld's outdoor temperature is the tile's own mean, a season's swing and a day's swing** (`RW/Verse/GenTemperature.cs:190-218`): the day's share is `cos(2π(dayPercent + 0.32))·7`, seven degrees either way, coldest a little after four in the morning and warmest a little after four in the afternoon; the season's swing grows with latitude. The weather adds its own offset.
+- **Its weather is a draw among the biome's kinds, each held for a while** (`RW/RimWorld/WeatherDecider.cs:80`; `RW/Verse/WeatherDef.cs:15`: 16,000 to 160,000 ticks, a quarter of a day to two and two thirds). A temperate forest draws clear 18, fog 1, rain 2, dry thunder 1, rainy thunder 1, foggy rain 1 and snow 8 where it is cold enough (`RD/BiomeDefs/Biomes_Temperate.xml:121-129`): about one draw in eight is rain. Rain may fall only over 0 °C and snow only under -0.5 (`RD/WeatherDefs/Weathers.xml:93,316`). Rain slows walking to 0.9 and shooting to 0.8, and raises the wind 1.5 times (`:94-100`).
+- **Dwarf Fortress has three states of weather**, clear, rain and snow (`DF/df.d_basics.xml:10700-10704`, `weather_type`; DFHack's `weather clear|rain|snow`, `DH/docs/weather.rst`), and a temperature kept block by block (`DF/df.block.xml:301-306`, `current_temperature` and `normal_temperature`). Temperature is largely harmless to dwarves outdoors on any embark that is not freezing or scorching (from memory): it matters as water that freezes and magma that burns. A tile keeps `rained` (`DF/df.d_basics.xml:11014`).
+
+### Cold
+
+- **RimWorld's person is comfortable from 16 to 26 °C with nothing on** (`RD/ThingDefs_Races/Races_Humanlike.xml:11-12`); clothes move both ends (`Insulation_Cold`, `RD/Stats/Stats_Pawns_General.xml:197-213`; a parka's is 2.0 times its stuff's, `RD/ThingDefs_Misc/Apparel_Various.xml:231`). Outside the comfortable range the pawn is unhappy and no more. **Ten degrees past it is the safe range's end** (`GenTemperature.cs:85-91`), and only beyond that does hypothermia grow.
+- **Hypothermia** (`RW/Verse/HediffGiver_Hypothermia.cs:27-40`; every 60 ticks, `RW/Verse/Pawn_HealthTracker.cs:1001`): under the safe range its severity grows by the larger of 0.00075 and 0.0000645 a degree under it, each interval of a thousand a day: 0.75 of the whole a day at the least, so **death in a day and a third at most**, and in 14 hours at 26 degrees under. Back over the comfortable minimum it mends 1.5 to 15 of the whole a day. Its stages are shivering (0.04), minor (0.2: moving -10%, hands -20%), serious (0.35: moving -30%, hands -50%), extreme (0.62: all but unconscious), death at 1 (`RD/HediffDefs/Hediffs_Global_Temperature.xml:73-150`). Under 0 °C with a severity over 0.37 a pawn may lose a finger or a toe to frostbite.
+- **A pawn with hypothermia looks for a place whose temperature is safe** and goes there by itself (`RW/RimWorld/JobGiver_SeekSafeTemperature.cs:28`).
+- **Wet**: every 123 ticks a pawn whose own cell has no roof, in weather that rains, is given "soaking wet", -3 to its mood for a tenth of a day (`RW/Verse/AI/Pawn_MindState.cs:355-369`; `RD/ThoughtDefs/Thoughts_Memory_Misc.xml:328-339`). It does not chill.
+- **Where it slept**: "slept outside" -4, "slept on ground" -4, "slept in the cold" -4, each for a day (`Thoughts_Memory_Misc.xml:68-111`; given on waking, `RW/RimWorld/Toils_LayDown.cs:171-198`: in the cold where the air was under its comfortable range, outside where its room is `PsychologicallyOutdoors`).
+- **Dwarf Fortress** gives a dwarf caught in the rain an unhappy thought and one that slept without a bed or a room another (from memory), and kills by cold only where water freezes on a body.
+
+### Roofs and rooms
+
+- **RimWorld keeps a roof for every cell** (`RW/Verse/RoofGrid.cs`: `Roofed(c)`), three kinds: built, thin rock and thick rock, the last over mountains. A built roof must lie within 6.9 cells of something that holds it up, a wall or a column, or it falls (`RW/Verse/RoofCollapseUtility.cs:14-31`, `RoofMaxSupportDistance`). **Roofs are built without being asked for** over any closed room of up to 320 cells (`RW/Verse/AutoBuildRoofAreaSetter.cs:37`). The player shows them by a toggle that tints every roofed cell green (`RoofGrid.Color`, the "roof overlay").
+- **A room is the cells joined without passing a wall or a door** (`RW/Verse/RegionAndRoomUpdater.cs`, `Room.cs`, `District.cs`). It **uses the outdoor temperature if it touches the map's edge or a quarter of its cells have no roof** (`Room.cs:54-58`, `UsesOutdoorTemperature`); it is **outdoors to the mind** with 300 unroofed cells, or touching the edge and half unroofed (`:210-214`). The pane at the bottom left says "Indoors" or "Outdoors" and the temperature of the cell under the pointer.
+- **A closed room holds its own temperature**, pulled toward the outdoors through its walls, faster through cells without a roof (`RW/Verse/RoomTempTracker.cs:25-27`: 0.0007 a tick for no roof against 0.00005 for a thin one), and **under thick rock toward 15 °C** (`:202-209`, "deep equalization"): a room dug into a mountain is cool in summer and mild in winter.
+- **Dwarf Fortress keeps three flags a tile** (`DF/df.d_basics.xml:11006-11008`, `tile_designation`): `light` (open to the sun), `subterranean` and `outside` (the sky is seen from it). Looking at a tile says Outside or Inside, Light or Dark, Above Ground or Subterranean. A tile that was once roofed over stays "inside" when the roof goes (from memory). There are no rooms for warmth, only zones.
+- **Ingnomia's room is the tiles the player dragged**, and it asks of them two things: `checkRoofed`, a solid floor over every tile, and `checkEnclosed` (`IG/src/game/room.cpp:288-330`).
+
+### Where a pawn sleeps
+
+- **RimWorld**: a bed first; with none, on the ground near where it is (`RW/RimWorld/JobGiver_GetRest.cs`). The first thing a new colony is given to place is the **sleeping spot**: "Designates a spot on the ground where people should sleep. Not comfortable." (`RD/ThingDefs_Buildings/Buildings_Furniture.xml:86-87`), free and instant, before any bed. A room with several beds is a barracks (`RoomRoleWorker_Barracks.cs`).
+- **Dwarf Fortress**: zones named Bedroom and Dormitory (`DF/df.d_basics.xml:133,146`), dragged like a stockpile; a dormitory is slept in by anyone without a room of their own, and a dwarf with neither sleeps where it drops.
+- **Ingnomia**: a Dorm is a room type, and a gnome is found a free bed in one (`IG/src/game/roommanager.h:69`).
+
+### Fire
+
+- **RimWorld's campfire** (`RD/ThingDefs_Buildings/Buildings_Temperature.xml`, `Campfire`): 20 wood and 200 ticks of work to build, the wood being its first fuel; it holds 20 and burns 10 a day, so a full fire lasts two days; **in rain with no roof over it, 0.0006 a tick more, 36 a day: 4.6 times as fast** (`RW/RimWorld/CompRefuelable.cs:59,175`: only where the rain's rate is over 0.4 and its cell is unroofed). It pushes 21 units of heat a second into its room until the room is 28 °C (`RW/Verse/CompHeatPusher.cs:25-34`), and lights 10 cells round it. Its own text says "As with all heat sources, it must be placed indoors so it has a closed space to heat": outdoors its heat is lost. It is fed by haulers from the stockpile without being asked, and the player can stop that with a toggle on the fire. Burnt out, it stands cold until fed.
+- **Dwarf Fortress has no fire to sit by**: warmth is not a need there.
+
+### What a player expects
+
+- **The weather is said where the date is**: its name, and the temperature outdoors in degrees. Nobody is surprised by cold: the figure was in the corner all day.
+- **Rain is seen falling**, and everything under a roof is dry.
+- **A roof is something the game can show.** One key, and every roofed cell is tinted.
+- **A room is walls all round and a roof.** A hole in the wall or the roof and it is the outdoors again; the game says which it is for the cell under the pointer.
+- **A room dug into rock is the safe first shelter**: mild whatever the season.
+- **Pawns sleep where the player marked**, before any bed is made; with nothing marked, where they drop.
+- **A fire is built of wood, burns wood and goes out.** It is fed without orders while wood is in store. It warms a closed room, and little or nothing in the open.
+- **Cold is slow and loud.** A word on the pawn's card first (shivering), then an alert that stays, then harm, then death, over a day or more; and a pawn in danger goes to the warm by itself if there is any.
+- **A first night outdoors costs nothing that lasts.** Both games let a party sleep rough in a mild season.
+
+### For OdinCraft (as built, `plan.md`, "P4, second half, as built")
+
+- **The weather is where the date is**, a line of its name, the air in degrees and the wind, with why behind it. It is a function of the island's own climate, so it is the same on the screen and in the dwarves' world.
+- **A dwarf is comfortable from 12 °C felt, clothed as it landed**; the wind and the wet take from what it feels, which neither game does, because the start island's winter is 7 to 14 °C and only its rain and wind are dangerous. Harm begins 6 degrees under that, once no warmth is left, and death comes after a day and a half of it: RimWorld's ten degrees and a day and a third.
+- **A roof is a block overhead, walls are blocks at the head within five steps, indoors is a roof and three walls.** No rooms are kept: there are no doors yet to close one, and a rule on the blocks is the same for the hold and for the picture. Nothing falls for want of a wall.
+- **Shelter is shown by a lens**, RimWorld's roof overlay with a second colour for indoors, and said on a block's card, Dwarf Fortress's "Inside".
+- **A room under ground or behind walls is halfway to the year's mean**, RimWorld's 15 °C under rock made the island's own.
+- **A place to sleep is dragged like a stockpile before any bed exists**: RimWorld's sleeping spot and Dwarf Fortress's dormitory. With none, a dwarf looks for a roof or a fire within a short walk, where RimWorld's lies down where it stands.
+- **A fire is laid of one log, holds six, burns three a day and three times that in rain**, where RimWorld's is 20 wood, 10 a day and 4.6 times: a tree here is three to six logs. It is fed from the store without orders, and a toggle on its card stops that, as in RimWorld. Unlike RimWorld's it warms those beside it in the open, two steps round, and four indoors.
+- **A cold dwarf goes to the warm by itself**, as RimWorld's pawn with hypothermia seeks a safe temperature; and the fire's own work is not left for the cold.

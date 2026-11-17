@@ -78,7 +78,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 | I-2 (built, and played) | **The front door and the world.** The menu; a new world with honest progress; the world's map; Walk the world, which is the game as it is today; settings for text size and keys | Makes a world from the menu and walks it | |
 | E-1 (built, and played) | **Expedition planning.** Where, with a site card that says what the ground offers and lacks and names its dangers; who, with the seven drawn again at will; set out. What they bring comes with P5, and a home hold with P9 | Chooses a hard site on purpose | |
 | P3 (built) | **Orders.** Mark ground to dig, trees to fell, blocks to build. Dwarves take the work themselves. Goods go to a store without being carried at first, as RimWorld's first version did; carrying follows in P5, since Bellwright's makers found that work done in the abstract "didn't feel inspiring" | Has a first room dug and roofed | 2 |
-| P4 (first half built, and played: thirst, hunger, sleep, the day and the year, death) | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown. Shelter, warmth and weather that acts are its second half | Gets through a first season, or does not | 1 |
+| P4 (built, and played, in two halves: thirst, hunger, sleep, the day and the year, death; then the weather, cold, roofs, a place to sleep and fire) | **Needs and the year.** Food, drink, sleep, shelter, warmth. Days and seasons pass. A dwarf can die. What each feels is shown. Weather that harms what is built is N6's | Gets through a first season, or does not | 1 |
 | P5 | **Materials and making.** What the rock and the woods give is what can be built and made: stone by its kind, timber, clay, a first metal. Goods are carried and stored. A workshop | Builds from the island's own stone | 2 |
 | P6 | **The world is kept.** A world is saved and reopened with what was dug and built. Leaving or losing a hold writes it into the world. A new party can land in the same world and walk into it | Finds the last game's hall | 3 |
 | P7 | **Trouble.** Dangerous animals, then a hostile band, then one great beast with a lair. Fighting and wounds. The pacing rule | Loses a dwarf to something with a name | 4 |
@@ -1037,7 +1037,7 @@ The scripts and their 25 pictures are in `interesting-world/real/play/`: `e1-pla
 
 **What can now happen that could not before:** a party lands in the morning with nothing to eat, drinks at the stream, strips the bracken and the gobies near the landing, sleeps on the ground, and is hungry by the second day unless the player has food gathered and stored; and a dwarf shut in a pit is warned of stage by stage and dies of thirst on the third day unless a stair is dug to it.
 
-The design is `adr/0014`; the real games' figures, with their files, are `interesting-world/notes/colony-sim-reference.md`, section 14; where everything stands on the screen is `foundations/interface.md`, section 17. Shelter, warmth and weather that acts are the second half and are not built.
+The design is `adr/0014`; the real games' figures, with their files, are `interesting-world/notes/colony-sim-reference.md`, section 14; where everything stands on the screen is `foundations/interface.md`, section 17. Shelter and warmth are the second half ("P4, second half, as built", below).
 
 **What the owner sees.** The date and the hour move, top left: the boat stands off at 08:00 on the 1st of spring. The first word of the hold says what the land within a walk bears, season by season. By early afternoon dwarves walk down to the stream and stand in it to drink; toward evening the hungry look for food. With none stored they mark the nearest shoots and fish themselves, gather them and eat, and an alert says the hold lives from hand to mouth and what to do. Gather (G) and Fish (N) drag a rectangle; pins stand up where something would be taken, and the tool's line says what, or why nothing. Store has a fourth choice, Food. The stores say "Food for two days". At 22:00 the party lies down where it is; the land is lit as by a moon. At dawn one message says the day, what was eaten and how long the food will last. A click on a dwarf shows three meters, Drink, Food and Sleep. The Dwarves list groups by what they are at.
 
@@ -1117,3 +1117,98 @@ The interface listed in 0.04 to 0.06 ms a frame. The six late frames of the fore
 - **No lens shows where food grows**: the field behind the landing's Food row costs a thousand reads a point. The Gather tool's pins under the pointer are the way to look.
 - **Not tried by hand**: no pointer has dragged Gather across a wood in a window.
 
+
+### P4, second half, as built: shelter and warmth (2026-11-16)
+
+**What can now happen that could not before:** a party sleeps its first spring nights on open ground and is none the worse; rain comes on the fourth evening and wets it through; the player has timber felled, a fire laid, a hut walled and roofed and its floor marked to sleep on, and at dawn the hold says seven slept indoors; and a party left to itself is warned on the first day of winter that it is numb with cold, and is dead of it on the fifth.
+
+The design is `adr/0015`; the real games' figures, with their files, are `interesting-world/notes/colony-sim-reference.md`, section 15; where everything stands on the screen is `foundations/interface.md`, section 19.
+
+**What the owner sees.** Under the date, top left, a line: "Fair, 14 °C, wind from the east". The pointer resting on it is told why. When it rains, rain falls across the picture and the ground darkens, but not under a roof. A dwarf's card has a fourth meter, Warmth, and says where it sleeps: on open ground, under a roof, indoors, by a fire. Build has two more choices: Roof, which lays a layer over the level it is dragged on, so on the tops of walls; and Fire, laid with a click. A fire burns with flames that light the night round it; a click on it says how long its timber lasts and what it warms. Sleep (Z) drags a place to sleep, shown in dusk blue; a click on it says how many of its places are indoors. The lens Shelter tints ground under a roof and ground indoors. At dawn the hold says the weather that was and how the party slept. In winter, with no fire and no roof, every picture at the top wears the trouble sign and an alert counts them.
+
+**What was built**
+
+- **The weather** (`weather.odin`): one function of the island's climate, the place and the seconds since the boat stood off: air, rain, wind, sky, snow. The dwarves' world asks it of its tick and the frame of the same count. Start-up prints the year's weather where the party gathers, season by season, and when the first rains fall.
+- **Shelter** (`shelter.odin`, `shelter_of`): a roof within sixteen blocks over the head, walls within five steps, indoors with three ways shut; asked by the hold of its ground and by the frame of the blocks it draws.
+- **Cold**: a fourth row of `WANTS`; what a dwarf feels (`feel_at`); getting wet and drying; warming itself (`warm_find`); the stages and death by the first half's code.
+- **Where a dwarf sleeps** (`sleep_find`): a sleeping place, a roof, a fire, where it is. A sleeping place is a zone with `sleep` set, on the stockpiles' own orders and map.
+- **Fire** (`Fire`, `fires_tick`, `fire_feed`): laid by the Build work of one log, fed from the nearest timber, burning down, going out, lit again when fed; let go out and removed by orders.
+- **Roof** as a plan of Build, and a block laid on the top of a wall two high from the ground beside it.
+- **On the screen** (`shelter_view.odin`, `crowd.odin`, `bar.odin`, `play.odin`, `shaders.metal`): the weather's line, rain and wet ground, the fourth meter, two causes for needing the player, the Sleep tool, Roof and Fire, the two cards, the lens, firelight, the alert for a fire with no timber.
+- **Without a window**: an orders file takes `sleep x y z x y z`, `build fire timber x y z x y z`, `build roof stone|timber x y z x y z`, `fire feed|leave x y z x y z`; `unstore` removes a sleeping place and `unmark` puts a fire out; the summary says each dwarf's warmth, what it feels and where, the weather and why, each fire, and the sleeping places' shelter. A script takes `until hour h`.
+
+**The figures, beside the real games'** (their files are in the reference note)
+
+| | RimWorld | Dwarf Fortress | Here |
+|---|---|---|---|
+| The day's swing of the air | 7 °C either way | block by block | 3.5 °C either way under a clear sky, 1.4 under an overcast one: an island's |
+| Rain | one draw in eight in a temperate forest, held a quarter of a day to nearly three | rain or snow, by the region | showers of three hours, for the share of the hours the place's own rain makes at 1.8 mm an hour: 15% where the party lands |
+| Comfortable from | 16 °C with nothing on; lower by clothes | no need | 12 °C felt: clothed as it landed |
+| Wet | "soaking wet", a mood, for 2.4 hours | a thought | 5 °C colder and the wind's chill doubled; dry in 3 hours, half an hour by a fire |
+| Wind | none on a pawn | none | 0.4 °C for each m/s, less by a quarter for each way walled |
+| Harm begins | 10 °C under comfortable | only where water freezes | under 6 °C felt, once no warmth is left |
+| Dead of cold after | a day and a third at most | | a day and a half of such hours |
+| Roof | a grid, built by itself over a closed room, 6.9 cells from a wall at most | a tile is outside if the sky sees it | a block within 16 over the head; nothing falls |
+| Indoors | a closed room, three quarters roofed | inside, dark, subterranean: three flags | a roof, and three of four ways walled within five steps |
+| A room under rock | drawn toward 15 °C | | halfway from the air outside to the year's mean: 13 °C on a winter night here |
+| A fire | 20 wood; burns 10 a day; 4.6 times in rain; warms a closed room only | none to sit by | one log to lay, holds six, burns three a day, three times in rain; warms two steps in the open and four indoors |
+| A place to sleep | the sleeping spot, free, before any bed | a dormitory zone | ground dragged like a stockpile |
+
+Twelve degrees was chosen because the start island is mild: 9.8 °C in its coldest month, 7 to 14 through winter. With RimWorld's figures nothing on it would ever be cold. It is the rain and the wind that make a winter night there dangerous, as on a real hill, so they are what chills. A day and a half was chosen as thirst's was: the remedy is an order and a walk away.
+
+**What the start island's weather is** (seed 7, where the party gathers, as start-up says): spring 10 to 25 °C with rain 54 of its 288 hours; summer 21 to 29; autumn 10 to 25; winter 7 to 14, its nights' coldest hour 8.5 on average, rain 36 hours. The first rain falls on the evening of the 4th of spring. No snow.
+
+**Found by playing, and put right**
+
+- *A hut could not be roofed.* With walls two blocks high, Floor pressed on a wall's top laid its layer at head height. Build has Roof, a layer over the level pressed, and a mason lays a block on the top of such a wall from the ground beside it.
+- *The roof's timber was carried to the top of the wall and dropped, for ever.* Stuff for a block was brought to the floor nearest it, which for a roof is the wall's top, where no way leads. It is brought to a floor the block can be laid from that the carrier has a way to (`site_haul`). Reproduced from the hut's orders: 25 marks waiting for timber with 40 logs lying.
+- *A dwarf was moved onto the roof and died there of thirst*, on the 4th of spring. A wall's upper block was laid where it walked on the lower; it was moved "to the nearest ground", which was the wall's top, two blocks up with no way down. Reproduced from the same orders. No block is laid where a dwarf stands or walks (`trodden`), and one moved aside goes beside or below before above. This is the fault left on merging the first half.
+- *Nobody slept in the hut.* A bush filled its doorway. The dwarves lay outside and said nothing. The hold now says, once a night, that no way leads to the sleeping place.
+- *The fire ordered in winter was never lit.* A cold dwarf left the laying of it for the cold, every two minutes; its log was fetched only when nothing else was marked, and 25 trees were; and the fire went unfed while marks remained, since a dwarf that finishes a block takes the next without standing idle. The fire's work is not left for cold, a cold dwarf takes a fire's mark first, and the log and a dying fire come before marked work.
+- *A fire was fed only from the nearest pile*, which may lie where no way leads. It tries five.
+- *Tips on parts that do nothing were never shown*: the meters' and the stores' from the first half, and the weather's. A resting pointer is told them now.
+- *Three meters across had no room for a fourth.* They stand two to a row.
+- *"Seven slept by a fire"* was said of seven in a room with a fire: indoors is said first.
+
+**Played** (`interesting-world/real/play/`; every picture looked at)
+
+- `p4-shelter-play.txt`, from the player's seat, two days at the fastest speed: the weather's line and its why; a wood felled; the first night on open ground and its dawn; Fire chosen, placed, lit, and its card; four walls dragged and built; Roof dragged from wall top to wall top; the hut; the lens with the view cut under the roof; Sleep dragged on its floor; the second night indoors, a sleeper's card, and the dawn; the sleeping place taken, made larger through the door, trimmed, removed; the fire let go out (`p4s-01` to `p4s-20`).
+- `p4-hut-orders.txt`, with no window: the same hut by orders, three days, which is where three of the faults above were reproduced before each was put right.
+- `p4-rain-orders.txt`, with no window: the first rain, on the evening of the 4th of spring, with a trench to dig: seven wet through, warmth down a tenth (`p4s-30`).
+- No orders at all, a year: nobody is cold before the 9th of autumn; numb with cold on the 1st of winter, dying on the 2nd, dead on the 5th and 6th (`p4s-31`, `p4s-32`).
+- `p4-winter-saved-orders.txt`: the same year, answered at the first warning: the party sent back to its camp, trees felled, a fire laid in the open, the ground round it marked to sleep on. The fire is lit in half a minute; nobody dies of cold; three of the seven starve, as a party that stored nothing does in winter (`p4s-33`).
+- `p4-winter-room-orders.txt`: a room dug and roofed on the first day, slept in, with a fire, food gathered and fished every fourth day, timber felled twice more: seven of seven alive at the next spring. The fire goes out four times for want of timber, and the room alone keeps them (`p4s-34`).
+- The first half's and P3's scripts played again on this build: see "Checked" below.
+
+**Weak points**
+
+- **The cold has two speeds**: nothing in three seasons, death in a week of winter. A dwarf that is chilled works and walks as fast as a warm one, and nothing but the meter and the alert says winter is coming. Start-up prints the year's weather; the screen does not.
+- **Food is still what kills a hold that plays well.** With a room, a fire and the land gathered every fourth day the seven live; with the room and no orders for food all seven starved in summer on `main`'s rule as on this one. Storing a season's food is the first half's open matter, and winter makes it sharper.
+- **A roof is any block within sixteen overhead**, so the foot of a cliff is "under a roof", truly, and a floor five blocks up shelters as well as one at the head.
+- **Indoors needs no door**, since there are none: a doorway a block wide leaves a room indoors, and so does a wall with one block out of it.
+- **Rain is drawn over everything**, cut rooms as well; from above an overcast day with no rain is as sunny as a clear one, since the cloud's shade is not drawn there.
+- **The wind's bearing never changes**, and its strength changes only with the spell.
+- **The dwarves lie in a heap** in a sleeping place, nearest the door first, and tall grass grows on through a hut's floor.
+- **A fire is walked round only where there is room**; a dwarf may still step through one.
+- **Firelight passes through walls**, and a fire inside lights the ground outside.
+- **A fire burns three logs a day whether or not anyone is cold.** The player lets it go out in summer by hand.
+- **Nothing here was played by a hand in a window.**
+
+**Checked.** `odin check src -vet-unused`; `./build.sh`; `./build.sh test`, which now marks the room it digs to sleep in, lays a fire in it, and asks that its floor is indoors by the rule, that the dawn says the party slept indoors, that the fire was fed and that every dwarf is warm on the second day; and presses Sleep, Fire and the Shelter lens, takes a sleeping place and a fire in the hand, and reads the fourth meter, the weather's line and the two alerts. The earlier scripts were played again on this build: `p4-play.txt` (the first day: seven alive, every order done), `zones-play.txt`, `goods-play.txt` (its five works done; its last case ends on a stair just marked, as written), and `p3-play.txt` (24 orders given and none left, seven alive, nobody shut in, fallen or moved aside). **`p3-play.txt` was found to leave the game at its thirteenth case, on `main` as here**: a second Escape there opens the menu, in which the script's D, meant for Dig, is "Leave to the front door", so its cases 13 to 15 were being played at the front door. The Escape is taken out, and all fifteen cases now play; the thirteenth, which now falls at dusk, waits on dwarves gone to eat and sleep.
+
+**Determinism.** The dwarves' logs agree three ways, 8d74e83926414943 (it changes on purpose: the dawn's line says the weather and the night, and the test plays a sleeping place and a fire). `GOLDEN` is unchanged: forming was not touched.
+
+**Costs.** A tick of seven costs 6 to 8 µs through a year with no orders, against 3 to 5 before: each dwarf asks the weather once a second and its shelter when it has moved. A year with no orders runs in 10 s, where it ran in 5. The shelter lens reads 89 by 89 columns round the view when the view has moved eight blocks or a block has changed, at most four times a second.
+
+Benches, one round, the machine at a load of 5 to 6.5 from other work. Our work in ms, median / 99% / worst, and frames over 12.5 ms:
+
+| Bench | This step |
+|---|---|
+| Forest flank, first person | 1.21 / 3.65 / 4.69, 0 over |
+| Down through cloud, first person | 1.08 / 3.06 / 3.82, 0 over |
+| From above, the cut following the ground | 1.65 / 4.49 / 6.70, 0 over |
+| The same with rain falling (`--rain=0.8`) | 1.77 / 5.63 / 11.73, 0 over |
+| From above over the landing, the seven on screen, 40 s | 0.73 / 2.91 / 4.99, 0 over |
+| Over the hut, cut under its roof, the Shelter lens on, 20 s | 0.64 / 2.78 / 3.50, 0 over |
+
+The interface listed in 0.03 to 0.06 ms a frame. The one frame of 11.7 ms under rain was not chased.

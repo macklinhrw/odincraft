@@ -35,10 +35,14 @@ NEEDS := [?]Need{
 		"Send the party to a stream, a lake or a pond, or make a way to one", .Trouble, proc(d: ^Seen) -> bool { return d.doing != .Dead && d.doing != .Aboard && d.want[.Drink] <= 0 }},
 	{"starving", "starving", "starving: it has had nothing to eat, and dies of hunger unless it does", "starving: they have had nothing to eat, and die of hunger unless they do",
 		"Mark plants to gather or water to fish, or send the party where food grows", .Trouble, proc(d: ^Seen) -> bool { return d.doing != .Dead && d.doing != .Aboard && d.want[.Food] <= 0 }},
+	{"freezing", "numb with cold", "numb with cold: it has no warmth left, and dies of cold unless it is warmed", "numb with cold: they have no warmth left, and die of cold unless they are warmed",
+		"Have a fire built (Build, then Fire), or a room dug or roofed, and mark a place to sleep there", .Trouble, proc(d: ^Seen) -> bool { return d.doing != .Dead && d.doing != .Aboard && d.want[.Warm] <= 0 }},
 	{"no-water", "no water", "thirsty: it finds no way to fresh water", "thirsty: they find no way to fresh water",
 		"Send the party to a stream, a lake or a pond, or make a way to one", .Caution, proc(d: ^Seen) -> bool { return d.doing != .Dead && .Drink in d.lacks }},
 	{"no-food", "no food", "hungry: no food lies in the hold, and nothing within its reach bears any now", "hungry: no food lies in the hold, and nothing within their reach bears any now",
 		"Mark plants to gather or water to fish, or send the party where food grows", .Caution, proc(d: ^Seen) -> bool { return d.doing != .Dead && .Food in d.lacks }},
+	{"no-warmth", "cold", "cold: no fire burns and no roof stands within its reach", "cold: no fire burns and no roof stands within their reach",
+		"Have a fire built (Build, then Fire), or a room dug or roofed, and mark a place to sleep there", .Caution, proc(d: ^Seen) -> bool { return d.doing != .Dead && .Warm in d.lacks }},
 	{"no-ground", "no ground", "without ground: none lies under it or within six steps", "without ground: none lies under them or within six steps",
 		"Waits for a block to be laid within its reach", .Trouble, proc(d: ^Seen) -> bool { return d.plight == .No_Ground }},
 	{"shut-in", "shut in", "shut in: no way leads out of where it stands", "shut in: no way leads out of where they stand",
@@ -272,32 +276,43 @@ dwarf_how :: proc(i: int) -> (word: string, grave: int) {
 	worst, at := 0, Want.Drink
 	for w in Want do if s := want_stage(w, d.want[w]); s > worst do worst, at = s, w
 	if d.doing == .Sleeping && worst < 2 do return "asleep", 0
+	if worst == 0 && d.wet > 0.5 do return "wet", 1
 	if worst == 0 do return "well", 0
 	return WANTS[at].how[worst], worst
 }
 
-// A dwarf's needs as three meters in a row, each with its name, the word for how it stands and a
-// bar that empties, coloured by how grave it is: what it feels, at a glance (I3, I9: a word and a
-// length, not only a colour). Returns how high the row is.
-FEELS := [Want]string{.Drink = "Drink", .Food = "Food", .Sleep = "Sleep"}
-feels_high :: proc() -> f32 { return line_of(.Small) + px(0.75) + px(1.25) }
+// A dwarf's needs as four meters, two to a row, each with its name, the word for how it stands
+// and a bar that empties, coloured by how grave it is: what it feels, at a glance (I3, I9: a word
+// and a length, not only a colour). Returns how high they are.
+FEELS := [Want]string{.Drink = "Drink", .Food = "Food", .Sleep = "Sleep", .Warm = "Warmth"}
+feel_high :: proc() -> f32 { return line_of(.Small) + px(0.75) + px(1.25) }
+feels_high :: proc() -> f32 { return 2*feel_high() + px(2) }
 feels_row :: proc(x, y, wide: f32, i: int) -> f32 {
 	L := &LOOK
 	d := &watch.seen.dwarves[i]
-	gap := px(4)
-	w := math.floor((wide - 2*gap)/3)
+	gap := px(6)
+	w := math.floor((wide - gap)/2)
 	for want, k in Want {
 		row := WANTS[want]
 		stage := want_stage(want, d.want[want])
 		if row.kills > 0 && d.spent[want] >= 0.5 do stage = 4
-		word := "asleep" if want == .Sleep && d.doing == .Sleeping else row.how[stage]
+		word := "asleep" if want == .Sleep && d.doing == .Sleeping else "wet" if want == .Warm && stage == 0 && d.wet > 0.5 else row.how[stage]
 		colour := L.ash if stage == 0 else L.brass if stage <= 2 else L.cinnabar
-		cx := x + f32(k)*(w + gap)
-		tip := fmt.tprintf("%s: %s. %s", capital(row.name), word, "A dwarf drinks about three times a day, standing in fresh water." if want == .Drink else "A dwarf eats about twice a day, of what lies in the hold or about it." if want == .Food else "A dwarf sleeps on dry ground where it is, at night for choice.")
-		part(.Head, {cx, y, w, feels_high()}, tip = tip)
-		part(.Text, {cx, y, w, line_of(.Small)}, FEELS[want], .Small, L.ash, id = "hand.feel.name")
-		part(.Text, {cx, y, w, line_of(.Small)}, word, .Small, colour if stage > 0 else L.chalk, {.Right}, id = "hand.feel")
-		by := y + line_of(.Small) + px(0.75)
+		cx, cy := x + f32(k%2)*(w + gap), y + f32(k/2)*(feel_high() + px(2))
+		tip: string
+		switch want {
+		case .Drink: tip = "A dwarf drinks about three times a day, standing in fresh water."
+		case .Food:  tip = "A dwarf eats about twice a day, of what lies in the hold or about it."
+		case .Sleep: tip = "A dwarf sleeps at night for choice: in a place marked to sleep in, under its roof first; with none, under a roof or by a fire near it, or on dry ground where it is."
+		case .Warm:
+			at := "indoors" if indoors({d.roof, d.walls}) else "under a roof" if d.roof else "in the open"
+			tip = fmt.tprintf("It feels %.0f °C where it stands, %s%s%s. A dwarf is chilled under %.0f °C: by the cold, by the wind and by being wet. It warms itself by a fire, or under a roof and inside walls.", math.round(d.felt), at,
+				", by a fire" if d.by_fire else "", ", wet through" if d.wet > 0.7 else ", wet" if d.wet > 0.2 else "", f32(COMFORT))
+		}
+		part(.Head, {cx, cy, w, feel_high()}, tip = fmt.tprintf("%s: %s. %s", capital(row.name), word, tip))
+		part(.Text, {cx, cy, w, line_of(.Small)}, FEELS[want], .Small, L.ash, id = "hand.feel.name")
+		part(.Text, {cx, cy, w, line_of(.Small)}, word, .Small, colour if stage > 0 else L.chalk, {.Right}, id = "hand.feel")
+		by := cy + line_of(.Small) + px(0.75)
 		part(.Fill, {cx, by, w, px(1.25)}, colour = L.pit)
 		part(.Fill, {cx, by, math.round(w*clamp(d.want[want], 0, 1)), px(1.25)}, colour = L.verdigris if stage == 0 else colour)
 	}
@@ -534,7 +549,7 @@ dwarf_brief :: proc(i: int) -> string {
 	case .Ashore:  return "Stepping ashore."
 	case .Walking: return fmt.tprintf("Walking to %s.", to)
 	case .Waiting, .Stopped: return fmt.tprintf("Waiting for word at %s.", to)
-	case .Working, .Drinking, .Eating, .Sleeping, .Dead: return fmt.tprintf("%s.", hold_card(i).doing)
+	case .Working, .Drinking, .Eating, .Sleeping, .Warming, .Dead: return fmt.tprintf("%s.", hold_card(i).doing)
 	}
 	return ""
 }
@@ -605,7 +620,7 @@ several_says :: proc() -> (title, sub, line, next: string) {
 	line = fmt.tprintf("%s.", strings.to_string(b))
 	// What they share: what they are doing, and what is wrong with any.
 	to := fmt.tprintf("the %s", s.place) if s.errand == 0 else s.place
-	DOING := [Doing]string{.Aboard = "in the boat", .Ashore = "stepping ashore", .Walking = fmt.tprintf("walking to %s", to), .Waiting = fmt.tprintf("waiting for word at %s", to), .Stopped = "stopped where they stand", .Working = "at work", .Drinking = "drinking", .Eating = "eating", .Sleeping = "asleep", .Dead = "dead"}
+	DOING := [Doing]string{.Aboard = "in the boat", .Ashore = "stepping ashore", .Walking = fmt.tprintf("walking to %s", to), .Waiting = fmt.tprintf("waiting for word at %s", to), .Stopped = "stopped where they stand", .Working = "at work", .Drinking = "drinking", .Eating = "eating", .Sleeping = "asleep", .Warming = "warming themselves", .Dead = "dead"}
 	doing: [Doing]int
 	for i in who do doing[s.dwarves[i].doing] += 1
 	share := strings.builder_make(context.temp_allocator)

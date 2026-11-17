@@ -29,7 +29,7 @@ import sdl "vendor:sdl3"
 //
 // Everything here is the frame thread's, and reads the hold only through what it shows (Shown).
 
-Tool :: enum u8 { None, Dig, Fell, Build, Store, Gather, Fish, Send, Remove }
+Tool :: enum u8 { None, Dig, Fell, Build, Store, Sleep, Gather, Fish, Send, Remove }
 Tool_Row :: struct { name, says, id: string }
 TOOL_ROWS := [Tool]Tool_Row{
 	.None   = {},
@@ -37,10 +37,11 @@ TOOL_ROWS := [Tool]Tool_Row{
 	.Fell   = {"Fell", "Mark trees to be felled for timber.", "orders.fell"},
 	.Build  = {"Build", "Mark blocks to be laid. Their stone or timber is brought to them.", "orders.build"},
 	.Store  = {"Store", "Mark ground as a stockpile: what is dug, felled, gathered and caught is carried there, and counted.", "orders.store"},
+	.Sleep  = {"Sleep", "Mark ground as a place to sleep: the dwarves lie down there at night, under its roof first.", "orders.sleep"},
 	.Gather = {"Gather", "Mark plants and trees that bear food to be gathered.", "orders.gather"},
 	.Fish   = {"Fish", "Mark fresh water to be fished.", "orders.fish"},
 	.Send   = {"Send", "Send the party to stand somewhere.", "orders.send"},
-	.Remove = {"Remove", "Take marks back; or take built blocks down; or take ground out of a stockpile.", "orders.remove"},
+	.Remove = {"Remove", "Take marks back; or take built blocks down; or put a fire out; or take ground out of a stockpile or a sleeping place.", "orders.remove"},
 }
 Choice :: struct { plan: Plan, name, says: string, line: bool }   // line: it is dragged as a line, not a rectangle
 DIG_CHOICES := [?]Choice{
@@ -51,7 +52,9 @@ DIG_CHOICES := [?]Choice{
 BUILD_CHOICES := [?]Choice{
 	{.Wall, "Wall", "A wall along the drag, one or two blocks high, standing on this level.", true},
 	{.Floor, "Floor", "One layer at this level wherever it is open: over a space it is the roof.", false},
+	{.Roof, "Roof", "One layer over this level: begun on the top of a wall, it lies on the walls and roofs what they stand round.", false},
 	{.Stair, "Stair up", "Steps built up from this level, a block up for each block along the drag.", true},
+	{.Fire, "Fire", "A fire, laid of a log and lit where you click. It warms those by it and dries them, lights the night, and is fed from the timber the hold has.", false},
 }
 DEEPEST :: 4   // blocks deep a dig, or high a wall, may be set
 
@@ -64,7 +67,12 @@ Bar :: struct {
 	deep:     i32,          // blocks an order to dig out goes down
 	high:     i32,          // blocks a wall stands
 	job:      int,          // the order whose card is in the hand, or -1
-	zone:     int,          // the stockpile in the hand, or -1
+	zone:     int,          // the stockpile or the sleeping place in the hand, or -1
+	fire:     int,          // the fire in the hand, among those the hold last showed, or -1
+	roofed:   int,          // with Sleep: how many of the places it would mark are under a roof
+	lens_boxes: [dynamic]Map_Box,   // the shelter lens: the ground under a roof round the view's middle (shelter_scan)
+	lens_key: u64,          // what they were read for
+	lens_at:  f64,          // and when
 	for_hand: [3]i32,       // the block of the thing that was looked up
 	posed:    bool,         // a run with no window holds the mark's box as if the button were down
 	aim:      Pick,         // the block the tool would begin on: the ground under the pointer, through any tree over it
@@ -90,11 +98,11 @@ Bar :: struct {
 	picked_v: int,
 	way:      int,          // with Remove: how many marks, built blocks or places it would take
 	built:    map[[3]i32]Plan,   // the blocks the dwarves laid that stand, and what each was laid as: told by the hold as they are laid and dug
-	undo:     enum u8 { Marks, Built, Zone },   // what Remove would take away here
-	said:     [3]string,    // the alerts as last raised
+	undo:     enum u8 { Marks, Built, Fire, Zone },   // what Remove would take away here
+	said:     [4]string,    // the alerts as last raised
 }
 Preview_Key :: struct { tool: Tool, dig, build: Plan, stuff: Stuff, takes: Takes, deep, high: i32, a, b: [3]i32, press: [3]i32, dragged, pressed: bool, volume: int, marks: int, day, taken: int }
-bar := Bar{dig = .Out, build = .Wall, deep = 2, high = 2, job = -1}
+bar := Bar{dig = .Out, build = .Wall, deep = 2, high = 2, job = -1, fire = -1}
 
 // Take a tool in the hand, or put it down; the same tool again puts it down. In first person Send
 // sends the party to the block aimed at.
@@ -178,11 +186,14 @@ tool_order :: proc(a: ^Above, m0, m1: [3]i32, press: Pick, dragged: bool) -> (o:
 		case .Out, .Down, .Up:
 		case .Wall:  return {kind = .Build, shape = .Wall, stuff = bar.stuff, at = m0, to = {m1.x, m0.y + bar.high - 1, m1.z}}, true
 		case .Floor: return {kind = .Build, shape = .Floor, stuff = bar.stuff, at = m0, to = m1}, true
+		case .Roof:  return {kind = .Build, shape = .Roof, stuff = bar.stuff, at = m0, to = m1}, true
 		case .Stair:
 			if far == m0 do far = m0 + ahead(a)*2
 			return {kind = .Build, shape = .Stair, stuff = bar.stuff, at = m0, to = far}, true
+		case .Fire:  return {kind = .Build, shape = .Fire, stuff = .Timber, at = m0, to = m0}, true   // one fire, where the press fell
 		}
 	case .Store:  return {kind = .Store, at = m0, to = m1, takes = bar.takes}, true
+	case .Sleep:  return {kind = .Sleep, at = m0, to = m1}, true
 	case .Gather:
 		if !dragged && press.ok do if t := thing_at(play.w, press); t.kind == .Tree && t.tree.form != .Fallen && t.island != nil {   // a click on any part of a tree is that tree
 			foot := [3]i32{t.tree.x + t.island.region.origin.x, t.tree.base, t.tree.z + t.island.region.origin.y}
@@ -251,11 +262,16 @@ bar_frame :: proc() {
 		bar.job = job_of(u.hand)
 	}
 	if _, ok := site_seen(bar.job); !ok do bar.job = -1
-	bar.zone = -1
+	bar.zone, bar.fire = -1, -1
 	if u.hand.kind == .Zone {   // the stockpile in the hand, while the ground it was taken by is still its ground
 		if z, on := zone_under(u.hand.block + {0, 1, 0}); on do bar.zone = z.id
 		else do hand_drop()
 	}
+	if u.hand.kind == .Fire {   // the fire in the hand, while it stands
+		for f, k in watch.seen.fires do if f.at == u.hand.block do bar.fire = k
+		if bar.fire < 0 do hand_drop()
+	}
+	shelter_scan()
 	preview()
 	alerts_keep()
 }
@@ -321,6 +337,15 @@ preview :: proc() {
 		floor := make([dynamic][3]i32, context.temp_allocator)
 		for c in bar.cells do append(&floor, c - {0, 1, 0})
 		boxes_of(floor[:], &bar.boxes)
+	case .Sleep:   // the same ground, and how much of it has a roof: what a sleeping place is for
+		zone_cells(o.at, o.to, world_blocks(u.w), &bar.cells)
+		floor := make([dynamic][3]i32, context.temp_allocator)
+		bar.roofed = 0
+		for c in bar.cells {
+			append(&floor, c - {0, 1, 0})
+			bar.roofed += int(roofed(world_blocks(u.w), c))
+		}
+		boxes_of(floor[:], &bar.boxes)
 	case .Unmark:   // marks first; with none, built blocks; with none, a stockpile's ground: what the hold will do (mark_obey)
 		append(&bar.boxes, [2][3]i32{{lo.x, -500, lo.z}, {hi.x, 3000, hi.z}})
 		overlap :: proc(t: Tint, lo, hi: [3]i32) -> int {
@@ -333,6 +358,10 @@ preview :: proc() {
 		if bar.way == 0 {
 			bar.undo = .Built
 			for c in bar.built do bar.way += int(c.x >= lo.x && c.x <= hi.x && c.z >= lo.z && c.z <= hi.z)
+		}
+		if bar.way == 0 {
+			bar.undo = .Fire
+			for f in watch.seen.fires do bar.way += int(f.at.x >= lo.x && f.at.x <= hi.x && f.at.z >= lo.z && f.at.z <= hi.z)
 		}
 		if bar.way == 0 {
 			bar.undo = .Zone
@@ -352,8 +381,8 @@ site_word :: proc(site: Site_Seen) -> string {
 // because of one of these, is marked among the dwarves (NEEDS, crowd.odin).
 alerts_keep :: proc() {
 	s := &watch.seen
-	texts: [3]string
-	places: [3][3]f64
+	texts: [4]string
+	places: [4][3]f64
 	reach, stuff, hard := 0, 0, 0
 	first: [3]Site_Seen
 	moving := false   // some order has work in hand or free to take: ground may yet be opened toward one that has none
@@ -378,7 +407,13 @@ alerts_keep :: proc() {
 	if stuff >= 1 do texts[1] = fmt.tprintf("No %s anywhere for the %s: %s.", STUFFS[first[1].stuff], site_word(first[1]), "dig rock" if first[1].stuff == .Stone else "fell trees")
 	if hard >= 1 do texts[1] = fmt.tprintf("%s%sRock too hard for the picks.", texts[1], " " if texts[1] != "" else "")
 	places[0], places[1] = middle(first[0]), middle(first[1] if stuff > 0 else first[2])
-	ids := [3]string{"orders.reach", "orders.store", ""}   // a dwarf shut in is the dwarves' own alert (NEEDS, crowd.odin)
+	ids := [4]string{"orders.reach", "orders.store", "", "orders.fire"}   // a dwarf shut in is the dwarves' own alert (NEEDS, crowd.odin)
+	// A fire that is out, or all but, with no timber lying anywhere to feed it (shelter.odin).
+	for f in s.fires do if f.fed && f.fuel < FIRE_DYING && stuff_lying(.Timber) == 0 {
+		texts[3] = fmt.tprintf("%s and no timber lies anywhere: fell trees (%s).", "A fire is out" if !f.lit else "A fire burns low", key_for(.Order, int(Tool.Fell)))
+		places[3] = feet_on(f.at)
+		break
+	}
 	for text, i in texts do if text != bar.said[i] && ids[i] != "" {
 		delete(bar.said[i])
 		bar.said[i] = strings.clone(text)
@@ -395,13 +430,13 @@ alerts_keep :: proc() {
 // where the view stands on it, has changed.
 MAP_WIDE :: 256
 MAP_HIGH :: 64
-Map_Box :: struct { lo, hi: [3]i32, kind: u8 }   // 1 to be dug, 2 what the tool would mark, 3 what it would take back, 4 the order in the hand, 5 a stockpile's ground, 6 the stockpile in the hand
+Map_Box :: struct { lo, hi: [3]i32, kind: u8 }   // 1 to be dug, 2 what the tool would mark, 3 what it would take back, 4 the order in the hand, 5 a stockpile's ground, 6 the stockpile in the hand, 7 a sleeping place's ground, 8 the sleeping place in the hand, 9 ground under a roof and 10 ground indoors, while the shelter lens is on
 
 // The map for the frame's picture: its texture, and where the eye stands in it. Called by render.
 marks_bind :: proc(g: ^Gpu, eye, focus: [3]f64) -> (texture: ^sdl.GPUTexture, at: [4]f32) {
-	bytes :: MAP_WIDE*MAP_HIGH*MAP_WIDE
+	bytes :: 2*MAP_WIDE*MAP_HIGH*MAP_WIDE   // two to a block: what it is marked as, and which of the blocks beside it are open air
 	if bar.map_tex == nil {
-		bar.map_tex = sdl.CreateGPUTexture(g.dev, {type = .D3, format = .R8_UNORM, usage = {.SAMPLER}, width = MAP_WIDE, height = MAP_HIGH, layer_count_or_depth = MAP_WIDE, num_levels = 1})
+		bar.map_tex = sdl.CreateGPUTexture(g.dev, {type = .D3, format = .R8G8_UNORM, usage = {.SAMPLER}, width = MAP_WIDE, height = MAP_HIGH, layer_count_or_depth = MAP_WIDE, num_levels = 1})
 		bar.map_staging = sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = bytes})
 		bar.map_cells = make([]u8, bytes)
 		bar.map_key = ~u64(0)
@@ -425,7 +460,10 @@ marks_bind :: proc(g: ^Gpu, eye, focus: [3]f64) -> (texture: ^sdl.GPUTexture, at
 		for b in bar.map_boxes {
 			lo := [3]i32{max(b.lo.x - origin.x, 0), max(b.lo.y - origin.y, 0), max(b.lo.z - origin.z, 0)}
 			hi := [3]i32{min(b.hi.x - origin.x, MAP_WIDE - 1), min(b.hi.y - origin.y, MAP_HIGH - 1), min(b.hi.z - origin.z, MAP_WIDE - 1)}
-			for z in lo.z..=hi.z do for y in lo.y..=hi.y do for x in lo.x..=hi.x do cells[int(x) + int(y)*MAP_WIDE + int(z)*MAP_WIDE*MAP_HIGH] = b.kind
+			for z in lo.z..=hi.z do for y in lo.y..=hi.y do for x in lo.x..=hi.x {
+				at := 2*(int(x) + int(y)*MAP_WIDE + int(z)*MAP_WIDE*MAP_HIGH)
+				cells[at], cells[at + 1] = b.kind, 0
+			}
 		}
 		// And beside each marked block, which ways are open air: there its face goes on round its own corner (marked_face).
 		SIDES := [5][3]i32{{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}}
@@ -433,11 +471,11 @@ marks_bind :: proc(g: ^Gpu, eye, focus: [3]f64) -> (texture: ^sdl.GPUTexture, at
 			lo := [3]i32{max(b.lo.x - origin.x, 0), max(b.lo.y - origin.y, 0), max(b.lo.z - origin.z, 0)}
 			hi := [3]i32{min(b.hi.x - origin.x, MAP_WIDE - 1), min(b.hi.y - origin.y, MAP_HIGH - 1), min(b.hi.z - origin.z, MAP_WIDE - 1)}
 			for z in lo.z..=hi.z do for y in lo.y..=hi.y do for x in lo.x..=hi.x {
-				at := &cells[int(x) + int(y)*MAP_WIDE + int(z)*MAP_WIDE*MAP_HIGH]
-				if at^ >= 8 do continue   // done already, by a box over this one
-				open := u8(0)
-				for side, i in SIDES do if m := block_made(play.w, origin + {x, y, z} + side); m == .Air || is(m, LEAVES) do open |= 8 << u32(i)
-				at^ |= open
+				at := &cells[2*(int(x) + int(y)*MAP_WIDE + int(z)*MAP_WIDE*MAP_HIGH) + 1]
+				if at^ != 0 do continue   // done already, by a box over this one
+				open := u8(32)
+				for side, i in SIDES do if m := block_made(play.w, origin + {x, y, z} + side); m == .Air || is(m, LEAVES) do open |= 1 << u32(i)
+				at^ = open
 			}
 		}
 		copy((cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, bar.map_staging, true))[:bytes], cells)
@@ -457,12 +495,16 @@ marks_bind :: proc(g: ^Gpu, eye, focus: [3]f64) -> (texture: ^sdl.GPUTexture, at
 // each tree to fell and a small block for each block to lay.
 marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 	s, a := &watch.seen, play.a
-	boxes := piles_view(boxes, eye, a.at if !play.afoot^ else eye)
+	boxes := fires_view(piles_view(boxes, eye, a.at if !play.afoot^ else eye), eye)
 	// The blocks themselves go to the map the terrain reads (marks_bind): the stockpiles' ground,
 	// then what is marked to be dug, the order in the hand, and what the tool would mark, each over
 	// the one before. Only the ground over a mark is still a box of the frame's own.
 	clear(&bar.map_boxes)
-	for t in s.zone_boxes do append(&bar.map_boxes, Map_Box{t.lo, t.hi, 6 if t.site == bar.zone else 5})
+	for t in s.zone_boxes {
+		z, _ := zone_seen(t.site)
+		append(&bar.map_boxes, Map_Box{t.lo, t.hi, (8 if t.site == bar.zone else 7) if z.sleep else 6 if t.site == bar.zone else 5})
+	}
+	append(&bar.map_boxes, ..bar.lens_boxes[:])   // the shelter lens over the ground set aside, since it was asked for; what is marked to be worked lies over it
 	for t in s.tints do append(&bar.map_boxes, Map_Box{t.lo, t.hi, 4 if t.site == bar.job else 1})
 	if play.afoot^ && len(s.ghosts) == 0 do return boxes
 	n := 0
@@ -597,12 +639,23 @@ tool_says :: proc() -> string {
 		case .Out, .Down, .Up:
 		case .Wall:  return fmt.tprintf("Wall %d long, %d high: %d %s of %s.%s", max(wide, long), bar.high, n, blocks, STUFFS[bar.stuff], short)
 		case .Floor: return fmt.tprintf("Floor %d by %d: %d %s of %s.%s", wide, long, n, blocks, STUFFS[bar.stuff], short)
+		case .Roof:  return fmt.tprintf("Roof %d by %d, over this level: %d %s of %s.%s", wide, long, n, blocks, STUFFS[bar.stuff], short)
 		case .Stair:
 			_, _, steps := stair_run(o.at, o.to)
 			return fmt.tprintf("%d steps up, heading %s: %d %s of %s.%s", steps, COMPASS[heading(o)], n, blocks, STUFFS[bar.stuff], short)
+		case .Fire:   // what it would warm there, by the rule the hold warms by (shelter_of)
+			s := shelter_of(world_blocks(play.w), o.at + {0, 1, 0})
+			reach := FIRE_REACH
+			where_ := fmt.tprintf("Indoors: it warms %d steps round it", reach[1]) if indoors(s) else fmt.tprintf("%s: it warms %d steps round it", "Under a roof with no walls" if s.roof else "In the open", reach[0])
+			return fmt.tprintf("A fire, of a log. %s%s.%s", where_, "" if s.roof else ", and burns three times as fast in rain", " No timber lies anywhere: it waits." if stuff_lying(.Timber) == 0 else "")
 		}
+	case .Sleep:
+		if !pressed do if z, on := zone_under(bar.aim.block + {0, 1, 0}); on && z.sleep do return fmt.tprintf("A sleeping place: %d places, %d under a roof. Drag beside it to make it larger.", z.cells, z.roofed)
+		if n == 0 do return "No ground to lie on here."
+		under := "all under a roof" if bar.roofed == n else "none under a roof: they will lie in the open" if bar.roofed == 0 else fmt.tprintf("%d under a roof", bar.roofed)
+		return fmt.tprintf("%d by %d: %d %s to sleep, %s.", wide, long, n, "place" if n == 1 else "places", under)
 	case .Store:
-		if !pressed do if z, on := zone_under(bar.aim.block + {0, 1, 0}); on do return fmt.tprintf("A stockpile for %s: %d of %d places hold something. Drag beside it to make it larger.", TAKES_SAYS[z.takes], z.full, z.cells)
+		if !pressed do if z, on := zone_under(bar.aim.block + {0, 1, 0}); on && !z.sleep do return fmt.tprintf("A stockpile for %s: %d of %d places hold something. Drag beside it to make it larger.", TAKES_SAYS[z.takes], z.full, z.cells)
 		if n == 0 do return "No ground to store on here."
 		return fmt.tprintf("%d by %d: %d %s for %s.", wide, long, n, "place" if n == 1 else "places", TAKES_SAYS[bar.takes])
 	case .Gather, .Fish:
@@ -615,11 +668,12 @@ tool_says :: proc() -> string {
 	case .Send:
 		return "Click where the party should stand."
 	case .Remove:
-		if bar.way == 0 do return "Nothing here to take back, take down or take out of a stockpile."
+		if bar.way == 0 do return "Nothing here to take back, take down, put out or take out of what is marked."
 		switch bar.undo {
 		case .Marks: return fmt.tprintf("%d %s taken back.", bar.way, "mark" if bar.way == 1 else "marks")
 		case .Built: return fmt.tprintf("%d built %s taken down; what they are of lies there.", bar.way, "block" if bar.way == 1 else "blocks")
-		case .Zone:  return fmt.tprintf("%d %s taken out of the stockpile.", bar.way, "place" if bar.way == 1 else "places")
+		case .Fire:  return "The fire is put out and taken up; what timber is left lies there."
+		case .Zone:  return fmt.tprintf("%d %s taken out of what is marked here.", bar.way, "place" if bar.way == 1 else "places")
 		}
 	}
 	return ""
@@ -673,8 +727,14 @@ bar_hand :: proc() -> bool {
 		tool_card()
 		return true
 	}
+	if bar.fire >= 0 {
+		fire_card()
+		return true
+	}
 	if bar.zone >= 0 && !u.card_open {
-		zone_card()
+		z, _ := zone_seen(bar.zone)
+		if z.sleep do sleep_card()
+		else do zone_card()
 		return true
 	}
 	site, ok := site_seen(bar.job)
@@ -873,7 +933,8 @@ tool_card :: proc() {
 		for name, stuff in STUFFS {
 			stuffs[int(stuff)], stuff_args[int(stuff)] = fmt.tprintf("%s %d", sentence(name)[:len(name)], stuff_lying(stuff)), int(stuff)
 		}
-		chips(cx, y, "Of", stuffs[:], int(bar.stuff), .Stuff, stuff_args[:], "tool.stuff")
+		if bar.build != .Fire do chips(cx, y, "Of", stuffs[:], int(bar.stuff), .Stuff, stuff_args[:], "tool.stuff")
+		else do words(cx, y + px(L.chip_pad.y), fmt.tprintf("Of timber: %d lie in the hold and about it", stuff_lying(.Timber)), .Body, L.ash, "tool.stuff.fire")
 		y += chip + px(1.5)
 		if bar.build == .Wall do chips(cx, y, "High", numbers[:2], int(bar.high) - 1, .High, args[:2], "tool.high")   // as high as a mason reaches from the ground: higher waits for scaffolds
 		y += chip + px(1.5)
