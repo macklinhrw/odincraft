@@ -235,7 +235,8 @@ why_at :: proc(wx, wz: f64) {
 	// The plants: the race on the cell this point reads, its runner-up, and what held that back.
 	why_part(.Plants)
 	k, cell := community_at(x, z, 1)
-	q := Point{x = (f64(cell%land.n) + 0.5)*LAND_CELL - region.size/2, z = (f64(cell/land.n) + 0.5)*LAND_CELL - region.size/2, cell = LAND_CELL}
+	o := land_corner()
+	q := Point{x = (f64(cell%land.n) + 0.5)*LAND_CELL + o.x, z = (f64(cell/land.n) + 0.5)*LAND_CELL + o.y, cell = LAND_CELL}
 	first, second, score := race(&q)
 	explain :: proc(k: Community_Kind, q: ^Point) -> (near: [2]string, by: f32) {
 		by = -ANY

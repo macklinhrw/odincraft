@@ -654,10 +654,11 @@ open_sea :: proc(key: Key) -> bool {
 	s := f64(i32(1) << u32(key.level))
 	if s <= COARSE do return false
 	lo := [2]f64{f64(key.x), f64(key.z)}*CHUNK*s
-	for &f in formed {
+	for &f in formed[:islands_count()] {
 		o, h := [2]f64{f64(f.island.origin.x), f64(f.island.origin.y)}, f.island.size/2
 		if lo.x < o.x + h && lo.x + CHUNK*s > o.x - h && lo.y < o.y + h && lo.y + CHUNK*s > o.y - h do return false
 	}
+	if mainland_state.pass != nil do for j in 0..=CHUNK do for i in 0..=CHUNK do if mainland_piece(lo.x + f64(i)*s, lo.y + f64(j)*s) >= 0 do return false
 	return true
 }
 

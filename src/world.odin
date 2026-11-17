@@ -381,9 +381,16 @@ world_update :: proc(w: ^World, dev: ^sdl.GPUDevice, cam: [3]f64) {
 waits :: proc(key: Key) -> bool {
 	s := f64(i32(CHUNK) << u32(key.level))
 	lo, hi := [2]f64{f64(key.x), f64(key.z)}*s - s/CHUNK - TREE_REACH, [2]f64{f64(key.x + 1), f64(key.z + 1)}*s + s/CHUNK + TREE_REACH
-	for &f in formed {
+	for &f in formed[:islands_count()] {
 		o, h := [2]f64{f64(f.island.origin.x), f64(f.island.origin.y)}, f.island.size/2
 		if !is_formed(&f) && lo.x < o.x + h && hi.x > o.x - h && lo.y < o.y + h && hi.y > o.y - h do return true
+	}
+	// Over the landmass, a piece not yet formed under any of the chunk's columns, read at most every 64 m.
+	if mainland_state.pass != nil {
+		step := max(s/CHUNK, 64)
+		for z := lo.y; z <= hi.y; z += step do for x := lo.x; x <= hi.x; x += step {
+			if p := mainland_piece(x, z); p >= 0 && !is_formed(&formed[mainland_state.first + p]) do return true
+		}
 	}
 	return false
 }

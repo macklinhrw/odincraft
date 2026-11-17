@@ -112,7 +112,7 @@ trace :: proc(from, to: int, want: End, feeds: []bool) -> int {
 node :: proc(c: int) -> [2]f32 {
 	g := land.grid
 	if k := trails.ford[c]; k > 0 do return {f32(region.features[k - 1].at.x), f32(region.features[k - 1].at.y)}
-	return ([2]f32{f32(c%g.n), f32(c/g.n)} + 0.5 + g.jitter[c])*g.d - f32(region.size/2)
+	return ([2]f32{f32(c%g.n + g.at.x), f32(c/g.n + g.at.z)} + 0.5 + g.jitter[c])*g.d - f32(region.size/2)
 }
 
 // Lay the animal's trails, if the island has the animal. Called once, after the plants.
@@ -138,7 +138,8 @@ trails_make :: proc() {
 	}
 
 	// A bed in each square where its host holds best, the seed breaking ties; feeding ground wherever its host holds.
-	side := int(region.size/DEER.across) + 1
+	side := int(land_side()/DEER.across) + 1
+	o := land_corner()
 	beds, best := make([]int, side*side, context.temp_allocator), make([]f32, side*side, context.temp_allocator)
 	feeds := make([]bool, n*n, context.temp_allocator)
 	slice.fill(beds, -1)
@@ -146,7 +147,7 @@ trails_make :: proc() {
 		c := int(ci)
 		p := Point{x = middle_of(g, c).x, z = middle_of(g, c).y, cell = LAND_CELL}
 		feeds[c] = host(DEER.feed, &p) > 0
-		k := int((p.z + region.size/2)/DEER.across)*side + int((p.x + region.size/2)/DEER.across)
+		k := int((p.z - o.y)/DEER.across)*side + int((p.x - o.x)/DEER.across)
 		if s := host(DEER.bed, &p)*(0.8 + 0.4*hash01(i32(c), 0, seed + 800)); s > 0.3 && s > best[k] do beds[k], best[k] = c, s
 	}
 	// Reached is not kept: the island must hold a herd.
@@ -245,7 +246,7 @@ trails_make :: proc() {
 			a, b := pts[i], pts[i + 1]
 			length += linalg.length(b - a)
 			append(&trails.segments, Trail_Segment{a, b, trails.first[least], trails.worn[least]})
-			lo, hi := linalg.min(a, b) - TRAIL_REACH + f32(region.size/2), linalg.max(a, b) + TRAIL_REACH + f32(region.size/2)
+			lo, hi := linalg.min(a, b) - TRAIL_REACH - [2]f32{f32(o.x), f32(o.y)}, linalg.max(a, b) + TRAIL_REACH - [2]f32{f32(o.x), f32(o.y)}
 			for bz in max(int(lo.y)/BUCKET, 0)..=min(int(hi.y)/BUCKET, rivers.side - 1) do for bx in max(int(lo.x)/BUCKET, 0)..=min(int(hi.x)/BUCKET, rivers.side - 1) {
 				append(&trails.buckets[bz*rivers.side + bx], i32(len(trails.segments) - 1))
 			}
@@ -258,9 +259,9 @@ trails_make :: proc() {
 // Metres to the middle of the nearest trail, if one is within reach, and its segment.
 trail_near :: proc(x, z: f64, seg: ^i32 = nil) -> (d: f32) {
 	d = ANY
-	rim := region.size/2
-	bx, bz := int(x + rim)/BUCKET, int(z + rim)/BUCKET
-	if len(trails.segments) == 0 || x < -rim || z < -rim || bx >= rivers.side || bz >= rivers.side do return
+	o := land_corner()
+	bx, bz := int(x - o.x)/BUCKET, int(z - o.y)/BUCKET
+	if len(trails.segments) == 0 || x < o.x || z < o.y || bx >= rivers.side || bz >= rivers.side do return
 	p := [2]f32{f32(x), f32(z)}
 	for id in trails.buckets[bz*rivers.side + bx] {
 		ab, ap := trails.segments[id].b - trails.segments[id].a, p - trails.segments[id].a

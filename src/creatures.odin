@@ -276,8 +276,9 @@ island_pose :: proc(out: ^[dynamic]Box, eye: [3]f64, clock: f64, dt, hour, day: 
 		}
 	}
 	// Fish in the streams and lakes round the eye.
-	rim := region.size/2
-	bx, bz := int(e.x + rim)/BUCKET, int(e.z + rim)/BUCKET
+	corner := land_corner()
+	if e.x < corner.x || e.z < corner.y do return
+	bx, bz := int(e.x - corner.x)/BUCKET, int(e.z - corner.y)/BUCKET
 	if bx < 0 || bz < 0 || bx >= rivers.side || bz >= rivers.side do return
 	for id in rivers.buckets[bz*rivers.side + bx] do if bits := fauna.fish[id]; bits != 0 {
 		s := rivers.segments[id]
@@ -400,8 +401,8 @@ creature_words :: proc(x, z: f64) {
 	c := land_cell(x, z)
 	near, by := -1, f32(30)
 	if r, ok := river_near(f32(x), f32(z)); ok && r.d - r.half < 20 {
-		rim := region.size/2
-		for id in rivers.buckets[int(z + rim)/BUCKET*rivers.side + int(x + rim)/BUCKET] {
+		o := land_corner()
+		for id in rivers.buckets[int(z - o.y)/BUCKET*rivers.side + int(x - o.x)/BUCKET] {
 			s := rivers.segments[id]
 			ab, ap := s.b - s.a, [2]f32{f32(x), f32(z)} - s.a
 			if d := linalg.length(ap - ab*clamp(linalg.dot(ap, ab)/linalg.dot(ab, ab), 0, 1)); d < by do near, by = int(id), d
@@ -427,7 +428,8 @@ creature_words :: proc(x, z: f64) {
 // Each bird's home on the map, ringed in pale blue, and each stretch of stream with fish dotted green.
 creatures_mark :: proc(pixels: []u8, size: int) {
 	put :: proc(pixels: []u8, size: int, at: [2]f64, r0, r1: int, colour: [3]u8) {
-		cx, cy := int((at.x + region.size/2)*f64(size)/region.size), int((at.y + region.size/2)*f64(size)/region.size)
+		o := land_corner()
+		cx, cy := int((at.x - o.x)*f64(size)/land_side()), int((at.y - o.y)*f64(size)/land_side())
 		for dy in -r1..=r1 do for dx in -r1..=r1 do if d := dx*dx + dy*dy; d >= r0*r0 && d <= r1*r1 && cx + dx >= 0 && cy + dy >= 0 && cx + dx < size && cy + dy < size {
 			for k in 0..<3 do pixels[((cy + dy)*size + cx + dx)*4 + k] = colour[k]
 		}

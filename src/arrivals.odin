@@ -146,6 +146,18 @@ dispersal_of :: proc(name: string) -> int {
 	return -1
 }
 
+// The landmass's pieces: every kind lives on the land larger than a region, which is where the
+// islands' kinds came from (a guess, as `arrivals_make` makes it).
+arrivals_extend :: proc(pieces: int) {
+	if pieces == 0 do return
+	n := len(arrivals)
+	more := make([][len(DISPERSAL)]Arrival, n + pieces)
+	copy(more, arrivals)
+	for &a in more[n:] do for &k in a do k = {reached = true, from = -1, chance = 1}
+	delete(arrivals)
+	arrivals = more
+}
+
 // Whether a kind reached the island in hand, and how.
 came :: proc(name: string) -> Arrival { return arrivals[here.island.id][dispersal_of(name)] }
 

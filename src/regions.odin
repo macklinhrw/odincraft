@@ -72,14 +72,19 @@ bound :: proc(f: ^Formed) -> ^Formed { return bind(f) }
 
 is_formed :: proc(f: ^Formed) -> bool { return sync.atomic_load_explicit(&f.ready, .Acquire) }
 
-// The island whose region's square holds a point in the world, or nil: the open sea.
+// The island whose region's square holds a point in the world, or the piece of the landmass whose
+// land does (continents.odin), or nil: the open sea.
 island_at :: proc(x, z: f64) -> ^Formed {
-	for &f in formed {
+	for &f in formed[:islands_count()] {
 		o, h := [2]f64{f64(f.island.origin.x), f64(f.island.origin.y)}, f.island.size/2
 		if x >= o.x - h && x < o.x + h && z >= o.y - h && z < o.y + h do return &f
 	}
+	if p := mainland_piece(x, z); p >= 0 do return &formed[mainland_state.first + p]
 	return nil
 }
+
+// The islands' records in `formed`, before the landmass's pieces, whose squares overlap.
+islands_count :: #force_inline proc() -> int { return mainland_state.first if mainland_state.pass != nil else len(formed) }
 
 // Bind the island under a point in the world; false at the open sea, where the binding is left.
 bind_at :: proc(x, z: f64) -> bool {

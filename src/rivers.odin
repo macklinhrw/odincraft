@@ -116,10 +116,10 @@ river_bed :: proc(area: f32) -> f32 {
 rivers_trace :: proc() {
 	g := land.grid
 	n := g.n
-	rivers.side = int(region.size)/BUCKET
+	rivers.side = int(land_side())/BUCKET
 	rivers.buckets = make([][dynamic]i32, rivers.side*rivers.side)
 	point :: proc(g: ^Grid, c: i32) -> River_Point {
-		p := [2]f32{f32(int(c)%g.n) + 0.5, f32(int(c)/g.n) + 0.5} + g.jitter[c]
+		p := [2]f32{f32(int(c)%g.n + g.at.x) + 0.5, f32(int(c)/g.n + g.at.z) + 0.5} + g.jitter[c]
 		return {p*g.d - f32(region.size/2), g.fill[c], g.area[c]}
 	}
 
@@ -130,7 +130,7 @@ rivers_trace :: proc() {
 	defer { delete(stream); delete(feeders) }
 	for c in g.order {
 		r := g.next[c]
-		stream[c] = g.area[c] >= HEAD_AREA && land.lake[c] == 0 && (r == -1 || (r >= 0 && (stream[r] || land.lake[r] > 0)))
+		stream[c] = g.area[c] >= HEAD_AREA && land.lake[c] == 0 && (r == -1 || r == ONWARD || (r >= 0 && (stream[r] || land.lake[r] > 0)))
 		if stream[c] && r >= 0 do feeders[r] += 1
 	}
 	// Springs (foundations/water.md, D6). Rain soaks down through a bed that passes water until
@@ -167,6 +167,7 @@ rivers_trace :: proc() {
 				append(&points, River_Point{point(g, r).p, min(g.fill[r], region.features[land.lake[r] - 1].level + FREEBOARD), g.area[r]})
 				break
 			}
+			if r == ONWARD do break   // on into the next piece of a landmass, which traces it on
 			if r < 0 {
 				// The mouth. The first sea cell is often only ankle deep, so carry on down
 				// the sea bed to properly deep water, with the banks under the surface. The
@@ -181,7 +182,7 @@ rivers_trace :: proc() {
 					}
 					if lowest < 0 || (cell != int(at) && g.z[lowest] >= g.z[cell]) do break
 					cell = lowest
-					append(&points, River_Point{([2]f32{f32(cell%n), f32(cell/n)} + 0.5)*g.d - f32(region.size/2), MOUTH_BANK, g.area[at]})
+					append(&points, River_Point{([2]f32{f32(cell%n + g.at.x), f32(cell/n + g.at.z)} + 0.5)*g.d - f32(region.size/2), MOUTH_BANK, g.area[at]})
 					if g.z[cell] < -2.5 do break
 				}
 				break
@@ -350,8 +351,9 @@ reach_build :: proc(traced: []River_Point, id: u32) {
 		pool := to[i - 1] - from[i] if i > 0 else 0
 		pool = plunge(pool, a.area, half[i]) - river_depth(half[i]) if pool > FALL_MIN else 0
 		append(&rivers.segments, Segment{a.p, b.p, from[i], to[i], half[i] + 0.5*pool, half[i + 1], max(stones[i], half[i] + 0.5*pool), stones[i + 1], bend[i], bend[i + 1], drop, max(pool, 0), gorge[i]})
-		lo := linalg.min(a.p, b.p) - RIVER_REACH + f32(region.size/2)
-		hi := linalg.max(a.p, b.p) + RIVER_REACH + f32(region.size/2)
+		o := land_corner()
+		lo := linalg.min(a.p, b.p) - RIVER_REACH - [2]f32{f32(o.x), f32(o.y)}
+		hi := linalg.max(a.p, b.p) + RIVER_REACH - [2]f32{f32(o.x), f32(o.y)}
 		for bz in max(int(lo.y)/BUCKET, 0)..=min(int(hi.y)/BUCKET, rivers.side - 1) {
 			for bx in max(int(lo.x)/BUCKET, 0)..=min(int(hi.x)/BUCKET, rivers.side - 1) {
 				append(&rivers.buckets[bz*rivers.side + bx], index)
@@ -485,9 +487,9 @@ River_Near :: struct {
 
 // The nearest river to a point, judged from the water's edge, if one is within reach.
 river_near :: proc(x, z: f32) -> (r: River_Near, ok: bool) {
-	rim := f32(region.size/2)
-	bx, bz := int(x + rim)/BUCKET, int(z + rim)/BUCKET
-	if x < -rim || z < -rim || bx >= rivers.side || bz >= rivers.side do return
+	o := land_corner()
+	bx, bz := int(x - f32(o.x))/BUCKET, int(z - f32(o.y))/BUCKET
+	if x < f32(o.x) || z < f32(o.y) || bx >= rivers.side || bz >= rivers.side do return
 	p := [2]f32{x, z}
 	nearest: f32 = RIVER_REACH
 	for id in rivers.buckets[bz*rivers.side + bx] {

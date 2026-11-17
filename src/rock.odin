@@ -407,6 +407,7 @@ rock_init :: proc(full: bool) {
 	rocks.full = full
 	draw :: proc(r: [2]f32, k: i32) -> f32 { return math.lerp(r[0], r[1], hash01(k, 0, seed + 301)) }
 	dip, turn := math.tan(math.to_radians(f64(draw(story.tilt, 0)))), 2*math.PI*f64(hash01(1, 0, seed + 301))
+	if region.mass != nil do dip *= min(1, 1500/(region.size/2))   // across a landmass the beds lie near level, or one bed would hold all of it
 	rocks.dip = {dip*math.cos(turn), dip*math.sin(turn)}
 	rocks.fold, rocks.wave = draw(story.fold, 2), f64(draw(story.wave, 3))
 	if story.ridges {

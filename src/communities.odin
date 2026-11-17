@@ -145,7 +145,8 @@ plants_init :: proc() {
 		for c in lo*n..<hi*n {
 			land.community[c] = 255
 			if land.grid.sea[c] do continue
-			p := Point{x = (f64(c%n) + 0.5)*LAND_CELL - region.size/2, z = (f64(c/n) + 0.5)*LAND_CELL - region.size/2, cell = LAND_CELL}
+			o := land_corner()
+			p := Point{x = (f64(c%n) + 0.5)*LAND_CELL + o.x, z = (f64(c/n) + 0.5)*LAND_CELL + o.y, cell = LAND_CELL}
 			k, _, _ := race(&p)
 			land.community[c] = u8(k)
 			land.age[c] = stand_draw(p.x, p.z, c)
