@@ -1,0 +1,16 @@
+# A hut of timber on the flat ground by the camp (P4, second half): a wood felled, four walls two
+# high with a door on the east, a roof laid over them, and its floor marked to sleep on.
+#   build/odincraft --dwarves=3700 --orders=docs/interesting-world/real/play/p4-hut-orders.txt
+# The summary says nine places indoors, and the dawn of the 3rd of spring that seven slept indoors.
+# Three faults were found and reproduced with these orders, before each was put right: the roof's
+# timber was carried to the wall's top and dropped for ever; a dwarf walking on a wall's lower
+# block had the upper laid where it stood, was moved onto the roof and died there of thirst; and,
+# with the fell box ending at x 2689, a bush filled the doorway and nobody slept inside.
+60 fell 2640 3 -1775 2696 3 -1735
+300 build wall timber 2684 2 -1752 2688 3 -1752
+300 build wall timber 2684 2 -1748 2688 3 -1748
+300 build wall timber 2684 2 -1751 2684 3 -1749
+300 build wall timber 2688 2 -1751 2688 3 -1751
+300 build wall timber 2688 2 -1749 2688 3 -1749
+700 build roof timber 2684 4 -1752 2688 4 -1748
+900 sleep 2685 2 -1751 2687 2 -1749

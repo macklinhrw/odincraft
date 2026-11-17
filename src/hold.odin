@@ -239,6 +239,8 @@ Hold :: struct {
 	fires_v:  int,               // counts every change to them but their burning down
 	chilled:  bool,              // a dwarf has said it is cold and found no fire and no roof,
 	chilled_on: int,             // and the day one last did
+	bedless:  bool,              // a dwarf found no way to a sleeping place,
+	bedless_on: int,             // and the day one last did
 	ground:   int,            // changes to the blocks so far
 	looked:   int,            // dwarves that have looked for work this tick
 	cared:    bool,           // an idle dwarf has looked to itself this tick
@@ -809,7 +811,8 @@ settle :: proc(h: ^Hold, i: int, dropped: bool) {
 	fell := to >= 0 && floor_block(w, to) not_in h.held
 	if !fell {
 		from := floor_block(w, to) if to >= 0 else d.cell
-		to = walk_near(w, from.x, from.y, from.z, ADRIFT, false, &h.held)
+		to = walk_near(w, from.x, from.y, from.z, ADRIFT, false, &h.held, true)   // beside it or below before over it: one moved onto the top of a wall two high has no way down
+		if to < 0 do to = walk_near(w, from.x, from.y, from.z, ADRIFT, false, &h.held)
 	}
 	clear(&d.path)
 	if to < 0 {
@@ -924,6 +927,7 @@ find :: proc(h: ^Hold, i: int) {
 	if g := h.spots[i]; walk_floor(w, g.x, g.y, g.z) < 0 do if f := walk_near(w, g.x, g.y, g.z, 3, false, &h.held); f >= 0 do h.spots[i] = floor_block(w, f)   // its place is no longer a floor: the nearest that is
 	clear(&w.shun)
 	for o, j in h.dwarves do if j != i && o.doing != .Aboard && o.doing != .Walking && o.doing != .Dead do append(&w.shun, o.cell)
+	for f in h.fires do append(&w.shun, f.at)   // and round a fire, where there is room
 	_, why, _, _ := way_timed(h, d.cell, h.spots[i], &d.path)
 	clear(&w.shun)
 	if why != .Way && !d.errand {   // on its way to work, or stepping aside: it gives that up
@@ -1156,6 +1160,14 @@ hold_report :: proc(h: ^Hold) {
 			any = true
 		}
 		fmt.println("" if any else " nothing")
+		loose: [Mat]i32
+		for g in h.goods do if !stored(h, g) do loose[g.kind] += g.n
+		any = false
+		for n, m in loose do if n > 0 {
+			fmt.printf("%s %d of %s", "  lying loose:" if !any else ",", n, store_words(m))
+			any = true
+		}
+		if any do fmt.println()
 	}
 	w := &h.walk
 	fmt.printfln("  the ground read: %d floors in %d rooms of %d chunks, %.1f MB kept", len(w.floors), len(w.rooms), w.made,

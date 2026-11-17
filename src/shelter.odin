@@ -269,6 +269,12 @@ sleep_find :: proc(h: ^Hold, i: int) -> [3]i32 {
 		w.budget = ASKING
 		if _, why, _, _ := way_timed(h, d.cell, b.c, &way); why == .Way do return b.c
 	}
+	if today := date_tick(h.tick - int(12*DAY/24/TICK)).day; len(beds) > 0 && (!h.bedless || h.bedless_on != today) {   // the night is the day's it began on   // a place is marked and free, and no way leads to it: said once a night
+		h.bedless, h.bedless_on = true, today
+		h.at = feet_on(beds[0].c)
+		h.short = "No way leads to the sleeping place."
+		say(h, "%s finds no way to the sleeping place at %s, and lies down elsewhere: something stands in the way in, or it has no door.", who(h, i), place_say(h, beds[0].c))
+	}
 	// No place marked, or none it can come to: the best within a short walk, where it stands if that is as good.
 	f := walk_floor(w, d.cell.x, d.cell.y, d.cell.z)
 	if f < 0 do return d.cell
@@ -325,7 +331,9 @@ fires_tick :: proc(h: ^Hold) {
 		for &d in h.dwarves do d.felt_any = false
 		h.at = feet_on(f.at)
 		h.short = "A fire has burnt out."
-		say(h, "The fire at %s has burnt out: %s.", place_say(h, f.at), "it was let go out" if !f.fed else "no timber was brought to it in time")
+		timber := false
+		for g in h.goods do timber ||= !is(g.kind, FOOD) && is_stuff(g.kind, .Timber)
+		say(h, "The fire at %s has burnt out: %s.", place_say(h, f.at), "it was let go out" if !f.fed else "no timber was brought to it in time" if timber else "no timber lies anywhere to feed it")
 	}
 }
 
@@ -394,20 +402,50 @@ fire_feed :: proc(h: ^Hold, i: int, dying: bool) -> bool {
 		w.budget = ASKING
 		stand := walk_near(w, f.at.x, f.at.y, f.at.z, 2, false, &h.burning)
 		if stand < 0 do continue
-		best, pick := max(i32), -1
+		// The piles of timber nearest the fire, a few of them: the nearest may lie where no way leads.
+		Near :: struct { far: i32, j: int }
+		tries: [5]Near
+		count := 0
 		for g, j in h.goods do if !is(g.kind, FOOD) && is_stuff(g.kind, .Timber) && g.n - g.held > 0 {
-			if far := far_of(g.at, f.at); far < best || far == best && j < pick do best, pick = far, j
+			far := far_of(g.at, f.at)
+			at := min(count, len(tries) - 1)
+			if count == len(tries) && far >= tries[at].far do continue
+			for at > 0 && tries[at - 1].far > far {
+				tries[at] = tries[at - 1]
+				at -= 1
+			}
+			tries[at] = {far, j}
+			count = min(count + 1, len(tries))
 		}
-		if pick < 0 do return false   // no timber lies anywhere
-		g := &h.goods[pick]
-		n := min(ARMFUL, i32(FIRE_HOLDS - f.fuel) - f.coming, g.n - g.held)
-		if n <= 0 do continue
-		if !haul_set(h, i, {on = true, from = g.at, to = floor_block(w, stand), kind = g.kind, n = n, site = -1, fire = true, hearth = f.at}) do continue
-		g.held += n
-		f.coming += n
+		if count == 0 do return false   // no timber lies anywhere
+		for t in tries[:count] {
+			g := &h.goods[t.j]
+			n := min(ARMFUL, i32(FIRE_HOLDS - f.fuel) - f.coming, g.n - g.held)
+			if n <= 0 do break
+			if !haul_set(h, i, {on = true, from = g.at, to = floor_block(w, stand), kind = g.kind, n = n, site = -1, fire = true, hearth = f.at}) do continue
+			g.held += n
+			f.coming += n
+			return true
+		}
 		_ = k
-		return true
 	}
+	return false
+}
+
+// What comes before any marked work: a fire about to go out is fed, and the log a fire is to be
+// laid of is brought. True if the dwarf has set out for either.
+fire_first :: proc(h: ^Hold, i: int) -> bool {
+	if len(h.fires) > 0 && fire_feed(h, i, true) do return true
+	for s, id in h.sites do if !s.over && s.work == .Build && s.shape == .Fire && site_wants(h, id) > 0 && site_haul(h, i, id) do return true
+	return false
+}
+
+// Whether what a dwarf has in hand is a fire's own work: laying one, bringing the log it is laid of,
+// or feeding one. It is the remedy of the cold, and is not left for it.
+fire_work :: proc(h: ^Hold, i: int) -> bool {
+	d := &h.dwarves[i]
+	if d.haul.on && (d.haul.fire || d.haul.site >= 0 && h.sites[d.haul.site].shape == .Fire) do return true
+	if k, ok := h.marked[d.job_at]; ok && d.job do return h.marks[k].work == .Build && h.sites[h.marks[k].site].shape == .Fire
 	return false
 }
 
@@ -421,13 +459,13 @@ fire_fed :: proc(h: ^Hold, i: int, hearth: [3]i32, kind: Mat, n: i32) -> bool {
 	h.fires_v += 1
 	if f.lit {
 		h.at, h.aside = feet_on(f.at), true   // the log's alone: a fire kept fed is no news
-		say(h, "%s lays %d logs on the fire at %s.", who(h, i), n, place_say(h, f.at))
+		say(h, "%s lays %d %s on the fire at %s.", who(h, i), n, "log" if n == 1 else "logs", place_say(h, f.at))
 	} else {
 		f.lit = true
 		for &d in h.dwarves do d.felt_any = false
 		h.at = feet_on(f.at)
 		h.short = fmt.tprintf("%s lights the fire again.", who(h, i))
-		say(h, "%s lays %d logs on the fire at %s and lights it again.", who(h, i), n, place_say(h, f.at))
+		say(h, "%s lays %d %s on the fire at %s and lights it again.", who(h, i), n, "log" if n == 1 else "logs", place_say(h, f.at))
 	}
 	return true
 }

@@ -305,4 +305,11 @@ Read on 2026-11-16 for step P4's second half, before it was built. Every figure 
 
 ### For OdinCraft (as built, `plan.md`, "P4, second half, as built")
 
-Filled in as the step was built: see `plan.md` for the figures chosen beside these.
+- **The weather is where the date is**, a line of its name, the air in degrees and the wind, with why behind it. It is a function of the island's own climate, so it is the same on the screen and in the dwarves' world.
+- **A dwarf is comfortable from 12 °C felt, clothed as it landed**; the wind and the wet take from what it feels, which neither game does, because the start island's winter is 7 to 14 °C and only its rain and wind are dangerous. Harm begins 6 degrees under that, once no warmth is left, and death comes after a day and a half of it: RimWorld's ten degrees and a day and a third.
+- **A roof is a block overhead, walls are blocks at the head within five steps, indoors is a roof and three walls.** No rooms are kept: there are no doors yet to close one, and a rule on the blocks is the same for the hold and for the picture. Nothing falls for want of a wall.
+- **Shelter is shown by a lens**, RimWorld's roof overlay with a second colour for indoors, and said on a block's card, Dwarf Fortress's "Inside".
+- **A room under ground or behind walls is halfway to the year's mean**, RimWorld's 15 °C under rock made the island's own.
+- **A place to sleep is dragged like a stockpile before any bed exists**: RimWorld's sleeping spot and Dwarf Fortress's dormitory. With none, a dwarf looks for a roof or a fire within a short walk, where RimWorld's lies down where it stands.
+- **A fire is laid of one log, holds six, burns three a day and three times that in rain**, where RimWorld's is 20 wood, 10 a day and 4.6 times: a tree here is three to six logs. It is fed from the store without orders, and a toggle on its card stops that, as in RimWorld. Unlike RimWorld's it warms those beside it in the open, two steps round, and four indoors.
+- **A cold dwarf goes to the warm by itself**, as RimWorld's pawn with hypothermia seeks a safe temperature; and the fire's own work is not left for the cold.

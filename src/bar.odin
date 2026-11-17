@@ -52,6 +52,7 @@ DIG_CHOICES := [?]Choice{
 BUILD_CHOICES := [?]Choice{
 	{.Wall, "Wall", "A wall along the drag, one or two blocks high, standing on this level.", true},
 	{.Floor, "Floor", "One layer at this level wherever it is open: over a space it is the roof.", false},
+	{.Roof, "Roof", "One layer over this level: begun on the top of a wall, it lies on the walls and roofs what they stand round.", false},
 	{.Stair, "Stair up", "Steps built up from this level, a block up for each block along the drag.", true},
 	{.Fire, "Fire", "A fire, laid of a log and lit where you click. It warms those by it and dries them, lights the night, and is fed from the timber the hold has.", false},
 }
@@ -185,6 +186,7 @@ tool_order :: proc(a: ^Above, m0, m1: [3]i32, press: Pick, dragged: bool) -> (o:
 		case .Out, .Down, .Up:
 		case .Wall:  return {kind = .Build, shape = .Wall, stuff = bar.stuff, at = m0, to = {m1.x, m0.y + bar.high - 1, m1.z}}, true
 		case .Floor: return {kind = .Build, shape = .Floor, stuff = bar.stuff, at = m0, to = m1}, true
+		case .Roof:  return {kind = .Build, shape = .Roof, stuff = bar.stuff, at = m0, to = m1}, true
 		case .Stair:
 			if far == m0 do far = m0 + ahead(a)*2
 			return {kind = .Build, shape = .Stair, stuff = bar.stuff, at = m0, to = far}, true
@@ -637,6 +639,7 @@ tool_says :: proc() -> string {
 		case .Out, .Down, .Up:
 		case .Wall:  return fmt.tprintf("Wall %d long, %d high: %d %s of %s.%s", max(wide, long), bar.high, n, blocks, STUFFS[bar.stuff], short)
 		case .Floor: return fmt.tprintf("Floor %d by %d: %d %s of %s.%s", wide, long, n, blocks, STUFFS[bar.stuff], short)
+		case .Roof:  return fmt.tprintf("Roof %d by %d, over this level: %d %s of %s.%s", wide, long, n, blocks, STUFFS[bar.stuff], short)
 		case .Stair:
 			_, _, steps := stair_run(o.at, o.to)
 			return fmt.tprintf("%d steps up, heading %s: %d %s of %s.%s", steps, COMPASS[heading(o)], n, blocks, STUFFS[bar.stuff], short)

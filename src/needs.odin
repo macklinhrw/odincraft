@@ -132,7 +132,8 @@ needs_tick :: proc(h: ^Hold, i: int) {
 	if d.caring || !(d.job || d.haul.on) do return
 	feeding := false   // the work in hand is to gather or to fish: it is not left for hunger, which it is the remedy of
 	if k, ok := h.marked[d.job_at]; ok && d.job do feeding = h.marks[k].work == .Gather || h.marks[k].work == .Fish
-	for &row, w in WANTS do if d.want[w] < row.urgent && h.tick >= d.retry[w] && !(w == .Food && feeding) {   // it will not wait: the work is let go, and the dwarf looks to itself when it next stands
+	warming := fire_work(h, i)   // nor is a fire's laying or feeding left for the cold
+	for &row, w in WANTS do if d.want[w] < row.urgent && h.tick >= d.retry[w] && !(w == .Food && feeding) && !(w == .Warm && warming) {   // it will not wait: the work is let go, and the dwarf looks to itself when it next stands
 		job_drop(h, i, 0)
 		haul_drop(h, i)
 		return
@@ -260,6 +261,7 @@ care_begin :: proc(h: ^Hold, i: int, w: Want) -> bool {
 	}
 	clear(&walk.shun)
 	for o, j in h.dwarves do if j != i && o.doing != .Aboard && o.doing != .Walking && o.doing != .Dead do append(&walk.shun, o.cell)
+	for f in h.fires do append(&walk.shun, f.at)   // and round a fire, where there is room
 	_, why, _, _ := way_timed(h, d.cell, to, &d.path)
 	clear(&walk.shun)
 	if why != .Way {

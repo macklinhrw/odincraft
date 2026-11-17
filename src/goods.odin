@@ -297,6 +297,46 @@ site_wants :: proc(h: ^Hold, id: int) -> int {
 	return s.left - len(s.brought) - s.coming
 }
 
+// A dwarf fetches stuff for an order to build that still wants some: the nearest of it, wherever it
+// lies, to a floor one of the order's blocks can be laid from. False if the order wants none, none
+// lies anywhere, or no way leads.
+site_haul :: proc(h: ^Hold, i: int, id: int) -> bool {
+	d, w := &h.dwarves[i], &h.walk
+	w.budget = ASKING
+	far :: proc(a, b: [3]i32) -> i32 { return abs(a.x - b.x) + abs(a.z - b.z) + 2*abs(a.y - b.y) }
+	s := &h.sites[id]
+	want := site_wants(h, id)
+	if want <= 0 do return false
+	// A floor one of its blocks can be laid from, that the dwarf has a way to: the stuff is brought where a mason
+	// will stand. (A floor merely near a block may be the top of a wall two high, which nobody comes to.)
+	to, found := [3]i32{}, false
+	stands := make([dynamic][3]i32, context.temp_allocator)
+	way := make([dynamic][3]i32, context.temp_allocator)
+	tried := 0
+	for m in h.marks do if m.site == id && !found && tried < 6 {
+		clear(&stands)
+		stands_of(h, i, m.at, &stands, true)
+		for stand in stands[:min(len(stands), 2)] {
+			tried += 1
+			if stand != d.cell do if _, why, _, _ := way_timed(h, d.cell, stand, &way); why != .Way do continue
+			to, found = stand, true
+			break
+		}
+	}
+	if !found do return false
+	best, pick := max(i32), -1
+	for g, k in h.goods do if is_stuff(g.kind, s.stuff) && g.n - g.held > 0 {
+		if f := far(g.at, to); f < best || f == best && k < pick do best, pick = f, k
+	}
+	if pick < 0 do return false
+	g := &h.goods[pick]
+	n := min(i32(want), ARMFUL, g.n - g.held)
+	if !haul_set(h, i, {on = true, from = g.at, to = to, kind = g.kind, n = n, site = id}) do return false
+	g.held += n
+	s.coming += int(n)
+	return true
+}
+
 // A dwarf with no marked work it can take looks for something to carry: stuff for a block marked
 // to be laid first, from the nearest pile of it wherever it lies; then a pile lying loose, to the
 // stockpile that takes it. False if there is nothing to carry.
@@ -305,26 +345,7 @@ haul_look :: proc(h: ^Hold, i: int) -> bool {
 	w.budget = ASKING
 	far :: proc(a, b: [3]i32) -> i32 { return abs(a.x - b.x) + abs(a.z - b.z) + 2*abs(a.y - b.y) }
 	// For building.
-	for &s, id in h.sites {
-		want := site_wants(h, id)
-		if want <= 0 do continue
-		to, found := [3]i32{}, false
-		for m in h.marks do if m.site == id && !found {   // a floor beside one of its blocks, to bring it to
-			if f := walk_near(w, m.at.x, m.at.y, m.at.z, 2); f >= 0 do to, found = floor_block(w, f), true
-		}
-		if !found do continue
-		best, pick := max(i32), -1
-		for g, k in h.goods do if is_stuff(g.kind, s.stuff) && g.n - g.held > 0 {
-			if f := far(g.at, to); f < best || f == best && k < pick do best, pick = f, k
-		}
-		if pick < 0 do continue
-		g := &h.goods[pick]
-		n := min(i32(want), ARMFUL, g.n - g.held)
-		if !haul_set(h, i, {on = true, from = g.at, to = to, kind = g.kind, n = n, site = id}) do continue
-		g.held += n
-		s.coming += int(n)
-		return true
-	}
+	for _, id in h.sites do if site_haul(h, i, id) do return true
 	// To a stockpile: the nearest pile that lies loose, or in a stockpile that does not take it.
 	stores := false
 	for z in h.zones do stores ||= !z.sleep && z.cells > 0

@@ -382,8 +382,9 @@ floor_step :: proc(w: ^Walk, f: i32, d: int, make_it := true) -> i32 {
 	return walk_floor(w, p.cx*CHUNK + x, y, p.cz*CHUNK + z, make_it)
 }
 
-// The floor nearest a block within `reach` columns of it, or -1; with `grown`, the nearest dry one under plants.
-walk_near :: proc(w: ^Walk, x, y, z, reach: i32, grown := false, taken: ^map[[3]i32]int = nil) -> (best: i32) {
+// The floor nearest a block within `reach` columns of it, or -1; with `grown`, the nearest dry one under plants;
+// with `level`, the nearest that is no higher than the block.
+walk_near :: proc(w: ^Walk, x, y, z, reach: i32, grown := false, taken: ^map[[3]i32]int = nil, level := false) -> (best: i32) {
 	best = -1
 	least := max(i32)
 	for r in 0..=reach {
@@ -395,6 +396,7 @@ walk_near :: proc(w: ^Walk, x, y, z, reach: i32, grown := false, taken: ^map[[3]
 			for i in p.first[col]..<p.first[col + 1] {
 				f := w.floors[p.base + i32(i)]
 				dy := i32(f.y) - y
+				if level && dy > 0 do continue   // none higher: the top of a wall is no place to be moved to
 				if at := ([3]i32{x + dx, i32(f.y), z + dz}); taken != nil && at in taken^ do continue   // a dwarf stands there
 				if s := 4*(dx*dx + dz*dz) + dy*dy; s < least && (f.grown && f.wet == 0 || !grown) do best, least = p.base + i32(i), s
 			}

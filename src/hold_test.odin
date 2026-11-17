@@ -228,7 +228,7 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 	testing.expect_value(t, said(played, "The 2nd of spring."), 1)
 	// The night was spent in the room marked to sleep in, by its fire, and nobody is the colder for it; the fire was fed from the timber felled.
 	testing.expectf(t, said(played, "slept indoors") >= 1, "the dawn says the party slept indoors: %d times", said(played, "slept indoors"))
-	testing.expectf(t, len(played.fires) == 1 && played.fires[0].lit && said(played, "logs on the fire") >= 1, "the fire still burns, and was fed: %d fires, fed %d times", len(played.fires), said(played, "logs on the fire"))
+	testing.expectf(t, len(played.fires) == 1 && played.fires[0].lit && said(played, "on the fire at") >= 1, "the fire still burns, and was fed: %d fires, fed %d times", len(played.fires), said(played, "on the fire at"))
 	for d, i in played.dwarves do testing.expectf(t, d.want[.Warm] > 0.5, "%s is warm on the second day: %.2f", played.party[i].given, d.want[.Warm])
 	{   // the weather is a function of the tick and the place: asked twice it is the same, colder by night and higher up
 		at := stand_of(played.landed.camp)

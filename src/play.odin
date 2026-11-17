@@ -845,8 +845,9 @@ place_build :: proc() {
 	x, y := r.x + px(L.pad.x), r.y + px(L.pad.y)
 	y += words(x, y, title, .Great, id = "place.title") + px(1)
 	y += words(x, y, date, .Body, L.ash, "place.date")
-	part(.Head, {x, y, inner, line_of(.Body)}, tip = why)
-	y += words(x, y, sky, .Body, L.chalk if u.sky.rain > 0 else L.ash, "place.weather") + px(3)
+	y += words(x, y, sky, .Body, L.chalk if u.sky.rain > 0 else L.ash, "place.weather")
+	part(.Head, {x, y - line_of(.Body), inner, line_of(.Body)}, tip = why)   // over the words, so the pointer resting on them is told why
+	y += px(3)
 	paused := u.clock.paused
 	button({x, y, first, px(L.button)}, fmt.tprintf("%s at %s", "Paused" if paused else "Running", hour), .Pause, 0, paused, "clock.pause", "Stop the world, or let it go on. You can look and give orders while it stands still.")
 	x += first + px(L.gap)
@@ -1553,8 +1554,16 @@ tip_build :: proc() {
 	u, a, L := &play, play.a, &LOOK
 	if u.menu || u.owner != .None || u.afoot^ && u.captured^ do return
 	text := ""
+	told := -1   // a part with something to say and nothing to do, under the pointer: a meter, a line of the stores, the weather
+	if screen.hot < 0 do #reverse for it, i in screen.items {
+		if !inside(it.rect, u.pointer) || it.clip.w > 0 && !inside(it.clip, u.pointer) do continue
+		if it.tip != "" do told = i
+		if it.tip != "" || it.part == .Panel || it.part == .Veil || .Solid in it.state do break
+	}
 	if hot := screen.hot; hot >= 0 {
 		if u.rest > 0.45 || u.still do text = screen.items[hot].tip
+	} else if told >= 0 {
+		if u.rest > 0.45 || u.still do text = screen.items[told].tip
 	} else if _, solid, _ := screen_over(&screen, u.pointer); !solid && !u.afoot^ && !tool_marks() && a.shown && a.under.ok && u.pointer.x >= 0 && (u.rest > 0.6 || u.still) {   // a tool's own line says what lies under it
 		if a.under.block != u.tip_block || u.tip == "" {   // asked once for each block the pointer rests on
 			delete(u.tip)

@@ -222,6 +222,17 @@ weather_say :: proc(at: Stand, where_: string) {
 		}
 		fmt.printfln("  %s: %.0f to %.0f °C, the nights' coldest hour %.1f on average; rain %d of its %d hours%s", season, low, high, nights, rained, 24*SEASON_DAYS, fmt.tprintf("; snow on %d days", snowed) if snowed > 0 else "")
 	}
+	fmt.print("  the first rains:")   // when, for whoever would see one
+	said := 0
+	for day := 0; day < YEAR_DAYS && said < 4; day += 1 do for h := 0; h < 24 && said < 4; h += 1 {
+		wet := proc(day, h: int, at: Stand) -> bool { return weather((f64(day) + (f64(h) + 0.5 - LANDS_AT)/24)*DAY, at).rain > 0 }
+		if !wet(day, h, at) || h > 0 && wet(day, h - 1, at) do continue
+		until := h
+		for until < 24 && wet(day, until, at) do until += 1
+		fmt.printf("%s the %s from %02d:00 to %02d:00", "" if said == 0 else ";", date_words(date_at((f64(day) + 0.5)*DAY)), h, until)
+		said += 1
+	}
+	fmt.println()
 }
 
 // The weather over a point of the world, for the frame: on the island nearest, at the ground's

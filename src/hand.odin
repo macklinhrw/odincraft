@@ -390,6 +390,7 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 			sub = "built by the hold"
 			line = fmt.tprintf("The dwarves laid it, of %s brought to it. Remove (X) takes it down, and the %s lies where it stood", "timber" if t.mat == .Timber else "stone", of)
 		}
+		if says := shelter_says(w, t.block); says != "" do line = fmt.tprintf("%s. %s", line, says)   // what stands over it and round it, for a dwarf standing on it (shelter_of)
 		c.column = true
 	case .Tree:
 		o := t.tree
@@ -474,7 +475,6 @@ card_make :: proc(w: ^World, t: Thing) -> (c: Hand_Card) {
 		line = fmt.tprintf("It holds %s%s", strings.to_string(words), fmt.tprintf(", and %d of open air", min(counts[.Air], blocks)) if counts[.Air] > 0 else "") if strings.builder_len(words) > 0 else "It holds only open air"
 		c.mat = most[0]
 		c.column = true
-		if says := shelter_says(w, t.block); says != "" do line = fmt.tprintf("%s. %s", line, says)   // what stands over it and round it, for a dwarf (shelter_of)
 	}
 	c.title, c.sub, c.line = strings.clone(sentence(title)[:len(sentence(title)) - 1]), strings.clone(sub), strings.clone(sentence(line))
 	c.says = why_parts(t.island, f64(c.x) + 0.5, f64(c.z) + 0.5)
