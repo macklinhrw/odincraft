@@ -2,6 +2,7 @@ package main
 
 import "core:c"
 import "core:fmt"
+import "core:math"
 import "core:mem"
 import "core:slice"
 import "core:strings"
@@ -14,9 +15,10 @@ import "core:sys/posix"
 // cell's piece, and what is known of each piece (continents.odin).
 
 KEPT_MAGIC   :: 0x4b434f31   // "1OCK"
-KEPT_VERSION :: 2
+KEPT_VERSION :: 3
 KEPT_RING    :: 2            // squares kept round any with land: 8 km, past a piece's margin
 KEPT_CELLS   :: SQUARE*SQUARE
+KEPT_ROSE    :: (SQUARE/ROSE_STEP)*(SQUARE/ROSE_STEP)
 NEXT_NONE    :: 255          // a land cell that drains into the sea,
 NEXT_SEA     :: 254          // and a cell of the sea; else the way a land cell drains, as its place in OFFSETS
 
@@ -32,6 +34,7 @@ Store :: struct {
 	next:   [][KEPT_CELLS]u8,
 	owner:  [][KEPT_CELLS]i16,     // each cell's piece, or -1
 	cut, face: [][KEPT_CELLS]f32,
+	rose:   [][KEPT_ROSE]f32,      // every ROSE_STEP cells: m/yr the rebound was raising the ground when the coarse stage ended
 	pieces: []Kept_Piece,
 	pairs:  [][2]i32,              // the pieces beside each other
 	left, lift, rise: f32,         // the grid's, as the coarse stage left them
@@ -128,6 +131,12 @@ store_write :: proc(path: string, g: ^Grid, cut: ^Cut, own: []i32) -> bool {
 			put(fd, buf[:KEPT_CELLS*(1 if plane == .Next else 2 if plane == .Owner else 4)], &ok)
 		}
 	}
+	for t in squares {
+		f := slice.reinterpret([]f32, buf)
+		side := SQUARE/ROSE_STEP
+		for j in 0..<side do for i in 0..<side do f[j*side + i] = g.coarse.rose[(int(t)/m*side + j)*(n/ROSE_STEP) + int(t)%m*side + i]
+		put(fd, buf[:KEPT_ROSE*4], &ok)
+	}
 	posix.close(fd)
 	if ok do ok = posix.rename(temp, strings.clone_to_cstring(path, context.temp_allocator)) == 0
 	return ok
@@ -145,7 +154,7 @@ store_open :: proc(st: ^Store, path: string, n: int) -> bool {
 	file := slice.from_ptr((^u8)(at), int(info.st_size))
 	head := (^Kept_Head)(at)^
 	m := int(head.m)
-	size := size_of(Kept_Head) + 2*m*m*4 + int(head.pieces)*size_of(Kept_Piece) + int(head.pairs)*8 + int(head.squares)*KEPT_CELLS*(3*4 + 1 + 2) + int(head.shores)*KEPT_CELLS*8
+	size := size_of(Kept_Head) + 2*m*m*4 + int(head.pieces)*size_of(Kept_Piece) + int(head.pairs)*8 + int(head.squares)*(KEPT_CELLS*(3*4 + 1 + 2) + KEPT_ROSE*4) + int(head.shores)*KEPT_CELLS*8
 	if head.magic != KEPT_MAGIC || head.version != KEPT_VERSION || int(head.n) != n || size != len(file) {
 		posix.munmap(at, c.size_t(info.st_size))
 		return false
@@ -162,6 +171,7 @@ store_open :: proc(st: ^Store, path: string, n: int) -> bool {
 	st.z, st.area, st.load = take(file, &k, [KEPT_CELLS]f32, s), take(file, &k, [KEPT_CELLS]f32, s), take(file, &k, [KEPT_CELLS]f32, s)
 	st.next, st.owner = take(file, &k, [KEPT_CELLS]u8, s), take(file, &k, [KEPT_CELLS]i16, s)
 	st.cut, st.face = take(file, &k, [KEPT_CELLS]f32, int(head.shores)), take(file, &k, [KEPT_CELLS]f32, int(head.shores))
+	st.rose = take(file, &k, [KEPT_ROSE]f32, s)
 	return true
 }
 
@@ -206,4 +216,19 @@ store_window :: proc(st: ^Store, lo: [2]int, side: int) -> (g: ^Grid, owner: []i
 	}
 	g.left, g.lift, g.rise = st.left, st.lift, st.rise
 	return
+}
+
+// How fast the rebound was raising the ground at a point of the lattice when the coarse stage ended,
+// m/yr: between the four kept round it. The point is in cells, a cell's middle at its index and a half.
+store_rose :: proc(st: ^Store, u, v: f32) -> f32 #no_bounds_check {
+	at :: proc(st: ^Store, i, j: int) -> f32 #no_bounds_check {
+		side := SQUARE/ROSE_STEP
+		if i < 0 || j < 0 || i >= st.n/ROSE_STEP || j >= st.n/ROSE_STEP do return 0
+		slot := st.slot[j/side*st.m + i/side]
+		return st.rose[slot][j%side*side + i%side] if slot >= 0 else 0
+	}
+	x, y := (u - 0.5)/ROSE_STEP, (v - 0.5)/ROSE_STEP
+	i, j := int(math.floor(x)), int(math.floor(y))
+	tu, tv := x - f32(i), y - f32(j)
+	return math.lerp(math.lerp(at(st, i, j), at(st, i + 1, j), tu), math.lerp(at(st, i, j + 1), at(st, i + 1, j + 1), tu), tv)
 }

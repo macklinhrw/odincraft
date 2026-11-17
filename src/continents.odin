@@ -32,7 +32,8 @@ Landmass :: struct {
 	seed:   u32,       // the seed it is formed from
 	area:   f32,       // km² of land, in the known world
 	top:    f32,       // m, the history's highest ground on it
-	near:   f64,       // metres from the start to its nearest land in the known world
+	near:   f64,       // metres from the start to its nearest land in the known world,
+	shore:  [2]f64,    // and where in the world that land is
 	frame:  Formed,    // its own region, which its coarse stage is formed on and every piece reads
 	store:  Store,     // its coarse stage, kept
 	path:   string,    // where
@@ -112,6 +113,7 @@ Holding :: struct {
 	keep:   []i32,      // own cells kept for the pieces after this one
 	out:    ^Band,      // what is kept of them
 	step:   int,        // steps taken at this cell size
+	rose:   []f32,      // each cell: m/yr the ground goes on rising as the rebound left the coarse stage rising (coarse.odin)
 }
 
 // The held cells as they stand at a stage of this step: 0 at its start, 2 after creep, 3 after the coast.
@@ -238,6 +240,7 @@ form_phases :: proc(g: ^Grid, from, upto: int, level: Leveller = nil, data: rawp
 			}
 			coast(g, p.years)
 			if g.holding != nil {
+				for c in 0..<g.n*g.n do if !g.sea[c] do g.z[c] += g.holding.rose[c]*p.years   // the crust goes on rising as rock is worn off it
 				held_stage(g, 3)
 				held_keep(g, 4)
 				g.holding.step += 1
@@ -577,13 +580,13 @@ Pieces :: struct {
 	m:      ^Landmass,
 	from:   int,
 	margin: f32,          // metres
-	bands:  [][dynamic]^Band,   // by piece: what it left for the pieces after it, while one of them is forming
 	formed: []bool,       // by piece: formed, and kept where it can be read back
 }
 
 // What a piece's grid is while it forms, for making its hold at each cell size: the window of the
 // coarse stage it forms on, a cell wider all round, and each of that window's cells' piece.
-Piece_Form :: struct { all: ^Pieces, p: i32, pass: ^Grid, owner: []i32 }
+// With them, the bands its earlier neighbours left it, read back for this forming, and those it leaves.
+Piece_Form :: struct { all: ^Pieces, p: i32, pass: ^Grid, owner: []i32, held: map[i32][dynamic]^Band, out: [dynamic]^Band }
 
 RING :: 8   // coarse cells held round a piece's own cells and margin: the coast's exposure reads 500 m
 
@@ -610,7 +613,7 @@ piece_level :: proc(g: ^Grid, data: rawptr) {
 	pass, cut := f.pass, &all.m.cut
 	if g.holding != nil {   // the coarser grid's hold, gone with it
 		h := g.holding
-		delete(h.held); delete(h.index); delete(h.cells); delete(h.band); delete(h.at); delete(h.coarse); delete(h.vals); delete(h.into); delete(h.keep)
+		delete(h.held); delete(h.index); delete(h.cells); delete(h.band); delete(h.at); delete(h.coarse); delete(h.vals); delete(h.into); delete(h.keep); delete(h.rose)
 		free(h)
 		g.holding = nil
 	}
@@ -637,7 +640,8 @@ piece_level :: proc(g: ^Grid, data: rawptr) {
 	}
 	sweep(far, n, g.d)
 	h := new(Holding)
-	h.held, h.index = make([]bool, n*n), make([]i32, n*n)
+	h.held, h.index, h.rose = make([]bool, n*n), make([]i32, n*n), make([]f32, n*n)
+	for c in 0..<n*n do h.rose[c] = store_rose(&all.m.store, (f32(c%n + g.at.x) + 0.5)*g.d/64, (f32(c/n + g.at.z) + 0.5)*g.d/64)
 	slice.fill(h.index, -1)
 	cells, bands, at, coarse := make([dynamic]i32), make([dynamic]^Band), make([dynamic]i32), make([dynamic]Held)
 	// The coarse pass at a point, metres from the lattice's corner: its height by the four cells round it.
@@ -654,7 +658,7 @@ piece_level :: proc(g: ^Grid, data: rawptr) {
 		if earlier(cut, q, p) {
 			k := lattice_of(g, c)
 			found := false
-			for b in all.bands[q] do if int(math.round(f32(b.cell))) == int(math.round(g.d)) {
+			for b in f.held[q] do if int(math.round(f32(b.cell))) == int(math.round(g.d)) {
 				if i, ok := b.place[k]; ok {
 					append(&cells, i32(c)); append(&bands, b); append(&at, i); append(&coarse, Held{})
 					found = true
@@ -716,7 +720,7 @@ piece_level :: proc(g: ^Grid, data: rawptr) {
 		b.place[b.cells[i]] = i32(i)
 	}
 	h.out = b
-	append(&all.bands[p], b)
+	append(&f.out, b)
 	g.holding = h
 }
 
@@ -727,14 +731,21 @@ pass_years :: proc() -> f32 {
 	return last
 }
 
-// Form piece `p` from the coarse pass, holding what the pieces formed before it left: its finished grid.
-piece_form :: proc(all: ^Pieces, p: i32) -> ^Grid {
-	w := all.m.cut.window[p]
+// Form piece `p` from the coarse pass, holding what the pieces formed before it left, which are read
+// back from where they were kept: its finished grid, the bands it leaves for the pieces after it, and
+// the bands it held, which its grid still reads until it is finished.
+piece_form :: proc(all: ^Pieces, p: i32) -> (g: ^Grid, out: [dynamic]^Band, held: map[i32][dynamic]^Band) {
+	m := all.m
+	w := m.cut.window[p]
 	f := Piece_Form{all = all, p = p}
-	f.pass, f.owner = store_window(&all.m.store, {int(w.x) - 1, int(w.y) - 1}, int(w.z) + 2)
-	defer { delete(f.owner); grid_free(f.pass) }
-	g := piece_grid(&f)
-	return form_phases(g, all.from, len(region.history), piece_level, &f)
+	f.pass, f.owner = store_window(&m.store, {int(w.x) - 1, int(w.y) - 1}, int(w.z) + 2)
+	for q in m.cut.near[p] do if earlier(&m.cut, q, p) do f.held[q] = band_load(m, q)
+	defer {
+		delete(f.owner)
+		grid_free(f.pass)
+	}
+	g = form_phases(piece_grid(&f), all.from, len(region.history), piece_level, &f)
+	return g, f.out, f.held
 }
 
 FOUR :: [4][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
@@ -772,7 +783,8 @@ lands_make :: proc() {
 		lo, hi = lo - MASS_PAD - f64(KNOWN_STEP)*500, hi + MASS_PAD + f64(KNOWN_STEP)*500
 		middle := (lo + hi)/2
 		append(&list, Landmass{mass = id, origin = {i32(math.round(middle.x/1024))*1024, i32(math.round(middle.y/1024))*1024}, side = math.ceil(max(hi.x - lo.x, hi.y - lo.y)/4096)*4096,
-			area = mass.area, top = top, near = f64(near - KNOWN_STEP/2)*1000, seed = hash(i32(start), 21, world_seed + 2100)})
+			area = mass.area, top = top, near = f64(near - KNOWN_STEP/2)*1000, seed = hash(i32(start), 21, world_seed + 2100),
+			shore = world_of([2]f32{f32(start%KNOWN_N) + 0.5, f32(start/KNOWN_N) + 0.5}*KNOWN_STEP - WINDOW/2)})
 	}
 	slice.sort_by(list[:], proc(a, b: Landmass) -> bool { return a.near < b.near || a.near == b.near && a.mass < b.mass })
 	lands = list[:]
@@ -782,8 +794,8 @@ lands_make :: proc() {
 	}
 	all: f32
 	for m in lands do all += m.area
-	fmt.printfln("land larger than a region in the known world: %d land masses, %.0f km² in all; the nearest the start %.0f km² of land, its coast %.0f km off, the history's ground up to %.0f m; the largest %.0f km²",
-		len(lands), all, lands[0].area, lands[0].near/1000, lands[0].top, slice.max(slice.mapper(lands, proc(m: Landmass) -> f32 { return m.area }, context.temp_allocator)))
+	fmt.printfln("land larger than a region in the known world: %d land masses, %.0f km² in all; the nearest the start %.0f km² of land, its coast %.0f km off at %.0f, %.0f, the history's ground up to %.0f m; the largest %.0f km²",
+		len(lands), all, lands[0].area, lands[0].near/1000, lands[0].shore.x, lands[0].shore.y, lands[0].top, slice.max(slice.mapper(lands, proc(m: Landmass) -> f32 { return m.area }, context.temp_allocator)))
 }
 
 // Bind a landmass's own region, or a piece's, its record drawn from the landmass's seed as an island's is.
@@ -847,7 +859,7 @@ mass_pass :: proc(m: ^Landmass, form: bool) -> bool {
 	}
 	for k in st.pairs { append(&c.near[k.x], k.y); append(&c.near[k.y], k.x) }
 	for &l in c.near do slice.sort(l[:])
-	m.all = Pieces{m = m, from = m.from, margin = MARGIN, bands = make([][dynamic]^Band, count), formed = make([]bool, count)}
+	m.all = Pieces{m = m, from = m.from, margin = MARGIN, formed = make([]bool, count)}
 	m.ready = true
 	// How many pieces each waits on: the cost of forming one alone, anywhere.
 	waits := make([]int, count, context.temp_allocator)
@@ -860,6 +872,15 @@ mass_pass :: proc(m: ^Landmass, form: bool) -> bool {
 	fmt.printfln("land mass %d: its coarse stage, %.0f km² of land before the sea's last rise in %d pieces, %s in %.1f s (%.0f MB kept); the pieces up to %d from the sea along their drainage, each waiting on a median %d before it, 90%% on %d or fewer, at most %d",
 		m.mass, f64(land_cells)*4096/1e6, count, "read back from where it was kept" if kept else "formed", time.duration_seconds(time.since(started)), f64(len(st.file))/1e6,
 		deepest, waits[count/2] if count > 0 else 0, waits[count*9/10] if count > 0 else 0, waits[count - 1] if count > 0 else 0)
+	if !kept && count > 0 {   // how high the land stands, as the forming's own figures on it
+		heights := make([dynamic]f32)
+		defer delete(heights)
+		for slot in 0..<len(st.z) do for k in 0..<KEPT_CELLS do if st.next[slot][k] != NEXT_SEA do append(&heights, st.z[slot][k])
+		slice.sort(heights[:])
+		dry := 0
+		for h in heights do if h > st.rise do dry += 1
+		fmt.printfln("land mass %d: its land before the sea's last rise of %.0f m: median %.0f m, 90th percentile %.0f m, highest %.0f m; %.0f%% of it stays over that rise", m.mass, st.rise, heights[len(heights)/2], heights[len(heights)*9/10], heights[len(heights) - 1], 100*f64(dry)/f64(len(heights)))
+	}
 	return true
 }
 
@@ -880,17 +901,84 @@ piece_square :: proc(m: ^Landmass, p: i32) -> (origin: [2]i32, size: f64) {
 	return {m.origin.x + i32((f64(w.x) + f64(w.z)/2 - f64(n)/2)*64), m.origin.y + i32((f64(w.y) + f64(w.z)/2 - f64(n)/2)*64)}, f64(w.z)*64
 }
 
-// Form a piece and everything that lives on it, after the pieces it waits on, on this thread.
-mass_form :: proc(m: ^Landmass, p: i32) {
+// Form the pieces listed, and everything that lives on them, with the pieces they wait on, side by
+// side on up to `threads` threads: each once the earlier neighbours it holds are formed. A piece is
+// the same whatever is formed beside it, so the order they are taken in decides nothing.
+mass_form :: proc(m: ^Landmass, want: []i32, threads: int) {
 	sync.lock(&m.mutex)
 	defer sync.unlock(&m.mutex)
-	if is_formed(&formed[m.first + int(p)]) do return
-	was := here
-	defer bind(was)
-	waits := cut_waits(&m.cut, p, context.allocator)   // forming frees the temporary memory as it goes
-	defer delete(waits)
-	for q in waits do if !m.all.formed[q] do piece_make(m, q, false)
-	piece_make(m, p, true)
+	Work :: struct {
+		m:      ^Landmass,
+		need:   []u8,           // by piece: 1, formed because another waits on it; 2, wanted as a region
+		left:   []i32,          // earlier neighbours still to form
+		ready:  [dynamic]i32,
+		todo, working: int,
+		mutex:  sync.Mutex,
+		wake:   sync.Cond,
+		quiet:  bool,
+	}
+	count := len(m.cut.size)
+	w := Work{m = m, need = make([]u8, count), left = make([]i32, count), quiet = quiet}
+	defer { delete(w.need); delete(w.left); delete(w.ready) }
+	stack := make([dynamic]i32)
+	defer delete(stack)
+	for p in want do if !is_formed(&formed[m.first + int(p)]) && w.need[p] == 0 {
+		w.need[p] = 2
+		append(&stack, p)
+	}
+	for len(stack) > 0 {
+		q := pop(&stack)
+		w.todo += 1
+		if w.need[q] == 2 && piece_kept(m, q) do continue   // read back: it waits on nothing
+		for r in m.cut.near[q] do if earlier(&m.cut, r, q) && !m.all.formed[r] {
+			if piece_kept(m, r) {
+				m.all.formed[r] = true
+				continue
+			}
+			w.left[q] += 1
+			if w.need[r] == 0 {
+				w.need[r] = 1
+				append(&stack, r)
+			}
+		}
+	}
+	if w.todo == 0 do return
+	for p in 0..<i32(count) do if w.need[p] != 0 && w.left[p] == 0 do append(&w.ready, p)
+	worker :: proc(w: ^Work) {
+		m := w.m
+		was_alone, was_quiet, was := alone, quiet, here
+		alone, quiet = true, w.quiet
+		defer { alone, quiet = was_alone, was_quiet; bind(was) }
+		for {
+			sync.lock(&w.mutex)
+			for len(w.ready) == 0 && w.todo > 0 do sync.cond_wait(&w.wake, &w.mutex)
+			if w.todo == 0 {
+				sync.unlock(&w.mutex)
+				return
+			}
+			p := pop(&w.ready)
+			sync.unlock(&w.mutex)
+			piece_make(m, p, w.need[p] == 2)
+			free_all(context.temp_allocator)
+			sync.lock(&w.mutex)
+			w.todo -= 1
+			for s in m.cut.near[p] do if w.need[s] != 0 && earlier(&m.cut, p, s) {
+				if w.need[s] == 2 && piece_kept(m, s) do continue
+				w.left[s] -= 1
+				if w.left[s] == 0 do append(&w.ready, s)
+			}
+			sync.unlock(&w.mutex)
+			sync.cond_broadcast(&w.wake)
+		}
+	}
+	pool := make([]^thread.Thread, max(min(threads, w.todo) - 1, 0))
+	defer delete(pool)
+	for &t in pool do t = thread.create_and_start_with_poly_data(&w, worker)
+	worker(&w)
+	for t in pool {
+		thread.join(t)
+		thread.destroy(t)
+	}
 }
 
 // The coarse stage's ground at a cell of the lattice of the landmass in hand; the open sea off it.
@@ -918,7 +1006,7 @@ mass_order :: proc(m: ^Landmass, at: [2]f64, reach: f64, allocator := context.te
 	return order
 }
 
-PASS_VERSION :: 5   // raised whenever what this file or coarse.odin does to form or keep the coarse stage changes
+PASS_VERSION :: 6   // raised whenever what this file or coarse.odin does to form or keep the coarse stage changes
 
 // Where the coarse stage of a landmass is kept: beside the known world, named by the seed and by what
 // forms it, so a change to the forming forms it again.
@@ -947,12 +1035,9 @@ piece_make :: proc(m: ^Landmass, p: i32, live: bool) {
 	g := piece_load(m, p) if kept else nil
 	if g == nil {
 		kept = false
-		lent := make([dynamic]i32, context.temp_allocator)   // the bands read back for this forming
-		for q in m.cut.near[p] do if earlier(&m.cut, q, p) && len(m.all.bands[q]) == 0 {
-			band_load(m, q)
-			append(&lent, q)
-		}
-		g = piece_form(&m.all, p)
+		out: [dynamic]^Band
+		held: map[i32][dynamic]^Band
+		g, out, held = piece_form(&m.all, p)
 		// The land as it is left: routed once more with its held cells at their last, and its outermost
 		// cells, which are held and not its own, the sea, as an island's rim is, for what reads a cell's
 		// neighbours.
@@ -975,10 +1060,11 @@ piece_make :: proc(m: ^Landmass, p: i32, live: bool) {
 		}
 		order_make(g)
 		g = piece_crop(g, m, p)
+		for _, l in held do band_free(l)
+		delete(held)
 		piece_save(m, p, g)
-		band_save(m, p)
-		for q in lent do band_free(m, q)
-		band_free(m, p)
+		band_save(m, p, out[:])
+		band_free(out)
 		m.all.formed[p] = true
 		// The bands of the pieces before it that no piece still to form reads are kept no longer.
 		for q in m.cut.near[p] do if m.all.formed[q] {
@@ -1062,12 +1148,12 @@ piece_load :: proc(m: ^Landmass, p: i32) -> ^Grid {
 }
 
 // Keep the bands a piece left for the pieces after it.
-band_save :: proc(m: ^Landmass, p: i32) {
+band_save :: proc(m: ^Landmass, p: i32, bands: []^Band) {
 	out := make([dynamic]u8)
 	defer delete(out)
-	count := i32(len(m.all.bands[p]))
+	count := i32(len(bands))
 	append(&out, ..mem.ptr_to_bytes(&count))
-	for b in m.all.bands[p] {
+	for b in bands {
 		head := [3]i32{i32(b.cell), i32(len(b.cells)), i32(len(b.vals))}
 		append(&out, ..mem.ptr_to_bytes(&head))
 		append(&out, ..slice.to_bytes(b.cells))
@@ -1078,7 +1164,7 @@ band_save :: proc(m: ^Landmass, p: i32) {
 	if err := os.write_entire_file(temp, out[:]); err == nil { _ = os.rename(temp, path) } else do fmt.eprintln("could not keep a piece's bands in", path)
 }
 
-band_load :: proc(m: ^Landmass, p: i32) {
+band_load :: proc(m: ^Landmass, p: i32) -> (bands: [dynamic]^Band) {
 	data, err := os.read_entire_file(piece_path(m, p, "bands"), context.allocator)
 	if err != nil {
 		fmt.eprintfln("land mass %d piece %d: the bands it left for the pieces after it are not where they were kept", m.mass, p)
@@ -1102,17 +1188,18 @@ band_load :: proc(m: ^Landmass, p: i32) {
 			at += int(head[1])*size_of(Held)
 			append(&b.vals, v)
 		}
-		append(&m.all.bands[p], b)
+		append(&bands, b)
 	}
+	return
 }
 
-band_free :: proc(m: ^Landmass, p: i32) {
-	for b in m.all.bands[p] {
+band_free :: proc(bands: [dynamic]^Band) {
+	for b in bands {
 		for v in b.vals do delete(v)
 		delete(b.vals); delete(b.cells); delete(b.place)
 		free(b)
 	}
-	clear(&m.all.bands[p])
+	delete(bands)
 }
 
 CROP :: 64   // fine cells kept round a finished piece's own land, for what reads the land round a cell
@@ -1149,7 +1236,7 @@ piece_crop :: proc(g: ^Grid, m: ^Landmass, p: i32) -> ^Grid {
 	for x in 0..<side do for y in ([2]int{0, side - 1}) do c.sea[y*side + x], c.sea[x*side + y] = true, true   // the rim, as an island's, so what reads a neighbour stays on the grid
 	h := g.holding
 	if h != nil {
-		delete(h.held); delete(h.index); delete(h.cells); delete(h.band); delete(h.at); delete(h.coarse); delete(h.vals); delete(h.into); delete(h.keep)
+		delete(h.held); delete(h.index); delete(h.cells); delete(h.band); delete(h.at); delete(h.coarse); delete(h.vals); delete(h.into); delete(h.keep); delete(h.rose)
 		free(h)
 		g.holding = nil
 	}
@@ -1229,26 +1316,284 @@ mass_from :: proc(m: ^Landmass, at: [2]f64) -> f64 {
 // Where the player is, for the pieces kept formed round them: set by the frame.
 mass_focus: [2]f64
 
+KEEP_THREADS :: 3   // threads that form pieces beside play
+LET_GO   :: 1.5   // a piece this many times the reach from the player is let go,
+GRACE    :: 8     // and its land's memory freed this many seconds later, when nothing that was reading it still is
+
 // Keep the landmasses' pieces within `reach` of the player formed, nearest first, on one thread of low
-// priority beside play.
+// priority beside play; and let go those the player has left far behind, which are read back from
+// where they were kept when the player comes near again, so that what is held does not grow with
+// how far the player has been.
 masses_keep :: proc(reach: f64) {
 	Keep :: struct { reach: f64 }
 	k := new(Keep)
 	k.reach = reach
 	thread.create_and_start_with_poly_data(k, proc(k: ^Keep) {
 		alone, quiet = true, true
+		Gone :: struct { f: ^Formed, at: time.Time }
+		gone := make([dynamic]Gone)
 		for {
 			at := mass_focus
 			formed_one := false
 			for &m in lands do if m.ready && !formed_one {
-				for p in mass_order(&m, at, k.reach, context.allocator) do if !is_formed(&formed[m.first + int(p)]) {   // its own memory: forming frees the temporary as it goes
-					mass_form(&m, p)
+				for p in mass_order(&m, at, k.reach, context.allocator) do if f := &formed[m.first + int(p)]; !is_formed(f) {   // its own memory: forming frees the temporary as it goes
+					waiting := false
+					for g in gone do waiting ||= g.f == f   // let go a moment ago, and not yet freed
+					if waiting do continue
+					mass_form(&m, {p}, KEEP_THREADS)
 					formed_one = true
 					break
 				}
+			}
+			for &m in lands do if m.ready do for p in 0..<i32(len(m.cut.size)) {
+				if f := &formed[m.first + int(p)]; is_formed(f) && mass_off(&m, p, at) > LET_GO*k.reach {
+					sync.atomic_store_explicit(&f.ready, false, .Release)
+					append(&gone, Gone{f, time.now()})
+				}
+			}
+			for i := len(gone) - 1; i >= 0; i -= 1 do if time.duration_seconds(time.since(gone[i].at)) > GRACE {
+				piece_free(gone[i].f)
+				unordered_remove(&gone, i)
 			}
 			free_all(context.temp_allocator)
 			if !formed_one do time.sleep(250*time.Millisecond)
 		}
 	}, priority = .Low, self_cleanup = true)
 }
+
+// Free what a piece's land holds for each of its cells, once the piece has been let go and nothing reads
+// it. What it keeps on the GPU the frame lets go (islands_upload); its lists of a few hundred things
+// (places, haunts) stay until it is formed again.
+piece_free :: proc(f: ^Formed) {
+	l := &f.land
+	for a in ([?][]f32{l.slope, l.wet, l.live, l.facing, l.hump, l.inland, l.sun, l.exposed, l.above, l.table, l.soil, l.age, l.valley, l.slid, l.swell, l.surf, l.supply, l.lifted, l.rain}) do delete(a)
+	for level in 1..<len(l.z) do delete(l.z[level])
+	delete(l.community); delete(l.lake); delete(l.pebble); delete(l.mouth)
+	if l.grid != nil do grid_free(l.grid)
+	l^ = {}
+	t := &f.trails
+	delete(t.wade); delete(t.cost); delete(t.worn); delete(t.first); delete(t.ford); delete(t.back); delete(t.seen); delete(t.going); delete(t.segments)
+	for b in t.buckets do delete(b)
+	delete(t.buckets)
+	t^ = {}
+	delete(f.fauna.barrier); delete(f.fauna.over); delete(f.fauna.fish)
+	f.fauna.barrier, f.fauna.over, f.fauna.fish = nil, nil, nil
+	r := &f.rivers
+	for b in r.buckets do delete(b)
+	delete(r.buckets); delete(r.segments); delete(r.ribbon); delete(r.spots); delete(r.falls); delete(r.drops)
+	r^ = {}
+	clear(&f.hollows); clear(&f.pillars); clear(&f.candidates); clear(&f.places); clear(&f.fauna.haunts)
+	f.drawn = false
+}
+
+// A map of the land larger than a region as the game has it: a square `span` metres across round a
+// point in the world, north up; the pieces formed at their own detail, the rest as the coarse stage
+// holds it under the sea's last rise; with `cuts`, the lines between pieces drawn.
+mass_map :: proc(path: string, middle: [2]f64, span: f64, cuts: bool) {
+	SIZE :: 2048
+	pixels := make([]u8, SIZE*SIZE*4)
+	defer delete(pixels)
+	heights := make([]f32, SIZE*SIZE)
+	defer delete(heights)
+	step := span/SIZE
+	for py in 0..<SIZE do for px in 0..<SIZE do heights[py*SIZE + px] = height_in_world(middle.x + (f64(px) + 0.5 - SIZE/2)*step, middle.y + (f64(py) + 0.5 - SIZE/2)*step, step)
+	for py in 0..<SIZE do for px in 0..<SIZE {
+		c := py*SIZE + px
+		h := heights[c]
+		gx := heights[py*SIZE + min(px + 1, SIZE - 1)] - heights[py*SIZE + max(px - 1, 0)]
+		gz := heights[min(py + 1, SIZE - 1)*SIZE + px] - heights[max(py - 1, 0)*SIZE + px]
+		shade := clamp(0.75 + 0.9*f32(f64(-gx - gz)/(2*step)), 0.25, 1.3)
+		col: [3]f32
+		if h <= 0 do col = math.lerp([3]f32{0.35, 0.62, 0.80}, [3]f32{0.08, 0.22, 0.42}, clamp(-h/30, 0, 1))
+		else {
+			// Green at the sea, tan at 200 m, brown at 500 and pale only near 1,500, as the islands' maps are.
+			ramp := [?][4]f32{{0, 0.36, 0.58, 0.30}, {200, 0.72, 0.66, 0.42}, {500, 0.55, 0.42, 0.30}, {1500, 0.92, 0.90, 0.88}}
+			col = ramp[len(ramp) - 1].yzw
+			for r, i in ramp[1:] do if h < r.x {
+				col = math.lerp(ramp[i].yzw, r.yzw, (h - ramp[i].x)/(r.x - ramp[i].x))
+				break
+			}
+			col *= shade
+			wx, wz := middle.x + (f64(px) + 0.5 - SIZE/2)*step, middle.y + (f64(py) + 0.5 - SIZE/2)*step
+			if m, p := mass_piece(wx, wz); m != nil {
+				if cuts && !is_formed(&formed[m.first + p]) do col = math.lerp(col, [3]f32{0.6, 0.6, 0.6}, f32(0.35))   // not formed: greyed where the cuts are asked for
+				if cuts {
+					_, right := mass_piece(wx + step, wz)
+					_, below := mass_piece(wx, wz + step)
+					if right >= 0 && right != p || below >= 0 && below != p do col = {0.1, 0.1, 0.1}
+				}
+			}
+		}
+		for k in 0..<3 do pixels[c*4 + k] = u8(clamp(col[k], 0, 1)*255)
+		pixels[c*4 + 3] = 255
+	}
+	write_png(path, pixels, SIZE, SIZE, false)
+	fmt.printfln("a map of the land larger than a region, %.0f km across round %.0f, %.0f, in %s", span/1000, middle.x, middle.y, path)
+}
+
+// The seam's measure on the land as the game has it (docs/interesting-world/notes/continents-forming.md):
+// in a square `span` metres across round a point, on the formed pieces' 16 m cells: the cut's length on
+// land; the closed hollows over 2 m deep, within 100 m of a cut and away from one; the steps between
+// neighbouring cells across a cut, and those more than 300 m from any; and how many steps across a cut
+// are larger than the largest step away from one at the same slope of the coarse stage's ground.
+mass_seam :: proc(middle: [2]f64, span: f64) {
+	D :: LAND_CELL
+	n := int(span/D)
+	z, piece := make([]f32, n*n), make([]i32, n*n)
+	defer { delete(z); delete(piece) }
+	at :: proc(middle: [2]f64, n, c: int) -> (x, y: f64) { return middle.x + (f64(c%n) + 0.5 - f64(n)/2)*D, middle.y + (f64(c/n) + 0.5 - f64(n)/2)*D }
+	unformed := 0
+	over := make([dynamic]f32)   // how far the formed land stands over the coarse stage's, as the far rings draw it
+	defer delete(over)
+	for c in 0..<n*n {
+		x, y := at(middle, n, c)
+		z[c], piece[c] = height_in_world(x, y, D), -1
+		if m, p := mass_piece(x, y); m != nil {
+			piece[c] = i32(p)
+			if !is_formed(&formed[m.first + p]) do unformed += 1
+			else if h, _, _ := far_ground(m, x, y); z[c] > 0 || h > 0 do append(&over, z[c] - h)
+		}
+	}
+	slice.sort(over[:])
+	// Metres to the nearest cut on land, by two sweeps.
+	far := make([]f32, n*n)
+	defer delete(far)
+	land_cells, cut_cells := 0, 0
+	for c in 0..<n*n {
+		far[c] = 1e9
+		if z[c] <= 0 do continue
+		land_cells += 1
+		x, y := c%n, c/n
+		for o in FOUR do if i, j := x + o.x, y + o.y; i >= 0 && j >= 0 && i < n && j < n && z[j*n + i] > 0 && piece[j*n + i] != piece[c] do far[c] = D/2
+		if far[c] < 1e9 do cut_cells += 1
+	}
+	steps := [4][3]f32{{-1, 0, 1}, {0, -1, 1}, {-1, -1, math.SQRT_TWO}, {1, -1, math.SQRT_TWO}}
+	for pass in 0..<2 do for i in 0..<n*n {
+		c := i if pass == 0 else n*n - 1 - i
+		x, y := c%n, c/n
+		for s in steps {
+			dx, dy := int(s.x) if pass == 0 else -int(s.x), int(s.y) if pass == 0 else -int(s.y)
+			if nx, ny := x + dx, y + dy; nx >= 0 && ny >= 0 && nx < n && ny < n do far[c] = min(far[c], far[ny*n + nx] + s.z*D)
+		}
+	}
+	// Closed hollows: the land filled from the sea and the square's edge.
+	fill := make([]f32, n*n)
+	defer delete(fill)
+	seen := make([]bool, n*n)
+	defer delete(seen)
+	heap := make([dynamic]u64)
+	defer delete(heap)
+	for c in 0..<n*n {
+		x, y := c%n, c/n
+		if z[c] <= 0 || x == 0 || y == 0 || x == n - 1 || y == n - 1 {
+			fill[c], seen[c] = max(z[c], 0), true
+			heap64_push(&heap, u64(fkey(fill[c])) << 32 | u64(u32(c)))
+		}
+	}
+	for len(heap) > 0 {
+		c := int(u32(heap64_pop(&heap)))
+		for o in OFFSETS {
+			x, y := c%n + o.x, c/n + o.y
+			if x < 0 || y < 0 || x >= n || y >= n || seen[y*n + x] do continue
+			k := y*n + x
+			seen[k], fill[k] = true, max(z[k], fill[c])
+			heap64_push(&heap, u64(fkey(fill[k])) << 32 | u64(u32(k)))
+		}
+	}
+	hollow_near, hollow_far, deepest_near, deepest_far := 0, 0, f32(0), f32(0)
+	for c in 0..<n*n do if d := fill[c] - z[c]; z[c] > 0 && d > 2 {
+		if far[c] <= 100 do hollow_near, deepest_near = hollow_near + 1, max(deepest_near, d)
+		else do hollow_far, deepest_far = hollow_far + 1, max(deepest_far, d)
+	}
+	// Steps between neighbouring land cells: across a cut, and more than 300 m from any; by the slope
+	// of the ground over 64 m, in bands of 0.05.
+	BANDS :: 64
+	largest: [BANDS]f32
+	across, away := make([dynamic]f32), make([dynamic]f32)
+	defer { delete(across); delete(away) }
+	Step :: struct { d: f32, band: int }
+	crossing := make([dynamic]Step)
+	defer delete(crossing)
+	for c in 0..<n*n do if z[c] > 0 {
+		x, y := c%n, c/n
+		if x < 4 || y < 4 || x >= n - 4 || y >= n - 4 do continue
+		slope := math.hypot(z[c + 2] - z[c - 2], z[c + 2*n] - z[c - 2*n])/(4*D)
+		band := min(int(slope/0.05), BANDS - 1)
+		for k in ([2]int{c + 1, c + n}) do if z[k] > 0 {
+			d := abs(z[k] - z[c])
+			if piece[k] != piece[c] {
+				append(&across, d)
+				append(&crossing, Step{d, band})
+			} else if far[c] > 300 {
+				append(&away, d)
+				largest[band] = max(largest[band], d)
+			}
+		}
+	}
+	slice.sort(across[:])
+	slice.sort(away[:])
+	larger := 0
+	for s in crossing do if s.d > largest[s.band] do larger += 1
+	top: f32
+	for h in z do top = max(top, h)
+	pick :: proc(v: []f32, share: f64) -> f32 { return v[min(int(f64(len(v))*share), len(v) - 1)] if len(v) > 0 else 0 }
+	fmt.printfln("the seam, %.0f km across round %.0f, %.0f: %.1f km² of land to %.0f m, %d cells of it on pieces not formed; cut on land %.1f km", span/1000, middle.x, middle.y, f64(land_cells)*D*D/1e6, top, unformed, f64(cut_cells)*D/2/1000)
+	fmt.printfln("  closed hollows over 2 m: within 100 m of a cut %d cells, the deepest %.1f m; away from one %d cells, the deepest %.1f m", hollow_near, deepest_near, hollow_far, deepest_far)
+	fmt.printfln("  steps across the cut: %d, 99th percentile %.1f m, largest %.1f m; steps more than 300 m from any cut: %d, 99th percentile %.1f m, largest %.1f m", len(across), pick(across[:], 0.99), pick(across[:], 1), len(away), pick(away[:], 0.99), pick(away[:], 1))
+	fmt.printfln("  steps across the cut over the largest elsewhere at that slope: %d of %d", larger, len(crossing))
+	fmt.printfln("  the formed land over the coarse stage's as it is drawn from afar: median %.1f m, a tenth under %.1f m and a tenth over %.1f m", pick(over[:], 0.5), pick(over[:], 0.1), pick(over[:], 0.9))
+}
+
+// ---- land not yet formed, seen from afar ------------------------------------------------------------
+
+// Cells this wide and wider are drawn over a landmass's piece that is not formed, from its coarse
+// stage: from about half a kilometre off, so that no ring of the view ends against land that is
+// missing. Nearer, where the ground can be stood on, a chunk waits for the piece (waits, world.odin).
+FAR_CELL  :: 4
+FAR_LEVEL :: 2
+
+// The ground a landmass's coarse stage holds at a point in the world, as it will stand once the sea
+// has risen the last of its rise: its height, how steep it is, and whether the sea is beside it.
+far_ground :: proc(m: ^Landmass, wx, wz: f64) -> (h, steep: f32, shore: bool) {
+	st := &m.store
+	u, v := (wx - f64(m.origin.x))/64 + f64(st.n)/2 - 0.5, (wz - f64(m.origin.y))/64 + f64(st.n)/2 - 0.5
+	i, j := int(math.floor(u)), int(math.floor(v))
+	tu, tv := f32(u - f64(i)), f32(v - f64(j))
+	a, b, c, d := store_z(st, i, j), store_z(st, i + 1, j), store_z(st, i, j + 1), store_z(st, i + 1, j + 1)
+	h = math.lerp(math.lerp(a, b, tu), math.lerp(c, d, tu), tv) - st.rise
+	steep = math.hypot((b - a + d - c)/2, (c - a + d - b)/2)/64
+	return h, steep, min(a, b, c, d) - st.rise <= 0
+}
+
+// A column over a piece of a landmass that is not formed, from far off: the coarse stage's ground,
+// clothed as the plant communities' own rows clothe ground of that slope (the laurel forest; the
+// valley forest on gentle ground; the strand beside the sea) and bare where soil does not hold.
+far_column :: proc(m: ^Landmass, wx, wz, cell: f64, level: i32, c: ^Columns, k: int) -> f32 {
+	h, steep, shore := far_ground(m, wx, wz)
+	if h < SEA_SURFACE {
+		h = max(h, SEA_BED)
+		c.water[k], c.mat[k], c.floor[k] = SEA_SURFACE, .Sand, .Sand
+		c.top[k] = min(i32(math.round(h)), SEA_LEVEL - 1)
+		c.ground[k] = c.top[k]
+		return h
+	}
+	if here != &m.frame do bind(&m.frame)
+	x, z := wx - f64(m.origin.x), wz - f64(m.origin.y)
+	c.under[k] = rock_base(x, z, cell)
+	com := Community_Kind.Coast if shore else .Valley if steep < 0.2 else .Slope
+	c.mat[k] = COMMUNITIES[com].cover if steep <= SOIL_HOLDS else rock_in(h - 0.5, c.under[k], rock_level(cell))
+	c.floor[k], c.water[k] = c.mat[k], NO_WATER
+	c.top[k] = i32(math.round(h))
+	c.ground[k] = c.top[k]
+	if steep <= SOIL_HOLDS && cell >= 8 {   // the canopy is part of the column from where it is on formed land
+		r := hash(i32(math.floor(wx/cell)), i32(math.floor(wz/cell)), seed + 160 + u32(level))
+		spacing, tall, _ := stand(200)
+		if f32(r & 0xFFFF)/65536 < cover(com, spacing) {
+			sp := SPECIES[pick_species(com, f32((r >> 16) & 0xFF)/256)]
+			c.top[k] += i32(f32(sp.height[0] + i32((r >> 24) % u32(sp.height[1] - sp.height[0] + 1)))*tall) - 1
+			c.mat[k] = sp.leaf
+		}
+	}
+	return h
+}
+

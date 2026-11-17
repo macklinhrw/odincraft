@@ -129,6 +129,10 @@ Options :: struct {
 	has_site:      bool,
 	continent:     int,
 	reach:         f64,
+	landmap:       string,   // write a map of the land larger than a region and exit: round --site, or the nearest landmass whole
+	mapspan:       f64,      // km across
+	cuts:          bool,     // with the cuts between pieces drawn
+	seam:          f64,      // measure the seam in a square this many km across round --site, and exit
 	over:          [2]f64,
 	has_over:      bool,
 	span, tilt:    f64,
@@ -231,6 +235,10 @@ options :: proc() -> Options {
 		case "continent": ok = numbers(value, ",", v[:1]); o.continent = int(v.x)
 		case "coarse":    coarse_how = .Plain if value == "plain" else .Check if value == "check" else .Fast
 		case "reach":     ok = numbers(value, ",", v[:1]); o.reach = f64(v.x)
+		case "landmap":   o.landmap = value
+		case "mapspan":   ok = numbers(value, ",", v[:1]); o.mapspan = f64(v.x)
+		case "cuts":      o.cuts = true
+		case "seam":      ok = numbers(value, ",", v[:1]); o.seam = f64(v.x)
 		case "dwarves": ok = numbers(value, ",", v[:1]); o.dwarves = v.x
 		case "orders": o.orders = value
 		case "send":  o.send = true

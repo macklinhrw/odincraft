@@ -662,56 +662,6 @@ open_sea :: proc(key: Key) -> bool {
 	return true
 }
 
-// Cells this wide and wider are drawn over a landmass's piece that is not formed, from its coarse
-// stage: from about 4 km off. Nearer, a chunk waits for the piece (waits, world.odin).
-FAR_CELL  :: 32
-FAR_LEVEL :: 5
-
-// The ground a landmass's coarse stage holds at a point in the world, as it will stand once the sea
-// has risen the last of its rise: its height, how steep it is, and whether the sea is beside it.
-far_ground :: proc(m: ^Landmass, wx, wz: f64) -> (h, steep: f32, shore: bool) {
-	st := &m.store
-	u, v := (wx - f64(m.origin.x))/64 + f64(st.n)/2 - 0.5, (wz - f64(m.origin.y))/64 + f64(st.n)/2 - 0.5
-	i, j := int(math.floor(u)), int(math.floor(v))
-	tu, tv := f32(u - f64(i)), f32(v - f64(j))
-	a, b, c, d := store_z(st, i, j), store_z(st, i + 1, j), store_z(st, i, j + 1), store_z(st, i + 1, j + 1)
-	h = math.lerp(math.lerp(a, b, tu), math.lerp(c, d, tu), tv) - st.rise
-	steep = math.hypot((b - a + d - c)/2, (c - a + d - b)/2)/64
-	return h, steep, min(a, b, c, d) - st.rise <= 0
-}
-
-// A column over a piece of a landmass that is not formed, from far off: the coarse stage's ground,
-// clothed as the plant communities' own rows clothe ground of that slope (the laurel forest; the
-// valley forest on gentle ground; the strand beside the sea) and bare where soil does not hold.
-far_column :: proc(m: ^Landmass, wx, wz, cell: f64, level: i32, c: ^Columns, k: int) -> f32 {
-	h, steep, shore := far_ground(m, wx, wz)
-	if h < SEA_SURFACE {
-		h = max(h, SEA_BED)
-		c.water[k], c.mat[k], c.floor[k] = SEA_SURFACE, .Sand, .Sand
-		c.top[k] = min(i32(math.round(h)), SEA_LEVEL - 1)
-		c.ground[k] = c.top[k]
-		return h
-	}
-	if here != &m.frame do bind(&m.frame)
-	x, z := wx - f64(m.origin.x), wz - f64(m.origin.y)
-	c.under[k] = rock_base(x, z, cell)
-	com := Community_Kind.Coast if shore else .Valley if steep < 0.2 else .Slope
-	c.mat[k] = COMMUNITIES[com].cover if steep <= SOIL_HOLDS else rock_in(h - 0.5, c.under[k], rock_level(cell))
-	c.floor[k], c.water[k] = c.mat[k], NO_WATER
-	c.top[k] = i32(math.round(h))
-	c.ground[k] = c.top[k]
-	if steep <= SOIL_HOLDS {
-		r := hash(i32(math.floor(wx/cell)), i32(math.floor(wz/cell)), seed + 160 + u32(level))
-		spacing, tall, _ := stand(200)
-		if f32(r & 0xFFFF)/65536 < cover(com, spacing) {
-			sp := SPECIES[pick_species(com, f32((r >> 16) & 0xFF)/256)]
-			c.top[k] += i32(f32(sp.height[0] + i32((r >> 24) % u32(sp.height[1] - sp.height[0] + 1)))*tall) - 1
-			c.mat[k] = sp.leaf
-		}
-	}
-	return h
-}
-
 // The ground under a chunk at a level of detail. Beyond the nearest level, single trees are
 // crowns hung over the ground on their trunks while cells are small enough to show them, then
 // a canopy that is part of the columns. Each column is the island's whose region holds it, or

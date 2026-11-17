@@ -46,6 +46,8 @@ Coarse :: struct {
 	donors:   []u8,                 // each land cell: which of its eight neighbours drain into it, a bit each in the order of OFFSETS
 	bits:     []u64,                // the sea, a bit a cell, a word to a square's row
 	was:      []f32,                // the ground at the step's start, for the rebound
+	rose:     []f32,                // at every ROSE_STEP cells: m/yr the rebound raised the ground over the last ROSE_STEPS steps, which the pieces go on rising at
+	keeping:  f32,                  // while those steps are taken: one over their years
 	pits:     [][dynamic]i32,       // by row of squares and block along it: cells the flood has to reach through the heap,
 	blocks:   [2][]Flood_Block,     // the flood's blocks, and those four times as wide
 	wide:     int,                  // blocks along a side
@@ -153,6 +155,7 @@ coarse_attach :: proc(g: ^Grid, all: bool) {
 	co.flags = slice.reinterpret([]u8, g.seen)
 	co.donors, co.was, g.old = make([]u8, n*n), make([]f32, n*n), make([]f32, n*n)
 	co.bits = make([]u64, n*m)
+	co.rose = make([]f32, (n/ROSE_STEP)*(n/ROSE_STEP))
 	if all {
 		slice.fill(co.core, true)
 		slice.fill(co.ready, true)
@@ -163,7 +166,7 @@ coarse_attach :: proc(g: ^Grid, all: bool) {
 coarse_free :: proc(g: ^Grid) {
 	co := g.coarse
 	if co == nil do return
-	delete(co.core); delete(co.ready); delete(co.donors); delete(co.was); delete(co.bits); delete(g.old)
+	delete(co.core); delete(co.ready); delete(co.donors); delete(co.was); delete(co.bits); delete(g.old); delete(co.rose)
 	for l in co.runs do delete(l)
 	for l in co.pits do delete(l)
 	for l in co.roots do delete(l)
@@ -1000,6 +1003,13 @@ coast_mass :: proc(g: ^Grid, dt: f32) #no_bounds_check {
 // The mean is taken as a sum along each row and then down each column, each a running sum from the
 // lattice's first cell in which the open sea counts for nothing, so it comes out the same whichever
 // squares are started and however the rows and columns are shared among threads.
+// The crust does not stop rising when the cells get finer: the pieces go on rising through their finer
+// phases at the rate the rebound raised the coarse stage over its last ROSE_STEPS steps, kept every
+// ROSE_STEP cells (it is a mean over 24 km) and the same on both sides of every cut. Without it a piece
+// wears a hundred metres and more below the coarse stage beside it (measured on seed 7's coast: a
+// median 145 m), which drowns its coast and leaves a step where formed land meets land drawn from afar.
+ROSE_STEPS   :: 8
+ROSE_STEP    :: 8
 ISOSTASY     :: 0.82
 REBOUND_WIDE :: 24_000   // metres (a guess within the 50 to 200 km a continental plate's flexure spreads a load; a smaller square keeps valleys and ranges apart)
 rebound :: proc(g: ^Grid, uplifted: f32) {
@@ -1057,16 +1067,18 @@ rebound :: proc(g: ^Grid, uplifted: f32) {
 // each of the rows before.
 rebound_row :: proc(g: ^Grid, tx, at, top, bottom, ring, r: int, sums: []f64) #no_bounds_check {
 	n, co := g.n, g.coarse
-	if at < top || at >= bottom || !co.core[at/SQUARE*co.m + tx] do return
+	if at < top || at >= bottom || !co.ready[at/SQUARE*co.m + tx] do return
 	y0, y1 := max(at - r, 0), min(at + r + 1, n)
 	above := row_sums[(y0%ring)*SQUARE:][:SQUARE] if y0 >= top else row_sums[(ring + 1)*SQUARE:][:SQUARE]
 	if y0 < top do for &s in above do s = 0
+	kept := co.keeping > 0 && at%ROSE_STEP == 0
 	for i in 0..<SQUARE {
 		x := tx*SQUARE + i
 		c := at*n + x
-		if g.sea[c] do continue
+		if g.sea[c] && !(kept && i%ROSE_STEP == 0) do continue
 		mean := (sums[i] - above[i])/f64((min(x + r + 1, n) - max(x - r, 0))*(y1 - y0))
-		g.z[c] += ISOSTASY*f32(mean)
+		if !g.sea[c] do g.z[c] += ISOSTASY*f32(mean)
+		if kept && i%ROSE_STEP == 0 do co.rose[at/ROSE_STEP*(n/ROSE_STEP) + x/ROSE_STEP] += ISOSTASY*f32(mean)*co.keeping
 	}
 }
 
@@ -1089,6 +1101,7 @@ mass_phases :: proc(g: ^Grid, upto: int) {
 	for p in region.history[:upto] {
 		g.lift, g.rise = p.uplift, rise
 		for _ in 0..<int(p.steps) {
+			co.keeping = 1/(p.years*ROSE_STEPS) if steps - co.steps <= ROSE_STEPS else 0
 			t := time.now()
 			lap :: proc(co: ^Coarse, t: ^time.Time, i: int) {
 				now := time.now()
@@ -1119,9 +1132,12 @@ mass_phases :: proc(g: ^Grid, upto: int) {
 plain_phases :: proc(g: ^Grid, upto: int) {
 	rise: f32
 	for p in region.history do rise += p.sea
+	steps := 0
+	for p in region.history[:upto] do steps += int(p.steps)
 	for p in region.history[:upto] {
 		g.lift, g.rise = p.uplift, rise
 		for _ in 0..<int(p.steps) {
+			g.coarse.keeping = 1/(p.years*ROSE_STEPS) if steps - g.coarse.steps <= ROSE_STEPS else 0
 			route_plain(g)
 			erode(g, p.years)
 			creep(g, p.years)
@@ -1148,6 +1164,7 @@ coarse_differ :: proc(a, b: ^Grid) -> (differ, land: int) {
 		same := a.z[c] == b.z[c] && a.cut[c] == b.cut[c] && a.face[c] == b.face[c] && a.load[c] == b.load[c] && a.area[c] == b.area[c] && a.fill[c] == b.fill[c] && a.next[c] == b.next[c]
 		if !same do differ += 1
 	}
+	for v, i in a.coarse.rose do if v != b.coarse.rose[i] do differ += 1
 	// The sea's floor wherever the parallel forming started a square.
 	for c in 0..<n*n do if a.sea[c] && b.sea[c] {
 		t := (c/n)/SQUARE*a.coarse.m + (c%n)/SQUARE
@@ -1179,10 +1196,13 @@ check_phases :: proc(g, p: ^Grid, upto: int) {
 		said^ += 1
 		fmt.printfln("step %d after %s: cells that differ: sea %d, ground %d, filled level %d, drainage %d, land drained %d, rock carried %d, cut %d, face %d", step, stage, counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6], counts[7])
 	}
-	step := 0
+	step, steps := 0, 0
+	for ph in region.history[:upto] do steps += int(ph.steps)
 	for ph in region.history[:upto] {
 		g.lift, g.rise, p.lift, p.rise = ph.uplift, rise, ph.uplift, rise
 		for _ in 0..<int(ph.steps) {
+			g.coarse.keeping = 1/(ph.years*ROSE_STEPS) if steps - step <= ROSE_STEPS else 0
+			p.coarse.keeping = g.coarse.keeping
 			route_mass(g); route_plain(p)
 			say(g, p, step, "routing", &said)
 			erode_mass(g, ph.years); erode(p, ph.years)

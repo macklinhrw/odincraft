@@ -215,13 +215,28 @@ main :: proc() {
 	if pieces > 0 {
 		started := time.now()
 		before := 0
-		for &m in lands do if m.ready do for p in mass_order(&m, around, min(opt.near*1000, NEAR_REACH), context.allocator) {   // its own memory: forming frees the temporary as it goes
+		for &m in lands do if m.ready {
+			near := mass_order(&m, around, min(opt.near*1000, NEAR_REACH), context.allocator)   // its own memory: forming frees the temporary as it goes
 			quiet = true
-			mass_form(&m, p)
+			mass_form(&m, near, max(os.get_processor_core_count() - 2, 1))
 			quiet = false
-			before += 1
+			before += len(near)
 		}
 		fmt.printfln("land larger than a region: %d pieces within %.0f km of %s formed before entering, in %.1f s", before, min(opt.near, NEAR_REACH/1000), "the site" if opt.has_site else "the start", time.duration_seconds(time.since(started)))
+	}
+	if opt.seam > 0 {
+		mass_seam(around, opt.seam*1000)
+		if opt.landmap == "" do return
+	}
+	if opt.landmap != "" {
+		if len(lands) == 0 || !lands[0].ready do fmt.eprintln("no land larger than a region is at hand to map")
+		else if opt.has_site do mass_map(opt.landmap, around, (opt.mapspan if opt.mapspan > 0 else 64)*1000, opt.cuts)
+		else {
+			m := &lands[0]
+			for &l in lands do if l.ready && l.area > m.area do m = &l
+			mass_map(opt.landmap, {f64(m.origin.x), f64(m.origin.y)}, opt.mapspan*1000 if opt.mapspan > 0 else m.side, opt.cuts)
+		}
+		return
 	}
 	if opt.has_site && !opt.has_pos {
 		opt.pos, opt.has_pos, opt.above, opt.fly = {opt.site.x, 60 + max(-f64(height_in_world(opt.site.x, opt.site.y, 1)), 0), opt.site.y}, true, true, true   // over the sea where the site is at sea
