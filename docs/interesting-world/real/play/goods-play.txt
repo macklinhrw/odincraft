@@ -49,7 +49,7 @@ until done 400
 key esc
 shot out/play/g-07-stored.png
 say
-click 1010 735
+click 1130 690
 shot out/play/g-08-click-pile.png
 say
 click 1160 790

@@ -844,7 +844,7 @@ stores_build :: proc() -> (foot: f32) {
 	if len(rows) == 0 && loose == 0 && len(s.zones) == 0 do return
 	slice.sort_by(rows[:], proc(a, b: Row) -> bool { return a.n > b.n })
 	if len(rows) > 5 do builtin.resize(&rows, 5)
-	note := fmt.tprintf("%d lie loose: no stockpile yet", loose) if len(s.zones) == 0 && loose > 0 else "No stockpile yet" if len(s.zones) == 0 else fmt.tprintf("%d lie loose, not counted", loose) if loose > 0 else ""
+	note := fmt.tprintf("%d loose: no stockpile", loose) if len(s.zones) == 0 && loose > 0 else "No stockpile yet" if len(s.zones) == 0 else fmt.tprintf("%d lie loose, not counted", loose) if loose > 0 else ""
 	w := px(66)
 	line := line_of(.Body)
 	high := 2*px(L.pad.y) + line_of(.Small) + px(1) + f32(max(len(rows), 1))*line + (px(1) + line_of(.Small) if note != "" else 0)
