@@ -303,6 +303,29 @@ store_cell :: proc(h: ^Hold, g: Good) -> (to: [3]i32, room: i32, ok: bool) {
 	return
 }
 
+// What the stockpiles have room for: an empty place, by what its stockpile takes, and more of the
+// kind of a heap that is not full; and whether any stockpile takes a class of things at all.
+Store_Room :: struct { empty: [Takes]i32, partly: [dynamic]Mat, takes: [Takes]bool }
+room_read :: proc(h: ^Hold) -> (r: Store_Room) {
+	for &e in r.empty do e = max(i32)
+	r.partly = make([dynamic]Mat, context.temp_allocator)
+	for z in h.zones do if !z.sleep && z.cells > 0 do r.takes[z.takes] = true
+	for c, cell in h.zoned {
+		z := h.zones[cell.zone]
+		if z.sleep do continue
+		if k, lies := h.lying[c]; !lies do r.empty[z.takes] = min(r.empty[z.takes], cell.coming)
+		else if g := h.goods[k]; takes_kind(z.takes, g.kind) && g.n + cell.coming < heap_of(g.kind) do append(&r.partly, g.kind)
+	}
+	return
+}
+room_fits :: proc(r: ^Store_Room, kind: Mat) -> bool {
+	for coming, t in r.empty do if coming < heap_of(kind) && takes_kind(t, kind) do return true
+	for m in r.partly do if m == kind do return true
+	return false
+}
+// The class of a thing, as a stockpile takes it: stone, timber or food.
+takes_of :: proc(m: Mat) -> Takes { return .Food if is(m, FOOD) else .Timber if is_stuff(m, .Timber) else .Stone }
+
 // How many blocks an order to build still wants brought: those marked, less what lies at it and what is coming.
 site_wants :: proc(h: ^Hold, id: int) -> int {
 	s := &h.sites[id]
@@ -365,10 +388,13 @@ haul_look :: proc(h: ^Hold, i: int) -> bool {
 	stores := false
 	for z in h.zones do stores ||= !z.sleep && z.cells > 0
 	if !stores do return false
+	// A heap nothing has room for is no try: with the food stockpiles full the six nearest heaps were all food, and
+	// timber farther off lay loose for a year beside an empty stockpile (plan.md, "A first year").
+	room := room_read(h)
 	Near :: struct { far: i32, k: int }
 	tries: [6]Near
 	count := 0
-	for g, k in h.goods do if g.n - g.held > 0 && !stored(h, g) {
+	for g, k in h.goods do if g.n - g.held > 0 && !stored(h, g) && room_fits(&room, g.kind) {
 		f := far(g.at, d.cell)
 		at := min(count, len(tries) - 1)
 		if count == len(tries) && f >= tries[at].far do continue
@@ -550,16 +576,37 @@ goods_show :: proc(h: ^Hold) {
 	if h.goods_shown == h.goods_v do return
 	h.goods_shown = h.goods_v
 	builtin.resize(&s.piles, len(h.goods))
-	s.store, s.loose = {}, {}
+	s.store, s.loose, s.unhoused, s.untaken = {}, {}, {}, {}
 	h.store = {}
+	room := room_read(h)
+	lying: [Takes]i32   // what lies loose, by its class
 	for g, k in h.goods {
 		in_store := stored(h, g)
 		s.piles[k] = {g.at, g.kind, g.n, in_store, g.left}
 		if in_store {
 			s.store[g.kind] += g.n
 			h.store[g.kind] += g.n
-		} else do s.loose[g.kind] += g.n
+		} else {
+			s.loose[g.kind] += g.n
+			lying[takes_of(g.kind)] += g.n
+		}
 	}
+	// What lies loose beyond what the stockpiles have room for, by its class: the stores say so. The room is counted in
+	// things: a free place holds a heap, a heap that is not full the rest of one. (A stockpile that takes everything is
+	// counted toward each class, so where one stands the figure errs toward "on its way in".)
+	free: [Takes]i32
+	for c, cell in h.zoned {
+		z := h.zones[cell.zone]
+		if z.sleep do continue
+		if k, lies := h.lying[c]; !lies do for class in ([3]Takes{.Stone, .Timber, .Food}) {
+			if z.takes == class || z.takes == .All do free[class] += HEAP if class != .Food else BASKET
+		} else if g := h.goods[k]; takes_kind(z.takes, g.kind) do free[takes_of(g.kind)] += max(heap_of(g.kind) - g.n, 0)
+	}
+	for class in ([3]Takes{.Stone, .Timber, .Food}) {
+		s.unhoused[class] = max(lying[class] - free[class], 0)
+		s.untaken[class] = !room.takes[class] && !room.takes[.All]
+	}
+	for d in h.dwarves do if d.carrying > 0 && d.doing != .Dead do s.loose[d.carry] += d.carrying   // what is in a dwarf's arms is the hold's as what lies loose is: marking a stockpile for the sacks dropped the stores from four days of food to one while they were carried to it
 	clear(&s.zones)
 	clear(&s.zone_boxes)
 	cells := make([dynamic][3]i32, context.temp_allocator)
@@ -617,9 +664,11 @@ keeps_well :: proc(kind: Mat) -> bool {
 	return keeps <= 0 || keeps >= SEASON_DAYS
 }
 
-// The air a thing lying in a cell lies in.
-air_at :: proc(h: ^Hold, c: [3]i32, walled: bool) -> f32 {
-	air := weather(f64(h.tick)*TICK, stand_of(c)).air
+// The air a thing lying in a cell lies in, from the air at the sea's level at that moment: the
+// weather's air differs from place to place by the height alone (weather.odin), so a tick's heaps
+// ask the weather once between them.
+air_at :: proc(sea: f32, c: [3]i32, walled: bool) -> f32 {
+	air := sea + -LAPSE*f32(max(c.y, 0))
 	return math.lerp(air, region.climate.mean - LAPSE*f32(max(c.y, 0)), f32(WALLED)) if walled else air
 }
 
@@ -628,11 +677,13 @@ air_at :: proc(h: ^Hold, c: [3]i32, walled: bool) -> f32 {
 goods_spoil :: proc(h: ^Hold) {
 	if h.tick%SPOIL_EVERY != 0 || len(h.goods) == 0 && h.gone == {} do return
 	blocks := hold_blocks(h)
+	sea, asked := f32(0), false   // the air at the sea's level, asked once for all the heaps (air_at)
 	for k := len(h.goods) - 1; k >= 0; k -= 1 {
 		g := &h.goods[k]
 		if !is(g.kind, FOOD) || FOODS[food_of(g.kind)].keeps <= 0 do continue
 		if g.read != h.ground + 1 do g.walled, g.read = indoors(shelter_of(blocks, g.at)), h.ground + 1
-		rate := spoil_rate(air_at(h, g.at, g.walled))
+		if !asked do sea, asked = weather(f64(h.tick)*TICK, Stand{0, region.climate.rain, 1}).air, true
+		rate := spoil_rate(air_at(sea, g.at, g.walled))
 		g.age += rate*SPOIL_EVERY*TICK/DAY
 		left := keeps_left(g.kind, g.age, rate)
 		if (left < SOON) != (g.left < SOON) || abs(left - g.left) >= 0.25 do h.goods_v += 1   // shown again when it has changed enough to be said otherwise

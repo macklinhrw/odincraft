@@ -135,7 +135,7 @@ tool_line :: proc() -> bool {
 tool_point :: proc(a: ^Above, w: ^World, eye: [3]f64, ray: [3]f32) {
 	bar.aim = a.under
 	if w.finest == 0 do bar.aim = pick(w, eye, ray, above_level(a), true, 4*linalg.length(a.at - eye) + 600, true)   // through leaf and limb, to the ground: no order is given to a crown
-	if !a.marking || !a.shown do return
+	if !a.marking do return   // a box begun on the world goes on following the pointer over a panel (play.odin): it stopped at the panel's edge, and a wood dragged to the foot of the screen was one tree
 	o := a.mark[0]
 	b := a.mark[1]
 	switch {
@@ -232,6 +232,15 @@ world_blocks :: proc(w: ^World) -> Blocks {
 			bind(f)
 			g := ground(f64(b.x - region.origin.x) + 0.5, f64(b.z - region.origin.y) + 0.5, 1)   // the water the land stands there, which a dwarf wades half a metre of
 			return f32(b.y) > g.h + 0.5 || g.water - f32(b.y) <= WADE
+		},
+		proc(data: rawptr, b: [3]i32) -> bool {
+			f := island_at(f64(b.x) + 0.5, f64(b.z) + 0.5)
+			if f == nil || !is_formed(f) do return false
+			was := here
+			defer bind(was)
+			bind(f)
+			g := ground(f64(b.x - region.origin.x) + 0.5, f64(b.z - region.origin.y) + 0.5, 1)
+			return f32(b.y) <= g.h + 0.5 && g.water > f32(b.y)
 		}, w}
 }
 
@@ -264,7 +273,10 @@ bar_frame :: proc() {
 		bar.for_hand = u.hand.block
 		bar.job = job_of(u.hand)
 	}
-	if _, ok := site_seen(bar.job); !ok do bar.job = -1
+	if _, ok := site_seen(bar.job); !ok {
+		if bar.job >= 0 do hand_drop()   // the order in the hand is done, or taken back: the hand is put down, as it is when a fire or a rack in it is gone. It went on showing the block the order was taken by, which is dug away
+		bar.job = -1
+	}
 	bar.zone, bar.fire, bar.bench = -1, -1, -1
 	if u.hand.kind == .Zone {   // the stockpile in the hand, while the ground it was taken by is still its ground
 		if z, on := zone_under(u.hand.block + {0, 1, 0}); on do bar.zone = z.id
@@ -431,6 +443,7 @@ alerts_keep :: proc() {
 		places[3] = feet_on(f.at)
 		break
 	}
+	if texts[3] != "" && stuff > 0 && first[1].stuff == .Timber do texts[1] = "" if hard == 0 else "Rock too hard for the picks."   // the fire's alert says that no timber lies: it is not said twice
 	for text, i in texts do if text != bar.said[i] && ids[i] != "" {
 		delete(bar.said[i])
 		bar.said[i] = strings.clone(text)
@@ -1026,11 +1039,13 @@ piles_view :: proc(boxes: []Box, eye, middle: [3]f64) -> []Box {
 		if is(p.kind, FOOD) {   // what is eaten: a low heap of small things in its own colour, wider as there is more of it; what is about to spoil has gone grey
 			heaps := clamp(int(p.n + 5)/6, 1, 4)
 			turned := p.left >= 0 && p.left < SOON
+			kept := keeps_well(p.kind)   // what keeps is tied up in bundles, upright with a dark band round each: by its shape, not its brown, it is told from the fresh heaps beside it
 			for k in 0..<heaps {
 				jog := f32((p.at.x*5 + p.at.z*11 + i32(k)*3)%%5 - 2)*0.02
-				size := [3]f32{0.17, 0.07, 0.17} if p.kind != .Ayu else {0.22, 0.045, 0.09}
+				size := [3]f32{0.14, 0.13, 0.14} if kept else {0.17, 0.07, 0.17} if p.kind != .Ayu else {0.22, 0.045, 0.09}
 				at := base + {(f32(k%2) - 0.5)*0.42 + jog, size.y, (f32(k/2) - 0.5)*0.42 - jog}
 				append(&out, Box{at, f32(greyed(p.kind, 1.5) if turned else shaded(p.kind, 1.5)), {size.x, 0, 0}, f32(greyed(p.kind, 1.0) if turned else shaded(p.kind, 1.0)), {0, size.y, 0}, 0, {0, 0, size.z}, feet})
+				if kept do append(&out, Box{at + {0, 0.03, 0}, 0x2a2018, {size.x + 0.012, 0, 0}, 0x2a2018, {0, 0.022, 0}, 0, {0, 0, size.z + 0.012}, feet})
 			}
 			continue
 		}

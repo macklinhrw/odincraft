@@ -78,6 +78,7 @@ Found :: enum u8 { Way, No_Ground, Cut_Off, Too_Far }
 Walk :: struct {
 	island:  ^Formed,
 	patches: map[[2]i32]^Patch,   // by chunk; nil where the chunk lies off the island's region
+	last:    ^Patch,              // the one last asked for (patch_at)
 	floors:  [dynamic]Floor,      // every patch's floors, one patch after another
 	owner:   [dynamic]^Patch,     // and the patch of each
 	rooms:   [dynamic]Room,
@@ -124,8 +125,15 @@ walk_drop :: proc(w: ^Walk) {
 // The patch of a chunk, made if it has not been and the search in hand may still make one; its
 // floors are read again first if a block of it has changed.
 patch_at :: proc(w: ^Walk, cx, cz: i32, make_it := true) -> ^Patch {
+	if l := w.last; l != nil && l.cx == cx && l.cz == cz {   // the patch last asked for is most often asked for again: a sixth of a year's ticks went on looking it up in the map
+		if l.stale do patch_read(w, l)
+		return l
+	}
 	if p, ok := w.patches[{cx, cz}]; ok {
-		if p != nil && p.stale do patch_read(w, p)
+		if p != nil {
+			if p.stale do patch_read(w, p)
+			w.last = p
+		}
 		return p
 	}
 	if !make_it do return nil

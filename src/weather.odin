@@ -85,6 +85,14 @@ spell_draw :: proc(k: i32, month: int) -> (cover, base, wind: f32) {
 // The day the spells are counted from: the first from the equinox on whose morning, at the hour
 // the boat stands off, is fair.
 weather_origin :: proc() -> f32 {
+	// It is the seed's and never changes: each thread keeps the one it last worked out, with the seed it was for.
+	// (Every call of `weather` worked it out again: a tenth of the hold's time through a year.)
+	@(thread_local) kept: struct { seed: u32, day: f32, set: bool }
+	if kept.set && kept.seed == world_seed do return kept.day
+	kept = {world_seed, weather_origin_find(), true}
+	return kept.day
+}
+weather_origin_find :: proc() -> f32 {
 	for day in 0..<60 {
 		t := (f32(day) + LANDS_AT/24)/SKY.spell
 		k, w := i32(math.floor(t)), smoothstep(0, 1, t - math.floor(t))

@@ -229,6 +229,15 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 	now = max(now + 600, 2400)   // past the second day's dawn, which is 1,100 s in, and its noon
 	hold_run(played, f64(now))
 	testing.expect_value(t, said(played, "The 2nd of spring."), 1)
+	{   // An order given while the clock stands is obeyed at once, at the tick in hand, and no tick passes (hold_heed):
+		// the world paused is a place to give orders in. The log played again from the file, further down, must agree.
+		zones, tick := len(played.zones), played.tick
+		order(t, played, &text, now, "sleep %d %d %d %d %d %d", camp.x - 2, camp.y - 1, camp.z + 5, camp.x + 2, camp.y - 1, camp.z + 7)
+		hold_heed(played)
+		testing.expectf(t, played.tick == tick && len(played.zones) == zones + 1 && said(played, `The hold says "sleep`) == 2, "an order given while paused is obeyed at once: %d zones where %d were, tick %d from %d", len(played.zones), zones, played.tick, tick)
+		order(t, played, &text, now, "unstore %d %d %d %d %d %d", camp.x, camp.y - 1, camp.z + 6, camp.x, camp.y - 1, camp.z + 6)
+		hold_heed(played)
+	}
 	// The night was spent in the room marked to sleep in, by its fire, and nobody is the colder for it; the fire was fed from the timber felled.
 	testing.expectf(t, said(played, "slept indoors") >= 1, "the dawn says the party slept indoors: %d times", said(played, "slept indoors"))
 	testing.expectf(t, len(played.fires) == 1 && played.fires[0].lit && said(played, "on the fire at") >= 1, "the fire still burns, and was fed: %d fires, fed %d times", len(played.fires), said(played, "on the fire at"))
@@ -272,6 +281,21 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 		testing.expectf(t, lean.on && lean.season == 1 && lean.off == SEASON_DAYS - date_tick(played.tick).nth + 1 && lean.days == SEASON_DAYS && said(played, "Summer is") >= 1, "the lean season ahead is summer, said at dawn: %v", lean)
 		for d, i in played.dwarves do testing.expectf(t, d.doing != .Dead && d.carrying >= 0 && (d.carrying == 0 || d.haul.on || d.job), "%s is alive on the fifth day, and carries nothing it is not taking somewhere", played.party[i].given)
 		fmt.printfln("winter's food: on the %s %d racks stand with %d things on them; %d things dried lie; %s", date_words(date_tick(played.tick)), len(played.benches), on_racks, dried, lean_words(lean))
+	}
+	// The fifth night, at 23:30: those asleep in the room lie apart, none beside another, while it has places to spare
+	// (sleep_find); and no plant, water or tree is left marked that every try found no way to (work_look).
+	now = 4*int(DAY) + int((23.5 - LANDS_AT)*DAY/24)
+	hold_run(played, f64(now))
+	{
+		asleep, beside := 0, 0
+		for d, i in played.dwarves do if d.doing == .Sleeping {
+			asleep += 1
+			for o in played.dwarves[:i] do if o.doing == .Sleeping && abs(o.cell.x - d.cell.x) <= 1 && abs(o.cell.z - d.cell.z) <= 1 && abs(o.cell.y - d.cell.y) <= 1 do beside += 1
+		}
+		testing.expectf(t, asleep >= 4 && beside == 0, "the sleepers lie apart in the room: %d asleep, %d pairs side by side", asleep, beside)
+		able: u64
+		for d, i in played.dwarves do if ashore(d) && !d.shut && !d.adrift do able |= 1 << u64(i%64)
+		for m in played.marks do testing.expectf(t, m.work == .Dig || m.work == .Build || m.wait != .No_Way || m.who & able != able, "a mark at %v that no dwarf has a way to is still marked", m.at)
 	}
 	SECONDS := now + 60
 	hold_run(played, f64(SECONDS))

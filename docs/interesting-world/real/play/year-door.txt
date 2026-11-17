@@ -1,0 +1,52 @@
+# A first year, the way in (plan.md, "A first year, as played"): the front door as it first stands,
+# the world's map, the start island taken and read, an expedition planned on it with the landing the
+# game offers, set out, and the boat come in. What follows the landing is year-days.txt.
+#   build/odincraft --door --play=docs/interesting-world/real/play/year-door.txt
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+print 1. the front door on its first frame, and once the world can be entered
+snap out/play/year-01-door-first.png
+until ready 120
+shot out/play/year-02-door-ready.png
+say
+
+print 2. Worlds, the world in hand opened: the map framed on its islands
+part Worlds
+shot out/play/year-03-worlds.png
+say
+key Enter
+wait 0.6
+shot out/play/year-04-world.png
+say
+
+print 3. the start island taken by its row of the list, and each depth of its card
+part East Firths
+wait 0.8
+shot out/play/year-05-island.png
+say
+part Climate
+shot out/play/year-06-island-climate.png
+say
+part Life
+shot out/play/year-07-island-life.png
+say
+part Land
+
+print 4. Plan an expedition: the landing offered, the party in the boat
+part Plan an expedition
+wait 1.0
+shot out/play/year-08-plan.png
+say
+move 900 700
+wait 0.6
+snap out/play/year-09-plan-hover.png
+under
+
+print 5. set out: the boat, the first word, and the party ashore
+key Enter
+wait 3
+shot out/play/year-10-boat.png
+say
+run 60
+shot out/play/year-11-ashore.png
+say

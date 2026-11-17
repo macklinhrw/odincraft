@@ -52,7 +52,7 @@ NEEDS := [?]Need{
 	// Orders (orders.odin): a dwarf with nothing to do while work is marked that it cannot take, by what the work waits for.
 	{"no-reach", "cannot reach the work", "idle: no way leads to the work that is marked", "idle: no way leads to the work that is marked",
 		"Waits for a way to it to be dug or built, or for other work", .Caution, proc(d: ^Seen) -> bool { return d.lack == .No_Way }},
-	{"no-stuff", "nothing to build with", "idle: no stone or timber lies anywhere to build what is marked", "idle: no stone or timber lies anywhere to build what is marked",
+	{"no-stuff", "nothing to build with", "idle: nothing lies anywhere to build what is marked of", "idle: nothing lies anywhere to build what is marked of",
 		"Waits for rock to be dug or trees felled, or for other work", .Caution, proc(d: ^Seen) -> bool { return d.lack == .No_Stuff }},
 	{"too-hard", "rock too hard", "idle: what is marked is rock too hard for the party's picks", "idle: what is marked is rock too hard for the party's picks",
 		"Waits for softer ground to be marked", .Caution, proc(d: ^Seen) -> bool { return d.lack == .Too_Hard }},
@@ -127,7 +127,7 @@ crowd_read :: proc() {
 	}
 	// The lean season ahead, or in hand, while the kept food in store falls short of it: one alert, said anew when its figures change (lean_of, needs.odin).
 	lean := watch.seen.lean
-	text := lean_alert(lean) if lean_short(lean) else ""
+	text := lean_alert(lean) if lean_short(lean) && lean.off <= LEAN_WARNS else ""   // from half a season off: said from the landing it stood ten days of every spring, and was read as wallpaper. The dawn's line and the stores say it before
 	if text != u.lean_said {
 		delete(u.lean_said)
 		u.lean_said = strings.clone(text)
@@ -151,6 +151,9 @@ crowd_read :: proc() {
 			count += 1
 			if first < 0 do first = i
 		}
+		// One cause, one alert: where the orders' own alert already says that no way leads to the work, or that nothing
+		// lies to build with (alerts_keep, bar.odin), the idle are marked among the dwarves and not counted again beside it.
+		if row.id == "no-reach" && bar.said[0] != "" || (row.id == "no-stuff" || row.id == "too-hard") && (bar.said[1] != "" || bar.said[3] != "") do count = 0
 		if count == 0 do sum = 0
 		if sum == u.alerted[k] do continue
 		u.alerted[k] = sum
@@ -424,8 +427,10 @@ crowd_marks :: proc() {
 	u, L := &play, &LOOK
 	for i in 0..<hold_count() {
 		held := in_hand(i)
-		if !held && u.need[i] < 0 do continue
 		at, _ := hold_where(i)
+		d := &watch.seen.dwarves[i]
+		asleep := d.doing == .Sleeping && (!d.roof || !u.afoot^ && u.a.cut && at.y < f64(u.a.level))   // where its body is drawn: one under a roof the cut has not opened says nothing through it
+		if !held && u.need[i] < 0 && !asleep do continue
 		tall := f64(watch.seen.dwarves[i].who.tall)
 		foot, _ := project(at)
 		head, seen := project(at + {0, tall, 0})
@@ -441,6 +446,9 @@ crowd_marks :: proc() {
 			sign := Rect{math.round(head.x - s/2), y - s - px(1), s, s}
 			part(.Sign, {sign.x - o, sign.y - o, s + 2*o, s + 2*o}, colour = L.pit).sign = need_sign(i)
 			part(.Sign, sign).sign = need_sign(i)
+		} else if asleep {   // a sleeper says so: lying, it was told from the dead by its colour alone, and at night by nothing
+			wide := px(12)
+			part(.Text, {math.round(head.x - wide/2), y - line_of(.Small), wide, line_of(.Small)}, "z", .Small, L.chalk, {.Centre, .Shadow}, id = "asleep")
 		}
 	}
 }

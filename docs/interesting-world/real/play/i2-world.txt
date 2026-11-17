@@ -83,10 +83,12 @@ key Esc
 wait 0.6
 shot out/play/i2-37-put-down.png
 
-print 11. the first door: the party landed on an island that is not the start
+print 11. the first door: an expedition planned on an island that is not the start, and set out as the game offers it (E-1 put planning where "Land the party here" stood)
 part North Back
 wait 0.6
-part Land the party here
+part Plan an expedition
+wait 0.8
+part Set out
 wait 3
 shot out/play/i2-38-landed.png
 say

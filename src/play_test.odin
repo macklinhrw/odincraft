@@ -641,9 +641,31 @@ the_dwarves_feel :: proc(t: ^testing.T) {
 		testing.expect_value(t, says("stores.soon"), "36 spoil within a day")
 		wrong := screen_says(&screen, .Wrong)
 		testing.expect(t, strings.contains(wrong, "Winter in 5 days: the land bears gobies alone then. Kept food for 2 of its 12 days: gather, dry and store."), wrong)
+		seen.lean.off = LEAN_WARNS + 3   // more than half a season off, it is the dawn's and the stores' to say, and no alert
+		frame(s)
+		testing.expect(t, !strings.contains(screen_says(&screen, .Wrong), "Winter in"), "the lean season's alert stands from more than six days off")
+		seen.lean.off = 5
+		frame(s)
+		testing.expect(t, strings.contains(screen_says(&screen, .Wrong), "Winter in 5 days"), "the lean season's alert did not come back at five days off")
 		seen.lean.kept, seen.kept_days = 12.4, 12.4
 		frame(s)
 		testing.expect(t, !strings.contains(screen_says(&screen, .Wrong), "Winter in"), "the lean season's alert stands though the kept food lasts it")
+		// What lies loose because no stockpile has room for it is said by its class, and the rest apart (plan.md, "A first year").
+		append(&seen.zones, Zone_Seen{id = 0, takes = .Food, cells = 25, full = 25})
+		seen.loose[.Bracken_Shoots], seen.loose[.Basalt], seen.unhoused[.Food] = 30, 4, 30
+		frame(s)
+		testing.expect_value(t, says("stores.full"), "No room for 30 of food")
+		testing.expect_value(t, says("stores.loose"), "4 lie loose, not counted")
+		seen.untaken[.Food] = true
+		frame(s)
+		testing.expect_value(t, says("stores.full"), "No stockpile for food: 30")
+		clear(&seen.zones)
+		seen.loose, seen.unhoused, seen.untaken = {}, {}, {}
+		// A message too long for one line takes two, and is not cut in the middle of a word.
+		long := "Provisions for about four days. Food within a walk: through the year."
+		tell(long)
+		frame(s)
+		testing.expectf(t, strings.contains(screen_says(&screen, .Said), long), "a message of two lines was cut: %s", screen_says(&screen, .Said))
 		seen.lean, seen.store, seen.food_days, seen.kept_days, seen.soon = {}, {}, 0, 0, {}
 		key(s, .B)
 		frame(s)

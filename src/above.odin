@@ -92,7 +92,7 @@ Above :: struct {
 	ray := view_ray(a.yaw, pitch, ABOVE_FOV, aspect, pointer)
 	if w.finest == 0 do a.under = pick(w, eye, ray, above_level(a), a.bare, 4*linalg.length(a.at - eye) + 600)   // from too far off for the block volume there is no block to pick (pick_far)
 	if tool_marks() do tool_point(a, w, eye, ray)   // a tool's mark lies flat on the level it began on (bar.odin)
-	else if a.marking && a.shown && a.under.ok do a.mark[1] = a.under.block
+	else if a.marking && a.under.ok do a.mark[1] = a.under.block
 	}
 
 	// Begin marking a box of blocks at the block under the pointer; mark_end leaves it marked, and

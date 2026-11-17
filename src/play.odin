@@ -876,24 +876,37 @@ said_build :: proc() {
 	first := len(u.said)
 	for first > 0 && len(u.said) - first < SAID_MOST && (u.still || u.now - u.said[first - 1].since < SAID_FOR) do first -= 1
 	if first == len(u.said) do return
-	// A message is one line, as wide as its words and no wider than the band's most; the whole of it
-	// is said beside the pointer that rests on it, and a click leads to where it happened.
+	// A message is a line, or two where its words want them, as wide as its words and no wider than
+	// the band's most; the whole of it is said beside the pointer that rests on it, and a click leads
+	// to where it happened. (One line cut the hold's first word, the dawn's and every list of what was
+	// felled or dried in the middle of a word: plan.md, "A first year".)
 	x, y := px(L.margin), max(u.place_foot + px(2), px(L.said_top))
 	most := px(L.said_wide) - 2*px(L.pad.x)
-	wide := f32(0)
-	for m in u.said[first:] do wide = max(wide, min(text_wide(.Body, m.text), most))
 	h := line_of(.Body)
-	part(.Band, {x, y, wide + 2*px(L.pad.x), f32(len(u.said) - first)*h + 2*px(2)})
+	Line :: struct { text: string, high: f32 }
+	lines := make([]Line, len(u.said) - first, context.temp_allocator)
+	wide, high := f32(0), f32(0)
+	for m, i in u.said[first:] {
+		l := &lines[i]
+		for share in ([4]f32{0, 1.9, 1.7, 1}) {   // whole, or cut to what two lines hold
+			l.text = m.text if share == 0 else fit(.Body, m.text, share*most)
+			l.high = h if text_wide(.Body, l.text) <= most else text_high(.Body, l.text, most)
+			if l.high <= 2*h + 1 do break
+		}
+		wide = max(wide, min(text_wide(.Body, l.text), most))
+		high += l.high
+	}
+	part(.Band, {x, y, wide + 2*px(L.pad.x), high + 2*px(2)})
 	y += px(2)
 	for m, i in u.said[first:] {
 		left := 1.0 if u.still else clamp((SAID_FOR - (u.now - m.since))/2, 0, 1)   // its last two seconds
 		older := 1.0 if i == len(u.said) - first - 1 else 0.72
-		line := fit(.Body, m.text, most)
-		it := part(.Text, {x + px(L.pad.x), y, wide, h}, line, .Body, {L.chalk.r, L.chalk.g, L.chalk.b, u8(255*left*older)}, {.Shadow}, id = "said")
+		line := lines[i].text
+		it := part(.Text, {x + px(L.pad.x), y, wide, lines[i].high}, line, .Body, {L.chalk.r, L.chalk.g, L.chalk.b, u8(255*left*older)}, {.Shadow, .Wrap} if lines[i].high > h else {.Shadow}, id = "said")
 		whole := m.more if m.more != "" else m.text if line != m.text else ""
 		if m.placed do it.act, it.arg, it.tip = .Said, first + i, fmt.tprintf("%s%sClick to go there.", whole, " " if whole != "" else "")
 		else do it.tip = whole
-		y += h
+		y += lines[i].high
 	}
 }
 
@@ -916,12 +929,23 @@ stores_build :: proc() -> (foot: f32) {
 	}
 	for n in s.loose do loose += int(n)
 	if timber > 0 do append(&rows, Row{.Timber, "Timber", timber})
-	if len(rows) == 0 && len(food) == 0 && loose == 0 && len(s.zones) == 0 do return
+	if len(rows) == 0 && len(food) == 0 && loose == 0 && len(s.zones) == 0 do return   // (a sleeping place alone still shows "No stockpile yet")
 	slice.sort_by(rows[:], proc(a, b: Row) -> bool { return a.n > b.n })
 	slice.sort_by(food[:], proc(a, b: Row) -> bool { return a.n > b.n })
 	if len(rows) > 4 do builtin.resize(&rows, 4)
 	if len(food) > 4 do builtin.resize(&food, 4)
-	note := fmt.tprintf("%d loose: no stockpile", loose) if len(s.zones) == 0 && loose > 0 else "No stockpile yet" if len(s.zones) == 0 else fmt.tprintf("%d lie loose, not counted", loose) if loose > 0 else ""
+	stores := 0
+	for z in s.zones do stores += int(!z.sleep)
+	// What lies loose because no stockpile has room for it, or takes it, is said by its class: "lie loose" alone left a
+	// full stockpile to be guessed at (plan.md, "A first year"). The rest is on its way in.
+	full: [3]string
+	fulls := 0
+	if stores > 0 do for class in ([3]Takes{.Food, .Timber, .Stone}) do if n := s.unhoused[class]; n > 0 {
+		loose -= int(n)
+		full[fulls] = fmt.tprintf("No stockpile for %s: %d", TAKES_SAYS[class], n) if s.untaken[class] else fmt.tprintf("No room for %d of %s", n, TAKES_SAYS[class])
+		fulls += 1
+	}
+	note := fmt.tprintf("%d loose: no stockpile", loose) if stores == 0 && loose > 0 else "No stockpile yet" if stores == 0 else fmt.tprintf("%d lie loose, not counted", loose) if loose > 0 else ""
 	// How long the food stored lasts those alive (needs.odin): the one figure a player plans a season by.
 	days := s.food_days
 	lasts := "No food stored" if days <= 0 else "Food for under a day" if days < 0.75 else fmt.tprintf("Food for %s", days_words(days))
@@ -938,7 +962,7 @@ stores_build :: proc() -> (foot: f32) {
 	soon := fmt.tprintf("%d spoil within a day", s.soon[0]) if s.soon[0] > 0 else fmt.tprintf("%d loose spoil within a day", s.soon[1]) if s.soon[1] > 0 else ""
 	w := px(78)
 	line := line_of(.Body)
-	high := 2*px(L.pad.y) + line_of(.Small) + px(1) + f32(max(len(rows) + len(food), 1))*line + (px(1.5) + line_of(.Small) + px(0.5) if fed else 0) + (px(1) + line_of(.Small) if note != "" else 0)
+	high := 2*px(L.pad.y) + line_of(.Small) + px(1) + f32(max(len(rows) + len(food), 1))*line + (px(1.5) + line_of(.Small) + px(0.5) if fed else 0) + (px(1) + line_of(.Small) if note != "" else 0) + (px(1) if fulls > 0 && note == "" else 0) + f32(fulls)*line_of(.Small)
 	if fed do high += (line_of(.Small) if keeps != "" else 0) + (line_of(.Small) if soon != "" else 0)
 	x, y := screen.w - px(L.margin) - w, px(L.margin)
 	part(.Panel, {x, y, w, high}, id = "stores", tip = "What lies in the hold's stockpiles. Things lying anywhere else are not counted until they are carried in.")
@@ -977,7 +1001,12 @@ stores_build :: proc() -> (foot: f32) {
 		put(cx, y, inner, line, r)
 		y += line
 	}
-	if note != "" do y += px(1) + words(cx, y, note, .Small, L.brass if len(s.zones) == 0 else L.ash, "stores.loose")
+	if fulls > 0 || note != "" do y += px(1)
+	for f in full[:fulls] {
+		y += words(cx, y, fit(.Small, f, inner), .Small, L.brass, "stores.full")
+		part(.Head, {cx, y - line_of(.Small), inner, line_of(.Small)}, tip = "These lie loose and are not counted, because no stockpile that takes them has a free place. Mark another (Store), or make one larger from its card.")
+	}
+	if note != "" do y += words(cx, y, note, .Small, L.brass if stores == 0 else L.ash, "stores.loose")
 	return px(L.margin) + high + px(2)
 }
 
@@ -1536,7 +1565,7 @@ places_build :: proc() {
 			group = e.group
 			n := 0
 			for o in rows do n += int(o.group == group)
-			name := "Named places" if group == 0 else fmt.tprintf("%s%s", sentence(PLACE_ROWS[Place_Kind(group - 1)].what)[:len(PLACE_ROWS[Place_Kind(group - 1)].what)], "es" if strings.has_suffix(PLACE_ROWS[Place_Kind(group - 1)].what, "s") else "s")
+			name := "Named places" if group == 0 else fmt.tprintf("%s%s", sentence(PLACE_ROWS[Place_Kind(group - 1)].what)[:len(PLACE_ROWS[Place_Kind(group - 1)].what)], "es" if strings.has_suffix(PLACE_ROWS[Place_Kind(group - 1)].what, "s") || strings.has_suffix(PLACE_ROWS[Place_Kind(group - 1)].what, "ch") else "s")   // passes, sea notches
 			part(.Head, {box.x, cy, box.w, head_high}, act = .Fold, arg = group, id = "list.group", tip = "Fold this group to its count, or open it.")
 			part(.Text, {x, cy + px(3), inner, line_of(.Body)}, name, .Body, L.ash, id = "list.group.name")
 			part(.Text, {x, cy + px(3), inner, line_of(.Body)}, fmt.tprintf("%d", n), .Body, L.ash, {.Right})
