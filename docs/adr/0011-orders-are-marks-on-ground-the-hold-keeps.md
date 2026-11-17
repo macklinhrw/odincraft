@@ -56,3 +56,5 @@ A felled tree is not a block changed but a tree taken out: an edit in its trunk'
 - **Timber is laid as `Mat.Timber`**, a block of sawn boards that is no tree's. A tree's bark block laid by hand is still drawn as a trunk by the mesher's rule.
 - A dwarf at work keeps its place, and a walker goes by it (ADR 0012, "Friends do not block one another").
 - `./build.sh test` hashes the blocks the hold changed and its store as well as the log, as played and as played again from the orders.
+
+**What is marked is shown from a map of marked blocks, not from boxes** (2026-11-16, on the owner's playing: marks vanished as the view moved, and did not join). The frame writes what the hold says is marked, and what the tool in the hand would mark, into a block-for-block map round the view's middle, with which sides of each marked block are open; the terrain reads it for every face it draws (`marks_bind`, `marked_face`). So a mark shows at any distance and in any number, and is lined only where it ends.

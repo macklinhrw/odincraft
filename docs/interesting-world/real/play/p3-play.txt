@@ -259,3 +259,33 @@ wait 0.4
 shot out/play/p3-39-one-block-lit.png
 say
 key esc
+
+print 14. marks side by side, and the view moved: three digs and two stockpiles dragged against each other read as two shapes, each with one outline, and stay lit when the view moves off, pulls back to 160 m and to 700 m, and turns (the owner's: marked ground vanishing as the camera moves, and boxes that did not join)
+view over=2690,-1750 span=30 tilt=55 turn=0 cut=off
+key 1
+key D
+drag 1380 800 1560 900
+drag 1560 840 1700 980
+drag 1300 900 1500 1020
+key S
+drag 1100 1000 1300 1100
+drag 1300 1040 1420 1180
+key esc
+wait 0.6
+shot out/play/p3-40-marks-joined.png
+view over=2700,-1740 span=30 tilt=55
+wait 0.3
+shot out/play/p3-41-marks-view-moved.png
+view over=2690,-1750 span=160 tilt=55
+wait 0.5
+shot out/play/p3-42-marks-pulled-back.png
+view over=2690,-1750 span=700 tilt=55
+wait 1.5
+shot out/play/p3-43-marks-far.png
+view over=2690,-1750 span=30 tilt=30 turn=120
+wait 0.5
+shot out/play/p3-44-marks-turned.png
+view over=2690,-1750 span=30 tilt=55 turn=0 cut=2
+wait 0.4
+shot out/play/p3-45-marks-cut.png
+view cut=off

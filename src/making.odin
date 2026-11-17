@@ -653,6 +653,7 @@ world_adopt :: proc(island: int, near_km: f64) {
 // mesh, water and plants on the GPU, the block volumes, and the simulated water. The world's
 // threads have ended (world_destroy).
 game_end :: proc(w: ^World, g: ^Gpu) {
+	clear(&bar.map_boxes)   // nothing of this game is marked in the next one's picture
 	for _, c in w.chunks {
 		for b in ([3]^sdl.GPUBuffer{c.buffer, c.water, c.plant_buf}) do if b != nil do sdl.ReleaseGPUBuffer(g.dev, b)
 		delete(c.plants); delete(c.blocks); delete(c.under)
