@@ -105,17 +105,18 @@ heading :: proc(bearing, scale: f32) -> matrix[3, 3]f32 {
 // A dwarf as sixteen boxes, its feet at `feet` from the eye: boots and legs, a broad tunic with a
 // belt, arms and hands, a head with a hood, a nose, eyes and a beard. `stride` is the metres it has walked,
 // which swing its legs and arms; seated, its legs lie forward.
-dwarf_boxes :: proc(out: ^[dynamic]Box, f: Facts, feet: [3]f32, bearing: f32, stride: f64, moving, seated: bool) {
+dwarf_boxes :: proc(out: ^[dynamic]Box, f: Facts, feet: [3]f32, bearing: f32, stride: f64, moving, seated: bool, toil: f32 = -1) {
 	R := heading(bearing, f.tall/1.36)
 	swing := 0.7*f32(math.sin(math.mod(stride, 1.3)/1.3*math.TAU)) if moving else 0
+	strike := 1.3 + 0.9*math.sin(toil*5.5) if toil >= 0 else 0   // at work, both arms are raised and brought down
 	cloth, at := TRADES[f.trade].cloth, feet
 	if seated do at.y -= 0.22*f.tall/1.36
 	for side in ([2]f32{-1, 1}) {
 		leg := 1.45 if seated else side*swing
 		limb(out, at, R, {side*0.11, 0.22, 0}, {0.095, 0.22, 0.11}, 0x3a3028, 0x3a3028, {0, 0.44, 0}, leg)
 		limb(out, at, R, {side*0.11, 0.07, 0.03}, {0.105, 0.07, 0.15}, 0x2a2018, 0x2a2018, {0, 0.44, 0}, leg)   // the boot
-		limb(out, at, R, {side*0.33, 0.72, 0}, {0.075, 0.2, 0.085}, cloth, cloth, {0, 0.92, 0}, -side*swing*0.8)
-		limb(out, at, R, {side*0.33, 0.47, 0}, {0.06, 0.055, 0.07}, f.skin, f.skin, {0, 0.92, 0}, -side*swing*0.8)   // the hand
+		limb(out, at, R, {side*0.33, 0.72, 0}, {0.075, 0.2, 0.085}, cloth, cloth, {0, 0.92, 0}, strike - side*swing*0.8)
+		limb(out, at, R, {side*0.33, 0.47, 0}, {0.06, 0.055, 0.07}, f.skin, f.skin, {0, 0.92, 0}, strike - side*swing*0.8)   // the hand
 		limb(out, at, R, {side*0.065, 1.16, 0.165}, {0.025, 0.022, 0.01}, 0x18120e, 0x18120e)   // an eye
 	}
 	limb(out, at, R, {0, 0.70, 0}, {0.25, 0.27, 0.16}, cloth, cloth)

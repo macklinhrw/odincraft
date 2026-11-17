@@ -1,5 +1,6 @@
 package main
 
+import "base:runtime"
 import "core:math"
 import "core:math/linalg"
 
@@ -45,6 +46,23 @@ Patch :: struct {
 	base:   i32,                    // its first floor among the walk's
 	first:  [CHUNK*CHUNK + 1]u16,   // a column's floors are those from first[col] up to first[col + 1], the lowest first
 	room:   i32,                    // its first room among the walk's
+	slots, rooms, room_slots: i32,  // floors it has room for among the walk's, its rooms, and the rooms it has room for
+	kept:   ^Kept,                  // its blocks, where the hold works this ground
+	keep:   bool,                   // they are to be kept when next read
+	stale:  bool,                   // a block changed: its floors are read again when next asked for
+}
+// A chunk's true blocks and what its columns say that floors are read from. A patch the dwarves only
+// walk lets them go once its floors are read; one where a block was changed, or a block asked
+// after, keeps them, so a changed block is one block written and the floors read again from memory
+// (docs/adr/0011): the generator is asked again only when a change falls outside the layers kept
+// or a tree is felled.
+Kept :: struct {
+	blocks:      []Mat,
+	y_base, h:   i32,
+	level:       [P*P]f32,     // the water standing in each column, by the land
+	top:         [P*P]i32,
+	grown, tall: [P*P]bool,
+	under:       [P*P]Under,   // the rock under the layers kept
 }
 Room :: struct {
 	patch:        ^Patch,
@@ -61,7 +79,11 @@ Walk :: struct {
 	floors:  [dynamic]Floor,      // every patch's floors, one patch after another
 	owner:   [dynamic]^Patch,     // and the patch of each
 	rooms:   [dynamic]Room,
-	edits:   [dynamic]Edit,       // the session's changes to the blocks, as the dwarves' world was told of them
+	edits:   [dynamic]Edit,       // the session's changes to the blocks, as the dwarves' world was told of them or made them
+	edited:  map[[3]i32]i32,      // and which of them is each block's
+	kept:    int,                 // patches whose blocks are kept, and the bytes of them
+	kept_bytes: int,
+	wasted:  int,                 // floors' places left behind by patches that outgrew them
 	going:   []Going,             // on each of the land's cells: what its wetness and plants make of the pace (trails.odin)
 	columns: ^Columns,
 	// A search's own.
@@ -85,9 +107,13 @@ walk_init :: proc(w: ^Walk, island: ^Formed) {
 	for c in 0..<n*n do w.going[c] = going(c)
 }
 
-// The patch of a chunk, made if it has not been and the search in hand may still make one.
+// The patch of a chunk, made if it has not been and the search in hand may still make one; its
+// floors are read again first if a block of it has changed.
 patch_at :: proc(w: ^Walk, cx, cz: i32, make_it := true) -> ^Patch {
-	if p, ok := w.patches[{cx, cz}]; ok do return p
+	if p, ok := w.patches[{cx, cz}]; ok {
+		if p != nil && p.stale do patch_read(w, p)
+		return p
+	}
 	if !make_it do return nil
 	// Only the hold's island is walked: a chunk whose blocks, border and trees reach outside its
 	// region is the open sea's or another island's.
@@ -104,50 +130,93 @@ patch_at :: proc(w: ^Walk, cx, cz: i32, make_it := true) -> ^Patch {
 	}
 	w.budget -= 1
 	w.made += 1
-	p := patch_make(w, cx, cz)
+	p := new(Patch)
+	p.cx, p.cz, p.base, p.room = cx, cz, -1, -1
 	w.patches[{cx, cz}] = p
+	patch_read(w, p)
 	return p
 }
 
-patch_make :: proc(w: ^Walk, cx, cz: i32) -> ^Patch {
+// Read a patch's floors: from the blocks it keeps, or from the generator's with the edits laid over them.
+patch_read :: proc(w: ^Walk, p: ^Patch) {
+	context.allocator = runtime.heap_allocator()   // kept blocks are let go by whichever thread next changes them
+	k := p.kept
+	if k == nil do k = ground_read(w, p.cx, p.cz)
+	patch_floors(w, p, k)
+	p.stale = false
+	if p.kept == nil {
+		if p.keep {
+			p.kept = k
+			w.kept += 1
+			w.kept_bytes += size_of(Kept) + len(k.blocks)*size_of(Mat)
+		} else {
+			delete(k.blocks)
+			free(k)
+		}
+	}
+}
+
+// Let a patch's kept blocks go: they are read from the generator again when next asked for.
+kept_drop :: proc(w: ^Walk, p: ^Patch) {
+	context.allocator = runtime.heap_allocator()
+	if p.kept == nil do return
+	w.kept -= 1
+	w.kept_bytes -= size_of(Kept) + len(p.kept.blocks)*size_of(Mat)
+	delete(p.kept.blocks)
+	free(p.kept)
+	p.kept = nil
+}
+
+// A chunk's blocks from the generator with the edits laid over them, and what its columns say.
+ground_read :: proc(w: ^Walk, cx, cz: i32) -> ^Kept {
 	c := w.columns
 	c^ = {}
 	gen_columns(0, cx, cz, c)
 	edits := make([dynamic]Edit, context.temp_allocator)
 	x0, z0 := cx*CHUNK - 1, cz*CHUNK - 1
-	for e in w.edits do if e.x >= x0 && e.x < x0 + P && e.z >= z0 && e.z < z0 + P do append(&edits, e)
-	blocks, y_base, h := build_volume({0, cx, cz}, c, edits[:])
-	defer delete(blocks)
+	for e in w.edits do if edit_reaches(e, x0, z0) do append(&edits, e)
+	k := new(Kept)
+	k.blocks, k.y_base, k.h = build_volume({0, cx, cz}, c, edits[:])
 	bound(w.island)
+	for i in 0..<P*P {
+		k.level[i] = c.water[i] if f32(c.top[i]) < c.water[i] else NO_WATER   // the land wets only the columns it made wet: a pit dug in a dry bank is dry, as it is in the world drawn (world.odin, build)
+		if c.hollow[i][1] > c.hollow[i][0] && f32(c.hollow[i][0]) < SEA_SURFACE do k.level[i] = max(k.level[i], SEA_SURFACE)   // the sea reaches under a roof
+		k.top[i], k.under[i] = c.top[i], c.under[i]
+		k.grown[i] = is(c.mat[i], COVERS) && c.mat[i] != .Dirt
+		k.tall[i] = c.plant[i] > 0 && GROUND_PLANTS[Plant_Kind(c.plant[i] - 1)].tall
+	}
+	return k
+}
 
+// Read a patch's floors, steps and rooms from a chunk's blocks into its places among the walk's.
+patch_floors :: proc(w: ^Walk, p: ^Patch, kept: ^Kept) {
+	blocks, y_base, h := kept.blocks, kept.y_base, kept.h
 	open :: #force_inline proc(blocks: []Mat, h: i32, k: int, y: i32) -> bool { return y >= h || y >= 0 && blocks[k + int(y)*P*P] == .Air }
 	// Every column's floors, the border's too: a step off the patch is read from this patch's own blocks.
 	ys: [P*P][FLOORS]i16
 	wet: [P*P][FLOORS]u8
 	count: [P*P]u8
 	for k in 0..<P*P {
-		level := c.water[k] if f32(c.top[k]) < c.water[k] else NO_WATER   // the land wets only the columns it made wet: a pit dug in a dry bank is dry, as it is in the world drawn (world.odin, build)
-		if c.hollow[k][1] > c.hollow[k][0] && f32(c.hollow[k][0]) < SEA_SURFACE do level = max(level, SEA_SURFACE)   // the sea reaches under a roof
+		level := kept.level[k]
 		for y in 0..=h {
 			if count[k] == FLOORS do break
 			if !open(blocks, h, k, y) || !open(blocks, h, k, y + 1) do continue
 			if y > 0 && (blocks[k + int(y - 1)*P*P] == .Air || is(blocks[k + int(y - 1)*P*P], LEAVES)) do continue   // nothing stands on air or on leaves
-			deep := level - f32(y + y_base) if y + y_base <= c.top[k] else 0
+			deep := level - f32(y + y_base) if y + y_base <= kept.top[k] else 0
 			if deep > WADE do continue
 			ys[k][count[k]], wet[k][count[k]] = i16(y), u8(math.ceil(max(deep, 0)*10))
 			count[k] += 1
 		}
 	}
-	p := new(Patch)
-	p.cx, p.cz, p.base, p.room = cx, cz, i32(len(w.floors)), i32(len(w.rooms))
+	mine := make([dynamic]Floor, context.temp_allocator)
 	for col in 0..<CHUNK*CHUNK {
 		k := (col/CHUNK + 1)*P + col%CHUNK + 1
-		p.first[col] = u16(i32(len(w.floors)) - p.base)
+		p.first[col] = u16(len(mine))
 		for i in 0..<count[k] {
 			f := Floor{y = ys[k][i] + i16(y_base), col = u16(col), wet = wet[k][i]}
 			y := i32(ys[k][i])
-			f.grown = y + y_base == c.top[k] && is(c.mat[k], COVERS) && c.mat[k] != .Dirt
-			f.tall = y + y_base == c.top[k] && c.plant[k] > 0 && GROUND_PLANTS[Plant_Kind(c.plant[k] - 1)].tall
+			f.grown = y + y_base == kept.top[k] && kept.grown[k]
+			f.tall = y + y_base == kept.top[k] && kept.tall[k]
 			// How the floors round it fall, two blocks either way: a single step is a grade of a quarter, a stair of them one.
 			level :: proc(ys: ^[P*P][FLOORS]i16, count: ^[P*P]u8, k: int, y: i32) -> f32 {
 				best := y
@@ -170,18 +239,17 @@ patch_make :: proc(w: ^Walk, cx, cz: i32) -> ^Patch {
 					if ok do f.links |= u16(to - y + 2) << u16(2*d)
 				}
 			}
-			append(&w.floors, f)
-			append(&w.owner, p)
+			append(&mine, f)
 		}
 	}
-	p.first[CHUNK*CHUNK] = u16(i32(len(w.floors)) - p.base)
+	p.first[CHUNK*CHUNK] = u16(len(mine))
 	// Its rooms: the floors joined by steps inside it.
-	mine := w.floors[p.base:]
+	rooms := make([dynamic]Room, context.temp_allocator)
 	stack := make([dynamic]i32, context.temp_allocator)
 	for &f, i in mine do if f.room == 0 {
-		append(&w.rooms, Room{patch = p, back = -1})
-		room := &w.rooms[len(w.rooms) - 1]
-		f.room = u16(i32(len(w.rooms)) - p.room)
+		append(&rooms, Room{patch = p, back = -1})
+		room := &rooms[len(rooms) - 1]
+		f.room = u16(len(rooms))
 		append(&stack, i32(i))
 		for len(stack) > 0 {
 			at := mine[pop(&stack)]
@@ -199,26 +267,73 @@ patch_make :: proc(w: ^Walk, cx, cz: i32) -> ^Patch {
 		}
 	}
 	for &f in mine do f.room -= 1
-	for f, i in mine do w.rooms[p.room + i32(f.room)].pace += floor_pace(w, p.base + i32(i))
-	for &r in w.rooms[p.room:] do r.pace /= f32(r.cells)
-	for len(w.cost) < len(w.floors) {
-		append(&w.cost, 0)
-		append(&w.back, -1)
-		append(&w.seen, 0)
-		append(&w.shut, 0)
-		append(&w.held, 0)
+	// Its places among the walk's floors and rooms: those it had, if they still hold it, or new ones with room to grow.
+	if n := i32(len(mine)); p.base < 0 || n > p.slots {
+		if p.base >= 0 do w.wasted += int(p.slots)
+		p.base, p.slots = i32(len(w.floors)), n + n/4 + 64
+		for _ in 0..<p.slots {
+			append(&w.floors, Floor{})
+			append(&w.owner, p)
+			append(&w.cost, 0)
+			append(&w.back, -1)
+			append(&w.seen, 0)
+			append(&w.shut, 0)
+			append(&w.held, 0)
+		}
 	}
-	return p
+	copy(w.floors[p.base:], mine[:])
+	if n := i32(len(rooms)); p.room < 0 || n > p.room_slots {
+		p.room, p.room_slots = i32(len(w.rooms)), n + 8
+		for _ in 0..<p.room_slots do append(&w.rooms, Room{patch = p, back = -1})
+	}
+	p.rooms = i32(len(rooms))
+	copy(w.rooms[p.room:], rooms[:])
+	for f, i in mine do w.rooms[p.room + i32(f.room)].pace += floor_pace(w, p.base + i32(i))
+	for &r in w.rooms[p.room:][:p.rooms] do r.pace /= f32(r.cells)
 }
 
-// A block has changed: the patches that read it are forgotten, and made again when next asked for.
+// Whether an edit falls in a chunk's blocks and border, whose low corner is x0, z0: a felled tree's
+// stump does wherever its crown reached them.
+edit_reaches :: proc(e: Edit, x0, z0: i32) -> bool {
+	r := i32(TREE_REACH + 1) if is(e.mat, RINGS) else 0
+	return e.x >= x0 - r && e.x < x0 + P + r && e.z >= z0 - r && e.z < z0 + P + r
+}
+
+// The block at a place, as the dwarves' world knows it: from a patch that keeps its blocks from
+// then on. False off the island's ground.
+walk_block :: proc(w: ^Walk, b: [3]i32) -> (m: Mat, ok: bool) {
+	p := patch_at(w, b.x >> CHUNK_SHIFT, b.z >> CHUNK_SHIFT)
+	if p == nil do return .Air, false
+	if p.kept == nil {
+		p.keep = true
+		patch_read(w, p)
+	}
+	k := p.kept
+	i := int(b.x & (CHUNK - 1) + 1) + int(b.z & (CHUNK - 1) + 1)*P
+	if ly := b.y - k.y_base; ly >= k.h do return .Air, true
+	else if ly >= 0 do return k.blocks[i + int(ly)*P*P], true
+	return crushed(rock_in(f32(b.y) + 0.5, k.under[i], 0), k.under[i]), true
+}
+
+// A block has changed. In each patch that reads it, the block is written among the blocks kept
+// and the floors are read again when next asked for; a patch that keeps none, or keeps layers the
+// block lies outside, or stands under a felled tree's crown, reads the generator again, and keeps.
 walk_edit :: proc(w: ^Walk, e: Edit) {
-	replaced := false
-	for &o in w.edits do if o.x == e.x && o.y == e.y && o.z == e.z do o.mat, replaced = e.mat, true
-	if !replaced do append(&w.edits, e)
-	for dz in i32(-1)..=1 do for dx in i32(-1)..=1 {
-		key := [2]i32{(e.x + dx) >> CHUNK_SHIFT, (e.z + dz) >> CHUNK_SHIFT}
-		if p, ok := w.patches[key]; ok && p != nil do delete_key(&w.patches, key)
+	at := [3]i32{e.x, e.y, e.z}
+	if i, ok := w.edited[at]; ok do w.edits[i].mat = e.mat
+	else {
+		w.edited[at] = i32(len(w.edits))
+		append(&w.edits, e)
+	}
+	r := i32(TREE_REACH + 2) if is(e.mat, RINGS) else 1
+	for cz in (e.z - r) >> CHUNK_SHIFT..=(e.z + r) >> CHUNK_SHIFT do for cx in (e.x - r) >> CHUNK_SHIFT..=(e.x + r) >> CHUNK_SHIFT {
+		p := w.patches[{cx, cz}] or_else nil
+		if p == nil do continue
+		p.stale, p.keep = true, true
+		k := p.kept
+		if k == nil do continue
+		if ly := e.y - k.y_base; r == 1 && ly >= 0 && ly < k.h do k.blocks[int(e.x - cx*CHUNK + 1) + int(e.z - cz*CHUNK + 1)*P + int(ly)*P*P] = e.mat
+		else do kept_drop(w, p)
 	}
 }
 
