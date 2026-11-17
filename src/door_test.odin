@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:os"
 import "core:strings"
 import "core:sync"
 import "core:testing"
@@ -9,8 +10,11 @@ import sdl "vendor:sdl3"
 // The screens before play are data, as the play screen is (docs/adr/0010): each a list of parts made
 // with no window. This test stands at the front door over the world the forming test made, moves
 // its focus by key and by pointer, goes through Worlds, a new world and settings, opens the world's
-// screen, takes an island in the hand, puts a lens on, and asks for the doors into play; and checks
-// that every screen lies inside the picture at every scale. It makes no world and enters no game:
+// screen, takes an island in the hand, puts a lens on, and asks for the doors into play; plans an
+// expedition (plan.odin): reads the landing offered, chooses others by key, by a click on the shore and
+// not on a cliff, draws the party and one dwarf again, and checks that a hold made with what was
+// chosen lands there with that party and says so in a log that plays again; and checks that every
+// screen lies inside the picture at every scale. It makes no world and enters no game:
 // those need the GPU, and are run with no window by `--door ... --press=`, as AGENTS.md says.
 // Called by the forming test once the start island and island 1 are formed.
 
@@ -80,6 +84,193 @@ laid_out :: proc(t: ^testing.T, what: string) {
 			testing.expectf(t, r.x >= o.x + o.w || o.x >= r.x + r.w || r.y >= o.y + o.h || o.y >= r.y + r.h, "%s at %d%%: the panels %s and %s cover each other", what, ui.module*25, a.id, b.id)
 		}
 	}
+}
+
+// Expedition planning, come to with the start island in the hand (plan.odin).
+@(private="file")
+an_expedition_is_planned :: proc(t: ^testing.T) {
+	p := &planning
+	settle()
+	names :: proc(party: []Facts) -> string {
+		b := strings.builder_make(context.temp_allocator)
+		for f in party do fmt.sbprintf(&b, "%s %s, %s %d; ", f.given, f.byname, TRADES[f.trade].name, f.age)
+		return strings.to_string(b)
+	}
+	shown :: proc() -> string {   // the party as the screen's rows say it
+		b := strings.builder_make(context.temp_allocator)
+		for it, i in screen.items do if it.id == "who.name" do fmt.sbprintf(&b, "%s, %s; ", it.text, screen.items[i + 1].text)
+		return strings.to_string(b)
+	}
+	at :: proc(cell: int) -> [2]f32 {   // where a cell of the island's shore stands in the picture
+		for sc in planning.shore do if int(sc.cell) == cell {
+			o := archipelago[planning.isle].origin
+			return chart_to({f64(o.x) + f64(sc.at.x), f64(o.y) + f64(sc.at.y)})
+		}
+		return {-1, -1}
+	}
+	press :: proc(where_: [2]f32) {
+		frame(where_)
+		e: sdl.Event
+		e.button.x, e.button.y, e.button.button = where_.x, where_.y, sdl.BUTTON_LEFT
+		for type in ([2]sdl.EventType{.MOUSE_BUTTON_DOWN, .MOUSE_BUTTON_UP}) {
+			e.type = type
+			door_event(&e)
+		}
+		frame()
+	}
+
+	// It opens with the landing the hold would choose in the hand, and the seed's party drawn: Enter alone is the game as it was.
+	testing.expect_value(t, says("plan.title"), fmt.tprintf("An expedition to %s", isle_name(0)))
+	testing.expect_value(t, says("expedition.title"), "The expedition")
+	own := new(Hold)
+	own.quiet = true
+	hold_make(own, home, "")
+	testing.expect(t, len(p.offered) >= 1 && p.choice == 0 && p.landed.cell == own.landed.cell && p.landed.at == own.landed.at, "the landing offered first is not the one the hold chooses")
+	testing.expect(t, !p.set.lands && p.set.draws == 0 && len(p.set.again) == 0, "an expedition with nothing chosen asks the hold for something")
+	testing.expect_value(t, count("landing.row"), len(p.offered))
+	testing.expect(t, strings.contains(says("site.tag"), "the game's own"), "the card does not say the landing in the hand is the game's own")
+	testing.expect_value(t, says("site.sub"), capital(LANDINGS[own.landed.row].name))
+	testing.expect_value(t, count("who.row"), LANDING)
+	testing.expect_value(t, names(p.party[:]), names(own.party[:]))
+	testing.expect(t, strings.contains(shown(), own.party[0].given) && strings.contains(shown(), TRADES[own.party[LANDING - 1].trade].name), "the party's rows do not say who is in the boat")
+	// The place's card is rows, and so is everything beside it: no sentence, the why on asking.
+	for thing in ([7]string{"Shelter", "Fresh water", "Ground to live on", "Slope", "Timber", "Rock", "Under it"}) {
+		found := false
+		for it in screen.items do found ||= it.id == "site.thing" && it.text == thing
+		testing.expectf(t, found, "the place's card has no row for %s", thing)
+	}
+	short :: proc(t: ^testing.T) {
+		for it in screen.items do if it.id == "site.says" || it.id == "site.thing" || it.id == "landing.says" || it.id == "work.says" || it.id == "caution" || it.id == "who.trade" {
+			testing.expectf(t, len(it.text) <= 46 && !strings.contains(it.text, ". "), "planning answers in a sentence: %q (%s)", it.text, it.id)
+		}
+	}
+	short(t)
+	testing.expect(t, count("site.bed") >= 1, "the place's card does not show the ground's beds")
+	testing.expect_value(t, count("work.thing"), len(WORKS))
+	testing.expect(t, screen_find(&screen, "plan.go").key == "Enter" && screen_find(&screen, "plan.back").key == "Esc" && screen_find(&screen, "who.again").key == "D" && screen_find(&screen, "who.all").key == "A", "the planning screen's buttons have not their keys")
+	testing.expect_value(t, count("site.why"), 0)
+	click("site.thing", "Shelter")
+	testing.expect(t, strings.contains(says("site.why"), "sea round"), "a row of the place's card clicked does not say its why, with its figures")
+	click("site.thing", "Shelter")
+
+	// The party drawn again, and one dwarf of it: each a function of the seed and the draws.
+	before := names(p.party[:])
+	key(.A)
+	again := make([dynamic]Facts, context.temp_allocator)
+	party_draw(world_seed, LANDING, &again, 1)
+	testing.expect(t, p.set.draws == 1 && names(p.party[:]) != before && names(p.party[:]) == names(again[:]), "A did not draw the seed's next party")
+	key(.DOWN)
+	second := fmt.tprintf("%s %s", p.party[1].given, p.party[1].byname)
+	key(.D)
+	party_draw(world_seed, LANDING, &again, 1, {1})
+	testing.expect(t, p.focus == 1 && len(p.set.again) == 1 && fmt.tprintf("%s %s", p.party[1].given, p.party[1].byname) != second && names(p.party[:]) == names(again[:]), "D did not draw the dwarf in focus again, and no other")
+	for f, i in p.party do for o in p.party[:i] do testing.expectf(t, f.given != o.given && f.trade != o.trade, "two of the party share a name or a trade: %s and %s", f.given, o.given)
+	testing.expect(t, strings.contains(says("who.again"), p.party[1].given), "the button does not name the dwarf it draws again")
+	click("who.bust")
+	testing.expect_value(t, p.focus, 0)
+
+	// A landing offered, by its number; a hold made with what is chosen lands there, with that party.
+	if len(p.offered) > 1 {
+		key(._2)
+		testing.expect(t, p.choice == 1 && p.set.lands, "2 did not choose the second landing offered")
+		made := new(Hold)
+		made.quiet = true
+		hold_make(made, home, "", LANDING, &p.set)
+		testing.expect(t, made.found && made.landed.cell == p.landed.cell && made.landed.at == p.landed.at && made.landed.camp == p.landed.camp, "the hold does not land where the screen says the boat comes in")
+		testing.expect_value(t, names(made.party[:]), names(p.party[:]))
+		// What it set out with is said in its log, in the form an orders file takes: played again from those lines it is the same game.
+		hold_run(made, 40)
+		lines := strings.builder_make(context.temp_allocator)
+		for line in made.log do if i := strings.index(line, `The hold says "`); i >= 0 {
+			rest := line[i + len(`The hold says "`):]
+			fmt.sbprintfln(&lines, "0 %s", rest[:strings.index(rest, `"`)])
+		}
+		testing.expect(t, strings.contains(strings.to_string(lines), "0 land ") && strings.contains(strings.to_string(lines), "0 party 1 2"), "the hold's log does not say what the expedition set out with")
+		path := "build/plan_test_orders.txt"
+		testing.expect(t, os.write_entire_file(path, transmute([]u8)strings.to_string(lines)) == nil, "the orders file is written")
+		replayed := new(Hold)
+		replayed.quiet = true
+		hold_make(replayed, home, path)
+		hold_run(replayed, 40)
+		testing.expect(t, replayed.landed.at == made.landed.at && log_hash(replayed) == log_hash(made) && len(made.log) > 5, "an expedition's log played again is not the same game")
+		fmt.printfln("the expedition: landed at %v with the party drawn again once and one dwarf again; its log %x as planned and %x played again from its own lines", made.landed.at, log_hash(made), log_hash(replayed))
+		key(._1)
+		testing.expect(t, p.choice == 0 && !p.set.lands, "1 did not go back to the game's own landing")
+	}
+
+	// The pointer on the shore: the place under it is read without a click, and a click chooses it, however bad it is.
+	open, cliff := -1, -1
+	reach := f64(px(7))*chart.span/f64(chart.wide) + 4*LAND_CELL
+	for sc in p.shore {
+		far, low := true, f64(1e9)
+		for o in p.offered do far &&= at(o) != at(int(sc.cell)) && abs(at(o).x - at(int(sc.cell)).x) + abs(at(o).y - at(int(sc.cell)).y) > 60
+		for o in p.shore do if o.row >= 0 do low = min(low, f64(abs(o.at.x - sc.at.x) + abs(o.at.y - sc.at.y)))
+		if sc.row == i8(len(LANDINGS) - 1) && far && open < 0 && inside(chart.free, at(int(sc.cell))) do open = int(sc.cell)
+		if sc.row < 0 && low > 2*reach && cliff < 0 && inside(chart.free, at(int(sc.cell))) do cliff = int(sc.cell)
+	}
+	if testing.expect(t, open >= 0, "the start island has no open shore to choose") {
+		frame(at(open))
+		testing.expect(t, says("site.tag") == "Under the pointer" && p.under == open, "the place under the pointer is not on the card")
+		testing.expect(t, says("site.sub") == "An open shore", "an open shore under the pointer is not said to be one")
+		was := p.landed.cell
+		frame({1280, 12})
+		testing.expect(t, strings.contains(says("site.tag"), "The landing chosen") && p.landed.cell == was, "the card does not go back to the place chosen when the pointer leaves the shore")
+		press(at(open))
+		frame({1280, 12})
+		testing.expect(t, p.choice == -1 && p.set.lands && p.landed.cell != was && p.landed.row == len(LANDINGS) - 1, "a click on an open shore did not choose it")
+		testing.expect(t, count("caution") >= 1 && count("landing.row") == len(p.offered) + 1, "a bad place chosen does not stand among the landings with its cautions named")
+		hard := new(Hold)
+		hard.quiet = true
+		hold_make(hard, home, "", LANDING, &p.set)
+		testing.expect(t, hard.found && hard.landed.at == p.landed.at, "the hold does not land on the open shore that was chosen")
+		short(t)
+	}
+	if cliff >= 0 {   // a shore that stands too high takes no boat, says so, and is not chosen
+		was := p.landed.cell
+		frame(at(cliff))
+		testing.expect(t, p.under == -1 && strings.contains(says("tip"), "No boat can be drawn up here"), "the pointer on a cliff does not say that no boat can be drawn up")
+		press(at(cliff))
+		testing.expect(t, p.landed.cell == was, "a click on a cliff chose a landing")
+	}
+	frame({1280, 12})
+
+	// Set out waits for the island's neighbours, and says so; then it is the one thing to do.
+	testing.expect(t, strings.contains(says("plan.waits"), "still to be formed") && .Faint in screen_find(&screen, "plan.go").state, "planning does not say why the party cannot set out yet")
+	key(.RETURN)
+	testing.expect(t, door.wish == .None, "the party set out before the island could be entered")
+	making.near_km = 10   // as if its neighbours were formed
+	frame()
+	testing.expect(t, says("plan.waits") == "" && .Main in screen_find(&screen, "plan.go").state, "Set out is not the main thing to do once it can be done")
+	key(.RETURN)
+	testing.expect(t, door.wish == .Hold && door.isle == 0 && door.planned, "Enter did not set out with the expedition planned")
+	door.wish, door.planned = .None, false
+	making.near_km = 64
+
+	// It holds at every size, with more dwarves than the boat's seven too.
+	for module in 3..=8 {
+		play.scale = module
+		frame()
+		laid_out(t, "planning")
+		panel := screen_find(&screen, "expedition").rect
+		for it in screen.items do if it.area == .List && it.clip.w == 0 && it.part != .Tip {
+			testing.expectf(t, it.rect.y + it.rect.h <= panel.y + panel.h + 1 && it.rect.x + it.rect.w <= panel.x + panel.w + 1, "planning at %d%%: %s %q leaves the expedition's panel", module*25, it.id, it.text)
+		}
+		for a, i in screen.items do if a.id == "plan.go" || a.id == "who.again" || a.id == "landing.row" || a.id == "caution.row" || a.id == "work.row" || a.id == "who.box" {
+			for b in screen.items[i + 1:] do if (b.id == "plan.go" || b.id == "who.again" || b.id == "landing.row" || b.id == "caution.row" || b.id == "work.row" || b.id == "who.box") && b.id != a.id {
+				testing.expectf(t, a.rect.y >= b.rect.y + b.rect.h || b.rect.y >= a.rect.y + a.rect.h, "planning at %d%%: %s lies on %s", module*25, a.id, b.id)
+			}
+		}
+	}
+	play.scale = 0
+	frame()
+
+	// Escape goes back with the island in the hand; in again, what was chosen is as it was left.
+	chosen, drawn := p.landed.cell, names(p.party[:])
+	key(.ESCAPE)
+	testing.expect_value(t, door.screen, Before.Chart)
+	key(.RETURN)
+	testing.expect(t, door.screen == .Plan && p.landed.cell == chosen && p.choice == -1 && names(p.party[:]) == drawn && p.set.draws == 1, "what was planned was not kept when the player went back and came in again")
+	key(.ESCAPE)
 }
 
 the_front_door_and_the_world :: proc(t: ^testing.T) {
@@ -226,16 +417,18 @@ the_front_door_and_the_world :: proc(t: ^testing.T) {
 
 	// The doors: not while the islands near it are unformed, and the card says why; then by key.
 	testing.expect(t, screen_find(&screen, "isle.found").key == "Enter" && screen_find(&screen, "isle.walk").key == "W", "the doors have not their keys on them")
-	testing.expect_value(t, says("isle.found"), "Land the party here")
+	testing.expect_value(t, says("isle.found"), "Plan an expedition")
 	testing.expect(t, strings.contains(says("isle.waits"), "still to be formed"), "the card does not say why play cannot begin yet")
+	testing.expect(t, .Main in screen_find(&screen, "isle.found").state, "an expedition cannot be planned on an island whose land is formed")
+	key(.W)
+	testing.expect(t, door.wish == .None, "the island was walked before it could be entered")
 	key(.RETURN)
-	testing.expect(t, door.wish == .None, "Found a hold was taken before the island could be entered")
+	testing.expect_value(t, door.screen, Before.Plan)
+	an_expedition_is_planned(t)
+	testing.expect(t, door.screen == .Chart && chart.pick == 0, "Escape from planning did not go back to the world's map with the island still in the hand")
 	making.near_km = 10   // as if its neighbours were formed
 	frame()
-	testing.expect(t, says("isle.waits") == "" && .Main in screen_find(&screen, "isle.found").state, "a door that can be taken is not the main thing to do")
-	key(.RETURN)
-	testing.expect(t, door.wish == .Hold && door.isle == 0, "Enter did not found a hold on the island in the hand")
-	door.wish = .None
+	testing.expect_value(t, says("isle.waits"), "")
 	key(.W)
 	testing.expect(t, door.wish == .Walk && door.isle == 0, "W did not walk the island in the hand")
 	door.wish = .None

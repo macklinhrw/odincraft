@@ -1,0 +1,114 @@
+# Expedition planning, played from the player's seat (step E-1; open-decisions.md, 2026-11-16): an
+# island taken, the landing the game offers read, the pointer moved along the shore to a bad place and
+# to a cliff, the bad place chosen anyway, the party drawn again and one dwarf of it again, back with
+# Escape and in again, and set out: the boat comes in at the place chosen with the party chosen.
+#   build/odincraft --door --play=docs/interesting-world/real/play/e1-plan.txt
+# The pictures go to out/play/. The pointer's figures are pixels of a picture 2560 by 1440.
+
+until ready 120
+print 1. an island taken on the world's map, and its door: Plan an expedition
+part Worlds
+key Enter
+wait 0.5
+part North Back
+wait 0.8
+shot out/play/e1-01-island.png
+part Plan an expedition
+wait 0.8
+print 2. planning opens with the landing the game would choose in the hand, and the seed's party drawn
+shot out/play/e1-02-plan.png
+say
+
+print 3. the why of a row: beside the pointer, and under the row once it is clicked
+move 330 1175
+wait 0.8
+snap out/play/e1-03-row-tip.png
+part A stream's fan
+shot out/play/e1-04-row-why.png
+part A stream's fan
+
+print 4. the pointer goes along the shore: an open shore to the west, read without a click
+move 838 698
+wait 0.6
+snap out/play/e1-05-hover-open.png
+under
+say
+print 5. a shore that stands as a cliff takes no boat, and says so
+move 1843 710
+wait 0.8
+snap out/play/e1-06-hover-cliff.png
+under
+print 6. under the slide
+move 1357 922
+wait 0.6
+snap out/play/e1-07-hover-slip.png
+under
+
+print 7. the bad place chosen anyway: a click on it
+click 838 698
+move 700 330
+wait 0.5
+shot out/play/e1-08-chosen-open.png
+say
+print 8. a landing offered taken by its number, and the bad place taken again
+key 3
+wait 0.3
+shot out/play/e1-09-offered-3.png
+click 838 698
+move 700 330
+wait 0.3
+
+print 8b. the wheel brings a bay nearer about the pointer, to read its shore; Home shows the island whole again
+move 1169 835
+wheel 5
+wait 0.5
+snap out/play/e1-09b-zoom.png
+under
+key Home
+wait 0.6
+move 700 330
+
+print 9. the party drawn again, all of it
+key A
+wait 0.3
+shot out/play/e1-10-party-again.png
+print 10. one dwarf drawn again: a click on its row, and the button under the party
+click 2317 640
+wait 0.3
+snap out/play/e1-11-dwarf-focus.png
+part who.again
+wait 0.3
+shot out/play/e1-12-dwarf-again.png
+say
+key Down
+key D
+wait 0.3
+shot out/play/e1-13-dwarf-again-key.png
+
+print 11. Escape goes back to the world's map with the island still in the hand; in again, what was chosen is kept
+key Esc
+wait 0.8
+shot out/play/e1-14-back.png
+key Enter
+wait 0.8
+shot out/play/e1-15-kept.png
+say
+
+print 12. set out: the boat comes in at the place chosen, with the party chosen
+key Enter
+wait 3
+shot out/play/e1-16-boat.png
+say
+run 40
+shot out/play/e1-17-ashore.png
+run 60
+shot out/play/e1-18-gathered.png
+say
+
+print 13. out of play to the world, and planning again: the expedition is as it was left
+key Esc
+part Leave to the world
+wait 0.8
+key Enter
+wait 0.8
+shot out/play/e1-19-again.png

@@ -68,6 +68,7 @@ Card_Row :: struct {
 	sign:  Sign,     // a disc where it is well, a triangle where a founder should look twice
 	block: Colour,   // a rock or a wood shown as a block of its own colour on the map
 	faint: bool,     // not known yet, or not there
+	named: string,   // a place's card (landing.odin): what the row is called among the cautions, where it is one
 }
 Isle_Card :: struct {
 	of:     int,    // the island it is of, MAINLAND, or -1 for none
@@ -617,22 +618,15 @@ chart_take :: proc(island: int, go := false) {
 }
 
 card_row :: proc(k: ^Isle_Card, d: Isle_Depth, thing, says: string, why := "", sign := Sign.None, block := Colour{}, faint := false) {
-	append(&k.rows[d], Card_Row{strings.clone(thing), strings.clone(says), strings.clone(why), sign, block, faint})
+	append(&k.rows[d], Card_Row{strings.clone(thing), strings.clone(says), strings.clone(why), sign, block, faint, ""})
 }
 
 // The landing an island's shore offers, as the hold will choose it (landing.odin): the first of the
 // landing's rows that holds on any cell of its shore, and on how many. The island is bound.
 shore_offers :: proc() -> (row, held, shores: int) {
-	g, n := land.grid, land.n
+	g := land.grid
 	row = -1
-	shore := make([dynamic]int, context.temp_allocator)
-	for ci in g.order {
-		c := int(ci)
-		if c%n < 1 || c/n < 1 || c%n >= n - 1 || c/n >= n - 1 do continue
-		beside := false
-		for o in OFFSETS do beside ||= g.sea[c + o.y*n + o.x]
-		if beside do append(&shore, c)
-	}
+	shore := shore_cells()
 	shores = len(shore)
 	for r, i in LANDINGS {
 		for c in shore {
@@ -843,6 +837,52 @@ row_high :: proc(r: Card_Row, inner: f32, chosen: bool) -> (high: f32, two: bool
 	return
 }
 
+// A card's rows in their box, `depth` high: a thing, then a word or a figure with its sign, and under
+// the row chosen its why. Scrolled where they are deeper than the box, with the wheel over it. A row
+// with a why takes `act` with its number; the parts are named `id`.row, .thing, .says, .why and .thumb.
+// `reveal` scrolls them so that the row chosen stands whole in the box, once, when it is chosen.
+rows_put :: proc(rows: []Card_Row, cx, y, inner, depth: f32, scroll, over: ^f32, chosen: int, act: Act, id: string, reveal := false) {
+	u, L := &play, &LOOK
+	name :: proc(id, part: string) -> string { return fmt.tprintf("%s.%s", id, part) }
+	box := Rect{cx, y, inner, depth}
+	all := f32(0)
+	for row, i in rows { h, _ := row_high(row, inner, i == chosen); all += h }
+	over^ = max(all - depth, 0)
+	if reveal && chosen >= 0 && chosen < len(rows) {   // the row just chosen, whole, with its why
+		top := f32(0)
+		for row in rows[:chosen] { h, _ := row_high(row, inner, false); top += h }
+		high, _ := row_high(rows[chosen], inner, true)
+		if top + high - scroll^ > depth do scroll^ = top + high - depth
+		if top < scroll^ do scroll^ = top
+	}
+	scroll^ = clamp(scroll^, 0, over^)
+	part(.Fill, box, colour = {}, state = {.Solid})   // the wheel over it scrolls it
+	u.clip = {box.x - px(L.pad.x) + 1, box.y, box.w + 2*px(L.pad.x) - 2, box.h}
+	ry := y - scroll^
+	for row, i in rows {
+		high, two := row_high(row, inner, i == chosen)
+		part(.Row, {box.x - px(L.pad.x) + 1, ry, box.w + 2*px(L.pad.x) - 2, high}, state = {.Chosen} if i == chosen else {}, act = act if row.why != "" else .None, arg = i, id = name(id, "row"), tip = row.why if i != chosen else "")
+		ty, lx := ry + px(1), cx
+		if row.block.a > 0 {
+			part(.Fill, {lx, ty + math.round((line_of(.Body) - px(L.block))/2), px(L.block), px(L.block)}, colour = row.block)
+			lx += px(L.block) + px(2)
+		}
+		words(lx, ty, row.thing, .Body, L.ash, name(id, "thing"))
+		sy := ty + (line_of(.Body) if two else 0)
+		sw := text_wide(.Body, row.says)
+		if two {
+			words(lx, sy, fit(.Body, row.says, inner - (lx - cx)), .Body, L.ash if row.faint else L.chalk, name(id, "says"))
+		} else {
+			part(.Text, {cx + inner - sw, sy, sw, line_of(.Body)}, row.says, .Body, L.ash if row.faint else L.chalk, id = name(id, "says"))
+			if row.sign != .None do part(.Sign, {cx + inner - sw - px(1.5) - px(L.sign), sy + math.round((line_of(.Body) - px(L.sign))/2), px(L.sign), px(L.sign)}).sign = row.sign
+		}
+		if i == chosen && row.why != "" do words(cx, sy + line_of(.Body) + px(0.5), row.why, .Small, L.ash, name(id, "why"), inner)
+		ry += high
+	}
+	u.clip = {}
+	if over^ > 0 do part(.Thumb, {cx + inner + px(1.5), y + depth*scroll^/all, px(1.5), depth*depth/all}, id = name(id, "thumb"))
+}
+
 // Lower left: the island in the hand, as a card of rows, and the doors into play.
 isle_build :: proc() {
 	c, u, L := &chart, &play, &LOOK
@@ -917,44 +957,15 @@ isle_build :: proc() {
 		part(.Rule, {cx, y - 1, inner, 1}, colour = L.edge)
 		y += px(2.5)
 	}
-	box := Rect{cx, y, inner, depth}
-	rows := k.rows[c.depth][:]
-	all := f32(0)
-	for row, i in rows { h, _ := row_high(row, inner, i == c.row); all += h }
-	c.over = max(all - depth, 0)
-	c.scroll = clamp(c.scroll, 0, c.over)
-	part(.Fill, box, colour = {}, state = {.Solid})   // the wheel over it scrolls it
-	u.clip = {box.x - px(L.pad.x) + 1, box.y, box.w + 2*px(L.pad.x) - 2, box.h}
-	ry := y - c.scroll
-	for row, i in rows {
-		high, two := row_high(row, inner, i == c.row)
-		part(.Row, {box.x - px(L.pad.x) + 1, ry, box.w + 2*px(L.pad.x) - 2, high}, state = {.Chosen} if i == c.row else {}, act = .Isle_Row if row.why != "" else .None, arg = i, id = "isle.row", tip = row.why if i != c.row else "")
-		ty, lx := ry + px(1), cx
-		if row.block.a > 0 {
-			part(.Fill, {lx, ty + math.round((line_of(.Body) - px(L.block))/2), px(L.block), px(L.block)}, colour = row.block)
-			lx += px(L.block) + px(2)
-		}
-		words(lx, ty, row.thing, .Body, L.ash, "isle.thing")
-		sy := ty + (line_of(.Body) if two else 0)
-		sw := text_wide(.Body, row.says)
-		if two {
-			words(lx, sy, fit(.Body, row.says, inner - (lx - cx)), .Body, L.ash if row.faint else L.chalk, "isle.says")
-		} else {
-			part(.Text, {cx + inner - sw, sy, sw, line_of(.Body)}, row.says, .Body, L.ash if row.faint else L.chalk, id = "isle.says")
-			if row.sign != .None do part(.Sign, {cx + inner - sw - px(1.5) - px(L.sign), sy + math.round((line_of(.Body) - px(L.sign))/2), px(L.sign), px(L.sign)}).sign = row.sign
-		}
-		if i == c.row && row.why != "" do words(cx, sy + line_of(.Body) + px(0.5), row.why, .Small, L.ash, "isle.why", inner)
-		ry += high
-	}
-	u.clip = {}
-	if c.over > 0 do part(.Thumb, {cx + inner + px(1.5), y + depth*c.scroll/all, px(1.5), depth*depth/all}, id = "isle.thumb")
+	rows_put(k.rows[c.depth][:], cx, y, inner, depth, &c.scroll, &c.over, c.row, .Isle_Row, "isle")
 	y += depth
 	if !isle do return
-	// The doors. They say what is done today: there is no expedition to plan yet (E-1).
+	// The doors: an expedition is planned on an island once its land is formed (plan.odin); walking it waits for its neighbours.
 	y += px(4)
 	if waits != "" do y += words(cx, y, waits, .Small, L.ash, "isle.waits", inner) + px(2)
 	walk := button_wide("Walk it", door_key(.Roam))
-	door_button({cx, y, inner - walk - px(L.gap), px(L.button)}, "Land the party here", .Found, 0, "isle.found", "The seven dwarves the seed drew land on this island, where its shore best lets a boat in, and you lead them from above. Choosing who comes, what they bring and where they land is not built yet.", main = !blocked, faint = blocked)
+	unformed := !is_formed(&formed[k.of])
+	door_button({cx, y, inner - walk - px(L.gap), px(L.button)}, "Plan an expedition", .Found, 0, "isle.found", "Choose where on this island the boat lands and who comes, and set out.", main = !unformed, faint = unformed)
 	door_button({cx + inner - walk, y, walk, px(L.button)}, "Walk it", .Roam, 0, "isle.walk", "Stand on this island on foot, with no party: the bank of its largest river.", faint = blocked)
 }
 

@@ -280,7 +280,7 @@ options :: proc() -> Options {
 		case "play":  o.play = value
 		case "alert": o.alert = value
 		case "enter": o.enter = true
-		case "door":  o.door, o.has_door, ok = value, true, value == "" || value == "worlds" || value == "new" || value == "settings" || value == "world"
+		case "door":  o.door, o.has_door, ok = value, true, value == "" || value == "worlds" || value == "new" || value == "settings" || value == "world" || value == "plan"
 		case "when":  o.at_when = value
 		case "focus": ok = numbers(value, ",", v[:1]) && v.x >= 1; o.focus = int(v.x)
 		case "pick":  ok = numbers(value, ",", v[:1]); o.pick, o.has_pick = int(v.x), true

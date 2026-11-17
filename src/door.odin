@@ -31,11 +31,13 @@ import sdl "vendor:sdl3"
 //                    arrives as it is made.
 //   settings         the interface's size, and the keys, which are the rows of BINDS: a row clicked
 //                    takes the next key pressed.
+//   the world        its map, an island in the hand, and the doors (chart.odin)
+//   planning         an expedition to the island in the hand: where it lands and who goes (plan.odin)
 //
 // A run with no window draws any of them in a state the options set (options.odin), and says what
 // it says; `press` works their buttons, across the way into play and out again.
 
-Before :: enum u8 { Door, Worlds, New, Settings, Chart }
+Before :: enum u8 { Door, Worlds, New, Settings, Chart, Plan }
 Wish :: enum u8 { None, Hold, Walk }
 
 Door :: struct {
@@ -52,6 +54,7 @@ Door :: struct {
 	scroll, over: f32,         // how far a list longer than its panel is scrolled, and how far it can be
 	wish:     Wish,            // play is to begin as soon as the world can be entered: with a hold, or on foot
 	isle:     int,             // on this island
+	planned:  bool,            // and with the expedition that was planned (plan.odin), not the game's own landing and the seed's first party
 	rebind:   int,             // the row of BINDS that takes the next key pressed, or -1
 	took:     [Stage]f64,      // how long each stage of making a world last took on this machine, kept between runs
 	now, rest, dt: f64,        // real seconds here, those the pointer has rested, and this frame's
@@ -111,6 +114,7 @@ door_run :: proc(opt: ^Options, g_in: ^Gpu, window_in: ^sdl.Window, to: Leave) {
 	case "settings": screen_go(.Settings)
 	case "world":    screen_go(.Chart)
 	}
+	plan_first := opt.door == "plan"   // the planning screen, once the island asked for is formed (--pick, or the start)
 
 	if script.on && script.at == 0 && len(script.steps) > 0 && script.steps[0].kind == .Loaded do script.at = 1   // a script begun here waits for no world: the first frame is its to look at
 	script_step, script_waited := -1, 0.0
@@ -160,12 +164,17 @@ door_run :: proc(opt: ^Options, g_in: ^Gpu, window_in: ^sdl.Window, to: Leave) {
 				chart.at += pan*chart.span*0.6*dt
 			}
 		}
+		if plan_first && sync.atomic_load(&making.records) && is_formed(&formed[clamp(opt.pick, 0, len(archipelago) - 1) if opt.has_pick else 0]) {
+			plan_first = false
+			chart_take(clamp(opt.pick, 0, len(archipelago) - 1) if opt.has_pick else 0)
+			screen_go(.Plan)
+		}
 		listed := sdl.GetPerformanceCounter()
 		door_frame(f32(pw), f32(ph), at, 0 if d.unseen && opt.shot != "" else dt)
 		append(&listing, f32(f64(sdl.GetPerformanceCounter() - listed)/frequency))
 		script_parts()
 		if say_now do play_say()
-		if under_now do fmt.printfln("script: the pointer is on %s", chart_tip(at) if d.screen == .Chart && chart_tip(at) != "" else "nothing the map names")
+		if under_now do fmt.printfln("script: the pointer is on %s", plan_under() if d.screen == .Plan && plan_under() != "" else chart_tip(at) if d.screen == .Chart && chart_tip(at) != "" else "nothing the map names")
 		shot := script_shot
 		posed := (opt.shot != "" || len(opt.press) > 0) && seconds >= opt.after && door_posed(opt) && pressed_all(opt, door_act)   // the state the options ask for, and their parts pressed
 		if opt.shot != "" && posed {
@@ -238,7 +247,8 @@ door_play :: proc() -> Leave {
 	play_again()
 	hold, watch = {}, {selected = -1}
 	if !o.first {
-		hold_make(&hold, home, "", o.party)
+		hold_make(&hold, home, "", o.party, &planning.set if d.planned else nil)
+		d.planned = false
 		if !hold.found do tell("No boat can come in to any shore of this island, so no dwarves have landed. You stand on the bank of its largest river.")
 	}
 	sky_choose(&o)
@@ -282,10 +292,12 @@ screen_go :: proc(to: Before) {
 		for w, i in d.worlds do if w.seed == making.seed do d.focus = i
 	}
 	if to == .Door do d.focus = 0
-	if to != .Chart {   // the map's lens and its view's journey are the world's screen's own
+	if to != .Chart {   // the map's lens is the world's screen's own, and its view's journey that screen's and the planning's
 		sync.atomic_store(&chart.lens, -1)
-		chart.lenses, chart.going = false, false
+		chart.lenses = false
+		if to != .Plan do chart.going = false
 	}
+	if to == .Plan || to == .Chart && was == .Plan do chart_go(chart.pick)   // the island whole, between the panels
 	if to == .Chart && was != .Chart && chart.pick == -1 do chart.homed = false   // the islands there are to choose from, and the start in the hand
 	if d.window != nil && !d.unseen {
 		if to == .New do _ = sdl.StartTextInput(d.window)
@@ -419,10 +431,13 @@ settings_keep :: proc() {
 
 // The key written on the button of an act before play: a row of BINDS for the screen that is up.
 door_key :: proc(act: Act, arg := 0) -> string {
-	views := Views.Chart if door.screen == .Chart else Views.Door
+	views := door_views()
 	for b in BINDS do if b.act == act && b.arg == arg && b.views == views do return b.name
 	return ""
 }
+
+// The rows of BINDS the screen that is up reads.
+door_views :: proc() -> Views { return .Chart if door.screen == .Chart else .Plan if door.screen == .Plan else .Door }
 
 // Give a row of BINDS another key, with the name a button shows for it.
 key_set :: proc(row: int, key: sdl.Scancode) {
@@ -459,10 +474,12 @@ KEYS_SAID := [?]Key_Said{
 	{.Back, 0, "Back to the game"}, {.Leave, int(Leave.World), "Leave to the world"}, {.Leave, int(Leave.Door), "Leave to the front door"}, {.Quit, 0, "Quit the game"},
 	{.Door_Move, -1, "The choice above"}, {.Door_Move, 1, "The choice below"}, {.Door_Go, 0, "Take the choice in focus"},
 	{.Door_Back, 0, "Back: put down, then to the front door"}, {.Draw, 0, "Draw a seed"}, {.Stop, 0, "Stop making the world, or go on"},
-	{.Found, 0, "Land the party on the island in the hand"}, {.Roam, 0, "Walk the island in the hand"},
+	{.Found, 0, "Plan an expedition to the island in the hand"}, {.Roam, 0, "Walk the island in the hand"},
 	{.Chart_Home, 0, "The map over all the islands"}, {.Chart_Zoom, 1, "The map nearer"}, {.Chart_Zoom, -1, "The map further"}, {.Chart_Lenses, 0, "The map's lenses"},
+	{.Set_Out, 0, "Set out"}, {.Site, 0, "Land at the first landing offered"}, {.Site, 1, "Land at the second"}, {.Site, 2, "Land at the third"}, {.Site, 3, "Land at the fourth"},
+	{.Party_Move, -1, "The dwarf above"}, {.Party_Move, 1, "The dwarf below"}, {.Draw_Dwarf, -1, "Draw the dwarf in focus again"}, {.Draw_Party, 0, "Draw the whole party again"},
 }
-VIEWS_SAID := [Views]string{.Above = "From above", .Afoot = "On foot", .Either = "From above and on foot", .Menu = "In the menu", .Door = "At the front door", .Chart = "On the world's map"}
+VIEWS_SAID := [Views]string{.Above = "From above", .Afoot = "On foot", .Either = "From above and on foot", .Menu = "In the menu", .Door = "At the front door", .Chart = "On the world's map", .Plan = "Planning an expedition"}
 
 key_says :: proc(b: Bind) -> string {
 	for row in KEYS_SAID do if row.act == b.act && row.arg == b.arg do return row.says
@@ -489,7 +506,7 @@ door_act :: proc(act: Act, arg: int) {
 		switch d.screen {
 		case .Door:
 			switch d.focus {
-			case 0: d.wish, d.isle = .Hold, 0   // into play at the start, as soon as it can be entered
+			case 0: d.wish, d.isle, d.planned = .Hold, 0, false   // into play at the start, as soon as it can be entered
 			case 1: screen_go(.Worlds)
 			case 2: screen_go(.New)
 			case 3: screen_go(.Settings)
@@ -499,12 +516,13 @@ door_act :: proc(act: Act, arg: int) {
 			if d.focus < len(d.worlds) do world_show(d.worlds[d.focus].seed)
 		case .New:
 			if s, ok := strconv.parse_uint(string(d.typed[:]), 10); ok && s > 0 && s <= uint(max(u32)) do world_show(u32(s))
-		case .Settings, .Chart:
+		case .Settings, .Chart, .Plan:
 		}
 	case .Door_Back:
 		switch {
 		case d.rebind >= 0: d.rebind = -1
 		case d.wish != .None: d.wish = .None
+		case d.screen == .Plan: screen_go(.Chart)   // back to the world's map, the island still in the hand and what was planned kept
 		case d.screen == .Chart && c.lenses && c.lens < 0: c.lenses = false
 		case d.screen == .Chart && c.pick != -1:   // the island is put down, and the view goes back to all of them
 			chart_take(-1)
@@ -534,10 +552,16 @@ door_act :: proc(act: Act, arg: int) {
 	case .Isle_Row: c.row = -1 if c.row == arg else arg
 	case .Isle_Take: chart_take(arg, true)
 	case .Chart_Zoom: chart_zoom(math.pow(0.9, f64(arg)), {c.free.x + c.free.w/2, c.free.y + c.free.h/2})
-	case .Chart_Home: chart_go(-1)
+	case .Chart_Home: chart_go(c.pick if d.screen == .Plan else -1)
 	case .Mass_Leave: sync.atomic_store(&mainland_state.leave, true)
-	case .Found, .Roam:
-		if d.screen == .Chart && c.pick >= 0 && world_enterable(c.pick) do d.wish, d.isle = .Hold if act == .Found else .Walk, c.pick
+	case .Found:   // an expedition to the island in the hand is planned, once its land is formed
+		if d.screen == .Chart && c.pick >= 0 && is_formed(&formed[c.pick]) do screen_go(.Plan)
+	case .Roam:
+		if d.screen == .Chart && c.pick >= 0 && world_enterable(c.pick) do d.wish, d.isle, d.planned = .Walk, c.pick, false
+	case .Set_Out:
+		if d.screen == .Plan && c.pick >= 0 && world_enterable(c.pick) && len(planning.offered) > 0 do d.wish, d.isle, d.planned = .Hold, c.pick, true
+	case .Site, .Site_Row, .Party_Who, .Party_Move, .Draw_Dwarf, .Draw_Party:
+		if d.screen == .Plan do plan_act(act, arg)
 	}
 }
 
@@ -559,7 +583,7 @@ door_event :: proc(e: ^sdl.Event) {
 			builtin.resize(&d.typed, len(without_last(string(d.typed[:]))))
 			return
 		}
-		views := Views.Chart if d.screen == .Chart else Views.Door
+		views := door_views()
 		for b in BINDS do if b.key == e.key.scancode && b.views == views {
 			if !e.key.repeat || b.held do door_act(b.act, b.shifted if e.key.mod & sdl.KMOD_SHIFT != {} else b.arg)
 			return
@@ -584,19 +608,23 @@ door_event :: proc(e: ^sdl.Event) {
 		d.pressing, d.on_map, d.dragged = false, false, false
 		if hot >= 0 {
 			d.pressing, d.pressed, d.pressed_arg = true, screen.items[hot].act, screen.items[hot].arg
-		} else if !solid && d.screen == .Chart do d.on_map, d.press = true, at
+		} else if !solid && (d.screen == .Chart || d.screen == .Plan) do d.on_map, d.press = true, at
 	case .MOUSE_BUTTON_UP:
 		if e.button.button != sdl.BUTTON_LEFT do return
 		at := [2]f32{e.button.x, e.button.y}*d.ratio
 		if d.pressing {
 			if hot, _, _ := screen_over(&screen, at); hot >= 0 && screen.items[hot].act == d.pressed && screen.items[hot].arg == d.pressed_arg do door_act(d.pressed, d.pressed_arg)
+		} else if d.on_map && !d.dragged && d.screen == .Plan {   // a click on the island chooses the shore under it
+			plan_click()
 		} else if d.on_map && !d.dragged && sync.atomic_load(&making.records) {   // a click on the map takes what is under it in the hand
 			chart_take(chart_under(chart_from(at)), true)
 		}
 		d.pressing, d.on_map, d.dragged = false, false, false
 	case .MOUSE_WHEEL:
 		_, solid, on := screen_over(&screen, d.pointer)
-		if d.screen == .Chart && !solid do chart_zoom(math.pow(0.88, f64(e.wheel.y)), d.pointer)
+		if (d.screen == .Chart || d.screen == .Plan) && !solid do chart_zoom(math.pow(0.88, f64(e.wheel.y)), d.pointer)
+		else if d.screen == .Plan && on >= 0 && screen.items[on].area == .Hand do planning.scroll -= e.wheel.y*px(8)
+		else if d.screen == .Plan && on >= 0 && screen.items[on].area == .List do planning.who_scroll -= e.wheel.y*px(13)
 		else if d.screen == .Chart && on >= 0 && screen.items[on].area == .Hand do c.scroll -= e.wheel.y*px(8)
 		else if d.screen == .Chart && on >= 0 && screen.items[on].area == .List do c.list_scroll -= e.wheel.y*px(13)
 		else if d.screen == .Settings || d.screen == .Worlds do d.scroll -= e.wheel.y*px(14)
@@ -617,15 +645,21 @@ door_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64) {
 	d.pointer = pointer
 	ui_bake(play.scale if play.scale != 0 else scale_for(high))
 	play.clip, play.menu = {}, false
-	if d.screen == .Chart do chart_build()
+	if d.screen == .Plan do plan_build()
+	else if d.screen == .Chart do chart_build()
 	else do front_build()
 	s.hot, _, _ = screen_over(s, pointer)
 	if d.on_map do s.hot = -1
 	if d.pressing && (s.hot < 0 || s.items[s.hot].act != d.pressed || s.items[s.hot].arg != d.pressed_arg) do s.hot = -1
 	// A few words beside the part the pointer rests on, or of what lies under it on the map.
 	text := ""
+	_, solid, on := screen_over(s, pointer)
 	if s.hot >= 0 && (d.rest > 0.45 || d.unseen) do text = s.items[s.hot].tip
-	else if _, solid, _ := screen_over(s, pointer); !solid && d.screen == .Chart && pointer.x >= 0 && !d.on_map && (d.rest > 0.6 || d.unseen) do text = chart_tip(pointer)
+	else if s.hot < 0 && on >= 0 && !d.pressing && (d.rest > 0.45 || d.unseen) {   // a part that does nothing and has something to say: the why of a stage left, of a caution
+		text = s.items[on].tip
+		if text != "" do s.hot = on
+	} else if !solid && d.screen == .Chart && pointer.x >= 0 && !d.on_map && (d.rest > 0.6 || d.unseen) do text = chart_tip(pointer)
+	else if !solid && d.screen == .Plan && pointer.x >= 0 && !d.on_map && (d.rest > 0.3 || d.unseen) do text = plan_tip()
 	if text != "" {
 		L := &LOOK
 		play.area = .World
@@ -638,6 +672,7 @@ door_frame :: proc(wide, high: f32, pointer: [2]f32, dt: f64) {
 			else if r.x + r.w/2 > 0.5*s.w do x, y = r.x - px(2) - w, r.y
 			else do x, y = r.x + r.w + px(2), r.y   // beside it, toward the picture's middle, so that nothing of its own panel is covered
 		}
+		if s.hot < 0 && d.screen == .Plan && x + w > s.w - px(L.margin) - px(L.isles_wide) - px(2) do x = pointer.x - px(4) - w   // beside the pointer on the island: on the side away from the expedition's column
 		if x + w > s.w - px(1) do x = s.w - px(1) - w
 		if y + h > s.h - px(1) do y = s.h - px(1) - h
 		part(.Tip, {math.round(x), math.round(y), w, h}, text, .Small, {}, {.Wrap}, id = "tip")
@@ -705,9 +740,9 @@ front_build :: proc() {
 	case .Worlds:   worlds_build(x, y)
 	case .New:      new_build(x, y)
 	case .Settings: settings_build(x, y)
-	case .Chart:
+	case .Chart, .Plan:
 	}
-	panels := [Before]string{.Door = "", .Worlds = "worlds", .New = "new", .Settings = "settings", .Chart = ""}
+	panels := [Before]string{.Door = "", .Worlds = "worlds", .New = "new", .Settings = "settings", .Chart = "", .Plan = ""}
 	if panel := screen_find(&screen, panels[d.screen]); panels[d.screen] != "" && panel != nil && made.h > 0 {
 		r := panel.rect   // a screen's own panel has the room first: the world being made is told at the front door
 		if made.x < r.x + r.w + px(2) && made.y < r.y + r.h + px(2) {
