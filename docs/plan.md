@@ -58,7 +58,7 @@ Each step is one change on one branch that the owner can look at, as before. The
 
 | # | Step | State | Play needs it for |
 |---|---|---|---|
-| N1 | Continents as land, with no seam, inside the 10 minutes (old step 21) | First part built: a landmass's coarse stage whole, ordered pieces round the start or a site, where the landmass is small enough today (`foundations.md`, "Step 21, as built"). Next: the coarse stage fast enough for the largest, pieces kept on disk | Rivers of real size; peoples' homelands seen on foot |
+| N1 | Continents as land, with no seam, inside the 10 minutes (old step 21) | Built, both parts (`foundations.md`, "Step 21, as built" and "Step 21, second part, as built"): every landmass's coarse stage in parallel and kept (the whole world's in 2.6 to 6.4 min by seed and load), pieces kept on disk and formed round the player, land not yet formed drawn from the coarse stage, no seam by the measures on seeds 1 and 7. Left: the coast against a real ria coast; capped ridges in the 64 m stage; memory while forming | Rivers of real size; peoples' homelands seen on foot |
 | N2 | Climate per island (old 25): temperature by season, rain on the wind, six zones | Built | Farming; the storm |
 | N3 | Ground and water by kind (old 27). River mouths, bay-head flats and reed marsh are built. Caves are left: a lava tube on a cone island, a solution cave in limestone | Half built | Harbours; lairs |
 | N4 | **The underground.** Deposits placed by the rock's story (ore where a dike or pluton baked the beds, clay, coal, salt); water under the ground and where it comes out; caves that connect; heat under a volcano | New, next | Digging with a purpose; story 2 |

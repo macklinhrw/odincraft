@@ -59,7 +59,16 @@ import "core:strings"
 //   place=N         look at named place N (from 1, as start-up lists them) from 1 to 2 km off, flying
 //   site=x,z        an expedition site: the landmass's pieces within `near` km of this point in the world are
 //                   formed before entering, as the start's are, and the camera is put 60 m over it
-//   continent=0     leave the land larger than a region a record, as before step 21, even where it can be formed
+//   continent=0     leave the land larger than a region records, as before step 21
+//   continent=1     form the coarse stage of every land mass of the known world larger than a region that is
+//                   not kept yet (minutes, once for a seed); without it, only of those within what is drawn
+//                   from the start, a site or the view asked for
+//   coarse=check    form a coarse stage both in parallel and as the serial forming takes it, step by step,
+//                   and say the first stage where a cell differs; coarse=plain forms it the serial way
+//   reach=km        how near the player a landmass's pieces are kept formed beside play (40); 0 for none
+//   landmap=file    write a map of the land larger than a region as the game has it and exit: mapspan=km
+//                   across round --site, or the largest land mass whole; cuts draws the lines between pieces
+//   seam=km         measure the seam in a square that wide round --site (continents.odin, mass_seam), and exit
 //   bench=seconds   travel straight ahead and report frame times: flying at `speed` m/s
 //                   with fly, otherwise running on the ground; with over, the view from above
 //                   panned toward its picture's top at `speed` m/s

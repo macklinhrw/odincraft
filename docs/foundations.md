@@ -769,8 +769,8 @@ Steps 17 to 20 started together; step 21 followed the seam test's failure, and s
 **The order of work from here is `plan.md`** (the owner's direction of 2026-11-16: a world that makes stories, after Dwarf Fortress first and RimWorld second). Steps 21, 25 and 27 carry on as its N1 to N3; steps 26, 29 and 30 are replaced by its N5, P9 and P7.
 
 - **Done:** steps 17, 18, 19, 20, 22, 23, 24, 25, 28, 31, 32, 33, 34 and 35; outside the table, the reef kind and Yakushima measured for the granite massif (`interesting-world/notes/real-islands.md`). Step 17's stand-in is replaced by step 22's history and step 32's regional history.
-- **Half done:** step 21 (the plan's N1). Its first part is built: a landmass's coarse stage whole through its 64 m phases, and ordered pieces taking up the finer phases from it, round the start or a site, on seeds whose nearest continent is small enough to form today ("Step 21, as built"). Left: the coarse stage fast enough for the largest landmasses (35 to 42 min today), pieces kept on disk and formed again on approach.
-- **Built since:** step 25, climate per island ("Step 25, as built"), with its narrowing of the stream beds by rain held back for the owner to judge; step 27's first part, river mouths, bay-head flats and reed marsh ("Step 27, part one, as built"), its caves left for a step of their own. Step 21 is being built, within the owner's goal of 10 minutes for the whole world's generation, staged if need be, with no loss of quality.
+- **Built, both parts:** step 21 (the plan's N1). Every land mass of the known world larger than a region is formed whole through its 64 m phases, in parallel and to the bit as the serial forming makes it, inside the ten minutes (seed 7's world in 3.7 to 6.4 min, seed 1's in 2.6, seed 3's in 4.9); pieces take up the finer phases round the start, a site or the player, are kept on disk and let go behind; land not yet formed is drawn from the coarse stage ("Step 21, as built" and "Step 21, second part, as built"). Left: the continent's coast judged against a real ria coast on an old margin; the 64 m stage made to wear a capped ridge as the finer cells do; memory while forming (9.6 to 11.8 GB); the last of the flood still on one thread.
+- **Built since:** step 25, climate per island ("Step 25, as built"), with its narrowing of the stream beds by rain held back for the owner to judge; step 27's first part, river mouths, bay-head flats and reed marsh ("Step 27, part one, as built"), its caves left for a step of their own. Step 21's second part is built within the owner's goal of 10 minutes for the whole world's generation.
 - **Not started, and now ordered by `plan.md`:** floras (its N5), peoples and history (P9), the fantastic (P7).
 - **Left open in step 32:** one sea for the world, which read into each phase put 33.1% of figures far, so the islands keep their kinds' seas; and the planet's boundaries, which stay two to three times the real length, since the regional history runs the planet's plates and did not shorten them.
 - **The land.**
@@ -791,7 +791,7 @@ Steps 17 to 20 started together; step 21 followed the seam test's failure, and s
     - rain growing with height while forming;
     - dry channels above the stream heads;
     - the planet's boundaries.
-- **Claude's recommended order:** a viewing pass for the owner; then step 21's second part (the coarse stage fast enough for every landmass, pieces kept on disk), now that its first part is built.
+- **Claude's recommended order:** a viewing pass for the owner, seed 7's continent and seed 1's capped ridge among what is looked at; then the 64 m stage's reading of capped rock, with the real ria coast measured beside it, since both move every continent's coast.
 
 ### Step 17, as built
 
@@ -1031,6 +1031,51 @@ Built 2026-11-16 by Claude, the first part of the plan's N1: land larger than a 
 - The landslide on a piece; climate per place across a landmass; the rock's bodies (faults, dikes, plutons) laid over a landmass.
 
 Weak points: one landmass formed, on one seed; the start's 64 km rule does not yet hold for continents (16 km before entering, 40 km beside play); the continent's recipe (its starting ground, its history) is a first guess judged on three windows; its climate is one for the whole landmass; the judge was Claude, not the owner.
+
+### Step 21, second part, as built
+
+Built 2026-11-16 and 17 by Claude: the rest of the plan's N1 that could be built in a day, toward the owner's goals of the same day (continents formed as land with no seam; the whole world's generation within 10 minutes, staged; no loss of quality). The owner has not yet looked at it. Every number, how the flood was made to run in parallel and what failed on the way are in `interesting-world/notes/continents-forming.md`, its first section; the choices are Claude's call of 2026-11-17 in `open-decisions.md`.
+
+![Seed 7's known world, 1,020 km across, north up: its continent (317,000 km² in the known world, cut by the known world's west and south edges) and the other land larger than a region, as their coarse stages hold them under the sea's last rise](interesting-world/real/continent-seed7-map.jpg)
+
+![32 km of the continent's north-east coast, the pieces formed: drowned valleys between spurs, and the cuts between pieces drawn, which follow the divides](interesting-world/real/continent-seed7-coast-map.jpg)
+
+![From 250 m over a hill 4 km inside that coast, looking south-south-west: the formed pieces' woods and crags, a bay on the right, and beyond them the land not yet formed, drawn from the coarse stage to the horizon](interesting-world/real/continent-seed7-air.jpg)
+
+![From the sea 7 km off the same coast, looking west](interesting-world/real/continent-seed7-from-sea.jpg)
+
+![Standing in the laurel forest on the continent](interesting-world/real/continent-seed7-standing.jpg)
+
+![12 km of seed 1's nearest landmass, formed, where a ridge of strong rock over weak stands on the cut between two pieces (the thin line): the ridge has both its flanks](interesting-world/real/continent-seed1-ridge-formed.jpg)
+
+![The same 12 km as the coarse stage has it and as it is drawn from afar: ridges the 64 m cells hold up, with the sea in every valley](interesting-world/real/continent-seed1-ridge-afar.jpg)
+
+**What the owner can see.** On every seed, every land mass of the known world larger than a region can now be formed as land: `--continent=1` forms the whole world's coarse stage (seed 7's six land masses in 3.7 to 6.4 min by the machine's load; seed 1's four in 2.6 min; seed 3's, the most land of the eleven seeds, in 4.9 min), and it is kept. Without it, a landmass is formed when it lies within what is drawn from the start, a site or the view; seed 7's continent is 230 km from the start, so the default game enters as before and the continent is reached with `--site=-212200,112320`. There it is a coast of drowned valleys between wooded spurs with crags on them, formed as the islands are, and the land beyond the formed pieces runs on to the horizon instead of ending in a straight grey side. From the start island's summit it cannot be seen on seed 7: the view reaches 65 km.
+
+**What is built** (`coarse.odin`, 1,223 lines; `kept.odin`, 234; `afar.odin`, 228; `continents.odin` rewritten where it met them; `src/` grew by about 2,000 lines):
+
+- **The coarse stage in parallel** (`coarse.odin`): the same rules as `erosion.odin`'s, ordered so that they can be shared among threads. The flood through a heap runs only through hollows (half a cell in a hundred), in blocks; the cutting, the land drained and the rock carried are worked over the drainage's own trees; the shore's cells are worked side by side but for those the sea cuts through; only the squares of the lattice with land in or near them are ever written. It is the serial forming's land cell for cell, with ties in the flood taken lowest index first: `--coarse=check` forms a landmass both ways and compares every stage of every step, and `./build.sh test` does it on seed 7's smallest landmass.
+- **Every land mass larger than a region** (`lands`), not only the nearest; each one's coarse stage kept by squares in `build/worlds/` and read by mapping the file (`kept.odin`).
+- **Pieces kept and formed side by side**: a piece's land and the bands it leaves are kept beside the coarse stage, a piece wanted only because another waits on it holds no memory, and pieces that do not wait on each other form at once.
+- **The pieces round the player kept formed, the rest let go** (`masses_keep`): within 40 km formed, beyond 60 km freed and read back on return.
+- **Land not yet formed drawn from the coarse stage** (`far_column`).
+- **The rebound carried through the finer phases**, and **a piece's cells near a cut leaning toward what the piece before it made of them**: see below.
+
+**Times and memory.** Seed 1's nearest landmass: 25 to 26 s where it was 394 to 403 s. Seed 7's continent: 201 to 357 s by the load, where 35 min was the estimate. At the peak 9.6 to 11.8 GB while the largest form (16 GB was the estimate; the brief's guess of 2 GB is not met); kept, 206 MB for seed 1's nearest (941 MB before) and 1,334 MB for seed 7's continent. The five pieces within 8 km of the site on seed 7's coast, with the six they wait on: 251 s to form and 6.8 GB at the peak, 16 s to read back.
+
+**The rebound goes on.** The first part let only the coarse stage rebound. Measured on seed 7's coast, the formed land then stood a median 145 m under the coarse stage beside it, and 1.3 km² of 28.6 km² in an 8 km square was left above the sea: the finer phases wear the land for 0.4 Myr, and without the crust's answer it sinks. The pieces now go on rising at the rate the rebound left the coarse stage rising, read from one field kept with it, the same on both sides of every cut. The same square then holds 28.6 km² of land to 328 m. This changes every piece's land, on purpose, and is much of why the first part found seed 1's coast drowned.
+
+**No seam**, by the first part's measures, now an option of the game (`--seam`), in three squares 8 km across, wholly formed. Seed 7's coast, 2.6 km of cut: no closed hollow over 2 m within 100 m of a cut; the largest step across the cut 18.7 m against 84.3 m away from any; none of 160 steps across it larger than the largest elsewhere at its slope. Seed 1, two squares with 12.9 and 12.3 km of cut: no hollow by a cut; the largest steps across 65.9 and 53.0 m against 80.4 and 67.3 m elsewhere; none of 856 and none of 798 larger than the largest elsewhere at their slope.
+
+**The lean.** The first of seed 1's squares failed that measure until this was built: 160 of its 856 steps across the cuts were larger than any elsewhere at their slope, a wall of up to 151 m along 4 km of a ridge. The ridge is a strong bed over weak rock. The piece formed first makes the far flank too, as its margin; its making and the later piece's own agreed to 2 m for 42 steps, and then the strong bed was worn through in one and not in the other, and the weak rock under it went in a few steps. So a piece's own cells within 384 m of a cut now lean toward what the piece formed before it made of them, wholly at the cut and not at all at 384 m, at the end of every step (`held_lean`). The two makings still part; they meet as a slope inside the later piece. The same trace showed that the 64 m stage and the finer phases do not make the same land in such rock (the two pictures above), which is not mended.
+
+**One world whatever the order**: seed 1's pieces round one site formed from nothing, and again after the pieces round a site 28 km off had been: the 11 pieces formed in both runs are the same byte for byte. The test found and mended two faults on the way (a piece read back was counted as formed by a piece that still waited on another; a lattice of 16 m cells over seed 7's known world outgrew a signed 32 bits).
+
+**The islands are unchanged**: all 83 islands of seeds 1 to 10, formed alone by this build and by `main`'s, give maps the same byte for byte. `./build.sh test` passes with `GOLDEN` and the dwarves' logs as they were.
+
+**Benches**: one round of the three, this build beside `main`'s built the same way, on a machine other work was using. No frame of our work over 12.5 ms on either. Our work, median and worst: the forest flank 1.56 and 5.2 ms (`main` 1.56 and 10.4); down through cloud 1.62 and 5.2 ms (1.57 and 5.0); from above 2.12 and 6.7 ms (2.03 and 10.1). Frame intervals over 12.5 ms, which are the display's: 0, 2 and 5 against `main`'s 19, 3 and 19. On the default seed nothing of a landmass is in view, so this says only that the islands' frames are as they were.
+
+**What is not done.** The real ria coast on an old margin is not measured, so the continent's coast is still judged against the three forearc coasts, and the rebound's 24 km is still a guess. Memory while forming is 9.6 to 11.8 GB, not small. The flood over the whole lattice is still on one thread (31% of seed 7's continent's time). Formed land and land drawn from afar differ: by a median 21 m on seed 7's coast, and on seed 1's capped ridges by 150 m and more over a fifth of the land. A landmass whose ground starts under the sea is formed as nothing (856 km² of seed 7's 336,000). The reaches for formed pieces stay at 16 and 40 km. Letting pieces go has not been run over a long journey.
 
 ### Step 31, as built
 
