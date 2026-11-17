@@ -22,7 +22,8 @@ struct Frame {
     float4 mark;        // xyz: the low corner of the marked box of blocks, from the eye; w: 1 when there is one
     float4 mark_size;   // xyz: its size in blocks
     float4 lens;        // xy: the eye from the corner of the island a lens is painted over, z: one over that island's side, w: 1 while a lens is on (play.odin)
-    float4 tint[48];    // boxes of ground marked for the dwarves (bar.odin): xyz the low corner from the eye; w: 0 none, 1 to be dug, 2 the box being dragged, 3 to be taken back, 4 the order in the hand, 5 the ground over what is being dragged, 6 over what is marked, 7 a stockpile's ground
+    float4 marked;      // xyz: the eye from the low corner of the map of marked blocks, w: 1 while anything is on it (bar.odin)
+    float4 tint[48];    // boxes of ground over a mark (bar.odin): xyz the low corner from the eye; w: 0 none, 5 the ground over what is being dragged, 6 over what is marked
     float4 tint_size[48];
     float4 live;        // the interface's brass and its cinnabar, lit
     float4 wrong;
@@ -328,6 +329,54 @@ static float shadow_at(float3 rel, float3 N, constant Frame &f, depth2d_array<fl
     return c == 3u ? mix(lit, 1.0, smoothstep(0.75, 0.9, dist / r)) : lit;
 }
 
+// A block's texel of the map of marked blocks. Its low three bits say what it is marked as: 0 not,
+// 1 to be dug, 2 what the tool would mark, 3 what it would take back, 4 the order in the hand, 5 a
+// stockpile's ground. The five above them say which of the blocks beside it are open air: east,
+// west, south, north, and over it.
+static uint marked_as(texture3d<float> marks, float3 cell) {
+    if (any(cell < 0.0) || cell.x >= 256.0 || cell.y >= 64.0 || cell.z >= 256.0) return 0u;
+    return uint(round(marks.read(uint3(cell)).r * 255.0));
+}
+
+// A marked block's face: tinted, and lined along a side only where the mark ends there. Across a
+// side the face goes on as the block's own next face, where the block beside it is open air; as
+// the face of the block beside it, level with it; or as the face of the block that stands in front
+// of that one, at the foot of a step. Where the one it goes on as is marked the same there is no
+// line, so marks side by side are one shape, whatever boxes they were given as and however the
+// ground under them steps.
+static float3 marked_face(float3 col, float3 rel, float3 N, float cell_size, constant Frame &f, texture3d<float> marks) {
+    float3 p = rel + f.marked.xyz;            // in the map's blocks
+    float3 cell = floor(p - N * 0.5);
+    uint here = marked_as(marks, cell);
+    uint kind = here & 7u;
+    if (cell_size > 1.5) {                    // far ground stands on cells of two metres and more: the block under or over it may be the one marked
+        kind = max(kind, max(marked_as(marks, cell - N) & 7u, marked_as(marks, cell + N) & 7u));
+        if (kind == 0u) return col;
+        float3 far_line = kind == 5u ? float3(0.42, 1.25, 1.0) : kind == 3u ? f.wrong.rgb : f.live.rgb;
+        return mix(col, far_line, kind == 1u ? 0.14 : 0.24);
+    }
+    if (kind == 0u || (kind == 5u && N.y < 0.5)) return col;   // a stockpile is its floor: the faces that look up
+    float3 line = kind == 5u ? float3(0.42, 1.25, 1.0) : kind == 3u ? f.wrong.rgb : f.live.rgb;
+    float tint = kind == 1u ? 0.09 : kind == 5u ? 0.2 : 0.22;
+    float3 a = abs(N.x) > 0.5 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);   // the two ways along the face
+    float3 b = abs(N.z) > 0.5 ? float3(0.0, 1.0, 0.0) : float3(0.0, 0.0, 1.0);
+    float3 in_cell = p - cell;
+    float2 at = float2(dot(in_cell, a), dot(in_cell, b));
+    float2 w = max(1.5 * fwidth(at), 0.03);
+    float edge = 0.0;
+    for (int i = 0; i < 4; i++) {
+        float3 side = (i < 2 ? a : b) * ((i & 1) == 0 ? -1.0 : 1.0);
+        uint bit = side.x > 0.5 ? 8u : side.x < -0.5 ? 16u : side.z > 0.5 ? 32u : side.z < -0.5 ? 64u : side.y > 0.5 ? 128u : 0u;
+        if ((here & bit) != 0u) continue;                               // open air beside it: the face goes on round the block's own corner
+        if ((marked_as(marks, cell + side) & 7u) == kind) continue;      // the block beside it is marked the same
+        if ((marked_as(marks, cell + side + N) & 7u) == kind) continue;  // or the one standing in front of that, at the foot of a step
+        float e = i < 2 ? ((i & 1) == 0 ? at.x : 1.0 - at.x) : ((i & 1) == 0 ? at.y : 1.0 - at.y);
+        float wide = i < 2 ? w.x : w.y;
+        edge = max(edge, 1.0 - smoothstep(0.6 * wide, wide, e));
+    }
+    return mix(col, line, max(tint, 0.85 * edge));
+}
+
 // A box of blocks shown on the faces of the blocks inside it: tinted, and lined where they meet
 // the box's sides, the line no thinner than a pixel and a half.
 static float3 outlined(float3 col, float3 rel, float3 N, float4 box, float3 size, float3 line, float tint) {
@@ -346,6 +395,7 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
                            texture2d_array<float> blocks [[texture(1)]], sampler block_smp [[sampler(1)]],
                            texture2d<float> lifted [[texture(2)]], sampler smp [[sampler(2)]], texture2d<float> seen [[texture(3)]],
                            texture2d<float> lens [[texture(4)]], sampler lens_smp [[sampler(4)]],
+                           texture3d<float> marks [[texture(5)]], sampler marks_smp [[sampler(5)]],
                            bool outside [[front_facing]]) {
     uint face = in.info & 7u;
     uint mat = (in.info >> 8u) & 0xFFFFu;
@@ -420,12 +470,14 @@ fragment float4 fs_terrain(TerrainV in [[stage_in]], constant Frame &f [[buffer(
     if (in.cell < 1.5) {
         col = outlined(col, in.rel, N, f.target, float3(1.0), f.target.w > 1.5 ? float3(2.2, 2.0, 1.2) : float3(0.0), 0.0);
         col = outlined(col, in.rel, N, f.mark, f.mark_size.xyz, float3(1.9, 1.2, 0.25), 0.12);
-        for (int i = 0; i < 48 && f.tint[i].w > 0.5; i++) {
-            float kind = f.tint[i].w;
-            if (kind > 4.5 && kind < 6.5 && N.y < 0.5) continue;   // the ground over a mark: its outline on the faces that look up, and no block's side, which would read as a block marked
-            col = outlined(col, in.rel, N, float4(f.tint[i].xyz, 1.0), f.tint_size[i].xyz, kind > 6.5 ? float3(0.42, 1.25, 1.0) : kind > 2.5 && kind < 3.5 ? f.wrong.rgb : f.live.rgb, kind < 1.5 ? 0.09 : kind > 6.5 ? 0.2 : kind > 5.5 ? 0.035 : kind > 4.5 ? 0.13 : 0.22);
+        if (N.y > 0.5) for (int i = 0; i < 48 && f.tint[i].w > 0.5; i++) {   // the ground over a mark: on the faces that look up, and no block's side, which would read as a block marked
+            if (f.tint[i].w > 5.5) {   // over an order's marks: a faint wash and no line, which would box each order by itself
+                float3 local = in.rel - N * 0.5 - f.tint[i].xyz;
+                if (all(local > -0.001) && all(local < f.tint_size[i].xyz + 0.001)) col = mix(col, f.live.rgb, 0.035);
+            } else col = outlined(col, in.rel, N, float4(f.tint[i].xyz, 1.0), f.tint_size[i].xyz, f.live.rgb, 0.13);
         }
     }
+    if (f.marked.w > 0.5) col = marked_face(col, in.rel, N, in.cell, f, marks);   // the blocks marked, at any distance
 
     return finish(apply_fog(col, in.rel, in.position.xy, f, lifted, smp, seen), in.position.xy, cut);
 }

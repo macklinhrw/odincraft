@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:math"
 import "core:math/linalg"
 import "core:strings"
+import "base:runtime"
+import sdl "vendor:sdl3"
 
 // The orders bar and the tool in the hand (docs/foundations/interface.md, section 4 and "With P3";
 // plan.md, P3). The bar stands at the bottom left, under the hand: Dig, Fell, Build, Send, Remove,
@@ -70,6 +72,13 @@ Bar :: struct {
 	cells:    [dynamic][3]i32,      // the blocks it would mark
 	boxes:    [dynamic][2][3]i32,   // and those to dig, as boxes
 	trees:    [dynamic]Tree,
+	map_boxes:   [dynamic]Map_Box,        // every block marked, for the map the terrain reads (marks_bind)
+	map_tex:     ^sdl.GPUTexture,
+	map_staging: ^sdl.GPUTransferBuffer,
+	map_cells:   []u8,
+	map_key:     u64,                     // what the map on the GPU was written from
+	map_origin:  [3]i32,                  // the block its low corner is
+	map_any:     bool,                    // and whether anything is on it
 	way:      int,          // with Remove: how many marks, built blocks or places it would take
 	built:    map[[3]i32]Plan,   // the blocks the dwarves laid that stand, and what each was laid as: told by the hold as they are laid and dug
 	undo:     enum u8 { Marks, Built, Zone },   // what Remove would take away here
@@ -339,12 +348,83 @@ alerts_keep :: proc() {
 	}
 }
 
-// What is marked, for the picture: the boxes of ground to dig, which the terrain tints, what the
-// tool would mark among them, brighter; and after the frame's boxes a band on each tree to fell
-// and a small block for each block to lay.
+// The map of marked blocks the terrain reads (shaders.metal, `marked`): a block of the world a
+// texel, MAP_WIDE by MAP_HIGH by MAP_WIDE of them round the view's middle, each saying what its
+// block is marked as. A mark is drawn on every face of its block the picture draws, at any distance
+// and however many there are, and lined only where the block beside it is not marked the same, so
+// marks side by side read as one shape. The map is written again only when what is marked, or
+// where the view stands on it, has changed.
+MAP_WIDE :: 256
+MAP_HIGH :: 64
+Map_Box :: struct { lo, hi: [3]i32, kind: u8 }   // 1 to be dug, 2 what the tool would mark, 3 what it would take back, 4 the order in the hand, 5 a stockpile's ground
+
+// The map for the frame's picture: its texture, and where the eye stands in it. Called by render.
+marks_bind :: proc(g: ^Gpu, eye, focus: [3]f64) -> (texture: ^sdl.GPUTexture, at: [4]f32) {
+	bytes :: MAP_WIDE*MAP_HIGH*MAP_WIDE
+	if bar.map_tex == nil {
+		bar.map_tex = sdl.CreateGPUTexture(g.dev, {type = .D3, format = .R8_UNORM, usage = {.SAMPLER}, width = MAP_WIDE, height = MAP_HIGH, layer_count_or_depth = MAP_WIDE, num_levels = 1})
+		bar.map_staging = sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = bytes})
+		bar.map_cells = make([]u8, bytes)
+		bar.map_key = ~u64(0)
+	}
+	snap :: proc(x: f64, by: i32) -> i32 { return i32(math.floor(x/f64(by)))*by }
+	origin := [3]i32{snap(focus.x, 32) - MAP_WIDE/2 + 16, snap(focus.y, 16) - MAP_HIGH/2 + 8, snap(focus.z, 32) - MAP_WIDE/2 + 16}
+	key := u64(14695981039346656037)
+	mix :: proc(key: ^u64, x: i32) { key^ = (key^ ~ u64(u32(x)))*1099511628211 }
+	for c in origin do mix(&key, c)
+	for b in bar.map_boxes {
+		for c in b.lo do mix(&key, c)
+		for c in b.hi do mix(&key, c)
+		mix(&key, i32(b.kind))
+	}
+	mix(&key, i32(play.w.volume))   // a block changed beside a mark changes which of its sides are open
+	any := len(bar.map_boxes) > 0
+	if key != bar.map_key && (any || bar.map_any) {
+		bar.map_key, bar.map_any, bar.map_origin = key, any, origin
+		cells := bar.map_cells
+		runtime.mem_zero(raw_data(cells), bytes)
+		for b in bar.map_boxes {
+			lo := [3]i32{max(b.lo.x - origin.x, 0), max(b.lo.y - origin.y, 0), max(b.lo.z - origin.z, 0)}
+			hi := [3]i32{min(b.hi.x - origin.x, MAP_WIDE - 1), min(b.hi.y - origin.y, MAP_HIGH - 1), min(b.hi.z - origin.z, MAP_WIDE - 1)}
+			for z in lo.z..=hi.z do for y in lo.y..=hi.y do for x in lo.x..=hi.x do cells[int(x) + int(y)*MAP_WIDE + int(z)*MAP_WIDE*MAP_HIGH] = b.kind
+		}
+		// And beside each marked block, which ways are open air: there its face goes on round its own corner (marked_face).
+		SIDES := [5][3]i32{{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}}
+		for b in bar.map_boxes {
+			lo := [3]i32{max(b.lo.x - origin.x, 0), max(b.lo.y - origin.y, 0), max(b.lo.z - origin.z, 0)}
+			hi := [3]i32{min(b.hi.x - origin.x, MAP_WIDE - 1), min(b.hi.y - origin.y, MAP_HIGH - 1), min(b.hi.z - origin.z, MAP_WIDE - 1)}
+			for z in lo.z..=hi.z do for y in lo.y..=hi.y do for x in lo.x..=hi.x {
+				at := &cells[int(x) + int(y)*MAP_WIDE + int(z)*MAP_WIDE*MAP_HIGH]
+				if at^ >= 8 do continue   // done already, by a box over this one
+				open := u8(0)
+				for side, i in SIDES do if m := block_made(play.w, origin + {x, y, z} + side); m == .Air || is(m, LEAVES) do open |= 8 << u32(i)
+				at^ |= open
+			}
+		}
+		copy((cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, bar.map_staging, true))[:bytes], cells)
+		sdl.UnmapGPUTransferBuffer(g.dev, bar.map_staging)
+		cmd := sdl.AcquireGPUCommandBuffer(g.dev)
+		pass := sdl.BeginGPUCopyPass(cmd)
+		sdl.UploadToGPUTexture(pass, {transfer_buffer = bar.map_staging}, {texture = bar.map_tex, w = MAP_WIDE, h = MAP_HIGH, d = MAP_WIDE}, true)
+		sdl.EndGPUCopyPass(pass)
+		_ = sdl.SubmitGPUCommandBuffer(cmd)
+	}
+	o := bar.map_origin
+	return bar.map_tex, {f32(eye.x - f64(o.x)), f32(eye.y - f64(o.y)), f32(eye.z - f64(o.z)), 1 if bar.map_any else 0}
+}
+
+// What is marked, for the picture: the blocks marked, for the map the terrain reads; the ground
+// over what is being dragged and over each order, as boxes; and after the frame's boxes a band on
+// each tree to fell and a small block for each block to lay.
 marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 	s, a := &watch.seen, play.a
 	boxes := piles_view(boxes, eye, a.at if !play.afoot^ else eye)
+	// The blocks themselves go to the map the terrain reads (marks_bind): the stockpiles' ground,
+	// then what is marked to be dug, the order in the hand, and what the tool would mark, each over
+	// the one before. Only the ground over a mark is still a box of the frame's own.
+	clear(&bar.map_boxes)
+	for t in s.zone_boxes do append(&bar.map_boxes, Map_Box{t.lo, t.hi, 5})
+	for t in s.tints do append(&bar.map_boxes, Map_Box{t.lo, t.hi, 4 if t.site == bar.job else 1})
 	if play.afoot^ && len(s.ghosts) == 0 do return boxes
 	n := 0
 	put :: proc(v: ^View, n: ^int, lo, hi: [3]i32, kind: f32, eye: [3]f64) {
@@ -353,23 +433,16 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 		v.tint_sizes[n^] = {f32(hi.x - lo.x + 1), f32(hi.y - lo.y + 1), f32(hi.z - lo.z + 1), 0}
 		n^ += 1
 	}
-	far :: proc(lo, hi: [3]i32, at: [3]f64) -> f64 { return abs(f64(lo.x + hi.x)/2 - at.x) + abs(f64(lo.z + hi.z)/2 - at.z) }
 	if tool_marks() && bar.ready {
 		v.has_mark = bar.tool == .Send
-		for b in bar.boxes[:min(len(bar.boxes), TINTS/2)] do put(v, &n, b[0], b[1], 3 if bar.tool == .Remove else 2, eye)
+		for b in bar.boxes do append(&bar.map_boxes, Map_Box{b[0], b[1], 3 if bar.tool == .Remove else 2})
 		if bar.tool == .Dig && len(bar.boxes) > 0 && a.marked && (a.marking || bar.posed) {   // and, through a drag, its outline on the ground over it, so a box under a hillside shows where it lies; with nothing pressed only the blocks themselves are lit
 			lo, hi := bar.boxes[0][0], bar.boxes[0][1]
 			for b in bar.boxes do lo, hi = {min(lo.x, b[0].x), min(lo.y, b[0].y), min(lo.z, b[0].z)}, {max(hi.x, b[1].x), max(hi.y, b[1].y), max(hi.z, b[1].z)}
 			put(v, &n, {lo.x, hi.y + 1, lo.z}, {hi.x, 3000, hi.z}, 5, eye)
 		}
 	} else do v.has_mark = v.has_mark && !tool_marks()
-	// The nearest the view's middle first, where there are more than the picture takes.
-	near := make([dynamic]Tint, context.temp_allocator)
-	for t in s.tints do append(&near, t)
-	if len(near) > TINTS - n do for i in 1..<len(near) do for k := i; k > 0 && far(near[k].lo, near[k].hi, a.at) < far(near[k - 1].lo, near[k - 1].hi, a.at); k -= 1 do near[k], near[k - 1] = near[k - 1], near[k]
-	for t in near do put(v, &n, t.lo, t.hi, 4 if t.site == bar.job else 1, eye)
 	for site in s.sites do if site.work == .Dig do put(v, &n, {site.lo.x, site.hi.y + 1, site.lo.z}, {site.hi.x, 3000, site.hi.z}, 6, eye)   // faintly, the ground over each
-	for t in s.zone_boxes do put(v, &n, t.lo, t.hi, 7, eye)   // the stockpiles' ground, in the colour of what is well
 	v.tint_count = n
 
 	out := make([dynamic]Box, 0, len(boxes) + len(s.ghosts) + len(bar.cells) + len(bar.trees), context.temp_allocator)

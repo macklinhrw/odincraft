@@ -28,7 +28,7 @@ SEA_GRID   :: 64     // the sea is drawn as this many quads squared, as in shade
 BOX_MAX    :: 8192   // creatures' boxes drawn a frame at most
 FOV        :: 70.0   // vertical, degrees, in first person
 NO_CUT     :: 1e9    // the cut's level when the world is not cut (above.odin)
-TINTS      :: 48     // boxes of marked ground the terrain tints in one picture
+TINTS      :: 48     // boxes of ground over a mark the terrain tints in one picture; the marked blocks themselves are a map (marks_bind, bar.odin)
 NEAR       :: 0.1
 DARK       :: 150    // metres under the sea past which the ground is drawn black, so casts no shadow worth drawing; as in shaders.metal
 
@@ -110,7 +110,7 @@ View :: struct {
 Frame :: struct {
 	view_proj: matrix[4, 4]f32,
 	shadow_vp: [4]matrix[4, 4]f32,
-	cascade_r, sun, cam, target, cam_r, cam_u, cam_f, screen, cloud, weather, focus, cut, mark, mark_size, lens: [4]f32,
+	cascade_r, sun, cam, target, cam_r, cam_u, cam_f, screen, cloud, weather, focus, cut, mark, mark_size, lens, marked: [4]f32,
 	tint, tint_size: [TINTS][4]f32,
 	live, wrong: [4]f32,   // the interface's brass and cinnabar (LOOK), which marked ground is tinted with
 	}
@@ -383,12 +383,12 @@ gpu_init :: proc(g: ^Gpu, window: ^sdl.Window) {
 
 	// Depth runs from 1 at the near plane to 0 at infinity, which keeps precision at long range.
 	g.terrain = make_pipeline(g, {
-		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 5, quads = true,
+		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 6, quads = true,
 		cull = .BACK, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER,
 	})
 	// Leaves near by: the terrain's faces with the gaps in their tiles cut out by alpha to coverage, seen from both sides.
 	g.leaf = make_pipeline(g, {
-		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 5, quads = true,
+		vs = "vs_terrain", fs = "fs_terrain", vs_uniforms = 2, fs_uniforms = 1, fs_samplers = 6, quads = true,
 		cull = .NONE, color = g.format, samples = ._4, depth = true, depth_write = true, compare = .GREATER, coverage = true,
 	})
 	// Ground plants: crossed pictures cut out by alpha to coverage, seen from both sides, casting no shadow.
@@ -643,6 +643,8 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	f.cut = {f32(v.level - v.eye.y) if cut else NO_CUT, 1 if v.bare else 0, 0, 0}
 	lens: ^sdl.GPUTexture   // one of the land's fields painted over the ground (play.odin)
 	lens, f.lens = lens_bind(g, v.eye)
+	marked: ^sdl.GPUTexture   // the map of blocks marked for the dwarves (bar.odin)
+	marked, f.marked = marks_bind(g, v.eye, v.focus)
 
 	// Shadow cascades are boxes centred on the camera, or from above on the ground under the view's
 	// middle (the focus), looking along the sunlight. Each
@@ -779,8 +781,8 @@ render :: proc(g: ^Gpu, w: ^World, v: View, shot := "") {
 	sdl.PushGPUFragmentUniformData(cmd, 0, &f, size_of(f))
 
 	sdl.BindGPUGraphicsPipeline(pass, g.terrain)
-	terrain_bindings := [5]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.blocks, g.block_sampler}, lifted, seen, {lens if lens != nil else near.lifted, g.linear}}
-	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 5)
+	terrain_bindings := [6]sdl.GPUTextureSamplerBinding{{g.shadow, g.shadow_sampler}, {g.blocks, g.block_sampler}, lifted, seen, {lens if lens != nil else near.lifted, g.linear}, {marked, g.linear}}
+	sdl.BindGPUFragmentSamplers(pass, 0, &terrain_bindings[0], 6)
 	// The view volume as four planes through the eye; a chunk, or a quarter of a far one, wholly
 	// outside one is skipped, and so are the faces in it turned from the eye.
 	planes := [4][3]f32{fwd*tan_x + right, fwd*tan_x - right, fwd*tan_y + up, fwd*tan_y - up}
