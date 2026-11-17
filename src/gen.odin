@@ -201,7 +201,7 @@ Trait :: enum u8 {
 	Passes,   // a rock water passes through, so a spring rises where it lies on one that holds it (rivers.odin)
 	Sinks,    // a rock the rain sinks into rather than running off it, so few streams cut it (SOAKS, rock.odin)
 	Pebbles,  // a river's gravel, which lies two blocks deep on its bed (block_below)
-	Ring,     // a trunk cut across. No block is one: as an edit at a tree's foot it says the tree is felled (gen_volume)
+	Ring,     // a trunk cut across. No block is one: as an edit in a tree's column, at FELLED, it says the tree is felled (gen_volume)
 	Grass, Litter, Susuki, Dune, Silt, Sand, Rubble,   // the grounds a ground plant grows on (GROUND_PLANTS.on)
 }
 @(rodata) TRAITS := #partial [Mat]bit_set[Trait]{
@@ -232,6 +232,10 @@ PLANT_BLOCKS :: bit_set[Trait]{.Bark, .Leaf}
 COVERS       :: bit_set[Trait]{.Cover}
 PEBBLES      :: bit_set[Trait]{.Pebbles}
 RINGS        :: bit_set[Trait]{.Ring}
+
+// A felled tree is an edit of rings in its trunk's column at this level, far under the world, where
+// no block is ever dug or laid: whatever is later done to the ground it stood on, it stays felled.
+FELLED :: -1_000_000
 
 CHUNK       :: 32               // cells along a chunk side
 CHUNK_SHIFT :: 5
@@ -818,7 +822,7 @@ gen_volume :: proc(cx, cz: i32, c: ^Columns, lo, hi: i32, edits: []Edit = nil) -
 			k := int(x) + int(z)*P + int(y)*P*P
 			if replace || blocks[k] == .Air do blocks[k] = m
 		}
-		felled := false   // an edit at its foot says so (the dwarves' felling, orders.odin): nothing of it stands
+		felled := false   // an edit of rings in its column says so (the dwarves' felling, orders.odin): nothing of it stands
 		for e in edits do felled ||= is(e.mat, RINGS) && e.x == t.x + region.origin.x && e.z == t.z + region.origin.y
 		if felled do continue
 		if t.form != .Fallen {

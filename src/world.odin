@@ -182,7 +182,7 @@ build_volume :: proc(key: Key, c: ^Columns, edits: []Edit) -> (blocks: []Mat, y_
 	}
 	blocks, y_base, h = gen_volume(key.x, key.z, c, lo, hi, edits)
 	ox, oz := key.x*CHUNK - 1, key.z*CHUNK - 1
-	for e in edits do if !is(e.mat, RINGS) {   // rings at a tree's foot are a felled tree, which gen_volume left out
+	for e in edits do if !is(e.mat, RINGS) {   // rings in a tree's column are a felled tree, which gen_volume left out
 		blocks[int(e.x - ox) + int(e.z - oz)*P + int(e.y - y_base)*P*P] = e.mat
 	}
 	return

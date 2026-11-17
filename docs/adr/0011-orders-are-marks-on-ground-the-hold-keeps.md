@@ -40,7 +40,7 @@ So a chunk the hold has changed, or asked a block of, keeps its blocks: about 15
 
 Each change the dwarves make is passed to the frame through the queue that carried an orders file's blocks. The frame records it among the session's edits and rebuilds the chunk if it is loaded. When the camera is elsewhere the dwarves go on by their own blocks, and when it comes back the chunk is built with the edits over it.
 
-A felled tree is not a block changed but a tree taken out: an edit at its foot, of a material that is only ever a face (a trunk's rings), tells the generator to leave the tree out of every chunk its crown reached.
+A felled tree is not a block changed but a tree taken out: an edit in its trunk's column far under the world (`FELLED`), of a material that is only ever a face (a trunk's rings), tells the generator to leave the tree out of every chunk its crown reached. It is kept under the world and not at the tree's foot because a block laid or dug at the foot would take its place, and the tree would stand again.
 
 ## Consequences
 
