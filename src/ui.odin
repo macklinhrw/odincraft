@@ -23,7 +23,7 @@ import sdl "vendor:sdl3"
 
 Colour :: [4]u8
 Face   :: enum u8 { Name, Text, Bold }
-Style  :: enum u8 { Body, Bold, Small, Small_Bold, Key, Name, Title, Great, Figure }
+Style  :: enum u8 { Body, Bold, Small, Small_Bold, Key, Name, Title, Great, Figure, Door }
 Type   :: struct { face: Face, size, line: f32 }   // in modules: the size of its em, and of a line of it
 
 Look :: struct {
@@ -46,6 +46,7 @@ Look :: struct {
 	kinds:              [8]Colour, // a lens that paints kinds of rock: the island's first, second and so on, told apart at a glance
 	faces:              [Face][]u8,
 	type:               [Style]Type,
+	few:                bit_set[Style],   // the styles made of letters and figures alone: too large for every glyph to have room in the atlas
 	// Spacing and sizes, in modules.
 	margin:             f32,      // from the picture's edge to a panel
 	pad:                [2]f32,   // inside a panel, across and down
@@ -77,6 +78,20 @@ Look :: struct {
 	said_top, said_wide: f32,     // the messages
 	wrong_least:        f32,      // the narrowest the alerts go to leave the dwarves their place at the top
 	menu_wide:          f32,
+	// Before play (interface.md, section 5): the front door, a world being made, and the world's screen.
+	shade:              Colour,   // the dark behind the front door's words, clearing toward the picture's right
+	shade_from:         f32,      // the share of its width from which it clears
+	door_left, door_top: f32,     // where the front door's title stands
+	door_wide:          f32,      // how wide its words run, and the panels that take their place
+	choice:             f32,      // a choice's height
+	choice_pad:         f32,      // from the brass line on the one in focus to its words
+	making_wide:        f32,      // a world being made: its stages
+	meter:              f32,      // how thick the line is that says how far a stage has come
+	seas:               [2]Colour, // the world's map: the sea where it is shallow and where it is deepest
+	unformed:           Colour,   // and what its land that is known and not yet formed is mixed toward
+	isle:               f32,      // the least an island's mark is across on the map
+	chart_wide:         f32,      // the lenses of the world's map
+	drift:              f32,      // modules a second the front door's picture of the world moves
 }
 
 LOOK := Look {
@@ -97,8 +112,10 @@ LOOK := Look {
 		.Small = {.Text, 5, 7}, .Small_Bold = {.Bold, 5, 7},
 		.Key = {.Text, 4.5, 6.5},
 		.Name = {.Name, 6.5, 8}, .Title = {.Name, 7.5, 9}, .Great = {.Name, 10, 11},
-		.Figure = {.Text, 8, 9},                              // a count that stands for a list: the inscription face's figures are too like letters
+		.Figure = {.Text, 8, 9},                              // a count that stands for a list: the inscription face's figures are too like letters; and a choice at the front door
+		.Door = {.Name, 22, 24},                              // the game's name at its front door
 	},
+	few = {.Door},
 	margin = 4, pad = {5, 4}, gap = 1.5, space = 3.5,
 	button = 11, button_pad = 4,
 	key_min = 7, key_pad = 1.5, key_high = 6.5, key_gap = 2,
@@ -111,6 +128,10 @@ LOOK := Look {
 	wrong_wide = 172,
 	said_top = 50, said_wide = 150, wrong_least = 96,
 	menu_wide = 150,
+	shade = {0x10, 0x15, 0x1a, 236}, shade_from = 0.22,
+	door_left = 40, door_top = 62, door_wide = 190, choice = 16, choice_pad = 6,
+	making_wide = 190, meter = 1, isle = 5, chart_wide = 78, drift = 1.5,
+	seas = {{0x3d, 0x74, 0x9e, 255}, {0x10, 0x25, 0x4c, 255}}, unformed = {0x7b, 0x86, 0x8c, 255},
 }
 
 // ---- text -----------------------------------------------------------------------------------
@@ -154,6 +175,11 @@ Ui :: struct {
 	buffer:          ^sdl.GPUBuffer,
 	staging:         ^sdl.GPUTransferBuffer,
 	room:            int,
+	// Pictures of the world's map (chart.odin): the known world, and a layer for each island.
+	known:           ^sdl.GPUTexture,
+	isles:           ^sdl.GPUTexture,
+	layers:          int,
+	smooth:          ^sdl.GPUSampler,
 }
 ui: Ui   // the frame thread's
 
@@ -192,7 +218,7 @@ ui_bake :: proc(module: int) {
 		font, b := &ui.fonts[t.face], &ui.baked[style]
 		b.scale = math.round(t.size*f32(module))/font.units
 		b.ascent, b.descent, b.line = font.ascent*b.scale, font.descent*b.scale, math.round(t.line*f32(module))
-		for i in 0..<GLYPH_COUNT {
+		for i in 0..<(95 if style in LOOK.few else GLYPH_COUNT) {
 			r := rune(i + 32) if i < 95 else rune(i - 95 + 160) if i < 95 + 96 else extras[i - 95 - 96]
 			g := font_glyph(font, r)
 			clear(&lines)
@@ -329,12 +355,16 @@ Part_Kind :: enum u8 {
 	Mark,     // the cut's level on the column
 	Thumb,    // how far a scrolled thing has been scrolled
 	Veil,     // the whole picture dimmed, behind a screen that takes all of it
+	Choice,   // a choice at the front door: the one in focus is brass, with a brass line beside it and its key after its words
+	Picture,  // a picture of the world's map: the known world, or an island
+	Fade,     // a dark that clears toward its right, behind words that stand over a picture
+	Ring,     // an island's mark on the map
 }
 State :: enum u8 { Held, Main, Open, Chosen, Wrap, Right, Centre, Faint, Solid, Shadow }
 Sign  :: enum u8 { None, Well, Trouble, Caution }   // the shape numbers of ui.metal
 
 // The places of the play screen (interface.md, I1), and what stands over the world itself.
-Area :: enum u8 { Place, Dwarves, Wrong, Said, Hand, Orders, Ground, Lenses, Lists, List, Menu, World, Lesson }
+Area :: enum u8 { Place, Dwarves, Wrong, Said, Hand, Orders, Ground, Lenses, Lists, List, Menu, World, Lesson, Door, Making, Chart }
 
 Screen_Part :: struct {
 	part:   Part_Kind,
@@ -352,6 +382,7 @@ Screen_Part :: struct {
 	arg:    int,
 	mat:    Mat,
 	sign:   Sign,
+	uv:     [4]f32,       // a picture: the part of it shown, from its top left to its bottom right, each from 0 to 1
 }
 
 Screen :: struct {
@@ -503,6 +534,19 @@ screen_draw :: proc(s: ^Screen) {
 			quad_put(r, L.brass)
 		case .Thumb:
 			quad_put(r, L.edge if !hot else L.ash)
+		case .Choice:
+			on := .Chosen in it.state
+			c := L.brass if on else L.ash if .Faint in it.state else L.chalk
+			if on do quad_put({r.x, r.y, px(L.bar), r.h}, L.brass)
+			x, y := r.x + px(L.choice_pad), r.y + math.round((r.h - ui.baked[it.style].line)/2)
+			text_put(it.style, it.text, x, y, c)
+			if on && it.key != "" do key_put(it.key, x + text_wide(it.style, it.text) + px(L.key_gap) + px(1) + key_wide(it.key), r)
+		case .Picture:
+			quad_put(r, it.colour if it.colour.a > 0 else Colour{255, 255, 255, 255}, it.uv, {-(f32(it.arg) + 1 + (0.5 if .Faint in it.state else 0)), 0, 0, 0})
+		case .Fade:
+			quad_put(r, it.colour if it.colour.a > 0 else L.shade, WHITE, {0, 0, 0, L.shade_from})
+		case .Ring:
+			quad_put(r, it.colour if it.colour.a > 0 else L.chalk, WHITE, {0, 4, 0, 0})
 		}
 	}
 	ui.clip = {}
@@ -532,13 +576,14 @@ ui_render :: proc(g: ^Gpu, cmd: ^sdl.GPUCommandBuffer) {
 	if ui.pipe == nil {
 		world := g.source   // the interface's shaders are a file of their own
 		g.source = strings.clone_to_cstring(UI_SHADERS)
-		ui.pipe = make_pipeline(g, {vs = "vs_ui", fs = "fs_ui", vs_uniforms = 1, fs_samplers = 2, boxes = true, cull = .NONE, color = g.format, samples = ._1, blend = true})
+		ui.pipe = make_pipeline(g, {vs = "vs_ui", fs = "fs_ui", vs_uniforms = 1, fs_samplers = 4, boxes = true, cull = .NONE, color = g.format, samples = ._1, blend = true})
 		g.source = world
 		#assert(size_of(Ui_Quad) == size_of(Box))   // both are four vectors of four, which that pipeline's vertices are read as
 		ui.atlas = sdl.CreateGPUTexture(g.dev, {type = .D2, format = .R8_UNORM, usage = {.SAMPLER}, width = ATLAS, height = ATLAS, layer_count_or_depth = 1, num_levels = 1})
 		ui.atlas_staging = sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = ATLAS*ATLAS})
 		ui.nearest = sdl.CreateGPUSampler(g.dev, {min_filter = .NEAREST, mag_filter = .NEAREST, address_mode_u = .CLAMP_TO_EDGE, address_mode_v = .CLAMP_TO_EDGE, address_mode_w = .CLAMP_TO_EDGE})
 		ui.tiled = sdl.CreateGPUSampler(g.dev, {min_filter = .NEAREST, mag_filter = .NEAREST, address_mode_u = .REPEAT, address_mode_v = .REPEAT, address_mode_w = .REPEAT})
+		ui.smooth = sdl.CreateGPUSampler(g.dev, {min_filter = .LINEAR, mag_filter = .LINEAR, mipmap_mode = .LINEAR, address_mode_u = .CLAMP_TO_EDGE, address_mode_v = .CLAMP_TO_EDGE, address_mode_w = .CLAMP_TO_EDGE})
 	}
 	if n > ui.room {
 		if ui.buffer != nil {
@@ -566,8 +611,9 @@ ui_render :: proc(g: ^Gpu, cmd: ^sdl.GPUCommandBuffer) {
 	sdl.BindGPUGraphicsPipeline(pass, ui.pipe)
 	size := [4]f32{f32(g.w), f32(g.h), 0, 0}
 	sdl.PushGPUVertexUniformData(cmd, 0, &size, size_of(size))
-	bindings := [2]sdl.GPUTextureSamplerBinding{{ui.atlas, ui.nearest}, {g.blocks, ui.tiled}}
-	sdl.BindGPUFragmentSamplers(pass, 0, &bindings[0], 2)
+	// Where no picture of the world has been made, the atlas and the blocks stand in their places, unread.
+	bindings := [4]sdl.GPUTextureSamplerBinding{{ui.atlas, ui.nearest}, {g.blocks, ui.tiled}, {ui.known if ui.known != nil else ui.atlas, ui.smooth}, {ui.isles if ui.isles != nil else g.blocks, ui.smooth}}
+	sdl.BindGPUFragmentSamplers(pass, 0, &bindings[0], 4)
 	binding := sdl.GPUBufferBinding{buffer = ui.buffer}
 	sdl.BindGPUVertexBuffers(pass, 0, &binding, 1)
 	sdl.DrawGPUPrimitives(pass, 4, u32(n), 0, 0)
@@ -578,4 +624,35 @@ ui_render :: proc(g: ^Gpu, cmd: ^sdl.GPUCommandBuffer) {
 without_last :: proc(s: string) -> string {
 	_, n := utf8.decode_last_rune_in_string(s)
 	return s[:len(s) - n]
+}
+
+// ---- pictures -------------------------------------------------------------------------------
+
+PICTURE_KNOWN :: 2048   // pixels along a side of the known world's picture: half a kilometre to a pixel
+PICTURE_ISLE  :: 1024   // and of an island's: its land's own cells where it is 16 km across
+
+// Put a picture of the world on the GPU: the known world's (layer -1), or an island's, with smaller
+// copies of itself for where it is drawn small. The islands' pictures are made again where the world
+// in hand has more islands than they have layers. `pixels` are four bytes each, as the display takes them.
+picture_put :: proc(g: ^Gpu, layer, layers: int, pixels: []u8) {
+	size := u32(PICTURE_KNOWN if layer < 0 else PICTURE_ISLE)
+	levels :: proc(size: u32) -> u32 { n := u32(1); for s := size; s > 1; s /= 2 do n += 1; return n }
+	if layer < 0 && ui.known == nil {
+		ui.known = sdl.CreateGPUTexture(g.dev, {type = .D2, format = .R8G8B8A8_UNORM, usage = {.SAMPLER, .COLOR_TARGET}, width = size, height = size, layer_count_or_depth = 1, num_levels = levels(size)})
+	}
+	if layer >= 0 && ui.layers < layers {
+		if ui.isles != nil do sdl.ReleaseGPUTexture(g.dev, ui.isles)
+		ui.layers = max(layers, 2)   // an array has two layers or more
+		ui.isles = sdl.CreateGPUTexture(g.dev, {type = .D2_ARRAY, format = .R8G8B8A8_UNORM, usage = {.SAMPLER, .COLOR_TARGET}, width = size, height = size, layer_count_or_depth = u32(ui.layers), num_levels = levels(size)})
+	}
+	staging := sdl.CreateGPUTransferBuffer(g.dev, {usage = .UPLOAD, size = size*size*4})
+	copy((cast([^]u8)sdl.MapGPUTransferBuffer(g.dev, staging, false))[:size*size*4], pixels)
+	sdl.UnmapGPUTransferBuffer(g.dev, staging)
+	cmd := sdl.AcquireGPUCommandBuffer(g.dev)
+	pass := sdl.BeginGPUCopyPass(cmd)
+	sdl.UploadToGPUTexture(pass, {transfer_buffer = staging}, {texture = ui.known if layer < 0 else ui.isles, layer = u32(max(layer, 0)), w = size, h = size, d = 1}, false)
+	sdl.EndGPUCopyPass(pass)
+	sdl.GenerateMipmapsForGPUTexture(cmd, ui.known if layer < 0 else ui.isles)
+	_ = sdl.SubmitGPUCommandBuffer(cmd)
+	sdl.ReleaseGPUTransferBuffer(g.dev, staging)
 }
