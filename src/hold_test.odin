@@ -203,13 +203,33 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 		fmt.printfln("the room: %d, %d, %d to %d, %d, %d, its floor at %d; %d blocks of its roof were laid of %s; the store was left %d of stone and %d of timber; done %d:%02d in",
 			lo.x, floor, lo.z, hi.x, floor + 1, hi.z, floor, len(open), STUFFS[roof], stone, timber, now/60, now%60)
 	}
+	// Needs (needs.odin): what bears food round the camp is marked to be gathered and its water to be
+	// fished, a stockpile is marked for the food, and the party is left to itself into the second
+	// day. Every dwarf has drunk at water it found for itself, eaten, and is alive.
+	order(t, played, &text, now, "gather %d %d %d %d %d %d", camp.x - 30, camp.y, camp.z - 30, camp.x + 30, camp.y, camp.z + 30)
+	order(t, played, &text, now, "fish %d %d %d %d %d %d", camp.x - 30, camp.y, camp.z - 30, camp.x + 30, camp.y, camp.z + 30)
+	order(t, played, &text, now, "store food %d %d %d %d %d %d", camp.x - 3, camp.y - 1, camp.z - 3, camp.x + 3, camp.y - 1, camp.z + 3)
+	now = max(now + 600, 2400)   // past the second day's dawn, which is 1,100 s in, and its noon
+	hold_run(played, f64(now))
+	testing.expect_value(t, said(played, "The 2nd of spring."), 1)
+	testing.expect(t, said(played, `The hold says "gather`) == 1 && said(played, `The hold says "fish`) == 1, "the orders to gather and to fish were obeyed")
+	testing.expectf(t, len(played.wells) >= 1, "the party found fresh water to drink at: %d places known", len(played.wells))
+	testing.expectf(t, len(played.picked) > 0, "plants were gathered or water fished: %d columns taken", len(played.picked))
+	for d, i in played.dwarves {
+		testing.expectf(t, d.doing != .Dead && d.want[.Drink] > 0 && d.want[.Food] > 0, "%s is alive on the second day, and neither parched nor starving: drink %.2f, food %.2f", played.party[i].given, d.want[.Drink], d.want[.Food])
+		for w in Want do testing.expectf(t, d.want[w] >= 0 && d.want[w] <= 1, "%s's %s is a share of the whole: %.2f", played.party[i].given, WANTS[w].name, d.want[w])
+	}
+	{
+		days, loose := food_days(played)
+		fmt.printfln("needs: on the %s the seven are alive; food for %.1f days lies in the stockpile and %d things loose; %d columns gathered or fished; %d places to drink known", date_words(date_tick(played.tick)), days, loose, len(played.picked), len(played.wells))
+	}
 	SECONDS := now + 60
 	hold_run(played, f64(SECONDS))
 	for d, i in played.dwarves {
 		w.budget = 64
-		testing.expectf(t, d.doing == .Waiting, "%s stands at the end, having found its way", played.party[i].given)
+		testing.expectf(t, d.doing != .Stopped && d.doing != .Dead && !d.adrift && !d.shut, "%s is alive at the end, with ground under it and a way from where it stands", played.party[i].given)
 		testing.expectf(t, walk_floor(w, d.cell.x, d.cell.y, d.cell.z) >= 0, "%s stands on a floor", played.party[i].given)
-		for o in played.dwarves[:i] do testing.expectf(t, o.cell != d.cell, "%s has a floor of its own", played.party[i].given)
+		for o in played.dwarves[:i] do testing.expectf(t, o.cell != d.cell || !(stands(o) && o.takes == 0 && stands(d) && d.takes == 0), "%s has a floor of its own where it stands", played.party[i].given)   // a walker goes by one who stands
 	}
 
 	// The same orders from the file: alone, and on a thread of its own at a clock another thread

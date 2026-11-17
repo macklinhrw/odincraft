@@ -130,8 +130,27 @@ heading :: proc(bearing, scale: f32) -> matrix[3, 3]f32 {
 // A dwarf as sixteen boxes, its feet at `feet` from the eye: boots and legs, a broad tunic with a
 // belt, arms and hands, a head with a hood, a nose, eyes and a beard. `stride` is the metres it has walked,
 // which swing its legs and arms; seated, its legs lie forward.
-dwarf_boxes :: proc(out: ^[dynamic]Box, f: Facts, feet: [3]f32, bearing: f32, stride: f64, moving, seated: bool, toil: f32 = -1, carry := Mat.Air, carrying: i32 = 0) {
+// How a body is held: on its feet; bent to the water or to what it eats; asleep on the ground; or dead, lying as it fell, its colours gone grey.
+Bearing_Of :: enum u8 { Up, Stooped, Asleep, Dead }
+
+dwarf_boxes :: proc(out: ^[dynamic]Box, f: Facts, feet: [3]f32, bearing: f32, stride: f64, moving, seated: bool, toil: f32 = -1, carry := Mat.Air, carrying: i32 = 0, pose := Bearing_Of.Up) {
+	mix :: proc(a, g: u32) -> u32 { return (a + 2*g)/3*4/5 }
 	R := heading(bearing, f.tall/1.36)
+	first := len(out)
+	feet := feet
+	if pose == .Asleep || pose == .Dead {   // on its back, its head the way it faced: the body turned a quarter about the axis across it
+		ahead := [3]f32{math.sin(bearing), 0, -math.cos(bearing)}
+		R = R*linalg.matrix3_rotate_f32(math.PI/2, [3]f32{1, 0, 0})
+		feet += {0, 0.17, 0} - ahead*0.62*f.tall/1.36
+	} else if pose == .Stooped do R = R*linalg.matrix3_rotate_f32(0.5, [3]f32{1, 0, 0})
+	defer if pose == .Dead do for &b in out[first:] {   // the colour gone out of it
+		for c in ([2]^f32{&b.upper, &b.under}) {
+			v := u32(c^)
+			grey := (v >> 16 & 255)*3/10 + (v >> 8 & 255)*5/10 + (v & 255)*2/10
+			c^ = f32(mix(v >> 16 & 255, grey) << 16 | mix(v >> 8 & 255, grey) << 8 | mix(v & 255, grey))
+		}
+	}
+	defer if pose == .Asleep || pose == .Dead do for &b in out[first:] do b.feet = feet.y - 0.17   // the cut draws it whole or not at all, by the ground it lies on
 	swing := 0.7*f32(math.sin(math.mod(stride, 1.3)/1.3*math.TAU)) if moving else 0
 	strike := 1.3 + 0.9*math.sin(toil*5.5) if toil >= 0 else 0   // at work, both arms are raised and brought down
 	if carrying > 0 do strike = 2.75   // and held up under what it carries

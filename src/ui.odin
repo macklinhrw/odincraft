@@ -337,6 +337,11 @@ text_put :: proc(style: Style, s: string, x, y: f32, c: Colour) {
 // A block of a material, as the world shows its side: the tile itself, a texel to `texel` pixels,
 // repeated to fill the rectangle from its top left.
 tile_put :: proc(r: Rect, m: Mat, texel: f32, tint := Colour{255, 255, 255, 255}) {
+	if int(m) >= BLOCK_MATS {   // a thing that is no block has no tile: its own colour (FOODS, food.odin)
+		c := mat_rgb(m)
+		quad_put(r, {u8(c >> 16), u8(c >> 8), u8(c), tint.a})
+		return
+	}
 	quad_put(r, tint, {0, 0, r.w/(TILE*texel), r.h/(TILE*texel)}, {f32(int(m)*2 + 1) + 1, 0, 0, 0})
 }
 

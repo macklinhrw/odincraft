@@ -273,11 +273,12 @@ play_again :: proc() {
 	card_free(&u.card)
 	for m in u.said do delete(m.text)
 	for w in u.wrong { delete(w.id); delete(w.text) }
-	delete(u.said); delete(u.wrong); delete(u.several); delete(u.kept); delete(u.need); delete(u.needing); delete(u.find); delete(u.tip)
+	delete(u.said); delete(u.wrong); delete(u.several); delete(u.kept); delete(u.need); delete(u.needing); delete(u.find); delete(u.tip); delete(u.mourned)
 	was := u^
 	u^ = {lens = -1, lens_shown = -1, open = {0}}
 	u.scale, u.learned, u.lens_tex = was.scale, was.learned, was.lens_tex
 	typing = false
+	delete(bar.food); delete(bar.picked)   // what the last game's tools knew of what was gathered
 	bar = {dig = .Out, build = .Wall, deep = 2, high = 2, job = -1}
 }
 
@@ -470,7 +471,7 @@ KEYS_SAID := [?]Key_Said{
 	{.List, int(List.Dwarves), "The list of dwarves"}, {.List, int(List.Places), "The list of places"},
 	{.Order, int(Tool.Dig), "The tool to dig"}, {.Order, int(Tool.Fell), "The tool to fell"}, {.Order, int(Tool.Build), "The tool to build"},
 	{.Order, int(Tool.Send), "Send the party"}, {.Order, int(Tool.Remove), "Take marks back, built blocks down, or a stockpile away"},
-	{.Order, int(Tool.Store), "The tool to mark a stockpile"}, {.More, 0, "The card of what is in the hand, or shut it"},
+	{.Order, int(Tool.Store), "The tool to mark a stockpile"}, {.Order, int(Tool.Gather), "The tool to gather food from plants and trees"}, {.Order, int(Tool.Fish), "The tool to fish"}, {.More, 0, "The card of what is in the hand, or shut it"},
 	{.Back, 0, "Back to the game"}, {.Leave, int(Leave.World), "Leave to the world"}, {.Leave, int(Leave.Door), "Leave to the front door"}, {.Quit, 0, "Quit the game"},
 	{.Door_Move, -1, "The choice above"}, {.Door_Move, 1, "The choice below"}, {.Door_Go, 0, "Take the choice in focus"},
 	{.Door_Back, 0, "Back: put down, then to the front door"}, {.Draw, 0, "Draw a seed"}, {.Stop, 0, "Stop making the world, or go on"},

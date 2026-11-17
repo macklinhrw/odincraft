@@ -1,0 +1,9 @@
+# A dwarf shut in a pit, where it can reach neither water nor food (P4, first half): the ground is
+# taken from under Bramik Tuffelbow where the party waits above the landing, three blocks deep.
+#   build/odincraft --dwarves=3600 --orders=docs/interesting-world/real/play/p4-pit-saved-orders.txt
+# Here a stair is dug down to it from the higher ground beside it once it is parched, fifteen
+# minutes in: it helps cut it from below, walks out and drinks. (p4-pit-orders.txt leaves it.)
+120 block 2693 2 -1747 Air
+120 block 2693 1 -1747 Air
+120 block 2693 0 -1747 Air
+900 dig stair-down 2690 2 -1747 2692 2 -1747

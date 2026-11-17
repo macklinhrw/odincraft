@@ -1,0 +1,8 @@
+# A dwarf shut in a pit, where it can reach neither water nor food (P4, first half): the ground is
+# taken from under Bramik Tuffelbow where the party waits above the landing, three blocks deep.
+#   build/odincraft --dwarves=3600 --orders=docs/interesting-world/real/play/p4-pit-orders.txt
+# Left there it is warned of, stage by stage, and dies of thirst on the third day. With the last
+# line, a stair dug to it once it is parched, it walks out and drinks.
+120 block 2693 2 -1747 Air
+120 block 2693 1 -1747 Air
+120 block 2693 0 -1747 Air

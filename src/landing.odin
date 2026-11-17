@@ -213,6 +213,9 @@ SHORE := [?]Shore_Row{
 			kinds := SPECIES[most[0]].name if most[1] == .Scrub else fmt.tprintf("%s and %s", SPECIES[most[0]].name, SPECIES[most[1]].name)
 			return fmt.tprintf("%s, %s", kinds, "thick" if share >= 0.5 else "open" if share >= 0.3 else "thin")
 		}, "The trees a log can be cut from, on the land within 300 m, by the woods that grow there."},
+	{"Food", true, {{.Food_Round, 2.5, ANY, 0}}, {{.Food_Round, -ANY, 1.5, 0}}, false, false, "Little food within a walk",
+		proc(p: ^Point) -> string { return larder_says(larder_round(land_cell(p.x, p.z))) },
+		"What the land within 300 m of where the party would gather bears to eat, and its water, season by season: the plants, trees and fish that are there, by their own rows. A season counts where it bears three days' eating for seven. The party brings no stores."},
 	{"Rock", true, {}, {{.Strength, TOOLS, ANY, 0}}, false, false, "Rock too hard for the picks",
 		proc(p: ^Point) -> string {
 			m := Mat(int(FIELDS[.Rock].at(p)))
@@ -254,6 +257,7 @@ site_write :: proc(k: ^[dynamic]Card_Row, c: int) {
 		}
 		block := Colour{}
 		if row.thing == "Rock" do block = byte(map_colour(Mat(int(FIELDS[.Rock].at(&p)))))
+		if row.thing == "Food" do fmt.sbprintf(&figures, ". %s", strings.trim_suffix(larder_words(larder_round(land_cell(p.x, p.z))), "."))   // season by season, in the land's own words
 		append(k, Card_Row{strings.clone(row.thing), strings.clone(row.says(&p)), fmt.aprintf("%s%s%s", row.why, strings.to_string(figures), "." if strings.builder_len(figures) > 0 else ""), .Trouble if lacks && row.grave else .Caution if lacks else .Well if well else .None, block, false, strings.clone(row.named) if lacks else ""})
 		if row.thing == "Rock" {   // and the bed under it, down to where a first hall would be dug
 			m0 := Mat(int(FIELDS[.Rock].at(&p)))
