@@ -413,6 +413,11 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
 - **Seed 1's coast is judged against a real low drowned coast before the history is changed**: the three coasts measured (Bōsō, Kii, Muroto) rise fast on a forearc and are the wrong kind to hold an old low margin to. The second part measures a ria coast on an old margin first.
 - *Asked of the owner:* **look at the continent** (`interesting-world/real/continent-seed1-map.jpg`, `-from-summit.jpg`, `-coast.jpg`; in the game, `--seed=1 --site=x,z`). Formed land ends in a straight grey side where the next piece is not formed; the far rings drawn from the coarse stage are to take that away.
 
+**2026-11-16, Claude's call** (P4 begun, in two halves)
+
+- **P4 is built in two halves, one at a time.** The first: hunger, thirst, sleep, the day and the year passing, death, and what each dwarf feels shown, with food and drink that are real things of the island, gathered, fished, carried and stored. The second: shelter and warmth. A step that large was how five were merged unplayed.
+- **The day and the year start from the plan's guess** (a day of about 20 minutes at normal speed, a year of 48 days), judged by the delegate against the two games' own figures and changed by playing. The owner has not answered this one; it is two rows to change.
+
 **2026-11-16, Claude's call** (a message that fades)
 
 - **A message's shadow fades with its words.** The shadow under words over the world was drawn at full strength whatever the words' own, so a line in its last two seconds, and the older lines at their 72%, turned black: the "older lines hard to read" noted on merging the goods. Seen in E-1's played pictures; checked in a picture of a line half faded.
