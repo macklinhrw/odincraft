@@ -43,6 +43,9 @@ Look :: struct {
 	dim:                Colour,   // over the world, behind a screen that takes all of it
 	water:              Colour,   // the sea or a stream, where a thing has no block to show
 	niche, eye:         Colour,   // behind a dwarf's picture, and its eyes
+	sleep:              Colour,   // ground marked to sleep on
+	roofed, indoors:    Colour,   // the shelter lens: ground under a roof, and ground under a roof inside walls
+	flame, ember, char: Colour,   // a fire: its flames, its heart, and its burnt logs
 	kinds:              [8]Colour, // a lens that paints kinds of rock: the island's first, second and so on, told apart at a glance
 	faces:              [Face][]u8,
 	type:               [Style]Type,
@@ -108,6 +111,8 @@ LOOK := Look {
 	deep = {0x1a, 0x20, 0x26, 255}, pit = {0x14, 0x18, 0x1c, 255}, held = {0x3a, 0x34, 0x24, 255}, lit = {0x38, 0x43, 0x4d, 255},
 	on_brass = {0x1d, 0x1a, 0x12, 255}, rule = {255, 255, 255, 18}, shadow = {0, 0, 0, 110}, said = {20, 24, 28, 184}, dim = {12, 15, 18, 150}, water = {0x2f, 0x62, 0x82, 255},
 	niche = {0x3b, 0x45, 0x4e, 255}, eye = {0x1b, 0x17, 0x14, 255},
+	sleep = {0x8f, 0x9c, 0xe0, 255}, roofed = {0xd9, 0xc7, 0x86, 255}, indoors = {0xe2, 0x8a, 0x4c, 255},
+	flame = {0xff, 0xb4, 0x48, 255}, ember = {0xe4, 0x56, 0x22, 255}, char = {0x26, 0x21, 0x1e, 255},
 	kinds = {{0xcd, 0xa8, 0x5f, 255}, {0x6d, 0xb3, 0xa2, 255}, {0xc4, 0x6a, 0x4e, 255}, {0x7f, 0x93, 0xc9, 255}, {0xe6, 0xe0, 0xd0, 255}, {0x9a, 0x6f, 0xa8, 255}, {0x8f, 0xa8, 0x5a, 255}, {0x8a, 0x8f, 0x94, 255}},
 	faces = {
 		.Name = #load("../assets/fonts/Marcellus-Regular.ttf"),

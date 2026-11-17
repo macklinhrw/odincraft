@@ -227,15 +227,15 @@ main :: proc() {
 	if leave != .Quit do door_run(&opt, &g, window, leave)   // out of play to the world's screen or the front door, with this world in hand
 }
 
-// With no day named, the first fair day from the March equinox on: a person looking at the
-// land sees it in sunlight, and pictures taken on different days of work can be compared.
+// What the sky is when the boat stands off: the first fair morning from the March equinox on
+// (weather_origin), so a person looking at the land sees it in sunlight.
 sky_choose :: proc(opt: ^Options) {
-	if !opt.has_day do for c, _ := weather_at(opt.day, opt.hour); c > FAIR && opt.day < 140; c, _ = weather_at(opt.day, opt.hour) do opt.day += 1
-	cover, base := weather_at(opt.day, opt.hour)
+	cover, base, _ := sky_at(0)
+	if opt.weather.x >= 0 do cover, base = opt.weather.x, opt.weather.y
 	daylight: f32
 	for h := f32(0.025); h < 24; h += 0.05 do daylight += 0.05 if sun_dir(h, opt.day).y > 0 else 0
-	fmt.printfln("sky on day %.0f at %.1f h: the sun %.0f° high at noon, %.1f h of daylight; drawn cover %.2f, cloud base %.0f m%s",
-		opt.day, opt.hour, math.to_degrees(math.asin(sun_dir(12, opt.day).y)), daylight, cover, base, ", forced by --weather" if opt.weather.x >= 0 else "")
+	fmt.printfln("sky on day %.0f at %.1f h: the sun %.0f° high at noon, %.1f h of daylight; the spells of weather counted from %.0f days after the equinox, the first fair morning; drawn cover %.2f, cloud base %.0f m%s",
+		opt.day, opt.hour, math.to_degrees(math.asin(sun_dir(12, opt.day).y)), daylight, weather_origin(), cover, base, ", forced by --weather" if opt.weather.x >= 0 else "")
 }
 
 // The window, opened once for the whole run.
@@ -410,6 +410,9 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 		today := date_at(watch.clock if hold.found else clock.seconds)
 		hour := math.mod((opt.hour if opt.has_hour else today.hour) + turned, 24)
 		sun_day := opt.day if opt.has_day else today.sun
+		sky, sky_place := weather_over(p.pos if afoot else a.at, watch.clock if hold.found else clock.seconds, afoot)   // the weather over the view, by the rule the dwarves feel it by (weather.odin)
+		if opt.rain >= 0 do sky.rain, sky.wet, sky.snow = opt.rain, min(1.5*opt.rain, 1), false
+		play.sky, play.sky_stand = sky, sky_place
 		world_update(w, g.dev, centre)
 		water_update(&w.water, g.dev, passed)
 
@@ -519,7 +522,7 @@ game :: proc(opt: ^Options, g: ^Gpu, window: ^sdl.Window, unseen: bool, far: []i
 			else do fmt.println("script: nothing is under the pointer")
 		}
 		view := View {
-			eye = eye, yaw = yaw, pitch = pitch, hour = hour, day = sun_day, weather_day = opt.day + f32(today.day), weather = opt.weather, seconds = f32(clock.seconds),
+			eye = eye, yaw = yaw, pitch = pitch, hour = hour, day = sun_day, sky = sky, weather = opt.weather, dry = afoot && roofed(world_blocks(w), {i32(math.floor(eye.x)), i32(math.floor(eye.y)) - 1, i32(math.floor(eye.z))}), seconds = f32(clock.seconds),
 			target = hit, has_target = aiming, crosshair = shot == "", boxes = boxes,
 			fov = fov, focus = eye if afoot else a.at, above = !afoot, level = NO_CUT if afoot else above_level(&a), bare = !afoot && (a.bare || bar.tool == .Gather),   // with Gather in the hand the woods are shown without their leaves: what it takes grows under them has_mark = !afoot && a.marked,
 		}

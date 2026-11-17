@@ -40,6 +40,7 @@ Act :: enum u8 {
 	Why, Go, Drop, Depth,                                // the hand
 	Order, Plan, Stuff, Takes, Deep, High, Take_Back, More,     // the orders bar, a tool's choices and numbers, an order's card (bar.odin), and the card asked for or shut
 	Zone_Takes, Zone_Grow, Zone_Remove,                  // a stockpile in the hand: what it takes, the Store tool taken up to make it larger, and the whole of it removed (bar.odin)
+	Tend, Fire_Remove,                                   // a fire in the hand: kept fed or let go out, and put out and taken up (shelter_view.odin)
 	List, Sort, Fold, Row, Find, Thumb,                  // the lists
 	Who, Lead, Keep, Only, Whole, Crowd,                 // the dwarves: a picture, a row, kept in view, the list's kept alone, a group whole, the list opened on some (crowd.odin)
 	Menu, Back, Quit, Scale, Escape,
@@ -80,6 +81,7 @@ BINDS := [?]Bind{
 	{.D, "D", .Order, int(Tool.Dig), int(Tool.Dig), .Above, false}, {.T, "T", .Order, int(Tool.Fell), int(Tool.Fell), .Above, false},
 	{.B, "B", .Order, int(Tool.Build), int(Tool.Build), .Above, false}, {.M, "M", .Order, int(Tool.Send), int(Tool.Send), .Either, false},
 	{.S, "S", .Order, int(Tool.Store), int(Tool.Store), .Above, false},
+	{.Z, "Z", .Order, int(Tool.Sleep), int(Tool.Sleep), .Above, false},
 	{.G, "G", .Order, int(Tool.Gather), int(Tool.Gather), .Above, false}, {.N, "N", .Order, int(Tool.Fish), int(Tool.Fish), .Above, false},
 	{.X, "X", .Order, int(Tool.Remove), int(Tool.Remove), .Above, false},
 	{.ESCAPE, "Esc", .Back, 0, 0, .Menu, false},
@@ -110,14 +112,15 @@ key_for :: proc(act: Act, arg := 0) -> string {
 List :: enum u8 { None, Dwarves, Places }
 
 // A lens: one of the land's fields painted over the world (fields.odin), as --overlay= paints it on the map.
-Lens_Row :: struct { name: string, field: Field, says: string }
+Lens_Row :: struct { name: string, field: Field, says: string, blocks: bool }   // blocks: it is read from the blocks round the view, not painted from a field of the land (shelter_scan)
 LENSES := [?]Lens_Row{
-	{"Rock", .Rock, "The rock at the ground's top, each kind in its own colour."},
-	{"Water in the ground", .Water_Table, "How far under the ground the water in it stands: bluest where it lies at the surface."},
-	{"Rain", .Rain, "A year's rain: more on high ground and on ground rising into the wind, less in its lee."},
-	{"Livable ground", .Livable, "Ground a hold could stand on: gentle, clear of the sea, a hectare or more."},
-	{"Plants", .Plants, "The plants that took each piece of ground."},
-	{"Soil", .Soil, "The kind of soil."},
+	{"Rock", .Rock, "The rock at the ground's top, each kind in its own colour.", false},
+	{"Water in the ground", .Water_Table, "How far under the ground the water in it stands: bluest where it lies at the surface.", false},
+	{"Rain", .Rain, "A year's rain: more on high ground and on ground rising into the wind, less in its lee.", false},
+	{"Livable ground", .Livable, "Ground a hold could stand on: gentle, clear of the sea, a hectare or more.", false},
+	{"Plants", .Plants, "The plants that took each piece of ground.", false},
+	{"Soil", .Soil, "The kind of soil.", false},
+	{"Shelter", .Rock, "Where a dwarf is out of the weather: ground with a roof over it, and ground with walls round it as well.", true},
 }
 LENS_SIZE :: 1024   // texels across an island
 Lens_Job :: struct { island: ^Formed, field: Field, pixels: []u8, done: bool, rank: [Mat]u8 }   // rank: which of the island's rocks each is, for a lens of kinds
@@ -167,6 +170,8 @@ Play :: struct {
 	eye:      [3]f64,
 	yaw, pitch, fov, hour, day: f32,
 	date:     Date,            // the day and the hour of the world, as the clock has them (clock.odin)
+	sky:      Weather,         // the weather over the view, and the ground it was read on (weather.odin)
+	sky_stand: Stand,
 	aim:      Pick,            // in first person, the block aimed at
 	now:      f64,             // real seconds since the game began
 	rest:     f64,             // seconds the pointer has rested
@@ -295,10 +300,10 @@ play_begin :: proc(opt: ^Options, a: ^Above, clock: ^Clock, w: ^World, p: ^Playe
 	append(&u.find, opt.find)
 	if opt.tell != "" do tell(opt.tell)
 	if opt.alert != "" do alert_raise("asked", opt.alert, .Caution if strings.has_prefix(opt.alert, "?") else .Trouble, a.at)
-	for l, i in LENSES do if opt.lens != "" && (strings.equal_fold(l.name, opt.lens) || FIELDS[l.field].name == opt.lens) do u.lens = i
+	for l, i in LENSES do if opt.lens != "" && (strings.equal_fold(l.name, opt.lens) || !l.blocks && FIELDS[l.field].name == opt.lens) do u.lens = i
 	if opt.lens != "" && u.lens < 0 && opt.lens != "leaves" {
 		fmt.eprint("no lens named", opt.lens, "; there are: leaves")
-		for l in LENSES do fmt.eprintf(", %s", FIELDS[l.field].name)
+		for l in LENSES do fmt.eprintf(", %s", strings.to_lower(l.name, context.temp_allocator) if l.blocks else FIELDS[l.field].name)
 		fmt.eprintln()
 		os.exit(2)
 	}
@@ -376,7 +381,10 @@ hand_pick :: proc(pick: Pick, pointer: [2]f32) {
 	t := thing_at(u.w, pick)
 	if !u.afoot^ {   // a pile before the ground behind it; a stockpile's ground as the stockpile
 		ray := view_ray(u.yaw, u.pitch, u.fov, u.aspect, pointer)
-		if k := pile_aimed(u.eye, ray, pick); k >= 0 {
+		if k := fire_aimed(u.eye, ray, pick); k >= 0 {   // a fire before what lies or stands behind it
+			at := watch.seen.fires[k].at
+			t = {kind = .Fire, island = t.island, block = at, lo = at, hi = at, feature = -1}
+		} else if k := pile_aimed(u.eye, ray, pick); k >= 0 {
 			p := watch.seen.piles[k]
 			t = {kind = .Pile, island = t.island, block = p.at, lo = p.at, hi = p.at, mat = p.kind, feature = int(p.n)}
 		} else if _, on := zone_under(t.block + {0, 1, 0}); on && t.kind == .Ground {   // a click on a stockpile's ground takes the whole stockpile, and its own card (zone_card, bar.odin)
@@ -476,8 +484,14 @@ play_act :: proc(act: Act, arg: int) {
 	case .Zone_Grow:
 		if z, ok := zone_seen(bar.zone); ok {
 			bar.takes = z.takes
-			if bar.tool != .Store do tool_take(.Store)
+			grows := Tool.Sleep if z.sleep else .Store
+			if bar.tool != grows do tool_take(grows)
 		}
+	case .Tend:
+		if u.hand.kind == .Fire do hold_order({kind = .Tend, at = u.hand.block - {0, 1, 0}, to = u.hand.block - {0, 1, 0}, on = arg != 0})
+	case .Fire_Remove:
+		if u.hand.kind == .Fire do hold_order({kind = .Unmark, at = u.hand.block - {0, 1, 0}, to = u.hand.block - {0, 1, 0}})
+		hand_drop()
 	case .List:
 		u.list = .None if u.list == List(arg) else List(arg)
 		u.list_scroll, u.typing = 0, false
@@ -818,12 +832,21 @@ place_build :: proc() {
 	tips := [3]string{"The world runs at its own pace.", "The world runs three times as fast.", "The world runs six times as fast."}
 	row := first
 	for n, i in names do row += px(L.gap) + button_wide(n, key_for(.Speed, i))
-	inner := max(row, text_wide(.Great, title), text_wide(.Body, date))
-	r := Rect{px(L.margin), px(L.margin), inner + 2*px(L.pad.x), 2*px(L.pad.y) + line_of(.Great) + px(1) + line_of(.Body) + px(3) + px(L.button)}
+	// The weather over the view, under the date: what falls, the air and the wind, by the island's own climate (weather.odin).
+	sky, why := "", ""
+	if f := island_near(at.x, at.z); f != nil {
+		was := bound(f)
+		sky, why = weather_line(u.sky), weather_why(u.sky, u.sky_stand, u.date)
+		bound(was)
+	}
+	inner := max(row, text_wide(.Great, title), text_wide(.Body, date), text_wide(.Body, sky))
+	r := Rect{px(L.margin), px(L.margin), inner + 2*px(L.pad.x), 2*px(L.pad.y) + line_of(.Great) + px(1) + 2*line_of(.Body) + px(3) + px(L.button)}
 	part(.Panel, r, id = "place")
 	x, y := r.x + px(L.pad.x), r.y + px(L.pad.y)
 	y += words(x, y, title, .Great, id = "place.title") + px(1)
-	y += words(x, y, date, .Body, L.ash, "place.date") + px(3)
+	y += words(x, y, date, .Body, L.ash, "place.date")
+	part(.Head, {x, y, inner, line_of(.Body)}, tip = why)
+	y += words(x, y, sky, .Body, L.chalk if u.sky.rain > 0 else L.ash, "place.weather") + px(3)
 	paused := u.clock.paused
 	button({x, y, first, px(L.button)}, fmt.tprintf("%s at %s", "Paused" if paused else "Running", hour), .Pause, 0, paused, "clock.pause", "Stop the world, or let it go on. You can look and give orders while it stands still.")
 	x += first + px(L.gap)
@@ -1144,7 +1167,7 @@ lenses_build :: proc() {
 	legend := len(screen.items)   // the key is measured by listing it, then moved to its place
 	lh := f32(0)
 	if u.lens >= 0 {
-		lh = legend_build(0, 0, inner, LENSES[u.lens]) + (px(L.space) if u.lenses else line_of(.Small) + px(1.5))
+		lh = (shelter_legend(0, 0, inner, LENSES[u.lens].says) if LENSES[u.lens].blocks else legend_build(0, 0, inner, LENSES[u.lens])) + (px(L.space) if u.lenses else line_of(.Small) + px(1.5))
 		high += lh
 	}
 	x := u.ground.x - px(2) - w
@@ -1539,7 +1562,7 @@ tip_build :: proc() {
 			if u.animal.ok do t = {kind = .Animal, creature = u.animal.row, nest = u.animal.nest}
 			u.tip_block = a.under.block
 			switch t.kind {
-			case .None, .Box, .Dwarf, .Dwarves, .Place, .Pile, .Zone: u.tip = strings.clone("")
+			case .None, .Box, .Dwarf, .Dwarves, .Place, .Pile, .Zone, .Fire: u.tip = strings.clone("")
 			case .Ground: u.tip = strings.clone(mat_words(t.mat))
 			case .Tree:   u.tip = fmt.aprintf("a %s%s, %d m", SPECIES[t.tree.kind].name, "" if t.tree.kind == .Scrub else " tree", t.tree.height)
 			case .Stream: u.tip = strings.clone("a stream")
@@ -1610,7 +1633,7 @@ menu_build :: proc() {
 // the field is read over the whole island on a thread of its own, and painted when it is ready.
 lens_follow :: proc() {
 	u := &play
-	if u.lens < 0 || u.afoot^ do return
+	if u.lens < 0 || u.afoot^ || LENSES[u.lens].blocks do return   // the shelter lens is read from the blocks, each frame it changes (shelter_scan)
 	f := island_near(u.a.at.x, u.a.at.z)
 	if f == nil || u.lens_job != nil || u.lens_island == f && u.lens_shown == u.lens do return
 	u.lens_job = new(Lens_Job)
@@ -1656,7 +1679,7 @@ lens_bind :: proc(g: ^Gpu, eye: [3]f64) -> (texture: ^sdl.GPUTexture, at: [4]f32
 		u.lens_job = nil
 	}
 	f := u.lens_island
-	if u.plain || u.afoot^ || u.lens < 0 || u.lens_shown != u.lens || f == nil do return nil, {}
+	if u.plain || u.afoot^ || u.lens < 0 || LENSES[u.lens].blocks || u.lens_shown != u.lens || f == nil do return nil, {}
 	size := f.region.size
 	return u.lens_tex, {f32(eye.x - f64(f.region.origin.x) + size/2), f32(eye.z - f64(f.region.origin.y) + size/2), f32(1/size), 1}
 }

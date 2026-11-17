@@ -200,6 +200,20 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 		inside := 0
 		for d in played.dwarves do inside += int(d.cell.x >= lo.x && d.cell.x <= hi.x && d.cell.z >= lo.z && d.cell.z <= hi.z && d.cell.y == floor)
 		testing.expectf(t, inside >= 4, "most of the party stands in the room, under its roof: %d do", inside)
+		// Shelter (shelter.odin): the room is marked to sleep in, and a fire is laid in its middle. By the
+		// rule its floor is indoors, and the ground the party gathered on is open to the sky.
+		order(t, played, &text, now, "sleep %d %d %d %d %d %d", lo.x, floor - 1, lo.z, hi.x, floor - 1, hi.z)
+		middle := [3]i32{(lo.x + hi.x)/2, floor, (lo.z + hi.z)/2}
+		order(t, played, &text, now, "build fire timber %d %d %d %d %d %d", middle.x, floor - 1, middle.z, middle.x, floor - 1, middle.z)
+		run_until(played, &now, now + 400, proc(h: ^Hold) -> bool { return len(h.fires) > 0 })
+		testing.expect(t, len(played.fires) == 1 && played.fires[0].lit && played.fires[0].roof && played.fires[0].walled, "a fire is laid and lit in the room, under its roof and inside its walls")
+		testing.expect(t, !shelter_of(hold_blocks(played), played.landed.camp).roof, "where the party gathered is open to the sky")
+		sleeping, roofed_, walled := 0, 0, 0   // a place in line with the door, or beside a gap in the hill's side, is under the roof and not indoors
+		for c, cell in played.zoned do if played.zones[cell.zone].sleep {
+			sh := shelter_of(hold_blocks(played), c)
+			sleeping, roofed_, walled = sleeping + 1, roofed_ + int(sh.roof), walled + int(indoors(sh))
+		}
+		testing.expectf(t, sleeping >= 20 && roofed_ == sleeping && 2*walled > sleeping, "the room's floor is a place to sleep, all of it under the roof and most of it indoors: %d places, %d roofed, %d indoors", sleeping, roofed_, walled)
 		fmt.printfln("the room: %d, %d, %d to %d, %d, %d, its floor at %d; %d blocks of its roof were laid of %s; the store was left %d of stone and %d of timber; done %d:%02d in",
 			lo.x, floor, lo.z, hi.x, floor + 1, hi.z, floor, len(open), STUFFS[roof], stone, timber, now/60, now%60)
 	}
@@ -212,6 +226,18 @@ dwarves_world_is_deterministic :: proc(t: ^testing.T) {
 	now = max(now + 600, 2400)   // past the second day's dawn, which is 1,100 s in, and its noon
 	hold_run(played, f64(now))
 	testing.expect_value(t, said(played, "The 2nd of spring."), 1)
+	// The night was spent in the room marked to sleep in, by its fire, and nobody is the colder for it; the fire was fed from the timber felled.
+	testing.expectf(t, said(played, "slept indoors") >= 1, "the dawn says the party slept indoors: %d times", said(played, "slept indoors"))
+	testing.expectf(t, len(played.fires) == 1 && played.fires[0].lit && said(played, "logs on the fire") >= 1, "the fire still burns, and was fed: %d fires, fed %d times", len(played.fires), said(played, "logs on the fire"))
+	for d, i in played.dwarves do testing.expectf(t, d.want[.Warm] > 0.5, "%s is warm on the second day: %.2f", played.party[i].given, d.want[.Warm])
+	{   // the weather is a function of the tick and the place: asked twice it is the same, colder by night and higher up
+		at := stand_of(played.landed.camp)
+		day, night_ := weather(0.25*DAY, at), weather(0.75*DAY, at)
+		testing.expect(t, weather(0.25*DAY, at) == day && day.air > night_.air, "the weather is not a function of the time, or the night is not colder than the day")
+		high := at
+		high.height += 400
+		testing.expect(t, abs(weather(0.25*DAY, high).air - (day.air - 400*LAPSE)) < 0.01, "the air is not colder with height")
+	}
 	testing.expect(t, said(played, `The hold says "gather`) == 1 && said(played, `The hold says "fish`) == 1, "the orders to gather and to fish were obeyed")
 	testing.expectf(t, len(played.wells) >= 1, "the party found fresh water to drink at: %d places known", len(played.wells))
 	testing.expectf(t, len(played.picked) > 0, "plants were gathered or water fished: %d columns taken", len(played.picked))

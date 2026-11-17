@@ -31,6 +31,7 @@ import "core:strings"
 //                   equinox, on): sets the sun's path
 //   weather=c[,b]   force the cloud cover, 0 clear to 1 overcast, and the cloud base in metres (default
 //                   1000, too high for a cap); otherwise both are drawn from the seed, the day and the hour
+//   rain=r          draw rain falling so hard, 0 to 1, whatever the weather is: for a picture or a measure
 //   shot=file.png   wait for the world to load, save one frame and exit
 //   after=seconds   with shot: let this much time pass first, so water can move; with bench as
 //                   well, the frame is saved then without waiting, in mid-flight. A picture's birds and
@@ -118,6 +119,7 @@ Options :: struct {
 	has_day:       bool,
 	has_hour:      bool,   // --hour: the sun is held at that hour, for a picture of the land
 	weather:       [2]f32,
+	rain:          f32,    // --rain: rain is drawn falling so hard, 0 to 1, whatever the weather is, for a picture or a measure; under 0 for the weather's own
 	fly, show:     bool,
 	width, height: i32,
 	shot:          string,
@@ -178,7 +180,7 @@ Options :: struct {
 	}
 
 options :: proc() -> Options {
-	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING, continent = true}
+	o := Options{hour = 9.5, day = 80, weather = {-1, -1}, rain = -1, width = 1280, height = 720, speed = 60, near = 64, span = 160, tilt = 50, pace = 1, party = LANDING, continent = true}
 	numbers :: proc(s, sep: string, out: []f64) -> bool {
 		parts := strings.split(s, sep, context.temp_allocator)
 		if len(parts) != len(out) do return false
@@ -202,6 +204,7 @@ options :: proc() -> Options {
 		case "size":  ok = numbers(value, "x", v[:2]); o.width, o.height = i32(v.x), i32(v.y)
 		case "hour":  ok = numbers(value, ",", v[:1]); o.hour, o.has_hour = f32(v.x), true
 		case "day":   ok = numbers(value, ",", v[:1]); o.day, o.has_day = f32(v.x), true
+		case "rain":  ok = numbers(value, ",", v[:1]); o.rain = f32(v.x)
 		case "weather":
 			ok = numbers(value, ",", v[:2]) || numbers(value, ",", v[:1])
 			o.weather = {f32(v.x), f32(v.y) if strings.contains(value, ",") else SKY.base[1]}

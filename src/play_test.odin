@@ -288,7 +288,7 @@ hold_shown :: proc(s: ^Stage, n: int) {
 	clear(&watch.seen.dwarves)
 	for f, i in party {
 		at := s.a.at + {f64(i%10)*2 - 9, 0, f64(i/10)*2 + 4}
-		append(&watch.seen.dwarves, Seen{who = f, was = at, at = at, doing = .Waiting, want = {.Drink = 1, .Food = 1, .Sleep = 1}})
+		append(&watch.seen.dwarves, Seen{who = f, was = at, at = at, doing = .Waiting, want = {.Drink = 1, .Food = 1, .Sleep = 1, .Warm = 1}})
 	}
 	watch.seen.place = "ground above the landing"
 	play.greeted, play.alerted = false, {}
@@ -515,7 +515,7 @@ the_dwarves_feel :: proc(t: ^testing.T) {
 	testing.expect(t, screen_says(&screen, .Wrong) == "", "a thirsty dwarf on its way to water raised an alert")
 	dwarf_take(0)
 	frame(s)
-	testing.expect_value(t, count("hand.feel"), 3)
+	testing.expect_value(t, count("hand.feel"), 4)
 	testing.expect_value(t, says("hand.feel"), "thirsty")
 	testing.expect_value(t, says("hand.line"), "Walking to fresh water, to drink.")
 	// One with nothing left to drink is first among those who need the player, with the trouble sign, and an alert says so.
@@ -566,6 +566,68 @@ the_dwarves_feel :: proc(t: ^testing.T) {
 	testing.expect_value(t, says("tool.title"), "Fish")
 	key(s, .N)
 	seen.store, seen.food_days = {}, 0
+	// Shelter and warmth (shelter.odin; foundations/interface.md, section 19). A dwarf with no warmth left is
+	// among those who need the player, with the trouble sign; one that found no fire and no roof is
+	// counted in an alert; and the fourth meter says how each is.
+	seen.dwarves[4].want[.Warm], seen.dwarves[4].felt, seen.dwarves[4].wet = 0, 2, 1
+	seen.dwarves[5].want[.Warm], seen.dwarves[5].lacks = 0.3, {.Warm}
+	seen.dwarves[6].want[.Warm], seen.dwarves[6].lacks = 0.3, {.Warm}
+	frame(s)
+	wrong := screen_says(&screen, .Wrong)
+	testing.expect(t, strings.contains(wrong, "is numb with cold") && strings.contains(wrong, "Two dwarves are cold: no fire burns and no roof stands within their reach."), wrong)
+	dwarf_take(4)
+	frame(s)
+	feels := make([dynamic]string, context.temp_allocator)
+	for it in screen.items do if it.id == "hand.feel" do append(&feels, it.text)
+	testing.expectf(t, len(feels) == 4 && feels[3] == "numb with cold", "the fourth meter says how cold a dwarf is: %v", feels)
+	hand_take({})
+	for &d in seen.dwarves do d.want[.Warm], d.lacks = 1, {}
+	// The weather stands under the date; the orders bar has Sleep; Build has Fire; and Shelter is among the lenses.
+	play.sky = Weather{cover = 0.9, rain = 0.6, air = 8.4, wind = 9.5}
+	frame(s)
+	testing.expect(t, strings.has_prefix(says("place.weather"), "Rain, 8 °C, strong wind from the"), says("place.weather"))
+	testing.expect(t, screen_find(&screen, "orders.sleep") != nil, "the orders bar has no Sleep")
+	key(s, .Z)
+	frame(s)
+	testing.expect_value(t, says("tool.title"), "Sleep")
+	key(s, .B)
+	frame(s)
+	testing.expect(t, click_words(s, "tool.choice", "Fire") && bar.build == .Fire, "Build has no Fire to choose")
+	bar.build = .Wall
+	key(s, .B)
+	key(s, .L)
+	frame(s)
+	testing.expect(t, click_words(s, "lens.row", "Shelter") && play.lens >= 0 && LENSES[play.lens].blocks, "Shelter is not among the lenses")
+	frame(s)
+	testing.expect(t, strings.contains(screen_says(&screen, .Lenses), "indoors: dry, out of the wind"), screen_says(&screen, .Lenses))
+	play.lens, play.lenses = -1, false
+	// A sleeping place is taken whole by a click on its ground, as a stockpile is, and says how it is sheltered; a fire says how it burns.
+	{
+		block := [3]i32{i32(math.floor(s.a.at.x)), 3, i32(math.floor(s.a.at.z))}
+		append(&seen.zones, Zone_Seen{id = 5, cells = 5, sleep = true, roofed = 4, walled = 3})
+		append(&seen.zone_boxes, Tint{block, block + {2, 0, 1}, 5})
+		play.card_open = false
+		hand_take({kind = .Zone, block = block, lo = block, hi = block})
+		frame(s)
+		hand := screen_says(&screen, .Hand)
+		testing.expect(t, says("zone.title") == "Sleeping place" && strings.contains(hand, "Indoors: dry and out of the wind") && strings.contains(hand, "Open to the sky") && strings.contains(hand, "Fewer places than dwarves"), hand)
+		testing.expect(t, click(s, "zone.grow") && bar.tool == .Sleep, "Make larger did not take up Sleep")
+		key(s, .ESCAPE)
+		clear(&seen.zones); clear(&seen.zone_boxes)
+		at := block + {4, 1, 0}
+		append(&seen.fires, Fire_Seen{at = at, fuel = 4.2, lit = true, fed = true, roof = true, walled = true})
+		hand_take({kind = .Fire, block = at, lo = at, hi = at})
+		frame(s)
+		hand = screen_says(&screen, .Hand)
+		testing.expect(t, bar.fire == 0 && says("fire.title") == "Fire" && strings.contains(hand, "Burning: timber for a day and a half.") && strings.contains(hand, "Indoors: it warms 4 steps round it.") && strings.contains(hand, "Let it go out"), hand)
+		seen.fires[0].lit, seen.fires[0].fuel = false, 0
+		frame(s)
+		testing.expect(t, strings.contains(screen_says(&screen, .Hand), "Out: no timber was brought to it in time."), screen_says(&screen, .Hand))
+		testing.expect(t, strings.contains(screen_says(&screen, .Wrong), "A fire is out and no timber lies anywhere"), screen_says(&screen, .Wrong))
+		clear(&seen.fires)
+		frame(s)
+		testing.expect(t, play.hand.kind == .None && bar.fire == -1, "a fire that is gone stayed in the hand")
+	}
 	// The date is the clock's: a day is DAY seconds, the year YEAR_DAYS days, and it begins at LANDS_AT on the 1st of spring.
 	testing.expect_value(t, date_words(date_at(0)), "1st of spring")
 	testing.expect_value(t, date_words(date_at(13*DAY)), "2nd of summer")

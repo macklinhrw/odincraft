@@ -42,7 +42,7 @@ Good :: struct {
 	n:    i32,
 	held: i32,      // of them, promised to dwarves on their way to fetch them
 }
-Stockpile :: struct { takes: Takes, cells: int }
+Stockpile :: struct { takes: Takes, cells: int, sleep: bool }   // sleep: it is no stockpile but a place to sleep, marked and kept as one is (shelter.odin)
 Zone_Cell :: struct { zone: int, coming: i32 }   // coming: things on their way to it
 Laid_Block :: struct { at: [3]i32, plan: Plan, on: bool }   // a block the dwarves laid, and as what; or one that stands no longer
 Haul :: struct {
@@ -52,11 +52,16 @@ Haul :: struct {
 	kind:     Mat,
 	n:        i32,
 	site:     int,      // the order to build they are for, or -1 for a stockpile
+	fire:     bool,     // they are timber for a fire,
+	hearth:   [3]i32,   // which burns in this cell (shelter.odin)
 }
+
+// Whether a dwarf standing in a cell of the hold's ground has a roof over it (shelter.odin).
+roofed_at :: proc(h: ^Hold, c: [3]i32) -> bool { return roofed(hold_blocks(h), c) }
 
 // What the frame may know of the goods: every pile, and the stockpiles as boxes of their ground.
 Pile_Seen :: struct { at: [3]i32, kind: Mat, n: i32, stored: bool }
-Zone_Seen :: struct { id: int, takes: Takes, cells, full: int }
+Zone_Seen :: struct { id: int, takes: Takes, cells, full: int, sleep: bool, roofed, walled: int }   // of a sleeping place: how many of its places are under a roof, and how many of those indoors
 
 takes_kind :: proc(t: Takes, m: Mat) -> bool {
 	return t == .All || t == .Stone && is_stuff(m, .Stone) || t == .Timber && is_stuff(m, .Timber) || t == .Food && is(m, FOOD)
@@ -65,7 +70,7 @@ takes_kind :: proc(t: Takes, m: Mat) -> bool {
 // Whether a pile lies where the hold counts it: in a stockpile that takes its kind.
 stored :: proc(h: ^Hold, g: Good) -> bool {
 	c, ok := h.zoned[g.at]
-	return ok && takes_kind(h.zones[c.zone].takes, g.kind)
+	return ok && !h.zones[c.zone].sleep && takes_kind(h.zones[c.zone].takes, g.kind)
 }
 
 // ---- things lying ---------------------------------------------------------------------------
@@ -173,12 +178,12 @@ zone_obey :: proc(h: ^Hold, o: Order) {
 	}
 	id := -1
 	for c in cells do for side in ([5][3]i32{{0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) do for dy in i32(-1)..=1 {
-		if n, ok := h.zoned[c + side + {0, dy, 0}]; ok && id < 0 && h.zones[n.zone].takes == o.takes do id = n.zone
+		if n, ok := h.zoned[c + side + {0, dy, 0}]; ok && id < 0 && h.zones[n.zone].takes == o.takes && h.zones[n.zone].sleep == (o.kind == .Sleep) do id = n.zone
 	}
 	joined := id >= 0
 	if !joined {
 		id = len(h.zones)
-		append(&h.zones, Stockpile{takes = o.takes})
+		append(&h.zones, Stockpile{takes = o.takes, sleep = o.kind == .Sleep})
 	}
 	added := 0
 	for c in cells {
@@ -192,6 +197,14 @@ zone_obey :: proc(h: ^Hold, o: Order) {
 	}
 	h.goods_v += 1
 	for &d in h.dwarves do if !d.job && !d.haul.on do d.rest = min(d.rest, 2)
+	if o.kind == .Sleep {   // a place to sleep: how much of it has a roof is said, since that is what it is for
+		roofed := 0
+		for c in cells do roofed += int(roofed_at(h, c))
+		under := "all under a roof" if roofed == len(cells) else "none of them under a roof" if roofed == 0 else fmt.tprintf("%d of them under a roof", roofed)
+		h.short = fmt.tprintf("Sleeping place: %d places%s, %s.", h.zones[id].cells, fmt.tprintf(", %d of them new", added) if joined else "", under)
+		say(h, `The hold says "%s": %d places are marked to sleep in, %s, %s. The dwarves lie down there at night, under its roof first.`, words, added, under, "joined to the sleeping place beside them" if joined else "a new sleeping place")
+		return
+	}
 	h.short = fmt.tprintf("Stockpile for %s: %d places%s.", TAKES_SAYS[o.takes], h.zones[id].cells, fmt.tprintf(", %d of them new", added) if joined else "")
 	say(h, `The hold says "%s": %d places are marked to store %s, %s.`, words, added, TAKES_SAYS[o.takes], "joined to the stockpile beside them" if joined else "a new stockpile")
 }
@@ -210,6 +223,21 @@ zone_change :: proc(h: ^Hold, o: Order) {
 		return
 	}
 	id := cell.zone
+	if h.zones[id].sleep {   // a sleeping place takes nothing, and is removed as a stockpile is
+		if o.kind == .Takes {
+			h.short = "A sleeping place takes nothing."
+			say(h, `The hold says "%s": that ground is a place to sleep, and takes nothing.`, words)
+			return
+		}
+		cells := make([dynamic][3]i32, context.temp_allocator)
+		for c, z in h.zoned do if z.zone == id do append(&cells, c)
+		for c in cells do delete_key(&h.zoned, c)
+		h.zones[id].cells = 0
+		h.goods_v += 1
+		h.short = fmt.tprintf("Sleeping place removed: %d places.", len(cells))
+		say(h, `The hold says "%s": the sleeping place is removed, %d places of it.`, words, len(cells))
+		return
+	}
 	if o.kind == .Takes {
 		h.zones[id].takes = o.takes
 		h.short = fmt.tprintf("The stockpile takes %s from now.", TAKES_SAYS[o.takes])
@@ -249,7 +277,7 @@ zone_remove :: proc(h: ^Hold, lo, hi: [3]i32) -> (gone: int) {
 store_cell :: proc(h: ^Hold, g: Good) -> (to: [3]i32, room: i32, ok: bool) {
 	best := max(i32)
 	for c, cell in h.zoned {
-		if !takes_kind(h.zones[cell.zone].takes, g.kind) || c == g.at do continue
+		if h.zones[cell.zone].sleep || !takes_kind(h.zones[cell.zone].takes, g.kind) || c == g.at do continue
 		free := heap_of(g.kind) - cell.coming
 		if k, lies := h.lying[c]; lies {
 			if h.goods[k].kind != g.kind do continue
@@ -298,7 +326,9 @@ haul_look :: proc(h: ^Hold, i: int) -> bool {
 		return true
 	}
 	// To a stockpile: the nearest pile that lies loose, or in a stockpile that does not take it.
-	if len(h.zones) == 0 do return false
+	stores := false
+	for z in h.zones do stores ||= !z.sleep && z.cells > 0
+	if !stores do return false
 	Near :: struct { far: i32, k: int }
 	tries: [6]Near
 	count := 0
@@ -362,7 +392,9 @@ haul_arrive :: proc(h: ^Hold, i: int) {
 			good_take(h, k, got)
 		}
 		if got < haul.n {   // fewer were there than it came for
-			if haul.site >= 0 do h.sites[haul.site].coming -= int(haul.n - got)
+			if haul.fire {
+				if k, burns := h.burning[haul.hearth]; burns do h.fires[k].coming = max(h.fires[k].coming - (haul.n - got), 0)
+			} else if haul.site >= 0 do h.sites[haul.site].coming -= int(haul.n - got)
 			else if c, zoned := &h.zoned[haul.to]; zoned do c.coming -= haul.n - got
 		}
 		if got == 0 {
@@ -382,6 +414,10 @@ haul_arrive :: proc(h: ^Hold, i: int) {
 	n := d.carrying
 	d.carrying = 0
 	h.goods_v += 1
+	if haul.fire {   // onto the fire; or, if it is gone, down where the dwarf stands
+		if !fire_fed(h, i, haul.hearth, haul.kind, n) do good_put(h, d.cell, haul.kind, n)
+		return
+	}
 	if haul.site >= 0 && !h.sites[haul.site].over {
 		s := &h.sites[haul.site]
 		s.coming -= int(n)
@@ -401,7 +437,9 @@ haul_drop :: proc(h: ^Hold, i: int) {
 	haul := d.haul
 	if haul.on {
 		if !haul.bringing do if k, ok := h.lying[haul.from]; ok do h.goods[k].held = max(h.goods[k].held - haul.n, 0)
-		if haul.site >= 0 do h.sites[haul.site].coming = max(h.sites[haul.site].coming - int(haul.n), 0)
+		if haul.fire {
+			if k, burns := h.burning[haul.hearth]; burns do h.fires[k].coming = max(h.fires[k].coming - haul.n, 0)
+		} else if haul.site >= 0 do h.sites[haul.site].coming = max(h.sites[haul.site].coming - int(haul.n), 0)
 		else if c, zoned := &h.zoned[haul.to]; zoned do c.coming = max(c.coming - haul.n, 0)
 	}
 	if d.carrying > 0 do good_drop(h, d.cell, d.carry, d.carrying)
@@ -435,15 +473,19 @@ goods_show :: proc(h: ^Hold) {
 	for zone, id in h.zones do if zone.cells > 0 {
 		clear(&cells)
 		clear(&boxes)
-		full := 0
+		full, roofed, walled := 0, 0, 0
 		for c, cell in h.zoned do if cell.zone == id {
 			append(&cells, c - {0, 1, 0})   // the block of ground it lies on, which is what is tinted
 			full += int(c in h.lying)
+			if zone.sleep {
+				s := shelter_of(hold_blocks(h), c)
+				roofed, walled = roofed + int(s.roof), walled + int(indoors(s))
+			}
 		}
 		for a in 1..<len(cells) do for k := a; k > 0 && less(cells[k], cells[k - 1]); k -= 1 do cells[k], cells[k - 1] = cells[k - 1], cells[k]   // a map gives its cells in no order: the boxes must be the same twice
 		boxes_of(cells[:], &boxes)
 		for b in boxes do append(&s.zone_boxes, Tint{b[0], b[1], id})
-		append(&s.zones, Zone_Seen{id, zone.takes, zone.cells, full})
+		append(&s.zones, Zone_Seen{id, zone.takes, zone.cells, full, zone.sleep, roofed, walled})
 	}
 	less :: proc(a, b: [3]i32) -> bool { return a.y < b.y || a.y == b.y && (a.z < b.z || a.z == b.z && a.x < b.x) }
 }

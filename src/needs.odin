@@ -20,7 +20,7 @@ import "core:strings"
 // All of it is the hold's own (docs/adr/0009): the hour is read from the tick (date_tick), the
 // water from the generator through the floors, what bears from the rows of FOODS.
 
-Want :: enum u8 { Drink, Food, Sleep }
+Want :: enum u8 { Drink, Food, Sleep, Warm }
 Want_Row :: struct {
 	name:   string,      // what a dwarf with it wanting has: "thirst"
 	of:     string,      // what it dies of
@@ -31,6 +31,7 @@ Want_Row :: struct {
 	kills:  f32,         // days with nothing before it dies of it; 0 for never
 	takes:  f32,         // seconds the act takes: a drink, one thing eaten
 	how:    [5]string,   // how a dwarf is: met, wanting, urgent, with nothing, and near its death
+	ends:   string,      // what is said of one with nothing left, with how long it has
 }
 // Read against the real games (colony-sim-reference.md, section 14). RimWorld's food falls 1.6 of
 // its whole in a day and a pawn eats under 0.3 of it, about twice a day, in 500 ticks, eight
@@ -44,9 +45,13 @@ Want_Row :: struct {
 // ten seconds each. It dies of thirst a day and a half after it ran dry and of hunger three days
 // after: longer than RimWorld's, since here the remedy may be a walk and an order away.
 WANTS := [Want]Want_Row{
-	.Drink = {"thirst", "thirst", 2.0, 0.5, 0.45, 0.2, 1.5, 6, {"not thirsty", "thirsty", "very thirsty", "parched", "dying of thirst"}},
-	.Food  = {"hunger", "hunger", 1.2, 0.6, 0.5, 0.2, 3.0, 10, {"fed", "hungry", "very hungry", "starving", "dying of hunger"}},
-	.Sleep = {"tiredness", "", 1.05, 0, 0.3, 0.1, 0, 0, {"rested", "tired", "worn out", "asleep on its feet", ""}},
+	.Drink = {"thirst", "thirst", 2.0, 0.5, 0.45, 0.2, 1.5, 6, {"not thirsty", "thirsty", "very thirsty", "parched", "dying of thirst"}, "it has had nothing to drink, and will die of thirst in %s unless it does"},
+	.Food  = {"hunger", "hunger", 1.2, 0.6, 0.5, 0.2, 3.0, 10, {"fed", "hungry", "very hungry", "starving", "dying of hunger"}, "it has had nothing to eat, and will die of hunger in %s unless it does"},
+	.Sleep = {"tiredness", "", 1.05, 0, 0.3, 0.1, 0, 0, {"rested", "tired", "worn out", "asleep on its feet", ""}, ""},
+	// Cold (shelter.odin): it falls by what a dwarf feels, so much of the whole in a day ten degrees under
+	// what is comfortable, and comes back where it is warm; with none left, in cold that harms, a dwarf
+	// dies in a day and a half. RimWorld's hypothermia kills in a day and a third at most.
+	.Warm  = {"cold", "cold", 2.5, 1, 0.5, 0.2, 1.5, 0, {"warm", "chilled", "cold", "numb with cold", "dying of cold"}, "it has been out in the cold and the wet too long, and will die of cold in %s of such cold unless it is warmed"},
 }
 SLEEP_MENDS :: 2.1    // of the whole, in a day asleep: eight hours make good sixteen awake
 SLEEPS_AT   :: 0.75   // at night a dwarf lies down under this (RimWorld's DefaultFallAsleepMaxLevel)
@@ -73,7 +78,7 @@ needs_init :: proc(h: ^Hold) {
 		key := fnv.fnv32a(transmute([]u8)h.party[i].given)*31 + fnv.fnv32a(transmute([]u8)h.party[i].byname)
 		for w in Want {
 			d.pace[w] = 0.85 + 0.3*hash01(i32(key & 0xFFFF), i32(w), world_seed + 920)
-			start := [Want][2]f32{.Drink = {0.85, 1}, .Food = {0.9, 1}, .Sleep = {0.85, 1}}
+			start := [Want][2]f32{.Drink = {0.85, 1}, .Food = {0.9, 1}, .Sleep = {0.85, 1}, .Warm = {0.95, 1}}
 			d.want[w] = math.lerp(start[w][0], start[w][1], hash01(i32(key & 0xFFFF), i32(w), world_seed + 921))
 		}
 	}
@@ -97,10 +102,15 @@ needs_tick :: proc(h: ^Hold, i: int) {
 			d.want[w] = min(d.want[w] + SLEEP_MENDS*TICK/DAY, 1)
 			continue
 		}
-		d.want[w] = max(d.want[w] - row.falls*d.pace[w]*(row.asleep if asleep else 1)*TICK/DAY, 0)
+		harmed := false
+		if w == .Warm do harmed = warm_tick(h, i)   // by what it feels of the weather where it stands (shelter.odin)
+		else {
+			d.want[w] = max(d.want[w] - row.falls*d.pace[w]*(row.asleep if asleep else 1)*TICK/DAY, 0)
+			harmed = d.want[w] <= 0
+		}
 		if row.kills == 0 do continue
-		if d.want[w] <= 0 do d.spent[w] += TICK/DAY
-		else do d.spent[w] = max(d.spent[w] - TICK/DAY, 0)   // made good as slowly as it was lost, as RimWorld's malnutrition is: a dwarf that goes without half its days does not mend
+		if harmed do d.spent[w] += TICK/DAY
+		else if d.want[w] > 0 do d.spent[w] = max(d.spent[w] - TICK/DAY, 0)   // made good as slowly as it was lost, as RimWorld's malnutrition is: a dwarf that goes without half its days does not mend
 		if d.spent[w] >= row.kills {
 			die(h, i, w)
 			return
@@ -111,7 +121,7 @@ needs_tick :: proc(h: ^Hold, i: int) {
 			left := row.kills - d.spent[w]
 			if stage == 3 {
 				h.short = fmt.tprintf("%s is %s.", who(h, i), row.how[3])
-				say(h, "%s is %s: it has had nothing to %s, and will die of %s in %s unless it does.", who(h, i), row.how[3], "drink" if w == .Drink else "eat", row.of, days_words(left))
+				say(h, "%s is %s: %s.", who(h, i), row.how[3], fmt.tprintf(row.ends, days_words(left)))
 			} else {
 				h.short = fmt.tprintf("%s is %s.", who(h, i), row.how[4])
 				say(h, "%s is %s: %s is left to it.", who(h, i), row.how[4], days_words(left))
@@ -160,14 +170,15 @@ die :: proc(h: ^Hold, i: int, w: Want) {
 care_look :: proc(h: ^Hold, i: int) -> bool {
 	d := &h.dwarves[i]
 	hour := date_tick(h.tick).hour
-	for pass in 0..<2 do for &row, w in WANTS {
+	for pass in 0..<2 do for w in ([4]Want{.Drink, .Food, .Warm, .Sleep}) {   // a cold dwarf warms itself before it lies down
+		row := &WANTS[w]
 		under := row.urgent if pass == 0 else row.seeks
 		if w == .Sleep && pass == 1 && night(hour) do under = SLEEPS_AT
 		if d.want[w] >= under || h.tick < d.retry[w] do continue
 		if h.looked >= LOOKS do return true
 		h.looked += 1
 		if care_begin(h, i, w) do return true
-		d.retry[w] = h.tick + (RETRY if w not_in d.forages else 30)
+		d.retry[w] = h.tick + (4*RETRY if w == .Warm else RETRY if w not_in d.forages else 30)
 	}
 	return false
 }
@@ -222,27 +233,23 @@ care_begin :: proc(h: ^Hold, i: int, w: Want) -> bool {
 		d.eats, d.care_at = true, pile
 		to = stand
 	case .Sleep:
-		to = d.cell
-		if !lies_well(h, to, i) {
-			f := walk_floor(walk, to.x, to.y, to.z)
-			if f < 0 do return false
-			walk.stamp += 1
-			queue := make([dynamic]i32, context.temp_allocator)
-			append(&queue, f)
-			walk.seen[f] = walk.stamp
-			found := false
-			for k := 0; k < len(queue) && k < 300 && !found; k += 1 {
-				if c := floor_block(walk, queue[k]); k > 0 && lies_well(h, c, i) {
-					to, found = c, true
-					break
-				}
-				for way in 0..<8 do if t := floor_step(walk, queue[k], way); t >= 0 && walk.seen[t] != walk.stamp {
-					walk.seen[t] = walk.stamp
-					append(&queue, t)
-				}
+		if walk_floor(walk, d.cell.x, d.cell.y, d.cell.z) < 0 do return false
+		to = sleep_find(h, i)   // a sleeping place, a roof, a fire; or where it is (shelter.odin)
+	case .Warm:
+		spot, ok := warm_find(h, i)
+		if !ok {
+			if .Warm not_in d.lacks {
+				d.lacks += {.Warm}
+				h.at = feet_of(h, i)
+				today := date_tick(h.tick).day
+				h.aside = h.chilled && h.chilled_on == today   // on the screen once a day: after that the log has it, and the alert counts them (NEEDS, crowd.odin)
+				h.chilled, h.chilled_on = true, today
+				h.short = fmt.tprintf("%s is cold: no fire and no roof.", who(h, i))
+				say(h, "%s is cold, and finds no fire burning and no roof within reach of %s.", who(h, i), place_say(h, d.cell))
 			}
-			if !found do to = d.cell   // nowhere better: it sleeps where it is
+			return false
 		}
+		to = spot
 	}
 	if w != .Food do d.care_at = to
 	d.caring, d.care = true, w
@@ -262,15 +269,6 @@ care_begin :: proc(h: ^Hold, i: int, w: Want) -> bool {
 	h.claims[to] = i
 	h.spots[i] = to
 	d.doing, d.seek, d.next, d.wait, d.said, d.errand = .Walking, false, 1, 0, "", false
-	return true
-}
-
-// Whether a dwarf can lie down in a cell: dry ground that is not marked, not a stockpile's and no other's.
-lies_well :: proc(h: ^Hold, c: [3]i32, i: int) -> bool {
-	f := walk_floor(&h.walk, c.x, c.y, c.z)
-	if f < 0 || h.walk.floors[f].wet > 0 || on_mark(h, c) do return false
-	if o, held := h.held[c]; held && o != i do return false
-	if o, claimed := h.claims[c]; claimed && o != i do return false
 	return true
 }
 
@@ -298,6 +296,10 @@ care_arrive :: proc(h: ^Hold, i: int) {
 		if dx, dz := f64(d.care_at.x - d.cell.x), f64(d.care_at.z - d.cell.z); dx != 0 || dz != 0 do d.facing = f32(math.atan2(dx, -dz))
 	case .Sleep:
 		d.doing = .Sleeping
+		d.slept = slept_as(h, d.cell)
+	case .Warm:
+		d.doing = .Warming
+		d.lacks -= {.Warm}
 	}
 }
 
@@ -337,8 +339,16 @@ care_tick :: proc(h: ^Hold, i: int) {
 		if d.want[.Food] < WANTS[.Food].seeks do d.retry[.Food] = h.tick   // still hungry: it looks for the next heap at once
 	case .Sleep:
 		woken := d.want[.Sleep] >= 1
-		for w in ([2]Want{.Drink, .Food}) do woken ||= d.want[w] < WANTS[w].urgent && h.tick >= d.retry[w]   // thirst or hunger that will not wait wakes it, where there is a remedy to look for
+		for w in ([3]Want{.Drink, .Food, .Warm}) do woken ||= d.want[w] < WANTS[w].urgent && h.tick >= d.retry[w]   // thirst, hunger or cold that will not wait wakes it, where there is a remedy to look for
 		if woken do care_drop(h, i)
+	case .Warm:   // until it is warm, or the place is warm no longer, or thirst or hunger will not wait
+		done := d.want[.Warm] >= FULL
+		if d.felt < COMFORT {
+			done = true
+			d.retry[.Warm] = h.tick + 20
+		}
+		for w in ([2]Want{.Drink, .Food}) do done ||= d.want[w] < WANTS[w].urgent && h.tick >= d.retry[w]
+		if done do care_drop(h, i)
 	}
 }
 
@@ -349,7 +359,7 @@ care_drop :: proc(h: ^Hold, i: int) {
 	if d.eats do if k, lies := h.lying[d.care_at]; lies do h.goods[k].held = max(h.goods[k].held - 1, 0)
 	if o, ok := h.claims[h.spots[i]]; ok && o == i do delete_key(&h.claims, h.spots[i])
 	d.caring, d.eats, d.rest = false, false, 0
-	if d.doing == .Drinking || d.doing == .Eating || d.doing == .Sleeping || d.doing == .Walking && d.takes == 0 {
+	if d.doing == .Drinking || d.doing == .Eating || d.doing == .Sleeping || d.doing == .Warming || d.doing == .Walking && d.takes == 0 {
 		clear(&d.path)
 		d.doing = .Waiting
 	} else if d.doing == .Walking {   // in a step: it stands at the step's end
@@ -611,6 +621,7 @@ day_tick :: proc(h: ^Hold) {
 	days, loose := food_days(h)
 	store := "no food" if days <= 0 else "food for under a day" if days < 0.75 else fmt.tprintf("food for %s", days_words(days))
 	fmt.sbprintf(&b, " The stockpiles hold %s%s.", store, fmt.tprintf("; %d more things of food lie loose", loose) if loose > 0 else "")
+	fmt.sbprint(&b, night_words(h, date.day - 1))   // the weather that was, and how the party slept (shelter.odin)
 	h.short = fmt.tprintf("The %s: %s in store.", date_words(date), store)
 	say(h, "%s", strings.to_string(b))
 	h.tally = {}
