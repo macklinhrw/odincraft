@@ -536,6 +536,7 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 	case .Dig, .Build:
 		cells := make([dynamic][3]i32, context.temp_allocator)
 		cells_of(work, o.shape, o.at, o.to, hold_blocks(h), &cells)
+		if work == .Build && (o.shape == .Fire || o.shape == .Rack) do for k := len(cells) - 1; k >= 0; k -= 1 do if cells[k] in h.burning || cells[k] in h.benched do ordered_remove(&cells, k)   // not where a fire burns or a rack stands already
 		if size := (i64(hi.x - lo.x) + 1)*(i64(hi.z - lo.z) + 1)*(i64(hi.y - lo.y) + 3); len(cells) > ORDER_MOST || size > 8*ORDER_MOST {
 			pop(&h.sites)
 			h.short = "Too much for one order: mark less at a time."

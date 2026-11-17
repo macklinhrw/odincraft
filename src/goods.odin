@@ -488,7 +488,7 @@ basket_home :: proc(h: ^Hold, i: int) {
 	for b in h.benches {   // a rack first: what will spoil is dried
 		k := make_of(kind, b.kind)
 		if !b.used || b.done || k < 0 || b.make >= 0 && k != b.make || BENCHES[b.kind].holds - b.n - b.coming <= 0 do continue
-		if far := far_of(b.at, d.cell); far < best {
+		if far := far_of(b.at, d.cell) + (0 if b.n + b.coming > 0 else 1000); far < best {   // one that holds some of it already before an empty one: a rack is filled before the next is begun
 			w.budget = ASKING
 			if stand := walk_near(w, b.at.x, b.at.y, b.at.z, 2, false, &h.benched); stand >= 0 do best, found, haul.bench, haul.hearth, haul.to = far, true, true, b.at, floor_block(w, stand)
 		}

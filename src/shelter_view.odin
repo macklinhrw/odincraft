@@ -110,8 +110,8 @@ fire_aimed :: proc(eye: [3]f64, ray: [3]f32, behind: Pick) -> (which: int) {
 			t0, t1 = max(t0, min(a0, a1)), min(t1, max(a0, a1))
 		}
 		if t0 <= t1 do which, near = k, t0
-		if behind.ok && (behind.block == f.at || behind.block == f.at - {0, 1, 0}) do which = k   // or the block it stands on was clicked
 	}
+	if which < 0 && behind.ok do for f, k in watch.seen.fires do if behind.block == f.at || behind.block == f.at - {0, 1, 0} do which = k   // or, with none met, the block it stands on was clicked
 	return
 }
 

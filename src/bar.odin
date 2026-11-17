@@ -317,6 +317,12 @@ preview :: proc() {
 		boxes_of(bar.cells[:], &bar.boxes)
 	case .Build:
 		cells_of(.Build, o.shape, o.at, o.to, world_blocks(u.w), &bar.cells)
+		if o.shape == .Rack || o.shape == .Fire do for i := len(bar.cells) - 1; i >= 0; i -= 1 {   // not where a fire burns or a rack stands already, as the hold will not (mark_obey)
+			taken := false
+			for f in watch.seen.fires do taken ||= f.at == bar.cells[i]
+			for b in watch.seen.benches do taken ||= b.at == bar.cells[i]
+			if taken do ordered_remove(&bar.cells, i)
+		}
 	case .Fell:
 		if f := island_at(f64(lo.x) + 0.5, f64(lo.z) + 0.5); f != nil && is_formed(f) {
 			bound(f)
@@ -584,7 +590,7 @@ marks_view :: proc(v: ^View, boxes: []Box, eye: [3]f64) -> []Box {
 	}
 	// And what the tool would lay or fell.
 	if !tool_marks() || !bar.ready do return out[:]
-	if bar.tool == .Build do for c in bar.cells[:min(len(bar.cells), 2000)] do cube(&out, rel({f64(c.x) + 0.5, f64(c.y) + 0.5, f64(c.z) + 0.5}, eye), {0.34, 0.34, 0.34}, stuff_colour(bar.stuff, &s.store), brass)
+	if bar.tool == .Build do for c in bar.cells[:min(len(bar.cells), 2000)] do cube(&out, rel({f64(c.x) + 0.5, f64(c.y) + 0.5, f64(c.z) + 0.5}, eye), {0.34, 0.34, 0.34}, stuff_colour(.Timber if bar.build == .Fire || bar.build == .Rack else bar.stuff, &s.store), brass)
 	if f := island_at(a.at.x, a.at.z); f != nil do for t in bar.trees {   // a band at the foot and a cap on the crown, so a tree marked shows from above and under leaves
 		foot := [3]f64{f64(t.x + f.region.origin.x) + 0.5, f64(t.base), f64(t.z + f.region.origin.y) + 0.5}
 		cube(&out, rel(foot + {0, 1.1, 0}, eye), {0.66, 0.16, 0.66}, brass, brass)
@@ -645,6 +651,7 @@ tool_says :: proc() -> string {
 	case .Build:
 		have := stuff_lying(bar.stuff)
 		short := "" if have >= n else fmt.tprintf(" %d to be had: the rest waits.", have)
+		if n == 0 && (o.shape == .Rack || o.shape == .Fire) do return "No free ground here for one: a dwarf must be able to stand where it goes."
 		if n == 0 do return "Nothing to lay here: a floor fills what is open at this level." if o.shape == .Floor else "Nothing to lay here."
 		switch o.shape {
 		case .Out, .Down, .Up:
@@ -665,9 +672,8 @@ tool_says :: proc() -> string {
 			reach := FIRE_REACH
 			for c in bar.cells do for f in watch.seen.fires do by_fire ||= f.lit && abs(f.at.x - c.x) <= reach[0] && abs(f.at.z - c.z) <= reach[0] && abs(f.at.y - c.y) <= 2
 			timber := stuff_lying(.Timber)
-			wants := fmt.tprintf(" %d timber to be had: the rest waits.", timber) if timber < n else ""
-			return fmt.tprintf("%s, of %s: %d things dry at a time. %s.%s", "A rack" if n == 1 else fmt.tprintf("%d racks", n), "a log" if n == 1 else fmt.tprintf("%d logs", n), n*int(row.holds),
-				"By a fire: twice as fast, rain or none" if by_fire else "In sun and wind; not in rain, unless a fire burns by them", wants)
+			how := fmt.tprintf("%d timber to be had: the rest wait", timber) if timber < n else "By a fire: they dry twice as fast, rain or none" if by_fire else "They dry in sun and wind; by a fire twice as fast, and in rain"
+			return fmt.tprintf("%s, for %d things at a time. %s.", "A rack of a log" if n == 1 else fmt.tprintf("%d racks of a log each", n), n*int(row.holds), how)
 		}
 	case .Sleep:
 		if !pressed do if z, on := zone_under(bar.aim.block + {0, 1, 0}); on && z.sleep do return fmt.tprintf("A sleeping place: %d places, %d under a roof. Drag beside it to make it larger.", z.cells, z.roofed)
@@ -958,7 +964,7 @@ tool_card :: proc() {
 		for name, stuff in STUFFS {
 			stuffs[int(stuff)], stuff_args[int(stuff)] = fmt.tprintf("%s %d", sentence(name)[:len(name)], stuff_lying(stuff)), int(stuff)
 		}
-		if bar.build != .Fire do chips(cx, y, "Of", stuffs[:], int(bar.stuff), .Stuff, stuff_args[:], "tool.stuff")
+		if bar.build != .Fire && bar.build != .Rack do chips(cx, y, "Of", stuffs[:], int(bar.stuff), .Stuff, stuff_args[:], "tool.stuff")
 		else do words(cx, y + px(L.chip_pad.y), fmt.tprintf("Of timber: %d lie in the hold and about it", stuff_lying(.Timber)), .Body, L.ash, "tool.stuff.fire")
 		y += chip + px(1.5)
 		if bar.build == .Wall do chips(cx, y, "High", numbers[:2], int(bar.high) - 1, .High, args[:2], "tool.high")   // as high as a mason reaches from the ground: higher waits for scaffolds

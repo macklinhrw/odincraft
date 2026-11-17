@@ -187,6 +187,11 @@ bench_load :: proc(h: ^Hold, i: int) -> bool {
 			if k < 0 || b.make >= 0 && k != b.make do continue
 			if score := max(g.left, 0)*40 + f32(far_of(g.at, b.at)); score < best do best, pick, make = score, j, k
 		}
+		if pick >= 0 && b.n + b.coming == 0 {   // an empty rack is not begun while another that holds the same has room: one is filled before the next
+			other := false
+			for o in h.benches do other ||= o.used && !o.done && o.make == make && o.n + o.coming > 0 && BENCHES[o.kind].holds - o.n - o.coming > 0
+			if other do continue
+		}
 		if pick < 0 do continue
 		w.budget = ASKING
 		stand := walk_near(w, b.at.x, b.at.y, b.at.z, 2, false, &h.benched)

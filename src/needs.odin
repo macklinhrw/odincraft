@@ -632,7 +632,8 @@ Lean :: struct {
 	off:    int,                  // days until it begins; none once it has
 	days:   int,                  // days of it ahead, or left
 	bears:  bit_set[Food_Kind],   // what the land within a walk bears in it
-	kept:   f32,                  // days the kept food in the stockpiles feeds those alive
+	kept:   f32,                  // days the kept food in the stockpiles feeds those alive,
+	loose:  f32,                  // and days the kept food that lies loose would
 }
 
 lean_of :: proc(h: ^Hold) -> (l: Lean) {
@@ -651,7 +652,18 @@ lean_of :: proc(h: ^Hold) -> (l: Lean) {
 	if l.off > 0 do l.days = SEASON_DAYS
 	for s := first + 1; s < first + 4 && lean(&larder, s, alive); s += 1 do l.days += SEASON_DAYS   // and the lean seasons that follow it without a break
 	_, l.kept, _ = food_days(h)
+	for g in h.goods do if is(g.kind, FOOD) && keeps_well(g.kind) && !stored(h, g) do l.loose += f32(g.n)*FOODS[food_of(g.kind)].feeds
+	l.loose /= f32(alive)*WANTS[.Food].falls
 	return
+}
+
+// How a lean season's store stands, in words: the kept food in the stockpiles against its days; and
+// where none is stored, what lies loose, as the stores say it.
+lean_store :: proc(l: Lean, short := false) -> string {
+	kept := min(int(l.kept + 0.25), l.days)
+	if kept <= 0 && l.loose >= 0.75 do return fmt.tprintf("Kept food for %d of %s, lying loose", min(int(l.loose + 0.25), l.days), "them" if short else fmt.tprintf("its %d days", l.days))
+	if short do return fmt.tprintf("Kept food for %d of them", kept)
+	return "No kept food is in store" if kept <= 0 else fmt.tprintf("Kept food in store for %d of them", kept) if kept < l.days else "Kept food in store for all of them"
 }
 
 // What a lean season's land bears, in words: "nothing", "gobies alone", "too little: gobies and shii nuts".
@@ -670,8 +682,7 @@ lean_bears :: proc(l: Lean) -> string {
 // land bears gobies alone for its 12 days. Kept food in store for 4 of them."
 lean_words :: proc(l: Lean) -> string {
 	if !l.on do return ""
-	kept := int(l.kept + 0.25)
-	store := "No kept food is in store" if kept <= 0 else fmt.tprintf("Kept food in store for %d of them", min(kept, l.days)) if kept < l.days else "Kept food in store for all of them"
+	store := lean_store(l)
 	if l.off > 0 do return fmt.tprintf("%s is %d %s off: the land here bears %s for its %d days. %s.", capital(SEASONS[l.season]), l.off, "day" if l.off == 1 else "days", lean_bears(l), l.days, store)
 	return fmt.tprintf("%s has %d %s left: the land here bears %s. %s.", capital(SEASONS[l.season]), l.days, "day" if l.days == 1 else "days", lean_bears(l), store)
 }
@@ -719,6 +730,10 @@ day_tick :: proc(h: ^Hold) {
 // the land bears gobies alone then. Kept food for 4 of its 12 days: gather, dry and store."
 lean_alert :: proc(l: Lean) -> string {
 	kept := min(int(l.kept + 0.25), l.days)
+	if kept <= 0 && l.loose >= 0.75 {
+		if l.off > 0 do return fmt.tprintf("%s in %d %s: the land bears %s then. %s: gather, dry and store.", capital(SEASONS[l.season]), l.off, "day" if l.off == 1 else "days", lean_bears(l), lean_store(l))
+		return fmt.tprintf("%s, %d %s left: the land bears %s. %s.", capital(SEASONS[l.season]), l.days, "day" if l.days == 1 else "days", lean_bears(l), lean_store(l, true))
+	}
 	if l.off > 0 do return fmt.tprintf("%s in %d %s: the land bears %s then. Kept food for %d of its %d days: gather, dry and store.", capital(SEASONS[l.season]), l.off, "day" if l.off == 1 else "days", lean_bears(l), kept, l.days)
 	return fmt.tprintf("%s, %d %s left: the land bears %s. Kept food for %d of them.", capital(SEASONS[l.season]), l.days, "day" if l.days == 1 else "days", lean_bears(l), kept)
 }
