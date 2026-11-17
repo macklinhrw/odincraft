@@ -586,7 +586,7 @@ mark_obey :: proc(h: ^Hold, o: Order) {
 	case .Fell:
 		trees := make([dynamic]Tree, context.temp_allocator)
 		ox, oz := region.origin.x, region.origin.y
-		trees_in(lo.x - ox, lo.z - oz, hi.x - ox, hi.z - oz, &trees)
+		trees_standing(lo.x - ox, lo.z - oz, hi.x - ox, hi.z - oz, &trees)
 		for t in trees {
 			foot := [3]i32{t.x + ox, t.base, t.z + oz}
 			if t.form == .Fallen || foot in h.marked || foot in w.edited do continue

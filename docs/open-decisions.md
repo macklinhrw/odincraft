@@ -145,6 +145,11 @@ Background: `ideas.md` (the destination) and `lessons.md` (why earlier attempts 
   - Each play step comes with a script that plays it as a player would (the pointer on the tree's own log, a drag across a wood, the order given and watched to its end), drawn unseen, and Claude looks at every picture before merging.
   - One play step at a time. The interface step in flight (I-2) is held, not merged, until the orders are right.
 
+**2026-11-16, by the owner, playing after part A** (a picture: the Fell tool on a trunk at 2670, 3, -1726 says "No tree here"; "clearly a tree")
+
+- **Fell takes every tree that stands**: the canopy's, the smaller ones between and under them, young growth in a gap, bushes, and the dead still standing. Only the fallen are left out. The fault: the order asked for trees as the far view does, which leaves out all but the canopy's and the ones between; the tree in the picture was young growth 11 m tall. Part A's played case pointed at a canopy tree and so passed. One rule now (`trees_standing`, `trees.odin`) is asked by the hold and by the frame.
+- **A played case must be the owner's own case where there is one**: the script now points at this trunk (`p3-play.txt`, case 10), and a drag across that wood leaves nothing standing in it.
+
 **2026-11-16, Claude's call** (P3 put right, part B: goods you can see, and a place for them; `plan.md` section 10, "Goods you can see, as built"; `adr/0012`; `foundations/interface.md` section 13; read against `interesting-world/notes/colony-sim-reference.md`, sections 6 and 7, and RimWorld's `StoreUtility`, `Frame` and `WorkGiver_ConstructDeliverResources`)
 
 - **What work yields is a thing lying where it was dug or felled**, up to eight of a kind in a cell: stone by its rock, timber by its tree. A block of rock dug is one stone; a tree is half its height in logs, as before. Earth, sand and brush leave nothing. Chosen over RimWorld's one chunk in four mined: the world is blocks, and a block dug is a block to build with (Ingnomia does the same).
