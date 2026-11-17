@@ -681,6 +681,7 @@ lean_store :: proc(l: Lean_Season, short := false) -> string {
 }
 
 // Whether the kept food in store falls short of a lean season, by the whole days the screen says.
+LEAN_WARNS :: 6   // days before a lean season from which its alert stands, while the kept food falls short of it
 lean_short :: proc(l: Lean_Season) -> bool { return l.on && int(l.kept + 0.25) < l.days }
 
 // What a lean season's land bears, in words: "nothing", "gobies alone", "too little: gobies and shii nuts".

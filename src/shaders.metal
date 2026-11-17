@@ -112,8 +112,8 @@ static float3 sky_ambient(float3 N, float3 sun, float cover) {
     // At night the land is lit as by a full moon, far brighter than a true one against the day: a hold
     // is kept through the night, and the player must see it (plan.md, P4). RimWorld's night keeps about
     // a third of the day's light.
-    float3 sky = mix(float3(0.18, 0.22, 0.32), mix(float3(0.44, 0.55, 0.76), float3(0.62, 0.64, 0.68), cover), day);
-    float3 ground = mix(float3(0.07, 0.085, 0.12), float3(0.27, 0.25, 0.20), day);
+    float3 sky = mix(float3(0.225, 0.275, 0.40), mix(float3(0.44, 0.55, 0.76), float3(0.62, 0.64, 0.68), cover), day);
+    float3 ground = mix(float3(0.09, 0.11, 0.155), float3(0.27, 0.25, 0.20), day);
     return mix(ground, sky, N.y * 0.5 + 0.5);
 }
 
@@ -370,9 +370,13 @@ static uint marked_as(texture3d<float> marks, float3 cell) {
 static float4 marked_look(uint kind, constant Frame &f) {
     if (kind == 3u) return float4(f.wrong.rgb, 0.22);
     if (kind < 5u) return float4(f.live.rgb, kind == 1u ? 0.09 : 0.22);
-    if (kind < 7u) return float4(0.42, 1.25, 1.0, kind == 5u ? 0.2 : 0.42);
-    if (kind < 9u) return float4(f.kinds[0].rgb, kind == 7u ? 0.22 : 0.45);
-    return float4(f.kinds[kind == 9u ? 1 : 2].rgb, kind == 9u ? 0.3 : 0.38);
+    // A stockpile, a sleeping place and sheltered ground are lit as the land is: at their day's strength they were
+    // the brightest thing in a night, and hid a fire's light on the floor they lay on. The one in the hand is
+    // brighter, tint and line, than those beside it.
+    float lit = mix(0.36, 1.0, daylight(f.sun.xyz));
+    if (kind < 7u) return kind == 5u ? float4(float3(0.42, 1.25, 1.0) * lit, 0.2) : float4(float3(0.62, 1.75, 1.4) * lit, 0.5);
+    if (kind < 9u) return kind == 7u ? float4(f.kinds[0].rgb * lit, 0.22) : float4(f.kinds[0].rgb * 1.45 * lit, 0.52);
+    return float4(f.kinds[kind == 9u ? 1 : 2].rgb * lit, kind == 9u ? 0.3 : 0.38);
 }
 
 // A marked block's face: tinted, and lined along a side only where the mark ends there. Across a
